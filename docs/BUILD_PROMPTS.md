@@ -436,8 +436,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV1 | Oven: SmartHQ spike at the range | Oven | [x] 2026-11-15 |
 | OV2 | Oven: connector, account, status in chat | Oven | [x] 2026-11-15 |
 | OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [x] 2026-11-15 |
-| OV4 | Oven: preheat from the cook screen | Oven | [~] |
-| OV5 | Oven: oven timers from step timers | Oven | [ ] |
+| OV4 | Oven: preheat from the cook screen | Oven | [x] 2026-11-15 |
+| OV5 | Oven: oven timers from step timers | Oven | [~] |
 | OV6 | Oven: Stop turns the oven off | Oven | [ ] |
 | OV7 | Oven: proofing dough | Oven | [ ] |
 | OV8 | Oven: preheat ahead of a planned dinner | Oven | [ ] |
@@ -20152,7 +20152,7 @@ Notes:
 - A lost sign-in tells the admins once.
 
 ### OV4 · Oven: preheat from the cook screen
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV2, CK prompts done
 Read first: the plan's "What Themi does" (cook screen) and "Safety and trust tiers";
 `themi_home/cooking_ahead.py`.
@@ -20166,6 +20166,19 @@ Read first: the plan's "What Themi does" (cook screen) and "Safety and trust tie
 - The session keeps which oven it started.
 Tests: mode and °F from step wording; °C step; Remote Enable off; a stale card refused;
 read-back failure told. A scenario: preheat from step 1 to preheated.
+
+Notes:
+- `themi_home/cooking_oven.py` (OV4 to OV7's cook-screen side): `heat_for(text)` reads the
+  step's preheat (°C to °F to the nearest 5; "convection"/"fan" is Convection Multi Bake;
+  "upper/top/lower/bottom oven" names one); `preheat_buttons` (a plain Bake offers both,
+  lower first: "Preheat lower oven", "Preheat upper oven"); `oven_line`.
+- The screen's state: `strip.oven` (the buttons) and `strip.at` (when it was drawn, the
+  stale check), and `oven_line` ("Lower oven 270°F of 400°F", "Lower oven preheated to
+  400°F", from the last poll, so it moves every 30 s). Shown in `cook/_tip.html`.
+- The tap is `oven_heat` on `/session/cook/{id}/act`; a heat that took marks the offer
+  done. The read-back failure is OV2's (`test_a_write_the_oven_doesnt_show_...`).
+- Not done: a preheat the look-ahead's `PREHEAT` doesn't match ("preheat the convection
+  oven to 375") gets no button; widening it would change CK4's offers too.
 
 ### OV5 · Oven: oven timers from step timers
 Status: [ ]
