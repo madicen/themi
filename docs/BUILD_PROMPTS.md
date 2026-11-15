@@ -439,8 +439,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV4 | Oven: preheat from the cook screen | Oven | [x] 2026-11-15 |
 | OV5 | Oven: oven timers from step timers | Oven | [x] 2026-11-15 |
 | OV6 | Oven: Stop turns the oven off | Oven | [x] 2026-11-15 |
-| OV7 | Oven: proofing dough | Oven | [~] |
-| OV8 | Oven: preheat ahead of a planned dinner | Oven | [ ] |
+| OV7 | Oven: proofing dough | Oven | [x] 2026-11-15 |
+| OV8 | Oven: preheat ahead of a planned dinner | Oven | [~] |
 
 ## Fixed technical choices
 
@@ -20217,13 +20217,22 @@ Notes:
   prompt said, for the same reason as OV3.
 
 ### OV7 · Oven: proofing dough
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV4
 Read first: the plan's "Is it possible" (Proof row, as OV1 left it).
 - A step that rises ("let rise", "proof until doubled", "rise in a warm place") offers
   [Proof in the oven]: Proof (mode 13) at 85°F on the upper oven, the only setting it
   accepts, only when that oven is off, plus a step timer for the step's time. `oven_heat`.
 Tests: wording matched; refused when the oven's hot; the timer started. A scenario.
+
+Notes:
+- `cooking_oven.RISE` ("let rise", "proof until", "until doubled", "in a warm place",
+  "first/second rise"); `proof_offer` puts `proof` in the screen's state on the step
+  they're on, only with the upper oven off as last read, with the step's first time.
+- The tap `oven_proof` reads the upper oven first (on: "The upper oven is on (...), so it
+  can't proof now."), then OV4's `heat()` with Proof at 85°F (so `oven_heat`, approved by
+  the tap), then the step's timer: "The upper oven is on Proof (85°F). And a 1 hr timer
+  for the rise." OV6's question covers a proofing oven too.
 
 ### OV8 · Oven: preheat ahead of a planned dinner
 Status: [ ]
