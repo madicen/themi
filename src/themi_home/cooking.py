@@ -873,6 +873,7 @@ class Cooking:
             screen_only = session.from_page and self.screen_open(session)  # F41b: it asks
             if self.timers is not None and not screen_only:
                 await self.timers.ask_on_end(self._owner(session))
+            await self._ask_oven_off(session, in_chat=not self.screen_open(session))
             return
         before = session.phase
         if session.phase == "ready":
@@ -939,6 +940,14 @@ class Cooking:
         await self.say(session, DONE_LINE)  # CK5: the card said it already
         if self.timers is not None and not self.screen_open(session):  # CK13: the screen asks
             await self.timers.ask_on_end(self._owner(session))
+        await self._ask_oven_off(session, in_chat=not self.screen_open(session))
+
+    async def _ask_oven_off(self, session: Session, *, in_chat: bool) -> None:
+        """OV6: an oven this session started still on: "Turn it off too?"."""
+        from themi_home import cooking_oven
+
+        session = self.get(session.id) or session  # ended, as it's kept
+        await cooking_oven.ask_off(self, session, in_chat=in_chat)
 
     async def remind_tomorrow(self, session: Session) -> None:
         recipe = self.recipes.get(session.recipe_id)

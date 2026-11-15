@@ -36,7 +36,8 @@ log = logging.getLogger(__name__)
 FIRED_SHOWN = timedelta(hours=2)  # a fired timer nobody tapped stays this long at most
 MOVES = ("next", "back", "skip", "stop", "finish", "anyway", "tomorrow")
 TIMER_TAPS = ("timer_add", "timer_cancel", "timer_clear", "timers_keep", "timers_cancel")
-AFTER_END = (*TIMER_TAPS, *WRAP_TAPS)  # what an ended session's screen can still do
+OVEN_OFF_TAPS = ("oven_off", "oven_leave")  # OV6: "Turn the oven off too?"
+AFTER_END = (*TIMER_TAPS, *WRAP_TAPS, *OVEN_OFF_TAPS)  # what an ended session's screen can do
 OPTIONAL = re.compile(
     r"\b(?:optional|if (?:you['\u2019]d like|you like|you want|desired|using|wanted))\b",
     re.IGNORECASE,
@@ -68,12 +69,16 @@ def may_tap(session: Session, member: Member) -> bool:
 
 def still_shown(cooking: Cooking, session: Session) -> bool:
     """An ended session stays on the screen while it has timers to show (kept ones, until
-    they fire and are tapped), or a wrap-up offer not yet answered (CK6)."""
+    they fire and are tapped), a wrap-up offer not yet answered (CK6), or the oven it
+    started still on and not asked about yet (OV6)."""
+    from themi_home.cooking_oven import off_question
     from themi_home.cooking_wrap import offer
 
     recipe = cooking.recipes.get(session.recipe_id)
-    return bool(timers(cooking, session)) or (
-        recipe is not None and offer(cooking, session, recipe) is not None
+    return (
+        bool(timers(cooking, session))
+        or (recipe is not None and offer(cooking, session, recipe) is not None)
+        or bool(off_question(cooking, session))
     )
 
 
@@ -211,6 +216,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         if heat:  # without an oven, the strip is as it was
             out["strip"]["oven"], out["strip"]["at"] = heat, cooking_oven.drawn_at()
     out["oven_line"] = cooking_oven.oven_line(cooking, session)
+    out["oven_off"] = cooking_oven.off_question(cooking, session)  # OV6
     if cooking_oven.has_timer(cooking):  # OV5: a step's timer can be the oven's too
         out["offers"] = [{**o, "oven": True} for o in out["offers"]]
     out["timers"] = timers(cooking, session)
@@ -468,6 +474,11 @@ async def act(
         return Tapped(True, cooking_wrap.swap_question(items[n].item, recipe))
     if action == "scale":
         return await rescale(cooking, session, recipe, form)
+    if action in OVEN_OFF_TAPS:  # OV6: the ending's "Turn the oven off too?"
+        from themi_home import cooking_oven
+
+        said = await cooking_oven.answer_off(cooking, member, session, action == "oven_off")
+        return Tapped(bool(said), said)
     if action == "oven_timer" and cooking.timers is not None:  # OV5: Themi's and the oven's
         from themi_home import cooking_oven
 

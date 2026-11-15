@@ -38,6 +38,7 @@ from themi.accounts import Member
 from themi.autonomy import Decision
 from themi.channels.events import Button
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.services import Services
 from themi.localtime import in_quiet_hours, quiet_hours_start, to_utc_iso
 from themi_home.connectors.smarthq import (
@@ -460,6 +461,9 @@ class OvenControl:
     async def on_button(self, event: Any) -> None:
         payload = event.button.payload
         member = self.services.store.get_member(event.member.id)
+        if str(payload.get("do", "")).endswith("_session"):  # OV6: after Stop or Finish
+            await self._session_button(event, member, payload)
+            return
         oven = self.oven(str(payload.get("oven", "")))
         if oven is None:
             return
@@ -476,6 +480,19 @@ class OvenControl:
             await self.services.outbox.edit(member, event.button.message_id, result)
         else:
             await self.services.outbox.send(member, result, priority=Priority.REPLY, kind="oven")
+
+    async def _session_button(self, event: Any, member: Member, payload: dict[str, Any]) -> None:
+        from themi_home import cooking_oven
+
+        cooking = self.services.maybe(keys.cooking)
+        session = cooking.get(int(payload.get("session") or 0)) if cooking is not None else None
+        if cooking is None or session is None:
+            return
+        off = payload.get("do") == "off_session"
+        said = await cooking_oven.answer_off(cooking, member, session, off)
+        result = said or "That's been answered already."
+        if event.button.message_id is not None:
+            await self.services.outbox.edit(member, event.button.message_id, result)
 
     async def on_lost(self, why: str) -> None:
         for member in self.services.store.list_members():

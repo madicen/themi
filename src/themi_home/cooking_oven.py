@@ -150,6 +150,67 @@ async def preheat(
     )
 
 
+def _names(cavities: list[str]) -> str:
+    if len(cavities) == 1:
+        return f"the {ov.NAMES[cavities[0]]}"
+    return "both ovens"
+
+
+def off_question(cooking: Cooking, session: Session) -> str:
+    """OV6: "The lower oven is still on. Turn it off too?", while an oven this session
+    started is on and nobody's answered; "" otherwise."""
+    if session.ended_at is None or "oven" in session.wrap:
+        return ""
+    on = started_here(cooking, session)
+    if not on:
+        return ""
+    names = _names(on)
+    still = f"{names[0].upper()}{names[1:]} {'is' if len(on) == 1 else 'are'} still on."
+    return f"{still} Turn {'it' if len(on) == 1 else 'them'} off too?"
+
+
+async def ask_off(cooking: Cooking, session: Session, *, in_chat: bool) -> None:
+    """OV6: Stop or Finish with an oven this session started still on. The screen asks
+    when it's open; otherwise the chat does."""
+    question = off_question(cooking, session)
+    if not question or not in_chat:
+        return
+    from themi.channels.events import Button
+    from themi.channels.outbox import Priority
+    from themi_home.oven import BUTTON
+
+    tap = {"session": session.id}
+    await cooking.services.outbox.send(
+        cooking.services.store.get_member(session.member_id),
+        question,
+        priority=Priority.REPLY,
+        buttons=[
+            Button("Turn off", BUTTON, {**tap, "do": "off_session"}),
+            Button("Leave it on", BUTTON, {**tap, "do": "leave_session"}),
+        ],
+        kind="oven",
+    )
+
+
+async def answer_off(cooking: Cooking, member: Member, session: Session, off: bool) -> str:
+    """OV6: [Turn off] turns off every oven this session started; [Leave it on] keeps them on
+    (the oven's left-on warning still comes). Asked once."""
+    oven = control(cooking)
+    if oven is None or "oven" in session.wrap:
+        return ""
+    session.wrap["oven"] = "off" if off else "left"
+    cooking.save_wrap(session)
+    on = started_here(cooking, session)
+    if not off:
+        return f"Okay, leaving {_names(on)} on." if on else ""
+    said = []
+    for cavity in on:
+        found = oven.oven(cavity)
+        if found is not None:
+            said.append((await oven.off(member, found)).words)
+    return " ".join(said)
+
+
 def has_timer(cooking: Cooking) -> bool:
     """OV5: the oven's linked, with its (upper) kitchen timer."""
     oven = control(cooking)
