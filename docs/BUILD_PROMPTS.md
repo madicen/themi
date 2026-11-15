@@ -20235,7 +20235,7 @@ Notes:
   for the rise." OV6's question covers a proofing oven too.
 
 ### OV8 · Oven: preheat ahead of a planned dinner
-Status: [ ]
+Status: [~] blocked 2026-11-15 (no meal plan yet)
 Depends on: OV4
 Read first: `themi_home/meals.py`.
 - A planned dinner whose recipe preheats gets a card at its preheat time ("Preheat at 5:40
