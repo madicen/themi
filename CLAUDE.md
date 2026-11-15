@@ -35,7 +35,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
    a `[~]`), skipping CR prompts. Check its dependencies are `[x]`, and read earlier prompts' Notes.
 2. Read the plan sections it lists. If the plan and the prompt disagree, the plan wins;
    say so and update the prompt.
-3. Mark it `[~]`, implement it with its tests, and run `make lint` and `make test-all`.
+3. Mark it `[~]` and implement it with its tests. While working, check with
+   `make test-changed` (only the tests the change touches) or a single test file; when
+   it's done, run `make lint` and `make test-all` once.
 4. Mark it `[x]` with the date and short Notes (deviations, follow-ups, setup the user
    must do). Update the Progress table too.
 5. Stop and report. Don't start the following prompt unless asked.
@@ -63,6 +65,16 @@ mode with nobody watching.
 5. Never delete, skip or loosen an existing test to get green. Changing a test that reaches
    into wiring the prompt moved is fine; the commit says which and why.
 6. At the end, report which prompts were done, where it stopped and why.
+
+## Running the tests
+
+- `make test-all` takes about 4 minutes on 4 cores when nothing else is running. Two full
+  runs at once (another session, a background run left going) take far longer each, so
+  don't start one while another is running.
+- `make test-changed` runs only the tests whose code changed since its last run
+  (pytest-testmon); a change to a migration, template or other non-Python file runs them all.
+- `PYTEST_ARGS` passes options through, e.g. `make test-py PYTEST_ARGS=--ff` (last
+  failures first) or `PYTEST_ARGS='-x -k gram'`.
 
 ## Version control: jj
 

@@ -283,6 +283,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F43a | Feedback: every to-do in a picture is added the first time | Feedback | [x] 2026-11-14 |
 | F43b | Idea: the tasks picture as cards with emoji, for one person or the family, with chores too | Feedback | [x] 2026-11-14 |
 | F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [x] 2026-11-14 |
+| F44a | Idea: the web lookups a day, paced from the search plan, with a setting | Feedback | [x] 2026-11-14 |
+| F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [x] 2026-11-14 |
+| F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [x] 2026-11-14 |
+| F44d | Feedback: a split task can be put back together | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -14192,6 +14196,237 @@ per-person loop. The other places checked name nobody: `SHARED_OVERDUE_TEXT` is 
 both of you", the end-of-day list has no names, and `taking.py`'s offer names the asker's
 partner. So nothing else changed. New tests at the end of
 `tests/scenarios/test_reminders.py`; none changed, no golden file changed.
+
+### F44a · Idea (2026-11-14): the web lookups a day, paced from the search plan, with a setting
+Status: [x] 2026-11-14
+Depends on: F30d, RC4a, GW3, GW6, SP3a
+Read first: `themi/standard/web_search.py` (`DAILY_CAP`, `spend`, `_ready`),
+`themi/connectors/search.py`, `themi/core/connector_settings.py` (`SearchSettings`), and
+`spend`'s callers (`themi_home/web_recipes.py`, `themi_home/gram_weights.py`). From
+Michael's idea #211 (2026-11-14, 6:35 pm, "Add web lookups limit to settings").
+
+What the Pi shows: `web_lookups` has 50 searches on 14 Nov, all from 4:35 to 4:39 pm, under
+Erin (member 1). That's the gram-weights queue at 0.8.6's start (`_look_up_queue`, one
+search per ingredient across the cookbook, until `spend` refused). The rest of the month
+is 1 or 2 a day. At 6:30 pm Michael asked "Can you set the web lookups limit to 100?" and
+got a rule proposal, then "managed in your website settings via /site". There's no such
+setting: `DAILY_CAP = 50` is a constant. Tavily's `GET /usage` says plan "Researcher",
+`plan_limit` 1000, `plan_usage` 64. So 50 a day could spend 1,500 a month, more than the plan has.
+
+Build:
+- `SearchBackend.credits_left() -> int | None`. Tavily: `GET /usage`, `account.plan_limit -
+  account.plan_usage` (a null limit is None). Firecrawl: `GET /v2/team/credit-usage`,
+  `data.remainingCredits`. Any error or a shape it doesn't know is None, logged once.
+- `SearchSettings.daily_lookups: int | None` (`THEMI_SEARCH_DAILY_LIMIT`, label "Web lookups
+  a day (blank: paced from the plan's credits)", 1 to 1000). It shows on the Modules page
+  under Web search, like the weather thresholds.
+- `WebSearch.cap`, today's lookups: the setting when it's set. Otherwise, paced from the plan
+  once a local day: the lookups already made today plus the credits left ÷ the days left in
+  the month (today included), rounded down. With no answer from the backend it's 50, as now
+  (`FALLBACK_CAP`). `async refresh()` reads the credits when today's pace isn't known yet. The
+  search, page-read and recipe-search paths, and the two gram-weights jobs, call it before
+  spending.
+- Background lookups (`spend(..., background=True)`: the gram-weights queue and GW6's check)
+  stop at half of today's cap, so what a person asks for keeps the other half. What's left of
+  the queue waits for the next run, as it does at the cap now.
+- The cap's line says where to change it: "Today's {cap} web lookups are used up; it resets at
+  midnight. An admin can change how many on the website's Modules page, under Web search.
+  Say so."
+
+Tests: Tavily's and Firecrawl's usage answers read through the fake (and a 500 is None);
+with 936 credits left on 14 Nov (17 days left) the cap is 55; no answer is 50; the setting
+wins and no usage call is made; the pace is read once a day, not each search; background
+spend stops at half while a person's search still goes through; the cap line names the
+Modules page; the setting's range check.
+Scenario: the gram-weights queue at a start with 60 ingredients to look up uses half the
+day, and Michael's "look up..." right after still searches.
+
+Data: none needed. Mark #211 reviewed once live.
+
+Notes: `SearchBackend.credits_left()` (Tavily `GET /usage`, Firecrawl `GET
+/v2/team/credit-usage`) over a new `_Http._send`. `WebSearch.cap` / `await refresh()`: the
+setting, else today's pace kept in memory as (local day, cap), so a restart reads the
+credits again once. No answer is 50 for the rest of the day. `spend(..., background=True)`
+from both gram-weights jobs. `refresh()` runs before `search`, `read`, the web-recipe search
+and page read, and both gram-weights jobs. The pace counts lookups against credits one for
+one. A deep search is already counted twice; a page read (Tavily: 1 credit per 5 pages) is
+counted as one, which errs low. The fake answers both usage paths (`fake_search.credits`).
+Unset, it 404s, so the earlier tests still see 50. `test_settings_store`'s
+`test_where_each_value_came_from` lists every `SearchSettings` field, so it gained
+`daily_lookups: default`. The variable is in docs/ENVIRONMENT.md. With 936 credits left on 14
+Nov the Pi's pace is 55 a day. The chat's "set the web lookups limit to 100" still goes to a
+rule proposal; the cap line now names the Modules page.
+
+### F44b · Feedback (2026-11-14): weigh a Tbsp of a spice, not a cup
+Status: [x] 2026-11-14
+Depends on: GW4
+Read first: `themi_home/gram_weights.py` (`weighing`, `_wanted_unit`, `_make_tasks`), the
+plan's GW4 section. From Michael's bug #210 (2026-11-14, 6:13 pm, "asking for a measurement
+of a cup of nutmeg is a little ridiculous. For such things a Tbsp would suffice").
+
+What the Pi shows: at 4:39 pm, GW4 made three weighing tasks for Erin: task 111, "Weigh 1 cup
+of ground nutmeg when you're next cooking", task "Weigh 1 cup of mild/yellow miso when you're
+next cooking" and "Weigh one garlic cloves". `_wanted_unit` answers "cup" for anything
+measured by volume. The cookbook uses nutmeg at ¼ to ½ tsp and a pinch, and miso by the tsp.
+The garlic title keeps the recipe's plural.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `_wanted_unit` takes the units the family's recipes use for it: a cup when a line has cups
+  (or a volume of 60 ml or more), a Tbsp when every volume line is tsp, Tbsp, a pinch or a
+  dash, "each" for a count. The weight saved is for that measure ("1 Tbsp ground nutmeg =
+  …"), which the book already scales to a tsp.
+- "Weigh one {name}" takes the singular ("garlic clove", "egg"), with a small helper for the
+  plurals recipes use (cloves, eggs, leaves, tomatoes, berries).
+- An open weighing task whose measure or wording is now different is updated in place
+  (`board.update`, title and steps), so Erin's nutmeg and miso tasks say a Tbsp and the garlic
+  one reads "Weigh one garlic clove". No new task, no message.
+
+Tests: nutmeg at ½ tsp, ¼ tsp and a pinch gets a Tbsp task; flour in cups still a cup; a
+line in ml at 250 a cup; "garlic cloves" reads "Weigh one garlic clove"; an open cup task
+for nutmeg is renamed to the Tbsp one, once; a Tbsp weight told back is saved as a Tbsp.
+Scenario: a spice no source settles becomes "Weigh 1 tablespoon of ground nutmeg when
+you're next cooking", and "it was 7 g" puts it in the guide.
+
+Data: none needed (tasks 111 and the other two are updated by the next run). Mark #210
+reviewed once live.
+
+Notes: `_wanted_unit` collects every recipe line missing that ingredient. "each" for a
+count. A cup when a line is in cups or litres, or in ml at 60 or more (`CUP_FROM_ML`).
+Otherwise a tablespoon. A pinch has no weight, so it never asks. `one_of` makes a count
+singular (an `ONE_OF` table for leaves, loaves, halves and molasses; -ies, -oes, and a
+trailing s except -ss, -us and -is). `_make_tasks` rewords an open weighing task whose title
+differs (`_reword_task`, `board.update`). A nudge already queued takes the new name (F20c),
+and no message is sent. On the Pi this renames task 111 and the miso task to a tablespoon,
+and the garlic one to "Weigh one garlic clove", at the next run after the update. New tests
+at the end of `tests/scenarios/test_gram_tasks.py`. None changed, and no golden file
+changed.
+
+### F44c · Feedback (2026-11-14): gram weights work when a recipe or the guide changes, not every 10 minutes
+Status: [x] 2026-11-14
+Depends on: GW2, GW3, GW4, GW6, F44a
+Read first: `themi_home/gram_weights.py` (`GramWeightsModule.install`, `look_up`,
+`_look_up_queue`, `_make_tasks`, `check_guide`), `themi_home/recipes.py` (`sync`),
+`themi_home/web_recipes.py` (`keep`), `themi/standard/guides.py` (`save`). From Michael in
+the session of 2026-11-14: "After one off runs to backfill our cookbook, surely it only
+needs to run for new recipes, right?"
+
+What the Pi shows: `gram_weights.look_up` runs every 10 minutes and `gram_weights.check`
+every hour. Each run hashes every recipe to find the new ones (cheap). Then it re-weighs
+the whole cookbook twice in `_needed` and `_wanted_unit`, 144 times a day, though the
+cookbook only changes when `recipes.sync` (every 15 minutes, only when Drive says the Doc
+changed) or a kept web recipe changes it. The 50-search backfill at 0.8.6's start is the
+one time it had real work. The log also shows "Weights for Oat Flour not read (Deferred)"
+and "salt for every cup of water": the Gemini free tier refused the call. In
+`_look_up_queue` an unread answer (`found is None`) takes the ingredient off the queue as
+`wanted`. So a model hiccup turns into a weighing task, and the ingredient isn't looked up
+again for 30 days.
+
+Build:
+- Bug fix first: a lookup whose model call was deferred for a reason that isn't setup (the
+  free tier's 429, a malformed answer: `Deferred` with `needs_setup` false) leaves the
+  ingredient in the queue. The run stops, and the queue waits for tomorrow. With no model
+  at all (`needs_setup`), it's `wanted` as now (GW3's test). Only "read, and no two sources
+  agree" makes it `wanted`.
+- The jobs work only when there's something to do. `look_up` reads a cheap state first: the
+  recipes' count and latest `updated_at`, the recipes cooked, and the weights guide's
+  `updated_at`. With that unchanged since its last run and nothing in the queue it may look
+  up today, it returns before reading any recipe. Then `_needed` and `_wanted_unit` aren't
+  run 144 times a day.
+- A run that stops at the background half of the day (F44a) or on a deferred model call
+  leaves the rest of the queue for the next local day. It doesn't try again every 15 minutes.
+- `check_guide` (GW6) runs only when the weights guide changed since its last full pass, or
+  when lines were left unchecked (three a run).
+- `gram_weights.look_up` runs every 15 minutes, like `recipes.sync`, which finds a changed
+  Doc. The first run after a start does the whole pass, as now.
+
+(Changed from the first draft of this prompt, 2026-11-14: change hooks on recipes and guides
+crossed module lines, and `Guides.save` is synchronous. A gate on a cheap state does the same
+with no new wiring.)
+
+Tests: start with the failing one: a lookup whose model calls are rate-limited leaves the
+ingredient queued, with no weighing task, and the next run that day doesn't search again;
+the next day it does. A second run with nothing changed reads no recipe and calls neither
+model nor search. A new recipe (or a changed one, or one first cooked) is weighed at the
+next run. An edited weights guide runs the check again; a run with nothing new doesn't.
+Scenario: Erin adds a recipe to the cookbook Doc and its weights are looked up at the next
+run. A day with no changes makes no lookups and no model calls.
+
+Data: on the Pi, oat flour and "salt for every cup of water" became `wanted` from deferred
+reads. They're looked up again after GW3's 30 days, or by an edit of their recipes; no
+one-off. The queue holds 289 ingredients from the backfill: at half of about 55 lookups a
+day, about 11 days.
+
+Notes: `GramWeights._state()` covers the recipes (count, latest `updated_at`, ingredients'
+total length, removed), the recipes cooked, the gram-weights records and how many of their
+tasks are open (so a weighing task done frees its slot, GW4's test), and the weights guide's
+text hash. `look_up` returns at once when that state is the same as after its last run and
+`_queue_ready()` is false (nothing queued, or the queue waits for tomorrow). The state is kept
+in memory, so the first run after a start does the full pass. `_read` raises `ReadLater` for
+an AI error with `needs_setup` false (the router's `Deferred` of a busy chain, read by
+attribute so `themi_home` needn't import the router). The queue then waits for the next local
+day (`_queue_waits`), as it does at F44a's background half. GW6 kept marking a deferred read
+"fine"; now it stops instead, and `check_guide` skips a guide whose text was checked in full.
+`gram_weights.look_up` runs every 15 minutes (golden `jobs.json`: 600 to 900, which this
+prompt asks for). `gram_weights.check` stays hourly, gated. No test changed. Mid-session, the
+first rewrite of this prompt's Build section cut F44d (added meanwhile by another session) out
+of this file; it's put back word for word.
+
+### F44d · Feedback (2026-11-14): a split task can be put back together
+Status: [ ] 
+Depends on: F26c
+Read first: `themi/standard/task_parts.py` (`TaskParts.split`, `_changed`, `note`,
+`split_task`), `themi/standard/tasks.py` (`cancel`, `update`, `_changed`, the `set_aside`
+queries, `off_displays`), `themi_cozyla/cozyla_todos.py` (how an "edited" or "cancelled"
+change reaches the wall). From Michael in the session of 2026-11-14: "After I remerged the
+items for cleaning the upstairs bathroom, what happened to the task. I don't see it
+assigned to me".
+
+What the Pi shows: at 7:41 am Michael made task 100, "Clean the upstairs bathroom", with
+five steps, and split it (`split_task`) into parts 104 to 108. At 4:55 pm he asked "Can you
+recombine the Clean the upstairs bathroom tasks as subtasks?" (reply 472). There's no tool
+for that, so the model improvised. `update_task` renamed part 104 ("…: Clean the shower") to
+"Clean the upstairs bathroom" and gave it all five steps. Then `cancel_task` cancelled 105
+to 108, and it answered "Done. ... is back as one task". But the split was never undone. 104
+still has its `task_parts` row (part 1 of 5 of task 100), so its note reads "Part 1 of 5 of
+Clean the upstairs bathroom; 0 of 5 parts done". Task 100 is open but set aside and
+`off_displays`, so it's on no list. 104's wall to-do and Google task were made under the
+part's old title.
+
+Build:
+- `TaskParts.unsplit(parent, by)`: the reverse of `split`. Every open or snoozed part is
+  cancelled quietly (no "Taken off the list" per part, and their nudges withdrawn). Every
+  part's `task_parts` row is deleted, `off_displays` is cleared on the parent, and the
+  parent gets one "edited" change, so the wall and Google Tasks show it again. The parent
+  keeps its own title and steps. If a part was done already, its step stays in the parent's
+  steps, and the reply says which were done ("the shower's done already").
+- If every part is settled already, the parent is settled already (`_changed`), so it
+  declines: "Clean the upstairs bathroom is finished already. Nothing was changed."
+- Given a part, it unsplits that part's parent. Given a task that isn't split, it declines
+  ("…isn't split. Nothing was changed.").
+- Tool `unsplit_task` (task_id: the task or any of its parts), described for "put it back
+  together", "recombine", "merge the parts back", "make them one task again", "as steps
+  again". Same tool group as `split_task` (`groups.SCHEDULES`). Its result says "Say it's one
+  task again, in one line."
+- `split_task`'s result ends "They can be put back together with unsplit_task." so the
+  model knows it's there.
+- `update_task` refuses to rename a part to its parent's title: "That's a part of Clean the
+  upstairs bathroom; use unsplit_task to make it one task again. Nothing was changed." This
+  catches the improvised merge if the router doesn't offer `unsplit_task`.
+
+Tests: unsplit after a split leaves the parent open, on the lists and `off_displays` off,
+with its steps, every part cancelled and no `task_parts` rows. Given a part's id, it unsplits
+its parent. A done part's step is named in the result and the parent keeps it. A task
+that isn't split, or one whose parts are all settled, is declined and nothing changes. The
+cancelled parts send no messages. The parent's "edited" change reaches the wall fake. A
+part renamed to its parent's title by `update_task` is refused.
+Scenario: Michael splits "Clean the upstairs bathroom" into five parts, then says "can you
+recombine them as subtasks?" He sees it as one task again, with five steps, assigned to
+him, and the wall shows one to-do, not "…: Clean the shower".
+
+Data: the Pi has the improvised merge. Once live, ask Themi to "put the bathroom task back
+together" (task 100, or 104, which is still its part). That cancels 104 and brings back 100
+with its five steps. No mark-reviewed needed (it wasn't a /bug report).
 
 ## Conversation mode
 

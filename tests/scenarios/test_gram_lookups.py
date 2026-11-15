@@ -231,3 +231,115 @@ async def test_shown_with_grams_asks_for_whats_missing(
     assert [r["name"] for r in weights.queued()] == ["chickpea flour"]
     weights.shown("1 cup chickpea flour", "written", 1)
     assert len(weights.queued()) == 1
+
+
+async def test_f44a_a_backfill_leaves_half_the_day_for_people(
+    scenario: Scenario, weights: GramWeights, fake_search: FakeSearch
+) -> None:
+    """At 0.8.6's start the queue used all 50 of the day's lookups in four minutes; now it
+    stops at half, and a lookup someone asks for right after still searches."""
+    fake_search.credits(220)  # 20 a day for 11 days
+    names = [f"{a}{b} flour" for a in "bcdfghjklm" for b in ("ax", "ix", "on", "ul", "ey", "ot")]
+    names = [n for n in names if not weights.book().has(n)]  # one the guide's fixture has
+    for name in names:  # 60, and nothing found for any (no model call)
+        weights.ask(name, "cup", None, None)
+    for _ in range(3):  # runs through the day (five a recipe each)
+        await weights._look_up_queue()
+    assert len(fake_search.queries()) == 10
+    assert len(weights.queued()) == len(names) - 10  # the rest wait for another day
+    fake_search.result("hours", "Library hours", "https://lib.example", "Open 9 to 5.")
+    scenario.primary.queue_tool_call("search_web", {"query": "library hours"})
+    scenario.primary.queue_text("It's open 9 to 5.")
+    await scenario.say("Husband", "Can you look up the library hours?")
+    assert len(fake_search.queries()) == 11
+
+
+# ----- F44c: work only when something changed; a deferred read waits ---------------------
+
+
+def rate_limited(scenario: Scenario) -> None:
+    from themi.ai.errors import MalformedOutputError
+
+    scenario.primary.queue_error(MalformedOutputError("not JSON"), op="structured")
+    scenario.fallback.queue_error(MalformedOutputError("not JSON"), op="structured")
+
+
+async def test_f44c_a_deferred_read_stays_queued_until_tomorrow(
+    scenario: Scenario, weights: GramWeights, fake_search: FakeSearch
+) -> None:
+    almond_results(fake_search)
+    weights.ask("almond flour", "cup", None, None)
+    rate_limited(scenario)
+    await weights.look_up()
+    assert weights.meta(key("almond flour")) is None  # not given up on as wanted
+    assert [r["name"] for r in weights.queued()] == ["almond flour"]
+    await weights.look_up()
+    assert len(fake_search.queries()) == 1  # not again today
+    await scenario.advance(hours=24)
+    scenario.primary.queue_structured({"weights": [
+        quote(1, 96, "almond flour: 1 cup = 96 grams"),
+        quote(2, 100, "one cup of almond flour weighs 100g"),
+    ]})  # fmt: skip
+    await weights.look_up()
+    assert len(fake_search.queries()) == 2
+    assert weights.book().grams("almond flour", 1, "cup") == 98
+
+
+async def test_f44c_nothing_changed_reads_nothing(
+    scenario: Scenario, weights: GramWeights, fake_search: FakeSearch, monkeypatch
+) -> None:
+    load(scenario.app.services)
+    scenario.app.db.execute("DELETE FROM gram_weights_queue")
+    await weights.look_up()  # the pass after a start
+    scenario.app.db.execute("DELETE FROM gram_weights_queue")  # what that pass asked for
+
+    def boom(*args: object) -> None:
+        raise AssertionError("re-read the cookbook with nothing changed")
+
+    monkeypatch.setattr(weights, "_needed", boom)
+    monkeypatch.setattr(weights, "learn", boom)
+    searched = len(fake_search.queries())
+    await weights.look_up()
+    assert len(fake_search.queries()) == searched
+
+
+async def test_f44c_a_new_recipe_is_weighed_at_the_next_run(
+    scenario: Scenario, weights: GramWeights, fake_search: FakeSearch
+) -> None:
+    import json
+
+    await weights.look_up()
+    almond_results(fake_search)
+    scenario.app.db.execute(
+        "INSERT INTO recipes (key, source, name, ingredients, created_at, updated_at) "
+        "VALUES ('doc:macarons', 'doc', 'Macarons', ?, '2026-10-21', '2026-10-21')",
+        (json.dumps([{"text": "1 cup almond flour", "group": ""}]),),
+    )
+    scenario.primary.queue_structured({"weights": [
+        quote(1, 96, "almond flour: 1 cup = 96 grams"),
+        quote(2, 100, "one cup of almond flour weighs 100g"),
+    ]})  # fmt: skip
+    await weights.look_up()
+    assert fake_search.queries() == ["almond flour 1 cup in grams"]
+
+
+async def test_f44c_the_guide_is_checked_again_only_after_an_edit(
+    scenario: Scenario, weights: GramWeights, monkeypatch
+) -> None:
+    await weights.check_guide()
+    calls: list[int] = []
+    owner = weights._guide_owner
+
+    def counted() -> object:
+        calls.append(1)
+        return owner()
+
+    monkeypatch.setattr(weights, "_guide_owner", counted)
+    await weights.check_guide()
+    assert calls == []  # nothing new
+    guides = scenario.app.services.maybe(keys.guides)
+    assert guides is not None
+    guides.save(scenario.member("Erin"), "Weights of Common Ingredients",
+                WEIGHTS_GUIDE + "\n1 cup teff flour 92g", personal=False)  # fmt: skip
+    await weights.check_guide()
+    assert calls == [1]

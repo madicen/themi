@@ -163,3 +163,104 @@ async def test_a_lookup_that_fills_it_cancels_its_task(
                               agrees=2)  # fmt: skip
     status = scenario.app.db.scalar("SELECT status FROM tasks WHERE id = ?", (task["id"],))
     assert status == "cancelled"
+
+
+# ----- F44b (bug #210): weigh a Tbsp of a spice, not a cup ------------------------------
+
+
+def cookbook_recipe(scenario: Scenario, name: str, lines: list[str]) -> int:
+    recipe_id = web_recipe(scenario, name, lines)
+    scenario.app.db.execute("UPDATE recipes SET source = 'doc' WHERE id = ?", (recipe_id,))
+    return recipe_id
+
+
+def titles(scenario: Scenario) -> list[str]:
+    return [t["title"] for t in tasks(scenario) if t["status"] == "open"]
+
+
+async def test_bug_210_a_spice_used_by_the_teaspoon_is_weighed_by_the_tablespoon(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    cookbook_recipe(scenario, "Pumpkin Pie", ["½ tsp ground nutmeg", "1 cup sugar"])
+    cookbook_recipe(scenario, "Alfredo Sauce", ["¼ tsp ground nutmeg"])
+    cookbook_recipe(scenario, "Bechamel Sauce", ["Pinch of ground nutmeg"])
+    weights.record("ground nutmeg", "wanted")
+    await weights.look_up()
+    assert titles(scenario) == ["Weigh 1 tablespoon of ground nutmeg when you're next cooking"]
+    (task,) = tasks(scenario)
+    assert "Spoon ground nutmeg into a 1 tablespoon measure and level it off" in task["steps"]
+
+
+async def test_cups_or_a_big_volume_still_weigh_a_cup(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    cookbook_recipe(scenario, "Bread", ["1 tsp teff flour", "2 cups teff flour"])
+    cookbook_recipe(scenario, "Soup", ["250 ml oat cream"])
+    cookbook_recipe(scenario, "Dressing", ["15 ml rice vinegar"])
+    for name in ("teff flour", "oat cream", "rice vinegar"):
+        weights.record(name, "wanted")
+    await weights.look_up()
+    assert sorted(titles(scenario)) == [
+        "Weigh 1 cup of oat cream when you're next cooking",
+        "Weigh 1 cup of teff flour when you're next cooking",
+        "Weigh 1 tablespoon of rice vinegar when you're next cooking",
+    ]
+
+
+async def test_one_of_a_counted_thing_is_singular(scenario: Scenario, weights: GramWeights) -> None:
+    cookbook_recipe(scenario, "Alfredo Sauce", ["2 garlic cloves, peeled and left whole"])
+    weights.record("garlic cloves", "wanted")
+    await weights.look_up()
+    assert titles(scenario) == ["Weigh one garlic clove"]
+
+
+def test_one_of() -> None:
+    from themi_home.gram_weights import one_of
+
+    for plural, single in [("garlic cloves", "garlic clove"), ("large eggs", "large egg"),
+                           ("bay leaves", "bay leaf"), ("cherry tomatoes", "cherry tomato"),
+                           ("strawberries", "strawberry"), ("hummus", "hummus"),
+                           ("onion", "onion"), ("molasses", "molasses")]:  # fmt: skip
+        assert one_of(plural) == single
+
+
+async def test_an_open_cup_task_becomes_the_tablespoon_one_once(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    """The Pi's task 111, made before the fix: renamed in place, no new task."""
+    board = scenario.app.services.maybe(keys.taskboard)
+    assert board is not None
+    cookbook_recipe(scenario, "Pumpkin Pie", ["½ tsp ground nutmeg"])
+    erin = scenario.member("Erin")
+    steps = [
+        "Spoon ground nutmeg into a 1 cup measure and level it off",
+        "Weigh it on the kitchen scale",
+        "Tell me the grams",
+    ]
+    title = "Weigh 1 cup of ground nutmeg when you're next cooking"
+    old = await board.create(erin, title, "physical", 1, importance="low", steps=steps)
+    weights.record("ground nutmeg", "wanted")
+    scenario.app.db.execute(
+        "UPDATE gram_weights_meta SET task_id = ? WHERE key = ?", (old.id, key("ground nutmeg"))
+    )
+    await weights.look_up()
+    await weights.look_up()
+    assert [(t["id"], t["title"]) for t in tasks(scenario)] == [
+        (old.id, "Weigh 1 tablespoon of ground nutmeg when you're next cooking")
+    ]
+
+
+async def test_a_tablespoon_weighed_is_saved_as_a_tablespoon(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    cookbook_recipe(scenario, "Pumpkin Pie", ["½ tsp ground nutmeg"])
+    weights.record("ground nutmeg", "wanted")
+    await weights.look_up()
+    scenario.primary.queue_tool_call(
+        "weighed_gram_weight",
+        {"ingredient": "ground nutmeg", "amount": 1, "unit": "tbsp", "grams": 7},
+    )
+    scenario.primary.queue_text("Saved.")
+    await scenario.say("Erin", "The tablespoon of nutmeg was 7 g")
+    assert weights.book().grams("ground nutmeg", 1, "tbsp") == 7
+    assert titles(scenario) == []

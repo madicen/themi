@@ -6,6 +6,7 @@
     fake_search.backend = "firecrawl"        # the other backend, over the same fake
     fake_search.fail("search", 429)          # the next search is refused
     fake_search.result(..., deep=True)       # found only by a deeper search (F31c)
+    fake_search.credits(936, limit=1000)     # the plan's credits left (F44a); unset: 404
 
 The scenario harness hands Themi a backend over this transport when a test uses the
 `fake_search` fixture. No real network calls.
@@ -34,6 +35,8 @@ class FakeSearch:
         self.backend = "tavily"
         self.calls: list[tuple[str, dict[str, Any]]] = []  # (kind, body)
         self._failures: Counter[str] = Counter()
+        self.left: int | None = None  # F44a: credits left; None answers 404
+        self.limit: int | None = 1000
         self.transport = httpx.MockTransport(self._handle)
 
     def result(self, words: str, title: str, url: str, snippet: str, *, deep: bool = False) -> None:
@@ -46,6 +49,10 @@ class FakeSearch:
 
     def page(self, url: str, text: str) -> None:
         self.pages[url] = text
+
+    def credits(self, left: int | None, *, limit: int | None = 1000) -> None:
+        """F44a: what the usage endpoints say (a None limit: Tavily's uncapped key)."""
+        self.left, self.limit = left, limit
 
     def fail(self, kind: str, status: int = 500) -> None:
         self._failures[f"{kind}:{status}"] += 1
@@ -71,13 +78,23 @@ class FakeSearch:
         assert request.headers.get("Authorization") == f"Bearer {KEY}"
         body = json.loads(request.content or b"{}")
         path = request.url.path
-        kind = "read" if path in ("/extract", "/v2/scrape") else "search"
+        usage = path in ("/usage", "/v2/team/credit-usage")
+        kind = "usage" if usage else "read" if path in ("/extract", "/v2/scrape") else "search"
         self.calls.append((kind, body))
         for failure in list(self._failures):
             name, status = failure.split(":")
             if name == kind and self._failures[failure]:
                 self._failures[failure] -= 1
                 return httpx.Response(int(status))
+        if usage and self.left is None:
+            return httpx.Response(404)
+        if usage and self.left is not None and request.url.host == "tavily.test":
+            used = None if self.limit is None else self.limit - self.left
+            account = {"current_plan": "Researcher", "plan_limit": self.limit,
+                       "plan_usage": used}  # fmt: skip
+            return _json({"key": {"usage": used, "limit": None}, "account": account})
+        if usage and self.left is not None:
+            return _json({"success": True, "data": {"remainingCredits": self.left}})
         if request.url.host == "tavily.test" and path == "/search":
             deep = body.get("search_depth") == "advanced"
             found = self._found(body["query"], deep)[: body.get("max_results", 5)]

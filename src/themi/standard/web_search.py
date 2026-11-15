@@ -5,9 +5,15 @@ could only point her to the dental board's site.
 `search_web` asks the configured backend (Tavily or Firecrawl, `themi.connectors.search`)
 and hands the results to the model as data, never instructions, with their links, so the
 answer can say where it came from. `read_web_page` reads one of those results. A daily
-cap keeps a free plan's credits for the month. Nothing personal goes into a query unless
-they said it in this message: a street number, phone number or email address Themi only
-knows from memory is refused.
+cap keeps a free plan's credits for the month.
+
+F44a (idea #211, "Add web lookups limit to settings"): the cap is the Modules page's "Web
+lookups a day" when it's set. Otherwise it's paced from the plan, once a local day: today's
+lookups so far plus the credits left over the days left in the month. Background lookups
+(the gram weights') stop at half of it, so what a person asks for keeps the rest.
+
+Nothing personal goes into a query unless they said it in this message: a street number,
+phone number or email address Themi only knows from memory is refused.
 
 F31c (idea #165, "searching the web should default our location to our house"): a search
 for a place near them gets the family home's city, state and ZIP, never its street. With
@@ -18,9 +24,10 @@ task's steps has to sit, in the results it came from, next to a name that step h
 
 from __future__ import annotations
 
+import calendar
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from themi import clock
@@ -35,7 +42,8 @@ from themi.modules import Module, ModuleContext, ModuleSetup
 if TYPE_CHECKING:
     from themi.core.services import Services
 
-DAILY_CAP = 50  # lookups a day for the family
+DAILY_CAP = 50  # lookups a day for the family, when the plan doesn't say (F44a: the fallback)
+BACKGROUND_SHARE = 0.5  # F44a: what background lookups may use of the day
 RESULTS = 5
 SHOWN_PAGE = 6_000  # characters of a page handed to the model
 SETUP_TEXT = (
@@ -43,7 +51,10 @@ SETUP_TEXT = (
     "from tavily.com) or a Firecrawl key (FIRECRAWL_API_KEY). Say so, and offer what they "
     "could search for themselves."
 )
-CAP_TEXT = "Today's {cap} web lookups are used up; it resets at midnight. Say so."
+CAP_TEXT = (
+    "Today's {cap} web lookups are used up; it resets at midnight. An admin can change how "
+    "many on the website's Modules page, under Web search. Say so."
+)
 PERSONAL_TEXT = (
     "Not searched: the query has {what} they didn't say in this message. Search without it, "
     "or ask them first."
@@ -94,10 +105,14 @@ NEARBY_CHARS = 200
 
 
 class WebSearch:
-    def __init__(self, services: Services, backend: SearchBackend | None) -> None:
+    def __init__(
+        self, services: Services, backend: SearchBackend | None, daily_lookups: int | None = None
+    ) -> None:
         self.services = services
         self.backend = backend
+        self.daily_lookups = daily_lookups  # F44a: the Modules page's number, or None to pace
         self.db = services.store.db
+        self._paced: tuple[date, int] | None = None  # F44a: (local day, its cap)
         self._seen: dict[int, set[str]] = {}  # links each member was shown, to read
         self._texts: dict[int, list[Shown]] = {}  # results each member saw lately (F31c)
 
@@ -106,12 +121,38 @@ class WebSearch:
         self.services.tools.register(search_web)
         self.services.tools.register(read_web_page)
 
-    def used_today(self) -> int:
+    def _midnight(self) -> datetime:
         family = self.services.store.get_family()
-        midnight = start_of_local_day(clock.now(), family.timezone if family else "UTC")
+        return start_of_local_day(clock.now(), family.timezone if family else "UTC")
+
+    def used_today(self) -> int:
         return self.db.scalar(
-            "SELECT COUNT(*) FROM web_lookups WHERE created_at >= ?", (to_utc_iso(midnight),)
+            "SELECT COUNT(*) FROM web_lookups WHERE created_at >= ?",
+            (to_utc_iso(self._midnight()),),
         )
+
+    @property
+    def cap(self) -> int:
+        """F44a: today's lookups for the family: the setting, today's pace, or 50."""
+        if self.daily_lookups:
+            return self.daily_lookups
+        if self._paced is not None and self._paced[0] == self._midnight().date():
+            return self._paced[1]
+        return DAILY_CAP
+
+    async def refresh(self) -> int:
+        """F44a: today's pace from the plan's credits, read once a local day."""
+        today = self._midnight().date()
+        fresh = self._paced is not None and self._paced[0] == today
+        if self.daily_lookups or self.backend is None or fresh:
+            return self.cap
+        left = await self.backend.credits_left()
+        if left is None:
+            self._paced = (today, DAILY_CAP)  # asked again tomorrow, not at each search
+        else:
+            days_left = calendar.monthrange(today.year, today.month)[1] - today.day + 1
+            self._paced = (today, self.used_today() + left // days_left)
+        return self.cap
 
     def _count(self, member_id: int, kind: str) -> None:
         self.db.execute(
@@ -124,17 +165,21 @@ class WebSearch:
             (to_utc_iso(clock.now() - timedelta(days=31)),),
         )
 
-    def spend(self, member_id: int, kind: str) -> None:
-        """RC4a: a page read another way (a recipe link) counts against the same cap."""
-        if self.used_today() >= DAILY_CAP:
-            raise ToolFailed(CAP_TEXT.format(cap=DAILY_CAP))
+    def spend(self, member_id: int, kind: str, *, background: bool = False) -> None:
+        """RC4a: a page read another way (a recipe link) counts against the same cap.
+        F44a: a `background` lookup (nobody asked for it) stops at half the day."""
+        cap = self.cap
+        if background and self.used_today() >= int(cap * BACKGROUND_SHARE):
+            raise ToolFailed(CAP_TEXT.format(cap=cap))
+        if self.used_today() >= cap:
+            raise ToolFailed(CAP_TEXT.format(cap=cap))
         self._count(member_id, kind)
 
     def _ready(self) -> SearchBackend:
         if self.backend is None:
             raise ToolFailed(SETUP_TEXT)
-        if self.used_today() >= DAILY_CAP:
-            raise ToolFailed(CAP_TEXT.format(cap=DAILY_CAP))
+        if self.used_today() >= self.cap:
+            raise ToolFailed(CAP_TEXT.format(cap=self.cap))
         return self.backend
 
     def home_area(self) -> str | None:
@@ -151,11 +196,12 @@ class WebSearch:
         place: str = "",
         lead: str = "",
     ) -> str:
+        await self.refresh()
         backend = self._ready()
         results = await self._search(backend, member_id, query, deep=False)
         named = [r for r in results if _names(r, name, place)] if name else results
         # One more, deeper, before saying it isn't there (reply 304).
-        if name and not named and self.used_today() < DAILY_CAP:
+        if name and not named and self.used_today() < self.cap:
             deeper = await self._search(backend, member_id, query, deep=True)
             self._count(member_id, "search")  # a deep search costs two
             results = deeper or results
@@ -238,6 +284,7 @@ class WebSearch:
     async def read(self, member_id: int, url: str) -> str:
         if url not in self._seen.get(member_id, set()):
             raise ToolFailed("Only a link from this conversation's search results can be read.")
+        await self.refresh()
         backend = self._ready()
         try:
             text = await backend.read(url)
@@ -435,15 +482,17 @@ class WebSearchModule(Module):
     tool_groups = (groups.WEB,)
     settings = SearchSettings
 
-    def __init__(self, backend: SearchBackend | None) -> None:
+    def __init__(self, backend: SearchBackend | None, daily_lookups: int | None = None) -> None:
         self.backend = backend
+        self.daily_lookups = daily_lookups
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
         from themi.connectors.search import choose
 
         s = setup.read(SearchSettings)
-        return cls(choose(s.backend.lower(), s.tavily_api_key, s.firecrawl_api_key))
+        backend = choose(s.backend.lower(), s.tavily_api_key, s.firecrawl_api_key)
+        return cls(backend, s.daily_lookups)
 
     async def check(self) -> str | None:
         if self.backend is None:
@@ -455,4 +504,4 @@ class WebSearchModule(Module):
         return None
 
     def install(self, ctx: ModuleContext) -> None:
-        ctx.provide(WebSearch(ctx.services, self.backend)).install()
+        ctx.provide(WebSearch(ctx.services, self.backend, self.daily_lookups)).install()

@@ -64,6 +64,7 @@ def test_where_each_value_came_from() -> None:
         "tavily_api_key": "stored",
         "firecrawl_api_key": "environment",
         "backend": "file",
+        "daily_lookups": "default",  # F44a's new field, nowhere set
     }
 
 

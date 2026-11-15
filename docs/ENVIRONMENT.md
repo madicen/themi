@@ -106,10 +106,13 @@ COZYLA_PASSWORD=
 # tavily.com gives 1,000 searches a month, no card needed. Firecrawl works instead
 # (firecrawl.dev, 1,000 free credits a month, about 500 searches; no card). With both keys
 # set, THEMI_SEARCH_BACKEND picks one (tavily or firecrawl). Without a key, Themi says it
-# can't search yet.
+# can't search yet. THEMI_SEARCH_DAILY_LIMIT is the family's lookups a day (1 to 1000);
+# blank paces the plan's credits over the rest of the month (F44a). It's also on the
+# website's Modules page, under Web search.
 # TAVILY_API_KEY=
 # FIRECRAWL_API_KEY=
 # THEMI_SEARCH_BACKEND=
+# THEMI_SEARCH_DAILY_LIMIT=
 
 # Nightly encrypted backups to S3-compatible storage (Cloudflare R2 or Backblaze B2);
 # docs/DEPLOY.md section 7. All four go together. Backups are encrypted with
