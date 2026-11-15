@@ -45,6 +45,7 @@
   "memory.journal": 3600,
   "modules.announce": 60,
   "outbox.flush": 30,
+  "oven.left_on": 300,
   "pantry.predict": 21600,
   "pantry.receipts": 600,
   "recipes.forget_web": 86400,

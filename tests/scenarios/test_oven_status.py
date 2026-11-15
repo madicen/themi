@@ -6,25 +6,14 @@ from __future__ import annotations
 from datetime import timedelta
 
 import httpx
-import pytest
 
 from tests.fakes.smarthq import CODE, EMAIL, PASSWORD, FakeSmartHQ
 from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_appliance_status import ask, tool_names
 from themi import clock
-from themi.core import keys
 from themi_home.connectors.smarthq import LOWER, UPPER
 from themi_home.connectors.smarthq import events as ov
-
-
-@pytest.fixture
-async def kitchen(scenario: Scenario, fake_smarthq: FakeSmartHQ) -> FakeSmartHQ:
-    watcher = scenario.app.services.get(keys.smarthq)
-    await watcher.sign_in(scenario.member("Erin"), EMAIL, PASSWORD, "US")
-    await watcher.submit_code(scenario.member("Erin"), EMAIL, CODE)
-    await scenario.run_periodic("devices.oven")
-    return fake_smarthq
 
 
 async def test_is_the_oven_still_on(scenario: Scenario, kitchen: FakeSmartHQ) -> None:

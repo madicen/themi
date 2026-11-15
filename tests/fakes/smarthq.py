@@ -267,3 +267,15 @@ class FakeSmartHQ(Snapshots):
 @pytest.fixture
 def fake_smarthq() -> FakeSmartHQ:
     return FakeSmartHQ()
+
+
+@pytest.fixture
+async def kitchen(scenario: Any, fake_smarthq: FakeSmartHQ) -> FakeSmartHQ:
+    """The range linked in a scenario (signed in with the emailed code) and read once."""
+    from themi.core import keys
+
+    watcher = scenario.app.services.get(keys.smarthq)
+    await watcher.sign_in(scenario.member("Erin"), EMAIL, PASSWORD, "US")
+    await watcher.submit_code(scenario.member("Erin"), EMAIL, CODE)
+    await scenario.run_periodic("devices.oven")
+    return fake_smarthq
