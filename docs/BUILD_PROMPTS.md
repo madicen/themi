@@ -20241,3 +20241,12 @@ Read first: `themi_home/meals.py`.
 - A planned dinner whose recipe preheats gets a card at its preheat time ("Preheat at 5:40
   for 6:00 dinner?"), to whoever's cooking. It is OV4's `oven_heat` action, never automatic.
 Tests: card time from the recipe; no card without a preheat step; Remote Enable off.
+
+Notes:
+- **Blocked:** Themi has no meal plan with recipes and dinner times (meals log what was
+  eaten; recipe ideas and [Cook this] start cooking now; GW4's notes say the same). A
+  preheat card needs a planned dinner to hang on. Needed: Michael's decision on what a
+  meal plan is (where it lives, who sets it, a time per dinner), as its own prompt
+  first. Once it exists, the card is OV4's `OvenControl.heat()` from a [Preheat] button
+  (`offered_at` the card's time), sent at the dinner's time less the preheat (about 15
+  minutes at 25°F a minute).
