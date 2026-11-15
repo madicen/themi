@@ -25,6 +25,7 @@ from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.roborock import FakeRoborock
 from tests.fakes.search import FakeSearch
+from tests.fakes.smarthq import FakeSmartHQ
 from tests.fakes.spotify import FakeSpotify
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
@@ -56,6 +57,7 @@ def connector_options(
     roborock: FakeRoborock | None = None,
     tuya: FakeTuya | None = None,
     catgenie: FakeCatGenie | None = None,
+    smarthq: FakeSmartHQ | None = None,
     keep: FakeKeep | None = None,
     weather: FakeWeather | None = None,
     timezone: str = "America/Los_Angeles",
@@ -72,6 +74,7 @@ def connector_options(
         "roborock": roborock,
         "tuya": tuya.config() if tuya else None,
         "catgenie": catgenie.config() if catgenie else None,
+        "smarthq": smarthq,  # OV2
         "keep": keep.connect if keep else None,
         "weather": weather.client() if weather else None,  # WX1
     }

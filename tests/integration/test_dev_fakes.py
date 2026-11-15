@@ -28,6 +28,7 @@ async def test_the_first_run_links_everything_and_the_next_doesnt_again(boot: Bo
         "Mochi's feeder",
         "CatGenie",
         "Dishwasher",
+        "the oven",
         "the Safeway helper",
     ]
     assert first.count("SELECT COUNT(*) FROM linked_accounts WHERE watched = 1") == 2

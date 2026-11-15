@@ -40,6 +40,7 @@ from tests.fakes.roborock import FakeRoborock
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.search import FakeSearch
 from tests.fakes.server_runner import FakeRunner
+from tests.fakes.smarthq import FakeSmartHQ
 from tests.fakes.spotify import FakeSpotify
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram, markup
 from tests.fakes.thinq import FakeThinq
@@ -108,6 +109,7 @@ class Scenario:
         roborock: FakeRoborock | None = None,
         tuya: FakeTuya | None = None,
         catgenie: FakeCatGenie | None = None,
+        smarthq: FakeSmartHQ | None = None,
         gtasks: FakeGtasks | None = None,
         keep: FakeKeep | None = None,
         runner: FakeRunner | None = None,
@@ -168,6 +170,7 @@ class Scenario:
                 roborock=roborock,
                 tuya=tuya,
                 catgenie=catgenie,
+                smarthq=smarthq,
                 keep=keep,
                 weather=weather,
                 timezone=family.family.timezone,
@@ -476,8 +479,8 @@ async def scenario(
     sync (a "Family" list) when it uses `fake_cozyla`, and Home Connect when it uses
     `fake_home_connect`, LG ThinQ (30) when it uses `fake_thinq`, Roborock (V1) when it uses
     `fake_roborock`, Tuya's feeders (32) when it uses `fake_tuya`, the CatGenie litter box (CG1a)
-    when it uses `fake_catgenie`, Google Keep (GK1) when it
-    uses `fake_keep`, and the control folder for updates from the website (D3a) when it uses
+    when it uses `fake_catgenie`, the oven (OV2) when it uses `fake_smarthq`, Google Keep (GK1)
+    when it uses `fake_keep`, and the control folder for updates from the website (D3a) when it uses
     `fake_runner`.
     """
 
@@ -499,6 +502,7 @@ async def scenario(
         roborock=optional("fake_roborock"),
         tuya=optional("fake_tuya"),
         catgenie=optional("fake_catgenie"),
+        smarthq=optional("fake_smarthq"),
         gtasks=optional("fake_gtasks"),
         keep=optional("fake_keep"),
         runner=optional("fake_runner"),

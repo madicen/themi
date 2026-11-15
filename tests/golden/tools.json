@@ -45,7 +45,7 @@
   },
   "appliance_status": {
     "group": "devices",
-    "spec": "c76c48dea818"
+    "spec": "db18cda0f894"
   },
   "archive_noise_emails": {
     "group": "email",
@@ -253,7 +253,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "e8855ad1e2bd"
+    "spec": "9b18eafc54be"
   },
   "move_expense": {
     "group": "spending",

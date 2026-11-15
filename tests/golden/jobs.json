@@ -17,6 +17,7 @@
   "devices.dishwasher_pace": 3600,
   "devices.feeders": 600,
   "devices.litter_box": 600,
+  "devices.oven": 30,
   "devices.thinq": 300,
   "devices.thinq_push": 60,
   "devices.vacuum": 60,
