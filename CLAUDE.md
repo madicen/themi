@@ -28,6 +28,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Gram weights (recipes' amounts in grams, the weights guide): Themi Gram Conversion Plan,
   https://claude.ai/artifact/4Vu3tyvfmARjojgvocuqZz. Read it the same way. It is the design
   source for the GW prompts.
+- Oven (the Café range through SmartHQ, and the cook screen's preheat, proof, timers and
+  off): Themi Oven Module Plan, https://claude.ai/artifact/LPAkQkcza7v4iFCG25AjiK. Read it
+  the same way. It is the design source for the OV prompts.
 
 ## "Implement the next prompt"
 

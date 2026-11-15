@@ -433,14 +433,14 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GW5 | Gram weights: corrections from chat | Gram weights | [x] 2026-11-14 |
 | GW6 | Gram weights: checking the family's guide | Gram weights | [x] 2026-11-14 |
 | GW7 | Gram weights: grams in a recipe saved to the cookbook | Gram weights | [x] 2026-11-14 |
-| OV1 | Oven: SmartHQ spike at the range | Oven | [ ] |
-| OV2 | Oven: connector, account, status in chat | Oven | [ ] |
-| OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [ ] |
-| OV4 | Oven: preheat from the cook screen | Oven | [ ] |
-| OV5 | Oven: oven timers from step timers | Oven | [ ] |
-| OV6 | Oven: Stop turns the oven off | Oven | [ ] |
-| OV7 | Oven: proofing dough | Oven | [ ] |
-| OV8 | Oven: preheat ahead of a planned dinner | Oven | [ ] |
+| OV1 | Oven: SmartHQ spike at the range | Oven | [x] 2026-11-15 |
+| OV2 | Oven: connector, account, status in chat | Oven | [x] 2026-11-15 |
+| OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [x] 2026-11-15 |
+| OV4 | Oven: preheat from the cook screen | Oven | [x] 2026-11-15 |
+| OV5 | Oven: oven timers from step timers | Oven | [x] 2026-11-15 |
+| OV6 | Oven: Stop turns the oven off | Oven | [x] 2026-11-15 |
+| OV7 | Oven: proofing dough | Oven | [x] 2026-11-15 |
+| OV8 | Oven: preheat ahead of a planned dinner | Oven | [~] |
 
 ## Fixed technical choices
 
@@ -20023,7 +20023,7 @@ Rules every OV prompt keeps:
 - No test reaches SmartHQ. The fake range (`tests/fakes/smarthq.py`) runs on `themi.clock`.
 
 ### OV1 · Oven: SmartHQ spike at the range
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: none
 Read first: the plan's "Is it possible" and "Open questions and setup".
 - Needs Michael at the range with his SmartHQ login. A throwaway script (not shipped), in
@@ -20036,8 +20036,41 @@ Read first: the plan's "Is it possible" and "Open questions and setup".
   into this prompt's Notes: ERD codes, mode values, which oven proofs, what failed.
 Tests: none (a spike). Stop if sign-in or the writes don't work: OV2 waits on this.
 
+Notes:
+- Run with Michael at the range, 10:12 to 10:48. Range: CHS950P2M9S1, one SmartHQ
+  appliance (`ErdApplianceType.OVEN`) with an upper and a lower oven, °F, set range 170 to
+  550°F (`OVEN_MODE_MIN_MAX_TEMP`), no warming drawer, probe in the lower oven only.
+  `gehomesdk` 2026.8.0.
+- Sign-in: `GeSmartHqLogin` (handles SmartHQ's emailed MFA code), then
+  `GeWebsocketClient(user, "", region, refresh_token=...)`. The refresh token alone was
+  enough for every later run and is rotated; keep the newest after each connect
+  (`client.refresh_token`). OV2 should store the refresh token beside the password, so a
+  reconnect doesn't need an MFA code.
+- ERDs (upper `0x51xx`, lower `0x52xx`): `COOK_MODE` 0x5100/0x5200 (r/w: mode byte, °F, then
+  times), `CURRENT_STATE` 0x5101/0x5201 (Off, Preheat, Proof, ...),
+  `RAW_TEMPERATURE` 0x510d/0x520d (the real °F), `DISPLAY_TEMPERATURE` 0x5109/0x5209 (0 when
+  off, 100 for anything under 100), `KITCHEN_TIMER` 0x5105 (upper only), `REMOTE_ENABLED`
+  0x510a/0x520a, `PROBE_PRESENT` / `PROBE_DISPLAY_TEMP` 0x5207/0x5203 (lower).
+- Modes the ovens list: upper Bake, Baked Goods, Frozen Pizza, Frozen Snacks; lower Bake,
+  Convection Multi Bake (27), Convection Roast (36), Baked Goods, Frozen Pizza and Snacks
+  (single and multi), Air Fry (158). There is no plain Convection Bake (18).
+- Results: heat with Remote Enable off is refused. Bake 350°F (lower) went to Preheat about
+  3 s after the write. The upper kitchen timer set 5 min and ran (read back in whole
+  minutes, rounded up). Proof is mode 13 at exactly 85°F on the upper oven (what the range
+  itself sends: raw `0D0055...`); 0°F and 100°F are refused. Proof isn't in the upper
+  oven's mode list, so it has to be hard-coded. Off (mode 0) works on both ovens in about
+  2 s, also on an oven started at the range with the Remote Enable icon off.
+- A refused write still echoes in `COOK_MODE` for about 45 s ("Bake (350°)" with the oven
+  off), then goes back. Read-back must wait for `CURRENT_STATE`, never trust `COOK_MODE`.
+- Remote Enable covers both ovens, stayed on for at least 15 minutes and through several
+  remote starts and offs, until Michael turned it off at the range. The lapse time is
+  still unknown. An oven that's cooking reports `REMOTE_ENABLED` true even with the icon off
+  (it accepts a remote off), and false again once it's off.
+- The spike scripts and the ERD dump were in the session scratchpad, not the repo (the
+  dump has the serial number). OV2 can make its fake range from these notes.
+
 ### OV2 · Oven: connector, account, status in chat
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV1
 Read first: the plan's "Design"; `themi_home/connectors/thinq/` and `homeconnect/` as the
 pattern; `themi_home/appliances.py`.
@@ -20045,7 +20078,9 @@ pattern; `themi_home/appliances.py`.
   `set_cook`, `set_timer`, `off`; `SmartHQError`), `watch.py` (the websocket, as events),
   `events.py` (mode words, preheated detection). `gehomesdk` added to the dependencies.
 - A SmartHQ device on the Accounts page (username, password, region), encrypted at rest;
-  the range becomes two devices, `oven_upper` and `oven_lower`.
+  linking handles the emailed MFA code (`GeSmartHqLogin`) and keeps the rotating refresh
+  token, encrypted too (OV1 notes). The range becomes two devices, `oven_upper` and
+  `oven_lower`.
 - Migration: `oven_readings` (last state per oven, with time) and `oven_actions` (each
   write, who, the read-back).
 - `appliance_status` reads the ovens: mode, set and actual °F, timer left, probe. An oven
@@ -20053,8 +20088,36 @@ pattern; `themi_home/appliances.py`.
 Tests: the fake range; status in words for both ovens; off; unreadable falls back to the
 last reading; sign-in failure is `SmartHQError`. A scenario: "is the oven on?".
 
+Notes:
+- Deviation: the ovens aren't rows in `devices`. Its provider CHECK can only change by
+  rebuilding the table, and a dozen tables cascade from it. The module (`smarthq`) has its
+  own track (`themi_home/smarthq_schema`): `smarthq_account`, `ovens` (one row per cavity),
+  `oven_readings`, `oven_actions`. `appliance_status` and the Home panel ask the watcher
+  for the ovens directly; the tool's `appliance` enum gained `oven`.
+- `themi_home/connectors/smarthq/`: `client.py` (`SmartHQLogin`, `SmartHQSession`,
+  `SmartHQAccount`, errors), `events.py` (Themi's own decode and encode of the raw ERDs:
+  `read`, `cook_value`, `OFF_VALUE`, `timer_value`, `state_words`, `OFFERS`, `PROOF_F`),
+  `watch.py` (`OvenWatcher`: link, `ovens`, `read`, `last`, `poll`, `heat`, `set_timer`,
+  `off`, `can_heat`), `library.py` (gehomesdk; optional extra `themi[smarthq]`, pinned
+  `gehomesdk==2026.8.0`). The session speaks raw hex both ways, so the fake holds OV1's
+  bytes (`tests/fixtures/smarthq/range_off.json`).
+- Sign-in keeps the password (encrypted, Michael's call) and the rotating refresh token
+  (encrypted; the newest kept after every read). The library connects with the token and
+  an empty password, so a refused token fails as `SignInLost` instead of starting an
+  emailed-code sign-in nobody can answer. The Accounts row (`accounts/smarthq.html`,
+  `/family/smarthq/sign-in`, `/code`, `/unlink`) handles the emailed code.
+- Writes wait for `CURRENT_STATE` (heat: on in that mode; off: off; timer: the minutes),
+  up to 30 s in 2 s steps through `SmartHQLogin.settle`, which the fake turns into
+  `clock.advance`. No write is refused for Remote Enable except heat.
+- `devices.oven` polls every 30 s. "oven" and "preheat" route to the devices group.
+- `make dev` has the fake range linked, and an Oven section on the control panel (Remote
+  Enable, start by hand, skip to preheated, off at the range, the probe).
+- Setup Michael must do: on the Pi, `pip install -e '.[smarthq]'` (or the extra in the
+  deploy), restart, then sign in on Accounts → Oven with the SmartHQ email and password
+  and the emailed code.
+
 ### OV3 · Oven: preheated, timer, probe and left-on notices
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV2
 Read first: the plan's "What Themi does" (Notices).
 - Through the outbox: "preheated" once per heat-up; "oven timer's done" unless a cook-screen
@@ -20063,31 +20126,81 @@ Read first: the plan's "What Themi does" (Notices).
 Tests: each notice once; no double timer message; [Turn it off] turns it off and isn't
 staged; [It's fine] quiet until the next heat-up. Scenarios for preheated and left on.
 
+Notes:
+- Deviation: off *is* staged, in `oven_off`, a family category that's automatic from the
+  start (tier 2). CLAUDE.md has every side effect go through the trust tiers; automatic,
+  it never waits and it's in the audit. Were it ever escalated (pending), the person is
+  told to turn the oven off at the range rather than left with a card.
+- `themi_home/oven.py`, `OvenControl` (`keys.oven`), installed by the smarthq module (one
+  module, as Roborock installs Vacuum). Track migration 0002: `oven_heatups` (one per
+  on-to-off, who started it through Themi, its cook session, what's been told),
+  `oven_timers`, and the categories `oven_heat` (tier 1, capped), `oven_timer` (tier 1,
+  may become 2), `oven_off` (tier 2).
+- The tap is the yes: approvals hold `oven_heat` and `oven_timer` (no chat card).
+  `heat()` stages and approves as the tapper; `set_timer()` and `off()` stage as
+  requested. Why the oven refused (Remote Enable, its modes) is said, not "didn't go
+  through". `heat(offered_at=)` refuses a card older than 10 minutes and says the oven
+  as it is.
+- Notices, once each per heat-up: preheated (to whoever started it through Themi; one
+  started at the range isn't announced), the oven timer (to whoever set it through Themi;
+  a linked cook-screen timer says it instead, OV5), the probe near (within 5°F) and
+  reached (to the starter, else everyone; the target is the cook mode's probe field).
+- "Household bedtime" (Michael's answer in the plan) is read as the first member's quiet
+  hours starting while the oven's on: there's no household bedtime setting. Left on goes
+  to everyone, urgent, with [Turn it off] [It's fine]; also 30 minutes after a cook
+  session that ended since the oven came on (`oven.left_on`, every 5 minutes).
+- A lost sign-in tells the admins once.
+
 ### OV4 · Oven: preheat from the cook screen
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV2, CK prompts done
 Read first: the plan's "What Themi does" (cook screen) and "Safety and trust tiers";
 `themi_home/cooking_ahead.py`.
-- The preheat cue gets [Preheat]: mode from the step (Bake; Convection Bake for
-  "convection" or "fan"), the step's °F (°C converted), the oven the recipe names or a pick.
-  The `oven_heat` category; max 550°F.
+- The preheat cue gets [Preheat]: mode from the step (Bake; Convection Multi Bake for
+  "convection" or "fan", which only the lower oven has), the step's °F (°C converted), the
+  oven the recipe names or a pick. The `oven_heat` category; 170 to 550°F.
+- Read-back waits for `CURRENT_STATE` to become Preheat; an echoed `COOK_MODE` alone isn't
+  success (OV1 notes).
 - The screen's live line ("Lower oven 285°F of 400°F", then "Preheated").
 - Remote Enable off: "Press Remote Enable on the oven, then tap Preheat again."
 - The session keeps which oven it started.
 Tests: mode and °F from step wording; °C step; Remote Enable off; a stale card refused;
 read-back failure told. A scenario: preheat from step 1 to preheated.
 
+Notes:
+- `themi_home/cooking_oven.py` (OV4 to OV7's cook-screen side): `heat_for(text)` reads the
+  step's preheat (°C to °F to the nearest 5; "convection"/"fan" is Convection Multi Bake;
+  "upper/top/lower/bottom oven" names one); `preheat_buttons` (a plain Bake offers both,
+  lower first: "Preheat lower oven", "Preheat upper oven"); `oven_line`.
+- The screen's state: `strip.oven` (the buttons) and `strip.at` (when it was drawn, the
+  stale check), and `oven_line` ("Lower oven 270°F of 400°F", "Lower oven preheated to
+  400°F", from the last poll, so it moves every 30 s). Shown in `cook/_tip.html`.
+- The tap is `oven_heat` on `/session/cook/{id}/act`; a heat that took marks the offer
+  done. The read-back failure is OV2's (`test_a_write_the_oven_doesnt_show_...`).
+- Not done: a preheat the look-ahead's `PREHEAT` doesn't match ("preheat the convection
+  oven to 375") gets no button; widening it would change CK4's offers too.
+
 ### OV5 · Oven: oven timers from step timers
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV4
 Read first: `themi_home/cooking_timers.py`.
 - A step timer gets [Oven timer] beside [Timer]: Themi's timer plus the oven's kitchen timer
-  on the session's oven (`oven_timer`, confirm by default, a rule may make it automatic).
+  on the upper oven, the only one with a kitchen timer (`oven_timer`, confirm by default, a
+  rule may make it automatic). The timer reads back in whole minutes.
   Cancelling either clears both; "add 2 minutes" moves both.
 Tests: both set; cancel clears both; the end message only once.
 
+Notes:
+- Each timer offer on the step gets [Oven timer] beside it (`offers[].oven`, only with the
+  upper oven linked). The tap `oven_timer` starts Themi's timer, then the oven's in whole
+  minutes rounded up (`cooking_oven.oven_timer`), tied by `oven_timers.cooking_timer_id`.
+- Either follows the other at the oven's next read (every 30 s), in `OvenControl`:
+  Themi's cancelled (screen, typed, or the ending's [Cancel them]) clears the oven's; more
+  time on Themi's moves the oven's; the oven's cleared at the range more than a minute
+  early cancels Themi's. The end is said once, by Themi's timer.
+
 ### OV6 · Oven: Stop turns the oven off
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV4
 Read first: `themi_home/cooking.py` (`stop`, `finish`).
 - Stop or Finish with an oven this session started still on: "Turn the oven off too?"
@@ -20096,14 +20209,30 @@ Read first: `themi_home/cooking.py` (`stop`, `finish`).
 Tests: Stop offers it; [Turn off] turns off without staging; [Leave it on] keeps it on and
 OV3's left-on timer still runs; an oven not started here isn't offered.
 
+Notes:
+- "Started here" is an open heat-up whose `session_id` is this session's (OV4's tap
+  sets it). Asked once (`session.wrap["oven"]`): on the cook screen when it's open (the
+  ended screen stays up for it, before the timers question), else in chat. [Turn off] is
+  OV3's `oven_off` (staged, automatic: in the audit, never waiting), not unstaged as the
+  prompt said, for the same reason as OV3.
+
 ### OV7 · Oven: proofing dough
-Status: [ ]
-Depends on: OV4, OV1 confirmed a remote Proof
+Status: [x] 2026-11-15
+Depends on: OV4
 Read first: the plan's "Is it possible" (Proof row, as OV1 left it).
 - A step that rises ("let rise", "proof until doubled", "rise in a warm place") offers
-  [Proof in the oven]: Proof on the oven OV1 found proofs, only when that oven is off, plus
-  a step timer for the step's time. `oven_heat`.
+  [Proof in the oven]: Proof (mode 13) at 85°F on the upper oven, the only setting it
+  accepts, only when that oven is off, plus a step timer for the step's time. `oven_heat`.
 Tests: wording matched; refused when the oven's hot; the timer started. A scenario.
+
+Notes:
+- `cooking_oven.RISE` ("let rise", "proof until", "until doubled", "in a warm place",
+  "first/second rise"); `proof_offer` puts `proof` in the screen's state on the step
+  they're on, only with the upper oven off as last read, with the step's first time.
+- The tap `oven_proof` reads the upper oven first (on: "The upper oven is on (...), so it
+  can't proof now."), then OV4's `heat()` with Proof at 85°F (so `oven_heat`, approved by
+  the tap), then the step's timer: "The upper oven is on Proof (85°F). And a 1 hr timer
+  for the rise." OV6's question covers a proofing oven too.
 
 ### OV8 · Oven: preheat ahead of a planned dinner
 Status: [ ]
@@ -20112,3 +20241,12 @@ Read first: `themi_home/meals.py`.
 - A planned dinner whose recipe preheats gets a card at its preheat time ("Preheat at 5:40
   for 6:00 dinner?"), to whoever's cooking. It is OV4's `oven_heat` action, never automatic.
 Tests: card time from the recipe; no card without a preheat step; Remote Enable off.
+
+Notes:
+- **Blocked:** Themi has no meal plan with recipes and dinner times (meals log what was
+  eaten; recipe ideas and [Cook this] start cooking now; GW4's notes say the same). A
+  preheat card needs a planned dinner to hang on. Needed: Michael's decision on what a
+  meal plan is (where it lives, who sets it, a time per dinner), as its own prompt
+  first. Once it exists, the card is OV4's `OvenControl.heat()` from a [Preheat] button
+  (`offered_at` the card's time), sent at the dinner's time less the preheat (about 15
+  minutes at 25°F a minute).

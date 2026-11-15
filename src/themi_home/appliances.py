@@ -4,7 +4,7 @@
 dryer?" "The dryer isn't running", both made up: no tool read the appliances. Now
 `appliance_status` reads each one live (LG ThinQ for the washer and dryer, Home Connect for
 the dishwasher, Roborock for the vacuum, V1, Tuya for the pet feeders, 32, CatGenie for the
-litter box, CG1a), keeps what it
+litter box, CG1a, SmartHQ for the range's two ovens, OV2), keeps what it
 saw as a poll would, and says the time left when the appliance reports it. One that can't be
 read now is told as it was last seen, with the time, and one that was never seen says so.
 Reading changes nothing in the house, so it isn't staged through the trust tiers.
@@ -31,13 +31,15 @@ from themi_home.connectors.catgenie.events import state_word as litter_words
 from themi_home.connectors.homeconnect import HomeConnectError
 from themi_home.connectors.roborock import RoborockError
 from themi_home.connectors.roborock.events import problems, state_word
+from themi_home.connectors.smarthq import Oven, OvenReading, SmartHQError
+from themi_home.connectors.smarthq.events import state_words as oven_words
 from themi_home.connectors.thinq import FINISHED, IDLE, RUNNING, ThinqError
 from themi_home.connectors.tuya import TuyaError
 from themi_home.connectors.tuya.events import state_word as feeder_words
 
 log = logging.getLogger(__name__)
 
-APPLIANCES = ("washer", "dryer", "dishwasher", "vacuum", "feeder", "litter_box")
+APPLIANCES = ("washer", "dryer", "dishwasher", "vacuum", "feeder", "litter_box", "oven")
 IN_WORDS = ("vacuum", "feeder", "litter_box")  # their states are kept in words already
 # Home Connect's words, as LG's three (and its own few that are neither).
 HOME_CONNECT = {
@@ -49,10 +51,9 @@ HOME_CONNECT = {
     "Aborting": IDLE,
 }
 NONE_LINKED = (
-    "No washer, dryer, dishwasher, vacuum, feeder or litter box is linked to Themi, so Themi "
-    "can't see "
-    "them. An admin can link them on the website's Accounts page. Say so; don't guess how "
-    "they're doing."
+    "No washer, dryer, dishwasher, vacuum, feeder, litter box or oven is linked to Themi, so "
+    "Themi can't see them. An admin can link them on the website's Accounts page. Say so; "
+    "don't guess how they're doing."
 )
 SAY_ONLY = (
     "That's all Themi can see of them: say it as it is, and never add a time or a state "
@@ -75,18 +76,20 @@ class Appliances:
             for d in self.services.store.list_devices()
             if d.appliance in APPLIANCES and which in ("all", d.appliance)
         ]
-        if not devices:
+        ovens = self._ovens() if which in ("all", "oven") else []
+        if not devices and not ovens:
             if which == "all":
                 return NONE_LINKED
             return f"No {which} is linked to Themi, so Themi can't see it. Say so; don't guess."
-        lines = [await self._line(d) for d in devices]
+        lines = [await self._line(d) for d in devices] + [await self._oven(o) for o in ovens]
         return "\n".join(lines) + "\n\n" + SAY_ONLY
 
     def at_a_glance(self) -> list[str] | None:
         """W2, the website's Home: what's worth knowing, from the states last seen (no reads,
         so the page never waits on an appliance). None when nothing is linked."""
         devices = [d for d in self.services.store.list_devices() if d.appliance in APPLIANCES]
-        if not devices:
+        ovens = self._ovens()
+        if not devices and not ovens:
             return None
         states = {
             r["device_id"]: str(r["state"])
@@ -107,6 +110,11 @@ class Appliances:
             elif state == FINISHED:
                 ended = self._cycle(device, "ended_at")
                 lines.append(f"{device.name}: finished" + (f" at {ended}" if ended else ""))
+        watcher = self.services.maybe(keys.smarthq)
+        for oven in ovens:  # OV2: only when it's on
+            last = watcher.last(oven) if watcher is not None else None
+            if last is not None and last.on:
+                lines.append(f"{oven.title}: {oven_words(last)}")
         return lines
 
     async def _line(self, device: Device) -> str:
@@ -194,6 +202,35 @@ class Appliances:
         chores = litter_box.chores(device.id) if litter_box is not None else []  # and whose
         return " ".join([f"{name}, read just now: {said}.", *chores])
 
+    def _ovens(self) -> list[Oven]:
+        watcher = self.services.maybe(keys.smarthq)
+        return watcher.ovens() if watcher is not None and watcher.account.linked() else []
+
+    async def _oven(self, oven: Oven) -> str:
+        """OV2: one of the range's ovens: what it's doing, its timer and its probe."""
+        watcher = self.services.get(keys.smarthq)
+        name = f"{oven.title} (oven)"
+        try:
+            reading = await watcher.read(oven)
+        except SmartHQError as exc:
+            log.info("Couldn't read the %s for a status question: %s", oven.name, exc)
+            last = watcher.last(oven)
+            if last is None or last.read_at is None:
+                return f"{name}: couldn't be read just now, and Themi hasn't seen it yet."
+            seen = self._local_words(last.read_at)
+            return f"{name}: couldn't be read just now. As of {seen} it was {oven_words(last)}."
+        return f"{name}, read just now: {self._oven_words(reading)}."
+
+    def _oven_words(self, reading: OvenReading) -> str:
+        said = oven_words(reading)
+        if reading.cook_minutes_left:
+            said += f", {_minutes(reading.cook_minutes_left)} left on its cook time"
+        if reading.timer_minutes:
+            said += f"; its kitchen timer has about {_minutes(reading.timer_minutes)} left"
+        if reading.probe_f is not None:
+            said += f"; the probe reads {reading.probe_f}°F"
+        return said
+
     def _words(self, device: Device, state: str, minutes: int | None) -> str:
         if state == RUNNING:
             since = self._cycle(device, "started_at", open_only=True)
@@ -269,11 +306,12 @@ def _minutes(minutes: int) -> str:
 
 @tool(
     "appliance_status",
-    "How the washer, dryer, dishwasher, robot vacuum, pet feeder or litter box is doing right "
-    "now: running or not, the time left when the appliance says, what the vacuum needs, the "
-    "feeder's food and last feeding, and the litter box's sani-solution, errors and last "
-    "clean. Use it for any question about them ('how long on the wash?', 'is the dryer "
-    "done?', 'where's the vacuum?', 'has the cat been fed?', 'is the litter box ok?'); never "
+    "How the washer, dryer, dishwasher, robot vacuum, pet feeder, litter box or oven is doing "
+    "right now: running or not, the time left when the appliance says, what the vacuum needs, "
+    "the feeder's food and last feeding, the litter box's sani-solution, errors and last "
+    "clean, and each oven's mode, temperature, timer and probe. Use it for any question about "
+    "them ('how long on the wash?', 'is the dryer done?', 'where's the vacuum?', 'has the cat "
+    "been fed?', 'is the litter box ok?', 'is the oven still on?', 'is it preheated?'); never "
     "answer those from memory or the conversation.",
     {
         "appliance": {
@@ -297,9 +335,9 @@ PROMPT_RULES = (
         "speak",
         80,
         """\
-- How the washer, dryer, dishwasher or robot vacuum is doing (running, done, time left,
-  stuck) comes only from appliance_status, asked each time: never from memory or the
-  conversation.""",
+- How the washer, dryer, dishwasher, robot vacuum or oven is doing (running, done, time
+  left, stuck, on, preheated) comes only from appliance_status, asked each time: never from
+  memory or the conversation.""",
     ),
 )
 

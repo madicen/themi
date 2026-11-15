@@ -1152,6 +1152,110 @@ def _catgenie_back(fakes: DevFakes, v: Values) -> Awaitable[str]:
     return relink()
 
 
+# ----- the oven (SmartHQ, OV2) ---------------------------------------------------------------
+
+OVEN_MODES = {"Bake": 1, "Convection Multi Bake": 27, "Convection Roast": 36, "Proof": 13}
+
+
+def _oven_ovens(fakes: DevFakes) -> list[str]:
+    from themi_home.connectors.smarthq import events as ov
+
+    lines = [f"Remote Enable: {'on' if fakes.smarthq.remote else 'off'}"]
+    raw = fakes.smarthq.erds()
+    for cavity in ov.CAVITIES:
+        lines.append(f"{ov.NAMES[cavity].capitalize()}: {ov.state_words(ov.read(cavity, raw))}")
+    return lines
+
+
+async def _read_oven(fakes: DevFakes) -> None:
+    """The ovens read now (a poll comes every 30 seconds)."""
+    assert fakes.app is not None
+    if fakes.app.services.maybe(keys.smarthq) is not None:
+        await fakes.app.services.get(keys.smarthq).poll()
+
+
+def _remote_enable(fakes: DevFakes, v: Values) -> str:
+    on = v["on"] == "on"
+    fakes.smarthq.remote_enable(on)
+    return f"Remote Enable {'pressed' if on else 'off'} on the range"
+
+
+def _oven_by_hand(fakes: DevFakes, v: Values) -> str:
+    mode = OVEN_MODES[v["mode"]]
+    temp = 85 if mode == 13 else int(v.number("temp"))
+    fakes.smarthq.start_by_hand(v["oven"], mode, temp)
+    return f"The {v['oven']} oven started by hand: {v['mode']} at {temp}°F"
+
+
+def _oven_off_by_hand(fakes: DevFakes, v: Values) -> str:
+    from themi_home.connectors.smarthq import events as ov
+
+    fakes.smarthq.receive(ov.code(v["oven"], ov.COOK_MODE), ov.OFF_VALUE)
+    return f"The {v['oven']} oven turned off at the range"
+
+
+def _oven_preheated(fakes: DevFakes, v: Values) -> str:
+    fakes.smarthq.preheated(v["oven"])
+    return f"The {v['oven']} oven is at its temperature"
+
+
+def _probe(fakes: DevFakes, v: Values) -> str:
+    temp = v["temp"]
+    fakes.smarthq.set_probe(int(float(temp)) if temp else None)
+    return f"The probe reads {temp}°F" if temp else "The probe is out"
+
+
+OVEN = Section(
+    "oven",
+    "Oven (SmartHQ)",
+    ("smarthq",),
+    (
+        Action(
+            "remote",
+            "Remote Enable",
+            (Field("on", "Remote Enable", "select", ("on", "off"), default="on"),),
+            _remote_enable,
+            (_read_oven,),
+            "Without it the range refuses a start from Themi; off always works.",
+        ),
+        Action(
+            "by_hand",
+            "Start an oven at the range",
+            (
+                Field("oven", "Oven", "select", ("upper", "lower"), default="lower"),
+                Field("mode", "Mode", "select", tuple(OVEN_MODES), default="Bake"),
+                Field("temp", "°F", "number", default="400"),
+            ),
+            _oven_by_hand,
+            (_read_oven,),
+            "It preheats 25°F a minute; Proof is always 85°F, upper oven only.",
+        ),
+        Action(
+            "preheated",
+            "Skip to preheated",
+            (Field("oven", "Oven", "select", ("upper", "lower"), default="lower"),),
+            _oven_preheated,
+            (_read_oven,),
+        ),
+        Action(
+            "off",
+            "Turn an oven off at the range",
+            (Field("oven", "Oven", "select", ("upper", "lower"), default="lower"),),
+            _oven_off_by_hand,
+            (_read_oven,),
+        ),
+        Action(
+            "probe",
+            "The lower oven's probe",
+            (Field("temp", "Probe °F (blank: out)", "number", default="150", required=False),),
+            _probe,
+            (_read_oven,),
+        ),
+    ),
+    _oven_ovens,
+)
+
+
 # ----- energy (dev only) --------------------------------------------------------------------
 
 DAY_LEVELS = {"Low": -1.0, "Medium": 0.0, "High": 1.0}
@@ -1632,6 +1736,7 @@ SECTIONS = tuple(
         VACUUM,
         FEEDERS_SECTION,
         LITTER_BOX,
+        OVEN,
         SAFEWAY,
         TRAVEL,
         ENERGY,

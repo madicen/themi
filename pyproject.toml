@@ -35,6 +35,8 @@ thinq = ["paho-mqtt>=2.1"]
 # The robot vacuum (V1), through the unofficial python-roborock library; without it the
 # vacuum isn't offered.
 roborock = ["python-roborock==7.15.1"]
+# The oven (OV2), through the unofficial gehomesdk (SmartHQ); without it the oven isn't offered.
+smarthq = ["gehomesdk==2026.8.0"]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
@@ -121,6 +123,7 @@ reminders = "themi.standard.reminders:RemindersModule"
 roborock = "themi_home.home_modules:RoborockModule"
 routines = "themi.standard.routines:RoutinesModule"
 safeway = "themi_home.safeway:SafewayModule"
+smarthq = "themi_home.home_modules:SmartHQModule"
 slack = "themi.standard.slack:SlackModule"
 spending = "themi_home.spending:SpendingModule"
 takeout = "themi_home.takeout:TakeoutModule"
@@ -164,6 +167,7 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "meals_schema/*.sql",  # 35a: the meal log
     "cooking_schema/*.sql",  # CK1: the cooking companion
     "gram_weights_schema/*.sql",  # GW1: where each gram weight came from
+    "smarthq_schema/*.sql",  # OV2: the range and its ovens
     "takeout_schema/*.sql",  # 35a: takeout favourites and rescues
     "spending_schema/*.sql",  # EX1a: expense sheets (left out until 2026-11-13)
     "expense_sync_schema/*.sql",

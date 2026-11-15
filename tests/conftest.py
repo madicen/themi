@@ -24,6 +24,7 @@ pytest_plugins = [
     "tests.fakes.spotify",
     "tests.fakes.thinq",
     "tests.fakes.roborock",
+    "tests.fakes.smarthq",
     "tests.fakes.tuya",
     "tests.fakes.catgenie",
     "tests.fakes.travel",

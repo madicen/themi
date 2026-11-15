@@ -47,6 +47,7 @@ CONNECTORS = (
     "fake_roborock",
     "fake_tuya",
     "fake_catgenie",
+    "fake_smarthq",  # OV2
     "fake_keep",
     "fake_runner",
 )

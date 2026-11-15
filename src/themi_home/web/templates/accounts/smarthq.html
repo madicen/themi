@@ -1,0 +1,55 @@
+{% from "_row.html" import row %}
+{# OV2: the smarthq module's row: the range's two ovens #}
+{% set smarthq = household.smarthq %}
+{% if smarthq %}
+{% if smarthq.linked and smarthq.problem %}{% set chips = [("Link it again", "bad")] %}
+{% elif smarthq.linked %}{% set chips = [("Linked", "good")] %}
+{% else %}{% set chips = [("Not linked", "")] %}{% endif %}
+{% call(part) row("Oven", meta="SmartHQ", chips=chips, id="smarthq", open=opened == "smarthq" or smarthq_code_sent) %}
+{% if part == "body" %}
+  <p class="muted">Themi reads the range's upper and lower ovens: what they're on, their
+  temperature, the kitchen timer and the probe. From the cook screen, with a tap, it can
+  preheat, proof dough, set the oven's timer and turn an oven off. It never heats the oven
+  on its own, and the range only starts from here after someone presses Remote Enable on
+  it.</p>
+  {% if smarthq.linked %}
+  {% if smarthq.problem %}<p class="error">{{ smarthq.problem }} Link it again below.</p>{% endif %}
+  {% for oven, last in smarthq.ovens %}
+  <p>{{ oven.title }}{% if last %} · {{ "on" if last.on else "off" }}{% endif %}</p>
+  {% else %}
+  <p>Linked, but no oven was found.</p>
+  {% endfor %}
+  <p class="muted">Signed in as {{ smarthq.email }}.</p>
+  {% endif %}
+  {% if not smarthq.linked or smarthq.problem %}
+  {% if smarthq_code_sent %}
+  <form method="post" action="/family/smarthq/code">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="email" value="{{ smarthq_code_sent }}">
+    <label>The code SmartHQ emailed to {{ smarthq_code_sent }}
+      <input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+    <button class="primary">Link SmartHQ</button>
+  </form>
+  {% else %}
+  <form method="post" action="/family/smarthq/sign-in">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="muted">The account the SmartHQ app signs in with. Themi keeps the password
+    encrypted; SmartHQ may email a code to finish.</p>
+    <label>Email <input name="email" type="email" value="{{ smarthq.email }}" autocomplete="off" required></label>
+    <label>Password <input name="password" type="password" autocomplete="off" required></label>
+    <label>Region <select name="region">{% for r in smarthq.regions %}<option>{{ r }}</option>{% endfor %}</select></label>
+    <button class="primary">Sign in</button>
+  </form>
+  {% endif %}
+  {% endif %}
+  {% if smarthq.linked %}
+  <div class="danger-zone">
+    <form method="post" action="/family/smarthq/unlink">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="danger">Unlink SmartHQ</button>
+    </form>
+  </div>
+  {% endif %}
+{% endif %}
+{% endcall %}
+{% endif %}

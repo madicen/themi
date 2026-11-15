@@ -42,6 +42,10 @@ from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.roborock import CODE as ROBOROCK_CODE
 from tests.fakes.roborock import EMAIL as ROBOROCK_EMAIL
 from tests.fakes.roborock import FakeRoborock
+from tests.fakes.smarthq import CODE as SMARTHQ_CODE
+from tests.fakes.smarthq import EMAIL as SMARTHQ_EMAIL
+from tests.fakes.smarthq import PASSWORD as SMARTHQ_PASSWORD
+from tests.fakes.smarthq import FakeSmartHQ
 from tests.fakes.snapshot import SnapshotError, Snapshots
 from tests.fakes.thinq import TOKEN as THINQ_TOKEN
 from tests.fakes.thinq import FakeThinq
@@ -100,6 +104,7 @@ class DevFakes:
         self.roborock = FakeRoborock()
         self.tuya = FakeTuya()
         self.catgenie = FakeCatGenie()
+        self.smarthq = FakeSmartHQ()  # OV2: the oven
         self.keep = FakeKeep()
         self.ourgroceries = FakeOurGroceries()
         self.travel = FakeTravel()
@@ -124,6 +129,7 @@ class DevFakes:
             "roborock": self.roborock,
             "tuya": self.tuya,
             "catgenie": self.catgenie,
+            "smarthq": self.smarthq,
             "keep": self.keep,
             "ourgroceries": self.ourgroceries,
             "travel": self.travel,
@@ -162,6 +168,7 @@ class DevFakes:
             roborock=self.roborock,
             tuya=self.tuya,
             catgenie=self.catgenie,
+            smarthq=self.smarthq,
             keep=self.keep,
             timezone=timezone,
         )
@@ -305,6 +312,10 @@ class DevFakes:
         ):
             await services.get(keys.catgenie).send_code(CATGENIE_PHONE)
             await services.get(keys.catgenie).link(admin, CATGENIE_PHONE, CATGENIE_CODE)
+        oven = services.maybe(keys.smarthq)
+        if oven is not None and not oven.account.linked():
+            await oven.sign_in(admin, SMARTHQ_EMAIL, SMARTHQ_PASSWORD, "US")
+            await oven.submit_code(admin, SMARTHQ_EMAIL, SMARTHQ_CODE)
         if (
             services.maybe(keys.home_connect) is not None
             and not services.get(keys.home_connect).linked()
@@ -361,6 +372,9 @@ class DevFakes:
             found.append("Keep")
         found += ["the wall", "OurGroceries"]
         found += [d.name for d in store.list_devices()]
+        oven = app.services.maybe(keys.smarthq)
+        if oven is not None and oven.account.linked():
+            found.append("the oven")
         if app.services.maybe(keys.safeway) is not None and self.safeway.token:
             found.append("the Safeway helper")
         return found

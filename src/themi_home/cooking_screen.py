@@ -36,7 +36,8 @@ log = logging.getLogger(__name__)
 FIRED_SHOWN = timedelta(hours=2)  # a fired timer nobody tapped stays this long at most
 MOVES = ("next", "back", "skip", "stop", "finish", "anyway", "tomorrow")
 TIMER_TAPS = ("timer_add", "timer_cancel", "timer_clear", "timers_keep", "timers_cancel")
-AFTER_END = (*TIMER_TAPS, *WRAP_TAPS)  # what an ended session's screen can still do
+OVEN_OFF_TAPS = ("oven_off", "oven_leave")  # OV6: "Turn the oven off too?"
+AFTER_END = (*TIMER_TAPS, *WRAP_TAPS, *OVEN_OFF_TAPS)  # what an ended session's screen can do
 OPTIONAL = re.compile(
     r"\b(?:optional|if (?:you['\u2019]d like|you like|you want|desired|using|wanted))\b",
     re.IGNORECASE,
@@ -68,12 +69,16 @@ def may_tap(session: Session, member: Member) -> bool:
 
 def still_shown(cooking: Cooking, session: Session) -> bool:
     """An ended session stays on the screen while it has timers to show (kept ones, until
-    they fire and are tapped), or a wrap-up offer not yet answered (CK6)."""
+    they fire and are tapped), a wrap-up offer not yet answered (CK6), or the oven it
+    started still on and not asked about yet (OV6)."""
+    from themi_home.cooking_oven import off_question
     from themi_home.cooking_wrap import offer
 
     recipe = cooking.recipes.get(session.recipe_id)
-    return bool(timers(cooking, session)) or (
-        recipe is not None and offer(cooking, session, recipe) is not None
+    return (
+        bool(timers(cooking, session))
+        or (recipe is not None and offer(cooking, session, recipe) is not None)
+        or bool(off_question(cooking, session))
     )
 
 
@@ -204,6 +209,18 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     out["strip"] = (
         strip(cooking, session, recipe, must_only=lighter) if session.ended_at is None else None
     )
+    from themi_home import cooking_oven  # OV4: the oven, when it's linked
+
+    if out["strip"] is not None and out["strip"]["kind"] == "offer":
+        heat = cooking_oven.preheat_buttons(cooking, recipe, out["strip"]["key"])
+        if heat:  # without an oven, the strip is as it was
+            out["strip"]["oven"], out["strip"]["at"] = heat, cooking_oven.drawn_at()
+    out["oven_line"] = cooking_oven.oven_line(cooking, session)
+    out["oven_off"] = cooking_oven.off_question(cooking, session)  # OV6
+    proofing = cooking_oven.proof_offer(cooking, session, recipe)  # OV7
+    out["proof"] = {**proofing, "at": cooking_oven.drawn_at()} if proofing else None
+    if cooking_oven.has_timer(cooking):  # OV5: a step's timer can be the oven's too
+        out["offers"] = [{**o, "oven": True} for o in out["offers"]]
     out["timers"] = timers(cooking, session)
     running = [t for t in out["timers"] if not t["fired"]]
     out["ended"] = session.ended_at is not None
@@ -459,6 +476,43 @@ async def act(
         return Tapped(True, cooking_wrap.swap_question(items[n].item, recipe))
     if action == "scale":
         return await rescale(cooking, session, recipe, form)
+    if action == "oven_proof":  # OV7: [Proof in the oven] on a rising step
+        from themi_home import cooking_oven
+
+        proofed = await cooking_oven.proof(cooking, member, session, recipe, form)
+        if proofed is None:
+            return Tapped(False)
+        if proofed.ok:
+            await cooking.show(session)
+        return Tapped(proofed.ok, proofed.words)
+    if action in OVEN_OFF_TAPS:  # OV6: the ending's "Turn the oven off too?"
+        from themi_home import cooking_oven
+
+        said = await cooking_oven.answer_off(cooking, member, session, action == "oven_off")
+        return Tapped(bool(said), said)
+    if action == "oven_timer" and cooking.timers is not None:  # OV5: Themi's and the oven's
+        from themi_home import cooking_oven
+
+        minutes = _float(form.get("minutes"))
+        if not 0 < minutes < 8 * 60:
+            return Tapped(False)
+        step = str(form.get("step", "")) or _step_label(session, recipe)
+        owner = cooking._owner(session)
+        cooking.timers.start(owner, session, recipe, step, minutes)
+        said = await cooking_oven.oven_timer(cooking, member, session, minutes)
+        await cooking.show(session)
+        return Tapped(True, said)
+    if action == "oven_heat":  # OV4: [Preheat] on the look-ahead strip
+        from themi_home import cooking_oven
+        from themi_home.cooking_ahead import answer
+
+        heated = await cooking_oven.preheat(cooking, member, session, form)
+        if heated is None:
+            return Tapped(False)
+        if heated.ok and str(form.get("key", "")):
+            answer(session, str(form["key"]), "done")
+            cooking.save(session)
+        return Tapped(heated.ok, heated.words)
     if action in ("ahead_done", "ahead_later"):  # CK4: the look-ahead strip
         from themi_home.cooking_ahead import answer
 

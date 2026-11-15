@@ -115,6 +115,7 @@ def test_the_family_template_is_family_modules_in_order() -> None:
                 "roborock",
                 "tuya",
                 "catgenie",
+                "smarthq",  # OV2
                 "keep",
             )
         }  # type: ignore[arg-type]
