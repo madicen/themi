@@ -90,6 +90,7 @@ modules = [
     "roborock",
     "tuya",
     "catgenie",
+    "smarthq",
     "appliances",
 ]
 

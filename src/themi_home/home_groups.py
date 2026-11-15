@@ -120,16 +120,17 @@ CALLS = ToolGroup(
 DEVICES = ToolGroup(
     name="devices",
     description=(
-        "the washer, dryer, dishwasher, robot vacuum, pet feeders and litter box: run"
-        "ning, done, time left, stuck, food left, last fed, sani-solution, errors; feed"
-        "ing a pet from its feeder now"
+        "the washer, dryer, dishwasher, robot vacuum, pet feeders, litter box and oven"
+        "s: running, done, time left, stuck, food left, last fed, sani-solution, errors"
+        ", on, preheated; feeding a pet from its feeder now"
     ),
     words=(
         "wash(?:er|ing)?\\b|dryer|drying|dishwasher|laundry|cycle|load\\b|appliance|how"
         " (?:much )?longer|time left|still running|is it done|robot|roborock|the vacu"
         "um\\b|vacuum'?s\\b|feeders?\\b|\\bfeed\\b|dispens|kibble|been fed|fed the (?:"
         "cat|dog)s?|pet food|c"
-        "at food|dog food|litter|cat ?genie|sani.?solution|cartridge|granules?\\b"
+        "at food|dog food|litter|cat ?genie|sani.?solution|cartridge|granules?\\b|\\bo"
+        "vens?\\b|preheat"
     ),
     examples=(
         "How much longer on the wash?",

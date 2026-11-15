@@ -1,5 +1,5 @@
 """The home pack's rows on the Accounts page (CR17a), one per module: Home Connect, LG
-ThinQ (with the laundry settings), Roborock, Tuya and CatGenie under "Household
+ThinQ (with the laundry settings), Roborock, Tuya, CatGenie and SmartHQ under "Household
 connections" (admins only, both the rows and their routes), and each person's own Spotify.
 
 Each module adds its row with `ctx.accounts_section(template, order, values=, routes=)`.
@@ -22,9 +22,11 @@ from themi.web.kit import Kit
 from themi_home.connectors.catgenie import CatGenieError
 from themi_home.connectors.homeconnect import HomeConnectAccount, HomeConnectError
 from themi_home.connectors.roborock import RoborockError
+from themi_home.connectors.smarthq import REGIONS, SmartHQError
 from themi_home.connectors.spotify import SpotifyError, SpotifyLinks
 from themi_home.connectors.thinq import ThinqError
-from themi_home.connectors.tuya import REGIONS, TuyaError
+from themi_home.connectors.tuya import REGIONS as TUYA_REGIONS
+from themi_home.connectors.tuya import TuyaError
 
 Values = Callable[[Member], dict[str, Any]]
 
@@ -88,7 +90,7 @@ def _tuya(services: Any) -> dict[str, Any] | None:
         "linked": watcher.account.linked(),
         "access_id": watcher.account.access_id() or "",
         "region": watcher.account.region() or "us",
-        "regions": [(key, name) for key, (name, _) in REGIONS.items()],
+        "regions": [(key, name) for key, (name, _) in TUYA_REGIONS.items()],
         "problem": watcher.account.problem(),
         "devices": [(d, states.get(d.id), watcher.raw(d)) for d in watcher.devices()],
     }
@@ -110,12 +112,26 @@ def _catgenie(services: Any) -> dict[str, Any] | None:
     }
 
 
+def _smarthq(services: Any) -> dict[str, Any] | None:
+    watcher = services.maybe(keys.smarthq)
+    if watcher is None:
+        return None
+    return {
+        "linked": watcher.account.linked(),
+        "email": watcher.account.email() or "",
+        "problem": watcher.account.problem(),
+        "regions": REGIONS,
+        "ovens": [(o, watcher.last(o)) for o in watcher.ovens()],
+    }
+
+
 ROWS: dict[str, Callable[[Any], dict[str, Any] | None]] = {
     "home_connect": _home_connect,
     "thinq": _thinq,
     "roborock": _roborock,
     "tuya": _tuya,
     "catgenie": _catgenie,
+    "smarthq": _smarthq,
 }
 
 
@@ -477,5 +493,63 @@ def spotify_routes(kit: Kit) -> APIRouter:
         if app.services.maybe(keys.music) is not None:
             app.services.maybe(keys.music).links.unlink(session.member)
         return kit.redirect(back("spotify"), "Unlinked Spotify.")
+
+    return router
+
+
+def smarthq_routes(kit: Kit) -> APIRouter:
+    router = APIRouter()
+    app = kit.app
+
+    # ----- SmartHQ, the oven (OV2) --------------------------------------------------------
+
+    @router.post("/family/smarthq/sign-in")
+    async def smarthq_sign_in(request: Request) -> Response:
+        """The first step: the email, password and region. SmartHQ may email a code."""
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.maybe(keys.smarthq)
+        to = back("smarthq")
+        if watcher is None:
+            return kit.redirect(to, "The oven isn't set up on this server.")
+        email = str(form.get("email", "")).strip().lower()
+        try:
+            linked = await watcher.sign_in(
+                session.member, email, str(form.get("password", "")), str(form.get("region", ""))
+            )
+        except SmartHQError as exc:
+            return kit.redirect(to, f"SmartHQ wasn't linked: {exc}")
+        if linked:
+            return kit.redirect(to, "Linked SmartHQ. Found the upper and lower ovens.")
+        return render(  # the address stays out of the URL
+            kit,
+            request,
+            session,
+            f"SmartHQ emailed a code to {email}.",
+            smarthq_code_sent=email,
+            opened="smarthq",
+        )
+
+    @router.post("/family/smarthq/code")
+    async def smarthq_code(request: Request) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.maybe(keys.smarthq)
+        to = back("smarthq")
+        if watcher is None:
+            return kit.redirect(to, "The oven isn't set up on this server.")
+        try:
+            await watcher.submit_code(
+                session.member, str(form.get("email", "")), str(form.get("code", ""))
+            )
+        except SmartHQError as exc:
+            return kit.redirect(to, f"SmartHQ wasn't linked: {exc}")
+        return kit.redirect(to, "Linked SmartHQ. Found the upper and lower ovens.")
+
+    @router.post("/family/smarthq/unlink")
+    async def smarthq_unlink(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        watcher = app.services.maybe(keys.smarthq)
+        if watcher is not None:
+            await watcher.unlink()
+        return kit.redirect(back("smarthq"), "Unlinked SmartHQ.")
 
     return router

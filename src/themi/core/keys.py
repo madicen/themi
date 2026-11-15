@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from themi_home.connectors.catgenie import CatGenieWatcher
     from themi_home.connectors.homeconnect import HomeConnectAccount
     from themi_home.connectors.roborock import RoborockWatcher
+    from themi_home.connectors.smarthq import OvenWatcher
     from themi_home.connectors.thinq import ThinqWatcher
     from themi_home.connectors.tuya import TuyaWatcher
     from themi_home.cookbook_save import CookbookSave
@@ -156,6 +157,7 @@ tuya: Key[TuyaWatcher] = Key("TuyaWatcher")
 feeders: Key[Feeders] = Key("Feeders")
 catgenie: Key[CatGenieWatcher] = Key("CatGenieWatcher")
 litter_box: Key[LitterBox] = Key("LitterBox")
+smarthq: Key[OvenWatcher] = Key("OvenWatcher")  # OV2
 reactions: Key[Reactions] = Key("Reactions")
 journal: Key[Journal] = Key("Journal")
 google_tasks: Key[GoogleTasksInbox] = Key("GoogleTasksInbox")

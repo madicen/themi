@@ -2,7 +2,7 @@
 the appliances, the grocery mirrors, Spotify). Split from connector_modules, which keeps
 the ones the work template uses too (Google Tasks, the email audit, travel).
 
-CR2c: the modules that come with one outside service each.
+CR2c: the modules that come with one outside service each. OV2 adds the oven (SmartHQ).
 
 Each takes its connector's client or config in its constructor, and is in the module
 list only when that service is set up. What the module's feature does lives in its own
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import timedelta
+from pathlib import Path
 
 from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup, as_job
 from themi.standard.tasks import TaskBoard
@@ -22,6 +23,7 @@ from themi_home.connectors.gkeep import KeepFactory
 from themi_home.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi_home.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi_home.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWatcher
+from themi_home.connectors.smarthq import OvenWatcher, SmartHQAccount, SmartHQLogin
 from themi_home.connectors.spotify import SpotifyClient, SpotifyLinks
 from themi_home.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi_home.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
@@ -345,3 +347,36 @@ class CatGenieModule(Module):
         ctx.periodic("devices.litter_box", timedelta(minutes=10), watcher.poll)
         ctx.provide(LitterBox(s, ctx.get(TaskBoard), watcher)).install()
         _row(ctx, "catgenie", "accounts/catgenie.html", 50)  # CR17a
+
+
+class SmartHQModule(Module):
+    """OV2: the family's GE range (two ovens), through SmartHQ."""
+
+    name = "smarthq"
+    title = "Oven (SmartHQ)"
+    summary = "Reads the range's two ovens, and preheats or turns them off when asked."
+    cost = "Unofficial: may stop working"
+    kind = "connector"
+    website = "An admin signs in to SmartHQ on Accounts (/accounts)."
+    needs_accounts = AccountNeed(
+        "the SmartHQ account", "/accounts", "an admin", "SELECT 1 FROM smarthq_account"
+    )
+    migrations = Path(__file__).parent / "smarthq_schema"
+
+    def __init__(self, login: SmartHQLogin) -> None:
+        self.login = login
+
+    @classmethod
+    def build(cls, setup: ModuleSetup) -> Module | None:
+        from themi_home.connectors.smarthq import library
+
+        login = library.available()  # the unofficial library, when it's installed
+        return cls(login) if login else None
+
+    def install(self, ctx: ModuleContext) -> None:
+        s = ctx.services
+        account = SmartHQAccount(s.store.db, s.store.cipher, self.login)
+        watcher = ctx.provide(OvenWatcher(account))
+        ctx.on_shutdown("smarthq", account.close)  # its websocket runs until closed
+        ctx.periodic("devices.oven", timedelta(seconds=30), watcher.poll)
+        _row(ctx, "smarthq", "accounts/smarthq.html", 60)

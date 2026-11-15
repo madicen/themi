@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
@@ -144,7 +145,12 @@ class Module:
         need = type(self).needs_accounts
         if need is None or not need.linked_when:
             return None
-        return services.store.db.scalar(need.linked_when) is not None
+        try:
+            return services.store.db.scalar(need.linked_when) is not None
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc):
+                return False  # OV2: its own track's tables come with its first install
+            raise
 
     async def check(self) -> str | None:
         """CR11: try the module's settings against its service, through its own client:

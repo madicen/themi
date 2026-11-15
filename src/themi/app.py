@@ -113,6 +113,7 @@ from themi_home.connectors.homeconnect import HomeConnectClient
 from themi_home.connectors.ourgroceries import GroceryListClient
 from themi_home.connectors.recipe_page import PageReader
 from themi_home.connectors.roborock import RoborockLogin
+from themi_home.connectors.smarthq import SmartHQLogin
 from themi_home.connectors.spotify import SpotifyClient
 from themi_home.connectors.thinq import ThinqConfig
 from themi_home.connectors.tuya import TuyaConfig
@@ -128,6 +129,7 @@ from themi_home.home_modules import (
     KeepModule,
     OurGroceriesModule,
     RoborockModule,
+    SmartHQModule,
     SpotifyModule,
     ThinqModule,
     TuyaModule,
@@ -184,6 +186,7 @@ def family_modules(
     roborock: RoborockLogin | None = None,
     tuya: TuyaConfig | None = None,
     catgenie: CatGenieConfig | None = None,
+    smarthq: SmartHQLogin | None = None,
     keep: KeepFactory | None = None,
     weather: WeatherSource | None = None,
 ) -> list[Module]:
@@ -284,6 +287,7 @@ def family_modules(
         *([RoborockModule(roborock)] if roborock else []),
         *([TuyaModule(tuya)] if tuya else []),
         *([CatGenieModule(catgenie)] if catgenie else []),
+        *([SmartHQModule(smarthq)] if smarthq else []),  # OV2: the oven
         AppliancesModule(),  # F20b: asked how they're doing, it reads them
     ]
 
@@ -307,6 +311,7 @@ def build_app(
     roborock: RoborockLogin | None = None,
     tuya: TuyaConfig | None = None,
     catgenie: CatGenieConfig | None = None,
+    smarthq: SmartHQLogin | None = None,
     keep: KeepFactory | None = None,
     weather: WeatherSource | None = None,
     backup: BackupConfig | None = None,
@@ -338,6 +343,7 @@ def build_app(
             roborock=roborock,
             tuya=tuya,
             catgenie=catgenie,
+            smarthq=smarthq,
             keep=keep,
             weather=weather,
         )
