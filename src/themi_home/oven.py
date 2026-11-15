@@ -28,6 +28,7 @@ What people hear, through the outbox, once per heat-up (`oven_heatups`):
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -82,6 +83,7 @@ class OvenControl:
         self.db = services.store.db
         self.autonomy = services.autonomy
         self._why: dict[int, str] = {}  # action id -> why the oven refused, for the person
+        self._following = False  # OV5: syncing the oven's timer (its own reads come back here)
 
     def install(self) -> None:
         # The tap is the yes (or the request): no card in the chat for these.
@@ -285,6 +287,8 @@ class OvenControl:
             await self._preheated(oven, now, heatup)
         if before.timer_minutes and not now.timer_minutes:
             await self._timer_done(oven)
+        if oven.cavity == ov.TIMER_OVEN:
+            await self._follow_cook_timers(oven)
         if heatup is not None and now.probe_f is not None and now.probe_target_f:
             await self._probe(oven, now, heatup)
 
@@ -315,8 +319,15 @@ class OvenControl:
         self.db.execute(
             "UPDATE oven_timers SET done_at = ? WHERE id = ?", (to_utc_iso(clock.now()), row["id"])
         )
-        if row["cooking_timer_id"] is not None:
-            return  # OV5: the cook screen's own timer says it
+        if row["cooking_timer_id"] is not None:  # OV5: the cook screen's own timer says it
+            early = datetime.fromisoformat(row["set_at"]) + timedelta(minutes=row["minutes"])
+            if early - clock.now() > timedelta(minutes=1):  # cleared at the range: both go
+                self.db.execute(
+                    "UPDATE cooking_timers SET cancelled_at = ? WHERE id = ? "
+                    "AND fired_at IS NULL AND cancelled_at IS NULL",
+                    (to_utc_iso(clock.now()), row["cooking_timer_id"]),
+                )
+            return
         member = self.services.store.get_member(int(row["member_id"]))
         await self.services.outbox.send(
             member,
@@ -325,6 +336,39 @@ class OvenControl:
             kind="oven",
             dedupe_key=f"oven-timer-{row['id']}",
         )
+
+    async def _follow_cook_timers(self, oven: Oven) -> None:
+        """OV5: a cook-screen timer cancelled clears the oven's; one given more time moves
+        the oven's to match."""
+        if self._following:
+            return
+        self._following = True
+        try:
+            for row in self.db.query(
+                "SELECT t.*, c.cancelled_at AS c_cancelled, c.fired_at AS c_fired, "
+                "c.ends_at AS c_ends FROM oven_timers t JOIN cooking_timers c "
+                "ON c.id = t.cooking_timer_id WHERE t.oven_id = ? AND t.minutes > 0 "
+                "AND t.done_at IS NULL",
+                (oven.id,),
+            ):
+                member = self.services.store.get_member(int(row["member_id"]))
+                if row["c_fired"]:
+                    continue  # it ended: the oven's ends with it
+                expected = datetime.fromisoformat(row["set_at"]) + timedelta(minutes=row["minutes"])
+                if row["c_cancelled"]:
+                    minutes = 0
+                elif datetime.fromisoformat(row["c_ends"]) - expected >= timedelta(minutes=1):
+                    left = datetime.fromisoformat(row["c_ends"]) - clock.now()
+                    minutes = max(1, math.ceil(left.total_seconds() / 60))
+                else:
+                    continue
+                self.db.execute(
+                    "UPDATE oven_timers SET done_at = ? WHERE id = ?",
+                    (to_utc_iso(clock.now()), row["id"]),
+                )
+                await self.set_timer(member, minutes, link=row["cooking_timer_id"] or None)
+        finally:
+            self._following = False
 
     async def _probe(self, oven: Oven, now: OvenReading, heatup: dict[str, Any]) -> None:
         assert now.probe_f is not None and now.probe_target_f

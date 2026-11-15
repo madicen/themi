@@ -211,6 +211,8 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         if heat:  # without an oven, the strip is as it was
             out["strip"]["oven"], out["strip"]["at"] = heat, cooking_oven.drawn_at()
     out["oven_line"] = cooking_oven.oven_line(cooking, session)
+    if cooking_oven.has_timer(cooking):  # OV5: a step's timer can be the oven's too
+        out["offers"] = [{**o, "oven": True} for o in out["offers"]]
     out["timers"] = timers(cooking, session)
     running = [t for t in out["timers"] if not t["fired"]]
     out["ended"] = session.ended_at is not None
@@ -466,6 +468,18 @@ async def act(
         return Tapped(True, cooking_wrap.swap_question(items[n].item, recipe))
     if action == "scale":
         return await rescale(cooking, session, recipe, form)
+    if action == "oven_timer" and cooking.timers is not None:  # OV5: Themi's and the oven's
+        from themi_home import cooking_oven
+
+        minutes = _float(form.get("minutes"))
+        if not 0 < minutes < 8 * 60:
+            return Tapped(False)
+        step = str(form.get("step", "")) or _step_label(session, recipe)
+        owner = cooking._owner(session)
+        cooking.timers.start(owner, session, recipe, step, minutes)
+        said = await cooking_oven.oven_timer(cooking, member, session, minutes)
+        await cooking.show(session)
+        return Tapped(True, said)
     if action == "oven_heat":  # OV4: [Preheat] on the look-ahead strip
         from themi_home import cooking_oven
         from themi_home.cooking_ahead import answer

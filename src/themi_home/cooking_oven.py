@@ -16,6 +16,7 @@ When the oven is linked (`themi_home.oven`), the cook screen can work it, always
 
 from __future__ import annotations
 
+import math
 import re
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -147,6 +148,25 @@ async def preheat(
     return await oven.heat(
         member, found, mode, temp, offered_at=_when(form.get("at")), session_id=session.id
     )
+
+
+def has_timer(cooking: Cooking) -> bool:
+    """OV5: the oven's linked, with its (upper) kitchen timer."""
+    oven = control(cooking)
+    return oven is not None and oven.oven(ov.TIMER_OVEN) is not None
+
+
+async def oven_timer(cooking: Cooking, member: Member, session: Session, minutes: float) -> str:
+    """OV5: the oven's timer for the cook-screen timer just started (whole minutes, rounded
+    up, as the oven counts), tied to it so either follows the other."""
+    oven = control(cooking)
+    timer_id = cooking.db.scalar(
+        "SELECT MAX(id) FROM cooking_timers WHERE session_id = ?", (session.id,)
+    )
+    if oven is None or timer_id is None:
+        return "Timer set."
+    said = await oven.set_timer(member, math.ceil(minutes), link=int(timer_id))
+    return "Timer set, and the oven's timer too." if said.ok else f"Timer set. {said.words}"
 
 
 def drawn_at() -> str:
