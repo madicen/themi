@@ -438,8 +438,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [x] 2026-11-15 |
 | OV4 | Oven: preheat from the cook screen | Oven | [x] 2026-11-15 |
 | OV5 | Oven: oven timers from step timers | Oven | [x] 2026-11-15 |
-| OV6 | Oven: Stop turns the oven off | Oven | [~] |
-| OV7 | Oven: proofing dough | Oven | [ ] |
+| OV6 | Oven: Stop turns the oven off | Oven | [x] 2026-11-15 |
+| OV7 | Oven: proofing dough | Oven | [~] |
 | OV8 | Oven: preheat ahead of a planned dinner | Oven | [ ] |
 
 ## Fixed technical choices
@@ -20200,7 +20200,7 @@ Notes:
   early cancels Themi's. The end is said once, by Themi's timer.
 
 ### OV6 · Oven: Stop turns the oven off
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV4
 Read first: `themi_home/cooking.py` (`stop`, `finish`).
 - Stop or Finish with an oven this session started still on: "Turn the oven off too?"
@@ -20208,6 +20208,13 @@ Read first: `themi_home/cooking.py` (`stop`, `finish`).
   offered.
 Tests: Stop offers it; [Turn off] turns off without staging; [Leave it on] keeps it on and
 OV3's left-on timer still runs; an oven not started here isn't offered.
+
+Notes:
+- "Started here" is an open heat-up whose `session_id` is this session's (OV4's tap
+  sets it). Asked once (`session.wrap["oven"]`): on the cook screen when it's open (the
+  ended screen stays up for it, before the timers question), else in chat. [Turn off] is
+  OV3's `oven_off` (staged, automatic: in the audit, never waiting), not unstaged as the
+  prompt said, for the same reason as OV3.
 
 ### OV7 · Oven: proofing dough
 Status: [ ]
