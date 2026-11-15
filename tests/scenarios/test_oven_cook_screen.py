@@ -185,3 +185,59 @@ async def test_an_oven_this_session_didnt_start_isnt_offered(
     await alfredo.scenario.run_periodic("devices.oven")
     shown = await alfredo.act("stop")
     assert not shown.get("oven_off")
+
+
+# ----- OV7: proofing dough ----------------------------------------------------------------
+
+
+async def at_the_rise(scenario: Scenario, site: httpx.AsyncClient) -> Screen:
+    from tests.unit.test_cooking_look_ahead import LINES, items
+    from tests.unit.test_cooking_look_ahead import recipe as a_recipe
+
+    rolls = a_recipe(
+        "Alfredo Sauce",
+        LINES,
+        [
+            "Mix the dough and knead for 8 minutes.",
+            "Cover and let rise in a warm place for 1 hour, until doubled.",
+            "Shape and bake.",
+        ],
+    )
+    load(scenario.app.services, rolls)
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "alfredo sauce", "scale": ""})
+    scenario.primary.queue_structured(items())
+    await scenario.say("Erin", "Let's make the alfredo sauce")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("skip", "all here", "skip prep", "go to step 2"):
+        await scenario.say("Erin", said)
+    return Screen(scenario, site, csrf)
+
+
+async def test_proof_in_the_upper_oven_with_a_timer(
+    scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ
+) -> None:
+    screen = await at_the_rise(scenario, site)
+    state = await screen.state()
+    assert state["proof"]["label"] == "Proof in the oven" and state["proof"]["minutes"] == 60
+    page = (await site.get("/session/cook/view")).text
+    assert 'value="oven_proof"' in page
+    kitchen.remote_enable()
+    shown = await screen.act("oven_proof", minutes=60, at=state["proof"]["at"])
+    assert shown["said"] == "The upper oven is on Proof (85°F). And a 1 hr timer for the rise."
+    assert kitchen.state(UPPER) == ov.STATE_PROOF
+    assert [t["label"] for t in shown["timers"]] == ["Step 2"]
+    assert shown["proof"] is None  # the oven's on now
+    assert shown["oven_line"] == "Upper oven proofing at 85°F"
+
+
+async def test_no_proof_while_the_upper_oven_is_hot(
+    scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ
+) -> None:
+    screen = await at_the_rise(scenario, site)
+    kitchen.start_by_hand(UPPER, ov.BAKE, 350)
+    shown = await screen.act("oven_proof", minutes=60, at=(await screen.state())["proof"]["at"])
+    assert shown["said"].startswith("The upper oven is on (preheating to 350°F")
+    assert shown["said"].endswith("so it can't proof now.")
+    await scenario.run_periodic("devices.oven")
+    assert (await screen.state())["proof"] is None  # not offered with it on
