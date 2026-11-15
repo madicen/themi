@@ -9,7 +9,7 @@ from tests.fakes.search import FakeSearch
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.standard.web_search import DAILY_CAP
+from themi.standard.web_search import DAILY_CAP, WebSearch
 
 BOARD = "https://dbc.example/license/12345"
 
@@ -292,3 +292,129 @@ async def test_reply_306_a_number_goes_on_the_step_for_its_place(
         "Husband", "Can you update the task to call their office to include the number?"
     )
     assert "650-557-2636" in board.get(task.id).steps[1]
+
+
+# ----- F44a (idea #211): the lookups a day, paced from the plan, with a setting ---------
+
+
+def web(scenario: Scenario) -> WebSearch:
+    found = scenario.app.services.maybe(keys.web_search)
+    assert found is not None
+    return found
+
+
+def lookups(scenario: Scenario, count: int, at: str = "2026-10-21T15:00:00+00:00") -> None:
+    for _ in range(count):
+        scenario.app.db.execute(
+            "INSERT INTO web_lookups (member_id, kind, created_at) VALUES (1, 'search', ?)", (at,)
+        )
+
+
+@pytest.mark.parametrize("backend", ["tavily", "firecrawl"])
+async def test_the_plan_says_its_credits_left(fake_search: FakeSearch, backend: str) -> None:
+    fake_search.backend = backend
+    fake_search.credits(936)
+    assert await fake_search.client().credits_left() == 936
+    fake_search.fail("usage", 500)
+    assert await fake_search.client().credits_left() is None
+    fake_search.credits(None)  # the service doesn't know the path
+    assert await fake_search.client().credits_left() is None
+
+
+async def test_an_uncapped_tavily_key_says_nothing(fake_search: FakeSearch) -> None:
+    fake_search.credits(500, limit=None)
+    assert await fake_search.client().credits_left() is None
+
+
+async def test_the_day_is_paced_from_the_credits_left(
+    scenario: Scenario, fake_search: FakeSearch
+) -> None:
+    fake_search.credits(936)  # 21 Oct: 11 days left, today included
+    assert await web(scenario).refresh() == 85
+
+
+async def test_todays_lookups_count_on_top_of_the_pace(
+    scenario: Scenario, fake_search: FakeSearch
+) -> None:
+    lookups(scenario, 7)
+    fake_search.credits(110)
+    assert await web(scenario).refresh() == 17  # 7 made, and 110 // 11 more
+
+
+async def test_no_answer_from_the_plan_is_50(scenario: Scenario, fake_search: FakeSearch) -> None:
+    assert await web(scenario).refresh() == DAILY_CAP == 50
+
+
+async def test_the_setting_wins_and_the_plan_isnt_asked(
+    scenario: Scenario, fake_search: FakeSearch
+) -> None:
+    fake_search.credits(936)
+    web(scenario).daily_lookups = 100
+    assert await web(scenario).refresh() == 100
+    assert fake_search.count("usage") == 0
+
+
+async def test_the_pace_is_read_once_a_day(scenario: Scenario, fake_search: FakeSearch) -> None:
+    scheinbach(fake_search)
+    fake_search.credits(936)
+    await ask(scenario, "Dr. Scheinbach San Mateo")
+    await ask(scenario, "Dr. Scheinbach San Mateo DDS")
+    assert fake_search.count("usage") == 1
+    await scenario.advance(hours=24)
+    await ask(scenario, "Dr. Scheinbach San Mateo")
+    assert fake_search.count("usage") == 2
+
+
+async def test_a_low_pace_stops_searches(scenario: Scenario, fake_search: FakeSearch) -> None:
+    scheinbach(fake_search)
+    fake_search.credits(10)  # 10 // 11 days: none left for today
+    await ask(scenario, "Dr. Scheinbach San Mateo")
+    assert "Today's 0 web lookups are used up" in tool_result(scenario)
+    assert fake_search.count("search") == 0
+
+
+async def test_background_lookups_stop_at_half_the_day(
+    scenario: Scenario, fake_search: FakeSearch
+) -> None:
+    from themi.core.tools import ToolFailed
+
+    scheinbach(fake_search)
+    fake_search.credits(220)  # 20 a day
+    search = web(scenario)
+    await search.refresh()
+    for _ in range(10):
+        search.spend(1, "search", background=True)
+    with pytest.raises(ToolFailed):
+        search.spend(1, "search", background=True)
+    await ask(scenario, "Dr. Scheinbach San Mateo")  # a person's still goes through
+    assert fake_search.count("search") == 1
+
+
+async def test_the_cap_line_says_where_to_change_it(
+    scenario: Scenario, fake_search: FakeSearch
+) -> None:
+    scheinbach(fake_search)
+    lookups(scenario, DAILY_CAP)
+    await ask(scenario, "Dr. Scheinbach San Mateo")
+    said = tool_result(scenario)
+    assert "Today's 50 web lookups are used up" in said
+    assert "Modules page, under Web search" in said
+
+
+def test_the_setting_is_a_number_from_1_to_1000() -> None:
+    from themi.core.connector_settings import SearchSettings
+    from themi.modules.settings import SettingsProblem, fields, read_settings
+
+    def daily(env: dict[str, str], section: dict[str, object] | None = None) -> int | None:
+        return read_settings(SearchSettings, env, section or {}, "web_search").daily_lookups
+
+    assert daily({}) is None
+    assert daily({"THEMI_SEARCH_DAILY_LIMIT": "100"}) == 100
+    assert daily({}, {"daily_lookups": 80}) == 80
+    assert daily({}, {"daily_lookups": ""}) is None  # cleared on the Modules page
+    for wrong in ("0", "5000", "lots"):
+        with pytest.raises(SettingsProblem, match="1 to 1000"):
+            daily({"THEMI_SEARCH_DAILY_LIMIT": wrong})
+    (field,) = [f for f in fields(SearchSettings) if f.name == "daily_lookups"]
+    assert field.kind == "number" and not field.advanced
+    assert field.label.startswith("Web lookups a day")

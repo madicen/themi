@@ -824,6 +824,8 @@ class GramWeights:
             return
         web = self.services.maybe(keys.web_search)
         backend = web.backend if web is not None else None
+        if web is not None and backend is not None:
+            await web.refresh()  # F44a: today's pace
         done: dict[int, list[str]] = {}
         per_recipe: dict[int | None, int] = {}
         for row in rows:
@@ -839,7 +841,7 @@ class GramWeights:
             if per_recipe.get(row["recipe_id"], 0) >= LOOKUPS_PER_RECIPE:
                 continue  # the next run
             try:
-                web.spend(member.id, "search")  # one search, counted like any other
+                web.spend(member.id, "search", background=True)  # F44a: half the day
             except ToolFailed:
                 break  # today's lookups are used up: the rest wait for tomorrow
             per_recipe[row["recipe_id"]] = per_recipe.get(row["recipe_id"], 0) + 1
@@ -1156,6 +1158,8 @@ class GramWeights:
             return
         web = self.services.maybe(keys.web_search)
         backend = web.backend if web is not None else None
+        if web is not None and backend is not None:
+            await web.refresh()  # F44a: today's pace
         searched = 0
         for entry in self.book().entries:
             if self.meta(entry.key) is not None:
@@ -1176,7 +1180,7 @@ class GramWeights:
             if web is None or backend is None or searched >= CHECKS_PER_RUN:
                 continue  # checked when there's a search, and a turn
             try:
-                web.spend(member.id, "search")
+                web.spend(member.id, "search", background=True)  # F44a
             except ToolFailed:
                 return
             searched += 1

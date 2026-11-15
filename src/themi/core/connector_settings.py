@@ -8,6 +8,10 @@ messages are the same.
 
 from __future__ import annotations
 
+from typing import Any
+
+from pydantic import field_validator
+
 from themi.modules.settings import ModuleSettings, env_field
 from themi.storage.secrets import Secret
 
@@ -39,3 +43,24 @@ class SearchSettings(ModuleSettings):
         label="Which one to use, when both keys are saved",
         choices=("tavily", "firecrawl"),
     )
+    # F44a (idea #211): the family's lookups a day; blank paces the plan's credits.
+    daily_lookups: int | None = env_field(
+        "THEMI_SEARCH_DAILY_LIMIT",
+        None,
+        label="Web lookups a day (blank: paced from the plan's credits)",
+        placeholder="paced from the plan",
+        advanced=False,
+    )
+
+    @field_validator("daily_lookups", mode="before")
+    @classmethod
+    def _daily(cls, value: Any) -> Any:
+        if value is None or str(value).strip() == "":
+            return None
+        try:
+            count = int(str(value).strip())
+        except ValueError:
+            raise ValueError("THEMI_SEARCH_DAILY_LIMIT is a whole number, 1 to 1000") from None
+        if not 1 <= count <= 1000:
+            raise ValueError("THEMI_SEARCH_DAILY_LIMIT is a whole number, 1 to 1000")
+        return count

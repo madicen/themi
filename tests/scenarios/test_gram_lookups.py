@@ -231,3 +231,24 @@ async def test_shown_with_grams_asks_for_whats_missing(
     assert [r["name"] for r in weights.queued()] == ["chickpea flour"]
     weights.shown("1 cup chickpea flour", "written", 1)
     assert len(weights.queued()) == 1
+
+
+async def test_f44a_a_backfill_leaves_half_the_day_for_people(
+    scenario: Scenario, weights: GramWeights, fake_search: FakeSearch
+) -> None:
+    """At 0.8.6's start the queue used all 50 of the day's lookups in four minutes; now it
+    stops at half, and a lookup someone asks for right after still searches."""
+    fake_search.credits(220)  # 20 a day for 11 days
+    names = [f"{a}{b} flour" for a in "bcdfghjklm" for b in ("ax", "ix", "on", "ul", "ey", "ot")]
+    names = [n for n in names if not weights.book().has(n)]  # one the guide's fixture has
+    for name in names:  # 60, and nothing found for any (no model call)
+        weights.ask(name, "cup", None, None)
+    for _ in range(3):  # runs through the day (five a recipe each)
+        await weights._look_up_queue()
+    assert len(fake_search.queries()) == 10
+    assert len(weights.queued()) == len(names) - 10  # the rest wait for another day
+    fake_search.result("hours", "Library hours", "https://lib.example", "Open 9 to 5.")
+    scenario.primary.queue_tool_call("search_web", {"query": "library hours"})
+    scenario.primary.queue_text("It's open 9 to 5.")
+    await scenario.say("Husband", "Can you look up the library hours?")
+    assert len(fake_search.queries()) == 11

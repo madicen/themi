@@ -206,14 +206,15 @@ class WebRecipes:
 
     # ----- reading -------------------------------------------------------------------------
 
-    def _count(self, member: Member) -> None:
+    async def _count(self, member: Member) -> None:
         web = self.services.maybe(keys.web_search)
         if web is not None:
+            await web.refresh()  # F44a: today's pace
             web.spend(member.id, "read")
 
     async def read(self, member: Member, url: str) -> PageRecipe:
         """The recipe on the page, or PageError with a plain reason."""
-        self._count(member)
+        await self._count(member)
         text = ""
         try:
             fetched = await self.reader.fetch(url)
@@ -405,6 +406,7 @@ class WebRecipes:
         web = self.services.maybe(keys.web_search)
         if web is None or web.backend is None:
             raise ToolFailed(SEARCH_SETUP_TEXT)
+        await web.refresh()  # F44a: today's pace
         web.spend(member.id, "search")
         try:
             results = await web.backend.search(self.query(asked, said), count=SEARCHED)

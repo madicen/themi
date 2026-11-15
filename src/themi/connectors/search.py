@@ -5,6 +5,8 @@
 - Firecrawl (`FIRECRAWL_API_KEY`): 1,000 free credits a month, a search is 2 credits per
   10 results; it reads a page into clean text. No card needed.
 
+F44a: each says how many credits are left (`credits_left`), for pacing the day's lookups.
+
 `THEMI_SEARCH_BACKEND` picks one; empty uses whichever has a key, Tavily first. Both are
 plain HTTP over `httpx`; tests hand in a transport (`tests/fakes/search.py`). What comes
 back is outside text: the caller treats it as data, never instructions.
@@ -49,6 +51,10 @@ class SearchBackend(Protocol):
 
     async def read(self, url: str) -> str: ...
 
+    async def credits_left(self) -> int | None:
+        """F44a: the plan's credits left this month, or None when the service won't say."""
+        ...
+
 
 class _Http:
     def __init__(
@@ -59,12 +65,20 @@ class _Http:
         self._transport = transport
 
     async def _post(self, path: str, body: dict[str, Any]) -> Any:
+        return await self._send("POST", path, body)
+
+    async def _get(self, path: str) -> Any:
+        return await self._send("GET", path, None)
+
+    async def _send(self, method: str, path: str, body: dict[str, Any] | None) -> Any:
         headers = {"Authorization": f"Bearer {self._key.reveal()}"}
         try:
             async with httpx.AsyncClient(
                 timeout=TIMEOUT, transport=self._transport, verify=tls()
             ) as client:
-                response = await client.post(f"{self._base}{path}", json=body, headers=headers)
+                response = await client.request(
+                    method, f"{self._base}{path}", json=body, headers=headers
+                )
         except httpx.HTTPError as exc:
             raise SearchError(f"couldn't reach the search service ({type(exc).__name__})") from exc
         if response.status_code in (401, 403):
@@ -77,6 +91,15 @@ class _Http:
             return response.json()
         except ValueError as exc:
             raise SearchError("the search service's answer wasn't readable") from exc
+
+    async def _credits(self, path: str, read: Any) -> int | None:
+        """F44a: `read` takes the answer to the credits left; any trouble is None."""
+        try:
+            left = read(await self._get(path))
+        except (SearchError, AttributeError, KeyError, TypeError, ValueError) as exc:
+            log.info("%s didn't say its credits left (%s)", type(self).__name__, exc)
+            return None
+        return max(int(left), 0) if left is not None else None
 
 
 class TavilySearch(_Http):
@@ -112,6 +135,16 @@ class TavilySearch(_Http):
         # Some sites refuse the fetch ("Failed to fetch url"); another result may read fine.
         raise SearchError("that site wouldn't let the page be read; another result may work")
 
+    async def credits_left(self) -> int | None:
+        """GET /usage: the account's plan limit less what it used (a null limit: None)."""
+
+        def read(body: Any) -> int | None:
+            account = body["account"]
+            limit, used = account.get("plan_limit"), account.get("plan_usage") or 0
+            return None if limit is None else int(limit) - int(used)
+
+        return await self._credits("/usage", read)
+
 
 class FirecrawlSearch(_Http):
     name = "Firecrawl"
@@ -143,6 +176,12 @@ class FirecrawlSearch(_Http):
         if not text:
             raise SearchError("that site wouldn't let the page be read; another result may work")
         return str(text)[:MAX_PAGE]
+
+    async def credits_left(self) -> int | None:
+        """GET /v2/team/credit-usage: the team's remaining credits."""
+        return await self._credits(
+            "/v2/team/credit-usage", lambda body: body["data"]["remainingCredits"]
+        )
 
 
 def choose(

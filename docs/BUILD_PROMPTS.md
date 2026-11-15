@@ -283,9 +283,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F43a | Feedback: every to-do in a picture is added the first time | Feedback | [x] 2026-11-14 |
 | F43b | Idea: the tasks picture as cards with emoji, for one person or the family, with chores too | Feedback | [x] 2026-11-14 |
 | F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [x] 2026-11-14 |
-| F44a | Idea: the web lookups a day, paced from the search plan, with a setting | Feedback | [ ] |
+| F44a | Idea: the web lookups a day, paced from the search plan, with a setting | Feedback | [x] 2026-11-14 |
 | F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [ ] |
 | F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [ ] |
+| F44d | Feedback: a split task can be put back together | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -14197,7 +14198,7 @@ partner. So nothing else changed. New tests at the end of
 `tests/scenarios/test_reminders.py`; none changed, no golden file changed.
 
 ### F44a · Idea (2026-11-14): the web lookups a day, paced from the search plan, with a setting
-Status: [ ] 
+Status: [x] 2026-11-14
 Depends on: F30d, RC4a, GW3, GW6, SP3a
 Read first: `themi/standard/web_search.py` (`DAILY_CAP`, `spend`, `_ready`),
 `themi/connectors/search.py`, `themi/core/connector_settings.py` (`SearchSettings`), and
@@ -14241,6 +14242,20 @@ Scenario: the gram-weights queue at a start with 60 ingredients to look up uses 
 day, and Michael's "look up..." right after still searches.
 
 Data: none needed. Mark #211 reviewed once live.
+
+Notes: `SearchBackend.credits_left()` (Tavily `GET /usage`, Firecrawl `GET
+/v2/team/credit-usage`) over a new `_Http._send`. `WebSearch.cap` / `await refresh()`: the
+setting, else today's pace kept in memory as (local day, cap), so a restart reads the
+credits again once. No answer is 50 for the rest of the day. `spend(..., background=True)`
+from both gram-weights jobs. `refresh()` runs before `search`, `read`, the web-recipe search
+and page read, and both gram-weights jobs. The pace counts lookups against credits one for
+one. A deep search is already counted twice; a page read (Tavily: 1 credit per 5 pages) is
+counted as one, which errs low. The fake answers both usage paths (`fake_search.credits`).
+Unset, it 404s, so the earlier tests still see 50. `test_settings_store`'s
+`test_where_each_value_came_from` lists every `SearchSettings` field, so it gained
+`daily_lookups: default`. The variable is in docs/ENVIRONMENT.md. With 936 credits left on 14
+Nov the Pi's pace is 55 a day. The chat's "set the web lookups limit to 100" still goes to a
+rule proposal; the cap line now names the Modules page.
 
 ### F44b · Feedback (2026-11-14): weigh a Tbsp of a spice, not a cup
 Status: [ ] 
@@ -14325,6 +14340,62 @@ sync. A day with no changes makes no lookups and no model calls.
 Data: none needed. Oat flour and "salt for every cup of water" are `wanted` on the Pi from
 the failed reads. A one-off in migration 0004 puts `wanted` rows with no links and no task
 back in the queue.
+
+### F44d · Feedback (2026-11-14): a split task can be put back together
+Status: [ ] 
+Depends on: F26c
+Read first: `themi/standard/task_parts.py` (`TaskParts.split`, `_changed`, `note`,
+`split_task`), `themi/standard/tasks.py` (`cancel`, `update`, `_changed`, the `set_aside`
+queries, `off_displays`), `themi_cozyla/cozyla_todos.py` (how an "edited" or "cancelled"
+change reaches the wall). From Michael in the session of 2026-11-14: "After I remerged the
+items for cleaning the upstairs bathroom, what happened to the task. I don't see it
+assigned to me".
+
+What the Pi shows: at 7:41 am Michael made task 100, "Clean the upstairs bathroom", with
+five steps, and split it (`split_task`) into parts 104 to 108. At 4:55 pm he asked "Can you
+recombine the Clean the upstairs bathroom tasks as subtasks?" (reply 472). There's no tool
+for that, so the model improvised. `update_task` renamed part 104 ("…: Clean the shower") to
+"Clean the upstairs bathroom" and gave it all five steps. Then `cancel_task` cancelled 105
+to 108, and it answered "Done. ... is back as one task". But the split was never undone. 104
+still has its `task_parts` row (part 1 of 5 of task 100), so its note reads "Part 1 of 5 of
+Clean the upstairs bathroom; 0 of 5 parts done". Task 100 is open but set aside and
+`off_displays`, so it's on no list. 104's wall to-do and Google task were made under the
+part's old title.
+
+Build:
+- `TaskParts.unsplit(parent, by)`: the reverse of `split`. Every open or snoozed part is
+  cancelled quietly (no "Taken off the list" per part, and their nudges withdrawn). Every
+  part's `task_parts` row is deleted, `off_displays` is cleared on the parent, and the
+  parent gets one "edited" change, so the wall and Google Tasks show it again. The parent
+  keeps its own title and steps. If a part was done already, its step stays in the parent's
+  steps, and the reply says which were done ("the shower's done already").
+- If every part is settled already, the parent is settled already (`_changed`), so it
+  declines: "Clean the upstairs bathroom is finished already. Nothing was changed."
+- Given a part, it unsplits that part's parent. Given a task that isn't split, it declines
+  ("…isn't split. Nothing was changed.").
+- Tool `unsplit_task` (task_id: the task or any of its parts), described for "put it back
+  together", "recombine", "merge the parts back", "make them one task again", "as steps
+  again". Same tool group as `split_task` (`groups.SCHEDULES`). Its result says "Say it's one
+  task again, in one line."
+- `split_task`'s result ends "They can be put back together with unsplit_task." so the
+  model knows it's there.
+- `update_task` refuses to rename a part to its parent's title: "That's a part of Clean the
+  upstairs bathroom; use unsplit_task to make it one task again. Nothing was changed." This
+  catches the improvised merge if the router doesn't offer `unsplit_task`.
+
+Tests: unsplit after a split leaves the parent open, on the lists and `off_displays` off,
+with its steps, every part cancelled and no `task_parts` rows. Given a part's id, it unsplits
+its parent. A done part's step is named in the result and the parent keeps it. A task
+that isn't split, or one whose parts are all settled, is declined and nothing changes. The
+cancelled parts send no messages. The parent's "edited" change reaches the wall fake. A
+part renamed to its parent's title by `update_task` is refused.
+Scenario: Michael splits "Clean the upstairs bathroom" into five parts, then says "can you
+recombine them as subtasks?" He sees it as one task again, with five steps, assigned to
+him, and the wall shows one to-do, not "…: Clean the shower".
+
+Data: the Pi has the improvised merge. Once live, ask Themi to "put the bathroom task back
+together" (task 100, or 104, which is still its part). That cancels 104 and brings back 100
+with its five steps. No mark-reviewed needed (it wasn't a /bug report).
 
 ## Conversation mode
 
