@@ -435,8 +435,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GW7 | Gram weights: grams in a recipe saved to the cookbook | Gram weights | [x] 2026-11-14 |
 | OV1 | Oven: SmartHQ spike at the range | Oven | [x] 2026-11-15 |
 | OV2 | Oven: connector, account, status in chat | Oven | [x] 2026-11-15 |
-| OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [~] |
-| OV4 | Oven: preheat from the cook screen | Oven | [ ] |
+| OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [x] 2026-11-15 |
+| OV4 | Oven: preheat from the cook screen | Oven | [~] |
 | OV5 | Oven: oven timers from step timers | Oven | [ ] |
 | OV6 | Oven: Stop turns the oven off | Oven | [ ] |
 | OV7 | Oven: proofing dough | Oven | [ ] |
@@ -20117,7 +20117,7 @@ Notes:
   and the emailed code.
 
 ### OV3 · Oven: preheated, timer, probe and left-on notices
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV2
 Read first: the plan's "What Themi does" (Notices).
 - Through the outbox: "preheated" once per heat-up; "oven timer's done" unless a cook-screen
@@ -20125,6 +20125,31 @@ Read first: the plan's "What Themi does" (Notices).
   cook session ended, with [Turn it off] [It's fine], once per heat-up.
 Tests: each notice once; no double timer message; [Turn it off] turns it off and isn't
 staged; [It's fine] quiet until the next heat-up. Scenarios for preheated and left on.
+
+Notes:
+- Deviation: off *is* staged, in `oven_off`, a family category that's automatic from the
+  start (tier 2). CLAUDE.md has every side effect go through the trust tiers; automatic,
+  it never waits and it's in the audit. Were it ever escalated (pending), the person is
+  told to turn the oven off at the range rather than left with a card.
+- `themi_home/oven.py`, `OvenControl` (`keys.oven`), installed by the smarthq module (one
+  module, as Roborock installs Vacuum). Track migration 0002: `oven_heatups` (one per
+  on-to-off, who started it through Themi, its cook session, what's been told),
+  `oven_timers`, and the categories `oven_heat` (tier 1, capped), `oven_timer` (tier 1,
+  may become 2), `oven_off` (tier 2).
+- The tap is the yes: approvals hold `oven_heat` and `oven_timer` (no chat card).
+  `heat()` stages and approves as the tapper; `set_timer()` and `off()` stage as
+  requested. Why the oven refused (Remote Enable, its modes) is said, not "didn't go
+  through". `heat(offered_at=)` refuses a card older than 10 minutes and says the oven
+  as it is.
+- Notices, once each per heat-up: preheated (to whoever started it through Themi; one
+  started at the range isn't announced), the oven timer (to whoever set it through Themi;
+  a linked cook-screen timer says it instead, OV5), the probe near (within 5°F) and
+  reached (to the starter, else everyone; the target is the cook mode's probe field).
+- "Household bedtime" (Michael's answer in the plan) is read as the first member's quiet
+  hours starting while the oven's on: there's no household bedtime setting. Left on goes
+  to everyone, urgent, with [Turn it off] [It's fine]; also 30 minutes after a cook
+  session that ended since the oven came on (`oven.left_on`, every 5 minutes).
+- A lost sign-in tells the admins once.
 
 ### OV4 · Oven: preheat from the cook screen
 Status: [ ]
