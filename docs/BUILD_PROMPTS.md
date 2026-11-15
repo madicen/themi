@@ -286,7 +286,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F44a | Idea: the web lookups a day, paced from the search plan, with a setting | Feedback | [x] 2026-11-14 |
 | F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [x] 2026-11-14 |
 | F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [x] 2026-11-14 |
-| F44d | Feedback: a split task can be put back together | Feedback | [ ] |
+| F44d | Feedback: a split task can be put back together | Feedback | [x] 2026-11-15 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -14373,7 +14373,7 @@ first rewrite of this prompt's Build section cut F44d (added meanwhile by anothe
 of this file; it's put back word for word.
 
 ### F44d · Feedback (2026-11-14): a split task can be put back together
-Status: [ ] 
+Status: [x] 2026-11-15
 Depends on: F26c
 Read first: `themi/standard/task_parts.py` (`TaskParts.split`, `_changed`, `note`,
 `split_task`), `themi/standard/tasks.py` (`cancel`, `update`, `_changed`, the `set_aside`
@@ -14427,6 +14427,27 @@ him, and the wall shows one to-do, not "…: Clean the shower".
 Data: the Pi has the improvised merge. Once live, ask Themi to "put the bathroom task back
 together" (task 100, or 104, which is still its part). That cancels 104 and brings back 100
 with its five steps. No mark-reviewed needed (it wasn't a /bug report).
+
+Notes (2026-11-15):
+- `TaskParts.unsplit(task, by)` takes the task or any part. It deletes the `task_parts` rows
+  first, so cancelling the parts doesn't settle the parent through `_changed`; then clears
+  `off_displays`, cancels each open or snoozed part with `board.cancel` (not interactive:
+  no message, nudges withdrawn), re-queues the parent's nudge (`board.prompt`, withdrawn at
+  the split; not in the prompt, added so it's asked about again), and sends one "edited"
+  change. Parts done already stay done; their steps (the parent's step at that position)
+  are named in the result.
+- Declines, changing nothing: not split ("…isn't split"), parent settled ("…is finished
+  already").
+- `unsplit_task` is in `groups.SCHEDULES`. The group's words gain "recombine", "merge",
+  "back together", "subtasks", "one task again", and its description "and putting them
+  back together".
+- `TaskBoard.rename_checks`: checks a new title before `update_task` saves anything; task
+  parts adds one refusing a part renamed to its parent's title (whitespace, case and a
+  trailing full stop ignored).
+- Golden `tools.json`: `unsplit_task` added, `more_tools`' spec changed (the group's
+  description), as the new tool needs.
+- Setup: restart `themi run` (no migration). Then, on the Pi, ask Themi to "put the
+  bathroom task back together" (task 100 or 104), as Data says.
 
 ## Conversation mode
 
