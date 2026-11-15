@@ -39,6 +39,7 @@ dev = [
     "pytest-asyncio>=0.24",
     "pytest-xdist>=3.6",
     "pytest-split>=0.10",  # CI's runners each take part of the tests (make test-py SPLIT=1/2)
+    "pytest-testmon>=2.1",  # make test-changed: only the tests the change touches
     "hypothesis>=6.100",
     "coverage[toml]>=7.10",  # CI measures on 3.14, where branches are fast (sysmon)
     "ruff>=0.8",

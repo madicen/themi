@@ -10,10 +10,13 @@ TESTS := tests/unit tests/integration tests/scenarios
 # (pytest-split, balanced by the times in .test_durations; make durations refreshes them).
 SPLIT ?=
 SPLIT_ARGS = $(if $(SPLIT),--splits $(word 2,$(subst /, ,$(SPLIT))) --group $(word 1,$(subst /, ,$(SPLIT))))
+# More pytest options for test, test-py and test-changed, e.g. PYTEST_ARGS=--ff (last
+# failures first) or PYTEST_ARGS='-x -k gram'.
+PYTEST_ARGS ?=
 # Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
 VENV_PYTHON ?= python3
 
-.PHONY: golden venv install fmt lint test test-all test-py test-live evals router-eval naming-eval cov cov-run cov-report durations dev dev-reset dev-invite dev-prod fresh fresh-reset
+.PHONY: golden venv install fmt lint test test-all test-py test-changed test-live evals router-eval naming-eval cov cov-run cov-report durations dev dev-reset dev-invite dev-prod fresh fresh-reset
 
 venv:
 	$(VENV_PYTHON) -m venv .venv
@@ -34,7 +37,7 @@ lint:
 	$(PYTHON) tools/check_packs.py
 
 test:
-	$(PYTEST) $(PARALLEL) tests/unit
+	$(PYTEST) $(PARALLEL) $(PYTEST_ARGS) tests/unit
 
 test-all: test-py
 	@if command -v node >/dev/null 2>&1; then \
@@ -44,7 +47,20 @@ test-all: test-py
 	fi
 
 test-py:
-	$(PYTEST) $(PARALLEL) $(SPLIT_ARGS) $(TESTS)
+	$(PYTEST) $(PARALLEL) $(SPLIT_ARGS) $(PYTEST_ARGS) $(TESTS)
+
+# While working: only the tests that run code changed since the last test-changed
+# (pytest-testmon, its record in .testmondata). testmon sees Python only, so when a
+# migration, template, script, fixture, golden file or pyproject.toml is newer than that
+# record, every test runs (and the record is brought up to date). The first run is a
+# full one too. test-all is still the check before a commit.
+TESTMON_DATA := .testmondata
+NON_PY_CHANGED = $(if $(wildcard $(TESTMON_DATA)),$(shell find src tests tools pyproject.toml \
+	-type f ! -name '*.py' ! -path '*/__pycache__/*' -newer $(TESTMON_DATA) -print -quit))
+test-changed:
+	@$(if $(NON_PY_CHANGED),echo "$(NON_PY_CHANGED) changed (and maybe more): running every test.")
+	$(PYTEST) $(PARALLEL) \
+		$(if $(NON_PY_CHANGED),--testmon-noselect,--testmon) $(PYTEST_ARGS) $(TESTS)
 
 # After adding or speeding up a lot of tests, so CI's halves stay even. Commit the file.
 durations:
