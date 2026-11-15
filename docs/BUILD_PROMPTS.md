@@ -283,6 +283,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F43a | Feedback: every to-do in a picture is added the first time | Feedback | [x] 2026-11-14 |
 | F43b | Idea: the tasks picture as cards with emoji, for one person or the family, with chores too | Feedback | [x] 2026-11-14 |
 | F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [x] 2026-11-14 |
+| F44a | Idea: the web lookups a day, paced from the search plan, with a setting | Feedback | [ ] |
+| F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [ ] |
+| F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -14192,6 +14195,136 @@ per-person loop. The other places checked name nobody: `SHARED_OVERDUE_TEXT` is 
 both of you", the end-of-day list has no names, and `taking.py`'s offer names the asker's
 partner. So nothing else changed. New tests at the end of
 `tests/scenarios/test_reminders.py`; none changed, no golden file changed.
+
+### F44a · Idea (2026-11-14): the web lookups a day, paced from the search plan, with a setting
+Status: [ ] 
+Depends on: F30d, RC4a, GW3, GW6, SP3a
+Read first: `themi/standard/web_search.py` (`DAILY_CAP`, `spend`, `_ready`),
+`themi/connectors/search.py`, `themi/core/connector_settings.py` (`SearchSettings`), and
+`spend`'s callers (`themi_home/web_recipes.py`, `themi_home/gram_weights.py`). From
+Michael's idea #211 (2026-11-14, 6:35 pm, "Add web lookups limit to settings").
+
+What the Pi shows: `web_lookups` has 50 searches on 14 Nov, all from 4:35 to 4:39 pm, under
+Erin (member 1). That's the gram-weights queue at 0.8.6's start (`_look_up_queue`, one
+search per ingredient across the cookbook, until `spend` refused). The rest of the month
+is 1 or 2 a day. At 6:30 pm Michael asked "Can you set the web lookups limit to 100?" and
+got a rule proposal, then "managed in your website settings via /site". There's no such
+setting: `DAILY_CAP = 50` is a constant. Tavily's `GET /usage` says plan "Researcher",
+`plan_limit` 1000, `plan_usage` 64. So 50 a day could spend 1,500 a month, more than the plan has.
+
+Build:
+- `SearchBackend.credits_left() -> int | None`. Tavily: `GET /usage`, `account.plan_limit -
+  account.plan_usage` (a null limit is None). Firecrawl: `GET /v2/team/credit-usage`,
+  `data.remainingCredits`. Any error or a shape it doesn't know is None, logged once.
+- `SearchSettings.daily_lookups: int | None` (`THEMI_SEARCH_DAILY_LIMIT`, label "Web lookups
+  a day (blank: paced from the plan's credits)", 1 to 1000). It shows on the Modules page
+  under Web search, like the weather thresholds.
+- `WebSearch.cap`, today's lookups: the setting when it's set. Otherwise, paced from the plan
+  once a local day: the lookups already made today plus the credits left ÷ the days left in
+  the month (today included), rounded down. With no answer from the backend it's 50, as now
+  (`FALLBACK_CAP`). `async refresh()` reads the credits when today's pace isn't known yet. The
+  search, page-read and recipe-search paths, and the two gram-weights jobs, call it before
+  spending.
+- Background lookups (`spend(..., background=True)`: the gram-weights queue and GW6's check)
+  stop at half of today's cap, so what a person asks for keeps the other half. What's left of
+  the queue waits for the next run, as it does at the cap now.
+- The cap's line says where to change it: "Today's {cap} web lookups are used up; it resets at
+  midnight. An admin can change how many on the website's Modules page, under Web search.
+  Say so."
+
+Tests: Tavily's and Firecrawl's usage answers read through the fake (and a 500 is None);
+with 936 credits left on 14 Nov (17 days left) the cap is 55; no answer is 50; the setting
+wins and no usage call is made; the pace is read once a day, not each search; background
+spend stops at half while a person's search still goes through; the cap line names the
+Modules page; the setting's range check.
+Scenario: the gram-weights queue at a start with 60 ingredients to look up uses half the
+day, and Michael's "look up..." right after still searches.
+
+Data: none needed. Mark #211 reviewed once live.
+
+### F44b · Feedback (2026-11-14): weigh a Tbsp of a spice, not a cup
+Status: [ ] 
+Depends on: GW4
+Read first: `themi_home/gram_weights.py` (`weighing`, `_wanted_unit`, `_make_tasks`), the
+plan's GW4 section. From Michael's bug #210 (2026-11-14, 6:13 pm, "asking for a measurement
+of a cup of nutmeg is a little ridiculous. For such things a Tbsp would suffice").
+
+What the Pi shows: at 4:39 pm, GW4 made three weighing tasks for Erin: task 111, "Weigh 1 cup
+of ground nutmeg when you're next cooking", task "Weigh 1 cup of mild/yellow miso when you're
+next cooking" and "Weigh one garlic cloves". `_wanted_unit` answers "cup" for anything
+measured by volume. The cookbook uses nutmeg at ¼ to ½ tsp and a pinch, and miso by the tsp.
+The garlic title keeps the recipe's plural.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `_wanted_unit` takes the units the family's recipes use for it: a cup when a line has cups
+  (or a volume of 60 ml or more), a Tbsp when every volume line is tsp, Tbsp, a pinch or a
+  dash, "each" for a count. The weight saved is for that measure ("1 Tbsp ground nutmeg =
+  …"), which the book already scales to a tsp.
+- "Weigh one {name}" takes the singular ("garlic clove", "egg"), with a small helper for the
+  plurals recipes use (cloves, eggs, leaves, tomatoes, berries).
+- An open weighing task whose measure or wording is now different is updated in place
+  (`board.update`, title and steps), so Erin's nutmeg and miso tasks say a Tbsp and the garlic
+  one reads "Weigh one garlic clove". No new task, no message.
+
+Tests: nutmeg at ½ tsp, ¼ tsp and a pinch gets a Tbsp task; flour in cups still a cup; a
+line in ml at 250 a cup; "garlic cloves" reads "Weigh one garlic clove"; an open cup task
+for nutmeg is renamed to the Tbsp one, once; a Tbsp weight told back is saved as a Tbsp.
+Scenario: a spice no source settles becomes "Weigh 1 tablespoon of ground nutmeg when
+you're next cooking", and "it was 7 g" puts it in the guide.
+
+Data: none needed (tasks 111 and the other two are updated by the next run). Mark #210
+reviewed once live.
+
+### F44c · Feedback (2026-11-14): gram weights work when a recipe or the guide changes, not every 10 minutes
+Status: [ ] 
+Depends on: GW2, GW3, GW4, GW6, F44a
+Read first: `themi_home/gram_weights.py` (`GramWeightsModule.install`, `look_up`,
+`_look_up_queue`, `_make_tasks`, `check_guide`), `themi_home/recipes.py` (`sync`),
+`themi_home/web_recipes.py` (`keep`), `themi/standard/guides.py` (`save`). From Michael in
+the session of 2026-11-14: "After one off runs to backfill our cookbook, surely it only
+needs to run for new recipes, right?"
+
+What the Pi shows: `gram_weights.look_up` runs every 10 minutes and `gram_weights.check`
+every hour. Each run hashes every recipe to find the new ones (cheap). Then it re-weighs
+the whole cookbook twice in `_needed` and `_wanted_unit`, 144 times a day, though the
+cookbook only changes when `recipes.sync` (every 15 minutes, only when Drive says the Doc
+changed) or a kept web recipe changes it. The 50-search backfill at 0.8.6's start is the
+one time it had real work. The log also shows "Weights for Oat Flour not read (Deferred)"
+and "salt for every cup of water": the Gemini free tier refused the call. In
+`_look_up_queue` an unread answer (`found is None`) takes the ingredient off the queue as
+`wanted`. So a model hiccup turns into a weighing task, and the ingredient isn't looked up
+again for 30 days.
+
+Build:
+- Bug fix first: an ingredient whose results couldn't be read (the model call failed) stays
+  in the queue for the next run. Its search still counts. Only "read, and no two sources
+  agree" makes it `wanted`.
+- Recipes tell the others when they change: `Recipes.on_changed` (a list of async callbacks
+  given the changed recipe ids), called by `sync` when it added or changed recipes, and by a
+  kept web recipe. Gram weights subscribes and runs `look_up` for those recipes only: learn,
+  queue, look up, tasks.
+- The guide tells it too: `Guides.on_saved`, called after a household guide is saved.
+  Gram weights runs GW6's check and `_make_tasks` when it's the weights guide (an edit can
+  settle a weighing task).
+- The two periodic jobs become one daily job, `gram_weights.daily`. It's the safety net: the
+  hash sweep for anything missed, what's left in the queue (F44a's half of the day's
+  lookups), the tasks, and GW6's check. It also runs once at start, as jobs do. Nothing runs
+  every 10 minutes.
+- A failed callback is logged and left to the daily job; it never breaks the recipe sync or
+  the guide save.
+
+Tests: start with the failing one: a lookup whose model call fails leaves the ingredient
+queued, with no weighing task. A new recipe from `sync` is weighed at once, and nothing
+else is re-read. A sync with no change calls nobody. A saved weights guide runs the check;
+another guide doesn't. The daily job picks up a recipe whose callback failed. Only
+`gram_weights.daily` is registered (no 10-minute job).
+Scenario: Erin adds a recipe to the cookbook Doc, and its weights are looked up within the
+sync. A day with no changes makes no lookups and no model calls.
+
+Data: none needed. Oat flour and "salt for every cup of water" are `wanted` on the Pi from
+the failed reads. A one-off in migration 0004 puts `wanted` rows with no links and no task
+back in the queue.
 
 ## Conversation mode
 
