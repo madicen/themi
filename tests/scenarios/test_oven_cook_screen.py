@@ -118,3 +118,70 @@ async def test_no_oven_linked_no_preheat_button(
     await scenario.tap("Erin", "Skip")
     state = (await site.get("/session/state")).json()
     assert "oven" not in state["strip"] and state["oven_line"] == ""
+
+
+# ----- OV6: Stop or Finish asks about the oven -------------------------------------------
+
+
+async def preheated_here(alfredo: Screen, kitchen: FakeSmartHQ) -> None:
+    kitchen.remote_enable()
+    state = await alfredo.state()
+    button = state["strip"]["oven"][0]
+    await alfredo.act(
+        "oven_heat", oven=button["oven"], mode=button["mode"], temp=button["temp"],
+        key=button["key"], at=state["strip"]["at"],
+    )  # fmt: skip
+
+
+async def test_stop_on_the_screen_asks_and_turns_it_off(
+    alfredo: Screen, kitchen: FakeSmartHQ
+) -> None:
+    await preheated_here(alfredo, kitchen)
+    shown = await alfredo.act("stop")
+    assert shown["oven_off"] == "The lower oven is still on. Turn it off too?"
+    page = (await alfredo.site.get("/session/cook/view")).text
+    assert 'value="oven_off"' in page and "Leave it on" in page
+    assert not [t for t in alfredo.scenario.inbox("Erin") if "Turn it off too" in t]  # one ask
+    shown = await alfredo.act("oven_off")
+    assert shown["said"] == "The lower oven is off." and not shown.get("oven_off")
+    assert kitchen.state(LOWER) == ov.STATE_OFF
+    trail = alfredo.scenario.app.services.autonomy.audit_trail(category="oven_off")
+    assert trail[-1]["event"] == "executed"
+
+
+async def test_stop_in_chat_asks_there_and_leave_it_on_keeps_the_warning(
+    scenario: Scenario, kitchen: FakeSmartHQ
+) -> None:
+    from tests.unit.test_cooking_look_ahead import BAKED, items
+    from themi.core import keys
+
+    load(scenario.app.services, BAKED)
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "alfredo sauce", "scale": ""})
+    scenario.primary.queue_structured(items())
+    await scenario.say("Erin", "Let's make the alfredo sauce")
+    oven = scenario.app.services.get(keys.oven)
+    session = scenario.app.services.get(keys.cooking).current(scenario.member("Erin"))
+    assert session is not None
+    kitchen.remote_enable()
+    lower = oven.oven(LOWER)
+    assert lower is not None
+    said = await oven.heat(scenario.member("Erin"), lower, ov.BAKE, 400, session_id=session.id)
+    assert said.ok
+    await scenario.say("Erin", "stop cooking")
+    await scenario.app.outbox.flush()
+    assert "The lower oven is still on. Turn it off too?" in scenario.inbox("Erin")
+    await scenario.tap("Erin", "Leave it on")
+    assert scenario.edits("Erin")[-1]["text"] == "Okay, leaving the lower oven on."
+    assert kitchen.state(LOWER) != ov.STATE_OFF
+    clock.advance(timedelta(minutes=31))
+    await scenario.run_periodic("devices.oven")
+    assert await scenario.run_periodic("oven.left_on") == 1  # the warning still comes
+
+
+async def test_an_oven_this_session_didnt_start_isnt_offered(
+    alfredo: Screen, kitchen: FakeSmartHQ
+) -> None:
+    kitchen.start_by_hand(LOWER, ov.BAKE, 400)
+    await alfredo.scenario.run_periodic("devices.oven")
+    shown = await alfredo.act("stop")
+    assert not shown.get("oven_off")
