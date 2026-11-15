@@ -78,6 +78,7 @@ if TYPE_CHECKING:
     from themi_home.maintenance import Maintenance
     from themi_home.meals import Meals
     from themi_home.music import Music
+    from themi_home.oven import OvenControl
     from themi_home.pantry import Pantry
     from themi_home.recipe_groceries import RecipeGroceries
     from themi_home.recipe_ideas import RecipeIdeas
@@ -158,6 +159,7 @@ feeders: Key[Feeders] = Key("Feeders")
 catgenie: Key[CatGenieWatcher] = Key("CatGenieWatcher")
 litter_box: Key[LitterBox] = Key("LitterBox")
 smarthq: Key[OvenWatcher] = Key("OvenWatcher")  # OV2
+oven: Key[OvenControl] = Key("OvenControl")  # OV3
 reactions: Key[Reactions] = Key("Reactions")
 journal: Key[Journal] = Key("Journal")
 google_tasks: Key[GoogleTasksInbox] = Key("GoogleTasksInbox")

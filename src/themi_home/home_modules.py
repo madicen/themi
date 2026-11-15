@@ -40,6 +40,7 @@ from themi_home.keep_groceries import KeepGroceries, KeepLinks
 from themi_home.laundry import Laundry, LaundrySettings
 from themi_home.litter_box import LitterBox
 from themi_home.music import Music
+from themi_home.oven import OvenControl
 from themi_home.pantry import Pantry
 from themi_home.vacuum import Vacuum
 
@@ -379,4 +380,9 @@ class SmartHQModule(Module):
         watcher = ctx.provide(OvenWatcher(account))
         ctx.on_shutdown("smarthq", account.close)  # its websocket runs until closed
         ctx.periodic("devices.oven", timedelta(seconds=30), watcher.poll)
+        from themi.core.approvals import ApprovalsUI
+
+        oven = ctx.provide(OvenControl(s, watcher, ctx.get(ApprovalsUI)))  # OV3
+        oven.install()
+        ctx.periodic("oven.left_on", timedelta(minutes=5), oven.left_on)
         _row(ctx, "smarthq", "accounts/smarthq.html", 60)
