@@ -204,6 +204,13 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     out["strip"] = (
         strip(cooking, session, recipe, must_only=lighter) if session.ended_at is None else None
     )
+    from themi_home import cooking_oven  # OV4: the oven, when it's linked
+
+    if out["strip"] is not None and out["strip"]["kind"] == "offer":
+        heat = cooking_oven.preheat_buttons(cooking, recipe, out["strip"]["key"])
+        if heat:  # without an oven, the strip is as it was
+            out["strip"]["oven"], out["strip"]["at"] = heat, cooking_oven.drawn_at()
+    out["oven_line"] = cooking_oven.oven_line(cooking, session)
     out["timers"] = timers(cooking, session)
     running = [t for t in out["timers"] if not t["fired"]]
     out["ended"] = session.ended_at is not None
@@ -459,6 +466,17 @@ async def act(
         return Tapped(True, cooking_wrap.swap_question(items[n].item, recipe))
     if action == "scale":
         return await rescale(cooking, session, recipe, form)
+    if action == "oven_heat":  # OV4: [Preheat] on the look-ahead strip
+        from themi_home import cooking_oven
+        from themi_home.cooking_ahead import answer
+
+        heated = await cooking_oven.preheat(cooking, member, session, form)
+        if heated is None:
+            return Tapped(False)
+        if heated.ok and str(form.get("key", "")):
+            answer(session, str(form["key"]), "done")
+            cooking.save(session)
+        return Tapped(heated.ok, heated.words)
     if action in ("ahead_done", "ahead_later"):  # CK4: the look-ahead strip
         from themi_home.cooking_ahead import answer
 

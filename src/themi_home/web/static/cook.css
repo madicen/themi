@@ -101,6 +101,8 @@ body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-
   padding: var(--space-2) var(--space-3); border-radius: var(--radius); background: var(--info-bg); }
 .cook-strip p { flex: 1 1 14rem; margin: 0; font-size: 1.2rem; }
 .cook-strip form { margin: 0; }
+/* OV4: an oven this session started, as it last read */
+.cook-oven-line { margin: var(--space-2) 0 0; font-size: 1.1rem; color: var(--muted, inherit); }
 
 /* CK5: the company bar: the chameleon by the counter, Themi's line, music, Ask Themi */
 .cook-company { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: stretch; border-top: 2px solid var(--line); padding-top: var(--space-3); }
