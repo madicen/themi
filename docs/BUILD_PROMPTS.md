@@ -437,8 +437,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV2 | Oven: connector, account, status in chat | Oven | [x] 2026-11-15 |
 | OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [x] 2026-11-15 |
 | OV4 | Oven: preheat from the cook screen | Oven | [x] 2026-11-15 |
-| OV5 | Oven: oven timers from step timers | Oven | [~] |
-| OV6 | Oven: Stop turns the oven off | Oven | [ ] |
+| OV5 | Oven: oven timers from step timers | Oven | [x] 2026-11-15 |
+| OV6 | Oven: Stop turns the oven off | Oven | [~] |
 | OV7 | Oven: proofing dough | Oven | [ ] |
 | OV8 | Oven: preheat ahead of a planned dinner | Oven | [ ] |
 
@@ -20181,7 +20181,7 @@ Notes:
   oven to 375") gets no button; widening it would change CK4's offers too.
 
 ### OV5 · Oven: oven timers from step timers
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV4
 Read first: `themi_home/cooking_timers.py`.
 - A step timer gets [Oven timer] beside [Timer]: Themi's timer plus the oven's kitchen timer
@@ -20189,6 +20189,15 @@ Read first: `themi_home/cooking_timers.py`.
   rule may make it automatic). The timer reads back in whole minutes.
   Cancelling either clears both; "add 2 minutes" moves both.
 Tests: both set; cancel clears both; the end message only once.
+
+Notes:
+- Each timer offer on the step gets [Oven timer] beside it (`offers[].oven`, only with the
+  upper oven linked). The tap `oven_timer` starts Themi's timer, then the oven's in whole
+  minutes rounded up (`cooking_oven.oven_timer`), tied by `oven_timers.cooking_timer_id`.
+- Either follows the other at the oven's next read (every 30 s), in `OvenControl`:
+  Themi's cancelled (screen, typed, or the ending's [Cancel them]) clears the oven's; more
+  time on Themi's moves the oven's; the oven's cleared at the range more than a minute
+  early cancels Themi's. The end is said once, by Themi's timer.
 
 ### OV6 · Oven: Stop turns the oven off
 Status: [ ]
