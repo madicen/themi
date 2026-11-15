@@ -187,6 +187,10 @@
     "group": "maintenance",
     "spec": "998dce8da9fe"
   },
+  "guide_from_picture": {
+    "group": "core",
+    "spec": "78125cb1b69b"
+  },
   "inbox_setup": {
     "group": "email",
     "spec": "6f2bc486592f"
