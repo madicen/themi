@@ -22,6 +22,7 @@ from themi.ai.types import (
     ChatResponse,
     Embeddings,
     ImageBlock,
+    ImageReference,
     ImageResult,
     Message,
     StructuredResponse,
@@ -83,5 +84,10 @@ class Provider(Protocol):
     ) -> Embeddings: ...
 
     async def image(
-        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+        self,
+        prompt: str,
+        size: str = IMAGE_SIZE,
+        *,
+        kind: CallKind = CallKind.BACKGROUND,
+        references: Sequence[ImageReference] = (),
     ) -> ImageResult: ...

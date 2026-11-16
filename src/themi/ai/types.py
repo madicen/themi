@@ -140,6 +140,16 @@ class StructuredResponse:
 
 
 @dataclass(frozen=True)
+class ImageReference:
+    """A picture an image model should keep to (BD4c): Themi's chameleon, so every step
+    picture shows the same character. `subject` names what to keep ("the chameleon")."""
+
+    data: bytes = field(repr=False)
+    mime_type: str
+    subject: str
+
+
+@dataclass(frozen=True)
 class ImageResult:
     """A picture a model made (BD4a): the file's bytes and its type."""
 

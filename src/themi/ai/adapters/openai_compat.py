@@ -38,6 +38,7 @@ from themi.ai.types import (
     ChatResponse,
     Embeddings,
     ImageBlock,
+    ImageReference,
     ImageResult,
     Message,
     StopReason,
@@ -204,7 +205,12 @@ class OpenAICompatProvider:
         return Embeddings(vectors, self.name, self.model)
 
     async def image(
-        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+        self,
+        prompt: str,
+        size: str = IMAGE_SIZE,
+        *,
+        kind: CallKind = CallKind.BACKGROUND,
+        references: Sequence[ImageReference] = (),
     ) -> ImageResult:
         """OpenAI's images API (the route's model, at low quality). Local servers don't
         offer one."""
