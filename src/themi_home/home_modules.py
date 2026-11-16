@@ -15,7 +15,14 @@ from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
 
-from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup, as_job
+from themi.modules import (
+    AccountNeed,
+    LibraryMissing,
+    Module,
+    ModuleContext,
+    ModuleSetup,
+    as_job,
+)
 from themi.standard.tasks import TaskBoard
 from themi_home import home_groups
 from themi_home.connectors.catgenie import CatGenieAccount, CatGenieConfig, CatGenieWatcher
@@ -271,7 +278,9 @@ class RoborockModule(Module):
         from themi_home.connectors.roborock import library
 
         login = library.available()  # the unofficial library, when it's installed
-        return cls(login) if login else None
+        if login is None:
+            raise LibraryMissing("roborock", "roborock")
+        return cls(login)
 
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
@@ -372,7 +381,9 @@ class SmartHQModule(Module):
         from themi_home.connectors.smarthq import library
 
         login = library.available()  # the unofficial library, when it's installed
-        return cls(login) if login else None
+        if login is None:
+            raise LibraryMissing("gehomesdk", "smarthq")
+        return cls(login)
 
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services

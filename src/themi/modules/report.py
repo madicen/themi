@@ -7,6 +7,7 @@ report says which, in plain words, for the Modules page, the dashboard and
     on          built and installed
     off         removed in themi.toml, or it needs a module that isn't on
     not_set_up  its settings aren't there (a connector nobody has configured)
+    needs_library  the Python library it needs isn't installed (an optional extra)
     failed      its settings are wrong, or building or installing it raised
 """
 
@@ -18,7 +19,7 @@ from typing import Literal
 
 from themi import clock
 
-ModuleState = Literal["on", "off", "not_set_up", "failed"]
+ModuleState = Literal["on", "off", "not_set_up", "needs_library", "failed"]
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,12 @@ class StartReport:
 
     def lines(self) -> list[str]:
         """For `themi config show`: each module that isn't on, and why."""
-        words = {"off": "off", "not_set_up": "not set up", "failed": "couldn't start"}
+        words = {
+            "off": "off",
+            "not_set_up": "not set up",
+            "needs_library": "not in this install",
+            "failed": "couldn't start",
+        }
         out = []
         for status in self.modules.values():
             if status.state == "on":

@@ -36,6 +36,7 @@ async def test_the_page_shows_each_module_by_kind_with_its_state(scenario: Scena
     report.note("travel", "failed", "connector", "TomTom turned the key down")
     report.note("ourgroceries", "not_set_up", "connector", "its settings aren't there")
     report.note("safeway", "off", "feature", "removed in themi.toml")
+    report.note("smarthq", "needs_library", "connector", "the gehomesdk library isn't here")
     scenario.app.services.start_report = report
     async with admin_site(scenario) as site:
         page = (await site.get("/modules")).text
@@ -49,6 +50,9 @@ async def test_the_page_shows_each_module_by_kind_with_its_state(scenario: Scena
     assert "Couldn&#39;t start" in travel and "TomTom turned the key down" in travel
     assert "Needs settings" in card_of(page, "ourgroceries")
     assert ">Off<" in card_of(page, "safeway")
+    smarthq = card_of(page, "smarthq")
+    assert "Not in this install" in smarthq and "the gehomesdk library isn" in smarthq
+    assert "Needs settings" not in smarthq
     assert ">Off<" in card_of(page, "spotify")  # not in this Themi at all
 
 

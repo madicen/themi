@@ -10,9 +10,10 @@ WORKDIR /app
 COPY pyproject.toml ./
 # The dependencies first, from pyproject.toml alone, so a change to the code reuses this
 # layer (the slowest step by far for the Pi's arm64 image, built under emulation). With
-# them the optional connectors: OurGroceries, ThinQ's pushes, the Roborock vacuum. (Not
-# Google Keep, the most fragile; add `keep` to EXTRAS to use it.)
-ARG EXTRAS="ourgroceries thinq roborock"
+# them the optional connectors: OurGroceries, ThinQ's pushes, the Roborock vacuum, the
+# oven (SmartHQ). (Not Google Keep, the most fragile; add `keep` to EXTRAS to use it.) A
+# module whose extra is left out shows "Not in this install" on the Modules page.
+ARG EXTRAS="ourgroceries thinq roborock smarthq"
 RUN python -c "import sys, tomllib; p = tomllib.load(open('pyproject.toml', 'rb'))['project']; \
 print('\n'.join(p['dependencies'] + [d for e in sys.argv[1:] for d in p['optional-dependencies'][e]]))" \
         $EXTRAS > /tmp/requirements.txt \

@@ -97,6 +97,38 @@ def test_removed_and_unconfigured_modules_say_why() -> None:
     assert "safeway (off): removed in themi.toml" in lines
 
 
+@pytest.mark.parametrize(
+    ("name", "library", "extra"),
+    [("smarthq", "gehomesdk", "smarthq"), ("roborock", "roborock", "roborock")],
+)
+def test_a_connector_without_its_library_says_so_not_that_it_needs_settings(
+    monkeypatch: pytest.MonkeyPatch, name: str, library: str, extra: str
+) -> None:
+    import importlib
+
+    connector = importlib.import_module(f"themi_home.connectors.{name}.library")
+    monkeypatch.setattr(connector, "_library", lambda: None)
+    modules, report = resolve_start(config(), settings())
+    assert name not in [m.name for m in modules]
+    assert report.state(name) == "needs_library"
+    reason = report.modules[name].reason
+    assert library in reason and f"the {extra} extra" in reason
+    assert "settings" not in reason
+    assert f"{name} (not in this install): " in "\n".join(report.lines())
+    assert not any(name in w for w in report.warnings())  # on by default: not nagged
+
+
+def test_one_added_in_themi_toml_without_its_library_is_said_to_admins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from themi_home.connectors.smarthq import library
+
+    monkeypatch.setattr(library, "_library", lambda: None)
+    _, report = resolve_start(config('modules = ["+smarthq"]'), settings())
+    assert report.state("smarthq") == "needs_library"
+    assert any(w.startswith("smarthq isn't on: the gehomesdk library") for w in report.warnings())
+
+
 # ----- installing --------------------------------------------------------------------
 
 

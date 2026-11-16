@@ -65,7 +65,7 @@ and restart Themi to put changes in place. Started from the {{ template }} templ
     <a href="/modules/{{ card.name }}"><strong>{{ card.title }}</strong></a>
     <span class="chip {{ card.badge_colour }}">{{ card.badge_words }}</span>
     <p class="muted">{{ card.summary }}</p>
-    {% if card.reason and card.badge in ("failed", "needs_settings") %}<p class="muted">{{ card.reason }}</p>{% endif %}
+    {% if card.reason and card.badge in ("failed", "needs_settings", "needs_library") %}<p class="muted">{{ card.reason }}</p>{% endif %}
   </li>
   {% endfor %}
 </ul>

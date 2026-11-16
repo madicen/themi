@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 
 import httpx
+import pytest
 
 from tests.fixtures.web import csrf_of, sign_in, web_client
 from tests.scenarios.harness import Scenario
@@ -154,6 +155,20 @@ async def test_test_tries_the_drafts_settings(scenario: Scenario) -> None:
         assert "Travel times didn&#39;t work: TomTom turned the key down" in page
         assert "tested Travel times" in (await site.get("/modules")).text
     assert [s.reveal() for s in seen] == ["tt-9", "tt-9"]  # type: ignore[attr-defined]
+
+
+async def test_test_says_when_a_modules_library_isnt_installed(
+    scenario: Scenario, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from themi_home.connectors.smarthq import library
+
+    monkeypatch.setattr(library, "_library", lambda: None)
+    scenario.app.services.get(Portal).builder = lambda cls, setup: cls.build(setup)
+    async with admin(scenario) as (site, csrf):
+        tested = await site.post("/modules/smarthq/test", data={"csrf": csrf})
+        page = (await site.get(tested.headers["location"])).text
+    assert "Oven (SmartHQ) isn&#39;t in this install: the gehomesdk library" in page
+    assert "fill in its settings" not in page
 
 
 async def test_tests_are_limited_to_a_few_a_minute(scenario: Scenario) -> None:
