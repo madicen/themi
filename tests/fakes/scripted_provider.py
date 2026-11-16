@@ -32,6 +32,7 @@ from themi.ai.types import (
     ChatResponse,
     Embeddings,
     ImageBlock,
+    ImageReference,
     ImageResult,
     Message,
     StopReason,
@@ -65,6 +66,7 @@ class RecordedRequest:
     max_tokens: int = DEFAULT_MAX_TOKENS
     texts: tuple[str, ...] = ()
     images: tuple[ImageBlock, ...] = ()  # F34m: pictures sent with a structured call
+    references: tuple[ImageReference, ...] = ()  # BD4c: pictures an image call keeps to
 
     @property
     def tool_names(self) -> list[str]:
@@ -244,11 +246,18 @@ class ScriptedProvider:
         return self
 
     async def image(
-        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+        self,
+        prompt: str,
+        size: str = IMAGE_SIZE,
+        *,
+        kind: CallKind = CallKind.BACKGROUND,
+        references: Sequence[ImageReference] = (),
     ) -> ImageResult:
         """A queued picture or error, else TINY_PNG: pictures are background work that
         tests don't usually script one by one."""
-        self.requests.append(RecordedRequest("image", kind, prompt=prompt))
+        self.requests.append(
+            RecordedRequest("image", kind, prompt=prompt, references=tuple(references))
+        )
         if self._queues["image"]:
             result = self._pop("image")
             assert isinstance(result, ImageResult)
