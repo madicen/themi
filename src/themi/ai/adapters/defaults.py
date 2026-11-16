@@ -20,8 +20,12 @@ GEMINI_DEFAULT_EMBEDDING_MODEL = "gemini-embedding-2"
 GEMINI_DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-lite-image"
 # OpenAI's current image model, asked for its low quality (a few cents a picture).
 OPENAI_DEFAULT_IMAGE_MODEL = "gpt-image-2"
-# Cloudflare Workers AI's FLUX.1 [schnell]: free up to 10,000 neurons a day (about 170 pictures).
-CLOUDFLARE_DEFAULT_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell"
+# Cloudflare Workers AI: free up to 10,000 neurons a day. BD4c (2026-11-15 pricing page):
+# FLUX.2 [klein] 4B, about 104 neurons a 1024px picture (some 95 a day), clearer than FLUX.1
+# [schnell] (about 58, some 170) and able to keep to a reference picture. Schnell is the
+# fallback when klein turns a request down.
+CLOUDFLARE_DEFAULT_IMAGE_MODEL = "@cf/black-forest-labs/flux-2-klein-4b"
+CLOUDFLARE_FALLBACK_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell"
 
 OLLAMA_URL = "http://localhost:11434/v1"
 LM_STUDIO_URL = "http://localhost:1234/v1"

@@ -22,6 +22,7 @@ import logging
 import re
 import secrets
 import tempfile
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -29,7 +30,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.ai.errors import AIError, ImageCapReached
 from themi.ai.settings import AITask
-from themi.ai.types import CallKind
+from themi.ai.types import CallKind, ImageReference
 from themi.core import keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
@@ -78,6 +79,50 @@ def image_prompt(step: str, *, notes: str = "", earlier: str = "") -> str:
     if notes and plain(notes):
         prompt += f" Shown this way: {plain(notes)}."
     return f"{prompt} {STYLE}"
+
+
+# BD4c: the session page's chameleon, drawn to a PNG and sent with each picture, so the
+# models that take a reference picture (FLUX.2 on Cloudflare) draw the same Themi every
+# time. The SVG has no colours of its own (the site's stylesheet gives them), so the light
+# theme's are put in here; the props are hidden. Cloudflare wants it under 512x512.
+CHAMELEON = Path(__file__).parent / "web" / "static" / "chameleon" / "chameleon.svg"
+REFERENCE_WIDTH = 480
+REFERENCE_VIEW = 'viewBox="-4 26 136 88"'  # the chameleon, without the props' room above
+REFERENCE_STYLE = """<style>
+path, rect, circle { stroke-linecap: round; stroke-linejoin: round; }
+.cham-skin { fill: #3d6f6a; stroke: #2b2a28; stroke-width: 1.6; }
+.cham-tail path { fill: none; stroke: #3d6f6a; stroke-width: 7; }
+.cham-belly, .cham-mouth, .cham-crest {
+  fill: none; stroke: #2b2a28; stroke-width: 1.6; opacity: .7; }
+.cham-spots { fill: #eef4f3; opacity: .6; }
+.cham-foot path, .cham-hand path { fill: none; stroke: #3d6f6a; stroke-width: 5; }
+.cham-eyeball { fill: #ffffff; stroke: #2b2a28; stroke-width: 1.6; }
+.cham-pupil { fill: #2b2a28; }
+.cham-lid { opacity: 0; }
+.prop, .cham-zz { display: none; }
+</style><rect x="-10" y="0" width="160" height="130" fill="#ffffff"/>"""
+
+
+def reference_svg() -> str:
+    """The chameleon on white, in the light theme's colours, props hidden."""
+    svg = CHAMELEON.read_text()
+    svg = svg.replace('viewBox="0 0 140 110"', REFERENCE_VIEW, 1)
+    opened = svg.index(">", svg.index("<svg")) + 1
+    return svg[:opened] + REFERENCE_STYLE + svg[opened:]
+
+
+@cache
+def chameleon_reference() -> ImageReference | None:
+    """Themi's look for the picture model, made once per process; None (and the pictures
+    go without it) when it can't be drawn."""
+    from themi.drawing.render import to_png
+
+    try:
+        png = to_png(reference_svg(), REFERENCE_WIDTH)
+    except Exception as exc:  # resvg missing or the SVG changed: words alone still work
+        log.warning("Couldn't draw the chameleon for step pictures: %r", exc)
+        return None
+    return ImageReference(png, "image/png", "the chameleon")
 
 
 class StepPictures:
@@ -156,7 +201,10 @@ class StepPictures:
         """One picture. False when the cap is reached (nothing was asked of a model)."""
         client = self.services.router.client_for(session.member_id, AITask.STEP_IMAGE)
         try:
-            picture = await client.image(prompt, kind=CallKind.BACKGROUND)
+            reference = chameleon_reference()
+            picture = await client.image(
+                prompt, kind=CallKind.BACKGROUND, references=(reference,) if reference else ()
+            )
         except ImageCapReached:
             return False
         except AIError as exc:

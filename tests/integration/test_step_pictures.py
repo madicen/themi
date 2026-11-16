@@ -112,3 +112,18 @@ async def test_only_the_owner_sees_the_pictures(
         await sign_in(scenario, his, "Husband")
         got = await his.get(f"/session/pictures/{session.id}/0")
         assert got.status_code == 200 and got.content == TINY_PNG
+
+
+async def test_each_picture_is_sent_the_chameleon_to_keep_to(scenario: Scenario) -> None:
+    """BD4c: the page's chameleon goes with every step picture, so the model that takes a
+    reference (FLUX.2 on Cloudflare) draws the same Themi each time."""
+    erin = scenario.member("Erin")
+    task = await kitchen(scenario)
+    await bd(scenario).start(erin, mode=GUIDED, task=task)
+    await scenario.run_jobs()
+    sent = [r.references for r in scenario.primary.requests if r.op == "image"]
+    assert len(sent) == 4
+    for references in sent:
+        (chameleon,) = references
+        assert chameleon.subject == "the chameleon" and chameleon.mime_type == "image/png"
+        assert chameleon.data.startswith(b"\x89PNG")

@@ -42,6 +42,7 @@ from themi.ai.types import (
     ChatResponse,
     Embeddings,
     ImageBlock,
+    ImageReference,
     ImageResult,
     Message,
     StopReason,
@@ -192,7 +193,12 @@ class GeminiProvider:
         return Embeddings(vectors, self.name, self.model)
 
     async def image(
-        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+        self,
+        prompt: str,
+        size: str = IMAGE_SIZE,
+        *,
+        kind: CallKind = CallKind.BACKGROUND,
+        references: Sequence[ImageReference] = (),
     ) -> ImageResult:
         """A picture from Gemini's image model (the route's model; one at a time)."""
         config = types.GenerateContentConfig(

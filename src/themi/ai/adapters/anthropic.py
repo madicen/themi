@@ -40,6 +40,7 @@ from themi.ai.types import (
     ChatResponse,
     Embeddings,
     ImageBlock,
+    ImageReference,
     ImageResult,
     Message,
     StopReason,
@@ -174,7 +175,12 @@ class AnthropicProvider:
         raise CapabilityError("Claude has no embeddings API; route embeddings elsewhere")
 
     async def image(
-        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+        self,
+        prompt: str,
+        size: str = IMAGE_SIZE,
+        *,
+        kind: CallKind = CallKind.BACKGROUND,
+        references: Sequence[ImageReference] = (),
     ) -> ImageResult:
         raise CapabilityError("Claude doesn't make pictures; route step pictures elsewhere")
 

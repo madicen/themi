@@ -57,6 +57,7 @@ from themi.ai.types import (
     ChatResponse,
     Embeddings,
     ImageBlock,
+    ImageReference,
     ImageResult,
     Message,
     StructuredResponse,
@@ -482,15 +483,17 @@ class TaskClient:
         *,
         kind: CallKind = CallKind.BACKGROUND,
         on_retry: OnRetry | None = None,
+        references: Sequence[ImageReference] = (),
     ) -> ImageResult:
         """A picture (BD4a), under the person's daily cap: past it, `ImageCapReached` and
-        no model is asked. Counted from today's successful calls in `ai_calls`."""
+        no model is asked. Counted from today's successful calls in `ai_calls`. `references`:
+        pictures to keep to (BD4c), for the models that take them."""
         cap = self._router.image_cap(self.member_id)
         if self._router.images_today(self.member_id, self.task) >= cap:
             raise ImageCapReached(cap)
 
         async def operation(provider: Provider) -> ImageResult:
-            return await provider.image(prompt, size, kind=kind)
+            return await provider.image(prompt, size, kind=kind, references=references)
 
         return await self._router.run(self.member_id, self.task, kind, operation, on_retry)
 
