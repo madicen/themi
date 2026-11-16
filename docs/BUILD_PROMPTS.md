@@ -20167,6 +20167,11 @@ Notes:
 - Setup Michael must do: on the Pi, `pip install -e '.[smarthq]'` (or the extra in the
   deploy), restart, then sign in on Accounts → Oven with the SmartHQ email and password
   and the emailed code.
+- 2026-11-15 fix: the image's `EXTRAS` hadn't got `smarthq`, so on the Pi the module
+  built to None and showed only "Needs settings". The Dockerfile now has it, and a build
+  whose library is missing raises `LibraryMissing` (SmartHQ, Roborock): the report's
+  `needs_library` state, "Not in this install" on the Modules page and in Test. Needs a
+  new image on the Pi.
 
 ### OV3 · Oven: preheated, timer, probe and left-on notices
 Status: [x] 2026-11-15
