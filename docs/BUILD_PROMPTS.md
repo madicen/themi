@@ -298,9 +298,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD1b | Body double: Guided Step-Through in chat | Body double | [x] 2026-11-06 |
 | BD2 | Body double: choosing the mode, and learning from sessions | Body double | [x] 2026-11-06 |
 | BD3a | Body double: the session page and the Telegram Mini App | Body double | [x] 2026-11-06 |
-| BD3b | Body double: Themi the chameleon | Body double | [x] |
+| BD3b | Body double: Themi the chameleon | Body double | [x] 2026-11-15 |
 | BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
 | BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
+| BD4c | Body double: better step pictures, the same Themi in each | Body double | [~] |
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
 | BD5b | Spotify: playing their own music | Body double | [x] 2026-11-06 |
 | BD5c | Body double: music that suits the task | Body double | [x] 2026-11-06 |
@@ -15205,6 +15206,55 @@ Notes (2026-11-06):
   shows it from a `blob:` address, which the CSP's `img-src 'self' data:` refused. The
   session page alone now allows `blob:` images. The headless-Chrome test now also runs the
   picture job and checks the step's picture actually loads on the page.
+
+### BD4c · Body double: better step pictures, the same Themi in each
+Status: [~]
+Depends on: BD4a, BD4b, BD3b
+Read first: BD4a's and BD4b's notes (the Cloudflare backend, the prompt built in code);
+Cloudflare's FLUX.2 [klein] 4B changelog (2026-01-15: multipart form, `prompt`, `width`,
+`height`, `seed`, `guidance`, `input_image_0`..`3` each under 512x512, 4 steps fixed).
+Asked for by Michael on 2026-11-15: the step pictures come through but look rough, and he
+wants better ones without paying.
+- The Cloudflare backend's default model becomes `@cf/black-forest-labs/flux-2-klein-4b`
+  (free tier: about 104 neurons a 1024px picture, so some 95 a day; Cloudflare's pricing
+  page, 2026-11-15). It is sent as a multipart form (`prompt`, `width`, `height` 1024, and
+  the reference pictures as `input_image_N`). FLUX.1 schnell keeps its JSON request when
+  it's the backend's model.
+- If klein answers 400 (other than a safety refusal), the same backend tries FLUX.1
+  schnell once and logs it, so a change on Cloudflare's side leaves pictures coming.
+- `Provider.image(..., references=())`: pictures the model should keep to. The Cloudflare
+  klein call sends them; models that can't take them ignore them.
+- The reference is the session page's chameleon (BD3b's `chameleon.svg`), drawn to a PNG
+  under 512px with resvg in the site's light colours, props hidden, once per process.
+  Step pictures send it, and the prompt says to keep the chameleon from image 0.
+Tests: klein's multipart request (fields, the reference as `input_image_0`); schnell's
+JSON request kept; the 400 fallback to schnell; a safety refusal isn't retried; the
+reference PNG is a PNG under 512px in both sides; step pictures pass it.
+A live check on the Pi with Michael's account before it's marked done.
+
+Notes (2026-11-15):
+- `CLOUDFLARE_DEFAULT_IMAGE_MODEL` is `@cf/black-forest-labs/flux-2-klein-4b`; a backend
+  with its model blank (or a display name) runs it. Any `@cf/black-forest-labs/flux-2-`
+  model is sent as a multipart form (`prompt`, `width`, `height`, `input_image_N`, built as
+  file parts so it is multipart even without a reference); schnell keeps its JSON.
+- Fallback: a 400 or 404 from a FLUX.2 model, other than an NSFW refusal, is logged and
+  FLUX.1 schnell is asked once on the same backend (`ImageResult.model` says which drew it).
+  Outages (429/5xx), bad tokens (401) and refusals aren't retried there; the router
+  handles them as before.
+- `ImageReference(data, mime_type, subject)` and `references=` on `Provider.image` and
+  `TaskClient.image`. Only Cloudflare's FLUX.2 uses them: each adds "Draw <subject>
+  exactly as in image N." to the prompt (Cloudflare counts from image 0). Gemini, OpenAI
+  and schnell ignore them; Gemini could take one later as an image part.
+- `step_images.chameleon_reference()`: `chameleon.svg` with the light theme's colours put
+  in as a `<style>` (no CSS variables: resvg has no site stylesheet), props hidden, cropped
+  to the chameleon on white, 480x310 PNG, made once per process. If it can't be drawn,
+  pictures go without it.
+- Tests changed: `test_ai_cloudflare.py`'s schnell request test now names schnell (the
+  default moved), and the default-model asserts say klein.
+- Setup: none if the Cloudflare backend's model is blank on the AI page; if it says
+  `@cf/black-forest-labs/flux-1-schnell`, clear it. Restart `themi run`. Live check:
+  `THEMI_LIVE_CLOUDFLARE_TOKEN=... THEMI_LIVE_CLOUDFLARE_ACCOUNT=...
+  THEMI_LIVE_PICTURE_DIR=/tmp make test-live` draws one picture with each model to compare.
 
 ### BD5a · Body double: built-in music
 Status: [x] 2026-11-06
