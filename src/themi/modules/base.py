@@ -37,6 +37,21 @@ class ModuleError(Exception):
     or a service asked for that nobody provided. The message names the modules involved."""
 
 
+class LibraryMissing(Exception):
+    """Raised by `build` when the Python library a module needs isn't installed (an
+    optional extra left out of this install). Settings can't fix it: the image or venv
+    needs the extra, so the report says that instead of "its settings aren't there"."""
+
+    def __init__(self, library: str, extra: str) -> None:
+        super().__init__(
+            f"the {library} library is missing "
+            f"(it comes with the {extra} extra: pip install 'themi[{extra}]', "
+            "or a Themi image built with it)"
+        )
+        self.library = library
+        self.extra = extra
+
+
 @dataclass(frozen=True)
 class PeriodicTask:
     name: str

@@ -56,6 +56,7 @@ BADGES = {
     "waiting": ("Waiting for restart", "info"),
     "failed": ("Couldn't start", "bad"),
     "needs_settings": ("Needs settings", "warn"),
+    "needs_library": ("Not in this install", "warn"),
     "needs_account": ("Needs an account linked", "warn"),
     "on": ("On", "good"),
     "off": ("Off", ""),
@@ -109,6 +110,8 @@ class Overview:
             badge = "failed"
         elif state == "not_set_up":
             badge = "needs_settings"
+        elif state == "needs_library":
+            badge = "needs_library"
         elif state == "on":
             module = self.built.get(name)
             linked = module.accounts_linked(services) if module is not None else None

@@ -31,7 +31,7 @@ from importlib.metadata import entry_points
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from themi.modules import Module, ModuleSetup, StartReport
+from themi.modules import LibraryMissing, Module, ModuleSetup, StartReport
 from themi.modules.settings import SettingsProblem
 from themi.settings import Settings, SettingsError
 
@@ -342,6 +342,9 @@ def _resolve(
         except SettingsProblem as exc:  # CR5b: its settings, in the person's words
             report.problems.extend(exc.problems)
             report.note(name, "failed", kind(name), "; ".join(exc.problems))
+            continue
+        except LibraryMissing as exc:  # its optional extra isn't installed: not a settings gap
+            report.note(name, "needs_library", kind(name), str(exc), warn=name in config.added)
             continue
         except Exception as exc:
             if not tolerant:

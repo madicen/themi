@@ -23,7 +23,7 @@ from themi import clock
 from themi.accounts import NotFound
 from themi.channels.outbox import SERVER_KIND, Priority
 from themi.localtime import to_utc_iso
-from themi.modules.base import Module, ModuleSetup
+from themi.modules.base import LibraryMissing, Module, ModuleSetup
 from themi.modules.planning import Planner
 from themi.modules.report import StartReport
 from themi.modules.settings import SettingsProblem, fields, read_settings
@@ -268,6 +268,8 @@ class Portal:
             module = self.builder(cls, setup)
         except SettingsProblem as exc:
             result = f"{title}'s settings aren't right yet: {'; '.join(exc.problems)}"
+        except LibraryMissing as exc:
+            result = f"{title} isn't in this install: {exc}."
         except Exception as exc:
             result = f"{title} couldn't be set up: {exc}"
         else:
