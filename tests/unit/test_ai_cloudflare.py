@@ -89,7 +89,12 @@ async def test_flux_2_klein_is_the_default_and_takes_a_multipart_form() -> None:
     assert request.url.path.endswith("/ai/run/@cf/black-forest-labs/flux-2-klein-4b")
     assert request.headers["content-type"].startswith("multipart/form-data")
     fields = form(request)
-    assert fields["prompt"] == (b"a broom by a door Draw the chameleon exactly as in image 0.")
+    # BD4d: the reference shows only the look, so the model poses it anew for the step
+    assert fields["prompt"] == (
+        b"Image 0 only shows what the chameleon looks like: draw it in a new scene and a new "
+        b"pose, keeping its face, colours and markings. a broom by a door"
+    )
+    assert b"exactly" not in fields["prompt"]
     assert (fields["width"], fields["height"]) == (b"1024", b"1024")
     assert fields["input_image_0"] == TINY_PNG
     assert b'filename="image0.png"' in request.content
