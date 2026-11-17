@@ -279,3 +279,54 @@ async def test_push_to_talk(scenario: Scenario) -> None:
         heard = "document.querySelector('.cook-heard').textContent"
         assert await tab.value(heard) == "“next”"
         assert await tab.value("window.listened") == 1  # one phrase a press
+
+
+HELD_RECOGNIZER = (
+    "window.stopped = 0; window.webkitSpeechRecognition = function () {"
+    " const rec = this; window.rec = rec;"
+    " rec.start = function () { window.listened = (window.listened || 0) + 1; };"
+    " rec.stop = function () { window.stopped += 1;"
+    "  rec.onresult({ results: [[{ transcript: 'next' }]] }); rec.onend(); };"
+    "}; window.SpeechRecognition = undefined; window.themiCook.setupVoice();"
+)
+
+
+async def test_a_long_press_talks_and_never_selects(scenario: Scenario) -> None:
+    """F45c (bug #214): on an iPhone a long press on "Hold to talk" selected "Hold", the
+    press was cancelled, and the recognizer was aborted with nothing said."""
+    from themi_home.cooking import CookingPreferences
+
+    clock.unfreeze()
+    erin = scenario.member("Erin")
+    await to_step_three(scenario)
+    scenario.app.store.save_preferences(erin, erin.id, CookingPreferences, cooking_voice=True)
+    async with page_in_chrome(scenario, erin, ".cook-moves") as tab:
+        mic = "document.querySelector('.cook-mic')"
+        await tab.value(HELD_RECOGNIZER)
+        assert await tab.value(f"getComputedStyle({mic}).userSelect") == "none"
+        assert await tab.value(f"getComputedStyle({mic}).touchAction") == "none"
+        menu = "new MouseEvent('contextmenu', {bubbles: true, cancelable: true})"
+        assert await tab.value(f"!{mic}.dispatchEvent({menu})")  # prevented
+        select = "new Event('selectstart', {bubbles: true, cancelable: true})"
+        assert await tab.value(f"!{mic}.dispatchEvent({select})")
+        # a press the browser cancels (iOS starting a selection) stops listening
+        await tab.value(
+            f"{mic}.dispatchEvent(new PointerEvent('pointerdown', {{cancelable: true}}))"
+        )
+        assert await tab.value(f"{mic}.getAttribute('aria-pressed')") == "true"
+        assert "Listening" in await tab.value(f"{mic}.textContent")
+        await tab.value(f"{mic}.dispatchEvent(new PointerEvent('pointercancel'))")
+        assert await tab.value("window.stopped") == 1
+        assert await tab.value("window.getSelection().toString()") == ""
+        count = "document.querySelector('.cook-count').textContent"
+        assert await until(lambda: tab.value(f"({count}).startsWith('Step 3 of 3')"))
+        assert "Hold to talk" in await tab.value(f"{mic}.textContent")
+        # an aborted recognizer says so, under the button
+        await tab.value(
+            f"{mic}.dispatchEvent(new PointerEvent('pointerdown', {{cancelable: true}}))"
+        )
+        await tab.value("window.rec.onerror({error: 'aborted'}); window.rec.onend()")
+        heard = "document.querySelector('.cook-heard').textContent"
+        assert await tab.value(heard) == "Didn't catch that. Tap to try again."
+        await tab.value("window.rec.onerror({error: 'not-allowed'})")
+        assert await tab.value(heard) == "The microphone isn't allowed for this page."

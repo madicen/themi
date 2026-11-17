@@ -293,7 +293,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F44d | Feedback: a split task can be put back together | Feedback | [x] 2026-11-15 |
 | F45a | Feedback: an imported recipe's apostrophes are apostrophes | Feedback | [x] 2026-11-16 |
 | F45b | Feedback: prep says how much to measure | Feedback | [x] 2026-11-16 |
-| F45c | Feedback: holding the mic button on an iPhone talks, not selects | Feedback | [ ] |
+| F45c | Feedback: holding the mic button on an iPhone talks, not selects | Feedback | [x] 2026-11-16 |
 | F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [ ] |
 | F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [ ] |
 | F45f | Feedback: the oven's preheat where the recipe says it; a cancelled timer stops the oven's | Feedback | [ ] |
@@ -14600,7 +14600,7 @@ amount, as the prompt asks): `test_alfredo_from_cook_this_to_prep_done` and
 and two scenarios at the end of `tests/scenarios/test_cooking.py`. No golden file changed.
 
 ### F45c · Feedback (2026-11-15): holding the mic button on an iPhone talks, not selects
-Status: [ ]
+Status: [x] 2026-11-16
 Depends on: CK8
 Read first: `themi_home/web/static/cook.js` (`setupVoice`);
 `themi_home/web/templates/cook/_company.html` (`.cook-mic`); the cook screen's CSS;
@@ -14635,6 +14635,18 @@ as pointerdown, then pointercancel, stops the recognizer and leaves no text sele
 Scenario: none (the browser test is the person's view).
 
 Data: none needed. Mark #214 reviewed once live; Michael checks a hold on his iPhone.
+
+Notes: `.cook-mic` and everything in it: `user-select`/`-webkit-user-select: none`,
+`-webkit-touch-callout: none`, `touch-action: none`, no tap highlight. The label is its own
+`.cook-mic-label` span, "Listening…" while listening. `pointerdown` prevents the default
+and captures the pointer (a synthetic press has nothing to capture, so that's tried);
+`pointercancel` stops listening at once; `pointerup` and `pointerleave` stop a hold
+(over 400 ms) as before. `contextmenu` and `selectstart` are prevented. Errors `aborted` and
+`network` show "Didn't catch that. Tap to try again." under the button, `not-allowed`,
+`service-not-allowed` and `audio-capture` "The microphone isn't allowed for this page.", for
+6 s; `no-speech` stays quiet; every error still goes to the log. New browser test
+`test_a_long_press_talks_and_never_selects`; none changed, no golden file changed. It can't
+reproduce iOS itself: Michael's check on his iPhone is the real test.
 
 ### F45d · Feedback (2026-11-16): weighing tasks are the cook's, and close when the weight is told
 Status: [ ]

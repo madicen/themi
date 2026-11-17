@@ -219,7 +219,27 @@
     mic.hidden = !Rec || mic.dataset.on !== "1";
     if (mic.hidden || mic.dataset.ready) return;
     mic.dataset.ready = "1";
-    var rec = null, listening = false, downAt = 0;
+    var label = mic.querySelector(".cook-mic-label");
+    var rec = null, listening = false, held = false, downAt = 0;
+    var TROUBLE = {  // F45c: said under the button, not only in the log
+      "aborted": "Didn't catch that. Tap to try again.",
+      "network": "Didn't catch that. Tap to try again.",
+      "not-allowed": "The microphone isn't allowed for this page.",
+      "service-not-allowed": "The microphone isn't allowed for this page.",
+      "audio-capture": "The microphone isn't allowed for this page."
+    };
+    function shown(on) {
+      listening = on;
+      mic.setAttribute("aria-pressed", on ? "true" : "false");
+      if (label) label.textContent = on ? "Listening\u2026" : "Hold to talk";
+    }
+    function trouble(text) {
+      var el = document.querySelector(".cook-heard");
+      if (!el) return;
+      el.textContent = text;
+      clearTimeout(heardTimer);
+      heardTimer = setTimeout(function () { el.textContent = ""; }, 6000);
+    }
     function start() {
       var Now = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (listening || !Now) return;
@@ -233,17 +253,37 @@
           var said = e.results && e.results[0] && e.results[0][0] ? e.results[0][0].transcript : "";
           sayWords(String(said).trim());
         };
-        rec.onend = function () { listening = false; mic.setAttribute("aria-pressed", "false"); };
-        rec.onerror = function (e) { listening = false; mic.setAttribute("aria-pressed", "false"); if (e && e.error !== "no-speech") report("voice: " + e.error); };
-        listening = true;
-        mic.setAttribute("aria-pressed", "true");
+        rec.onend = function () { shown(false); };
+        rec.onerror = function (e) {
+          shown(false);
+          var code = e && e.error;
+          if (code === "no-speech") return;
+          if (TROUBLE[code]) trouble(TROUBLE[code]);
+          report("voice: " + code);
+        };
+        shown(true);
         rec.start();
-      } catch (e) { listening = false; report("voice start: " + e); }
+      } catch (e) { shown(false); report("voice start: " + e); }
     }
-    mic.addEventListener("pointerdown", function () { downAt = Date.now(); start(); });
-    mic.addEventListener("pointerup", function () {  // held: stop when let go; tapped: one phrase
+    function letGo() {  // held: stop when let go; tapped: the recognizer stops after a phrase
+      if (!held) return;
+      held = false;
       if (rec && listening && Date.now() - downAt > 400) rec.stop();
+    }
+    mic.addEventListener("pointerdown", function (e) {
+      e.preventDefault();  // F45c: no text selection, no callout, no focus dance
+      try { mic.setPointerCapture(e.pointerId); } catch (ignored) { /* a synthetic press */ }
+      held = true; downAt = Date.now(); start();
     });
+    mic.addEventListener("pointerup", letGo);
+    mic.addEventListener("pointercancel", function () {  // F45c: iOS took the press
+      if (!held) return;
+      held = false;
+      if (rec && listening) rec.stop();
+    });
+    mic.addEventListener("pointerleave", letGo);
+    mic.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    mic.addEventListener("selectstart", function (e) { e.preventDefault(); });
     mic.addEventListener("click", function (e) { if (e.detail === 0) start(); });  // keyboard
   }
 
