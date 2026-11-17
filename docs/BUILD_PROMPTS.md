@@ -308,6 +308,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
 | BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
 | BD4c | Body double: better step pictures, the same Themi in each | Body double | [~] |
+| BD4d | Body double: a Themi character sheet for the step pictures | Body double | [ ] |
+| BD3c | Body double: the session page's chameleon redrawn as the chosen Themi | Body double | [ ] |
+| BD4e | Body double: ready-made pictures when live ones can't be made | Body double | proposed |
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
 | BD5b | Spotify: playing their own music | Body double | [x] 2026-11-06 |
 | BD5c | Body double: music that suits the task | Body double | [x] 2026-11-06 |
@@ -15592,6 +15595,47 @@ Notes (2026-11-15):
   `@cf/black-forest-labs/flux-1-schnell`, clear it. Restart `themi run`. Live check:
   `THEMI_LIVE_CLOUDFLARE_TOKEN=... THEMI_LIVE_CLOUDFLARE_ACCOUNT=...
   THEMI_LIVE_PICTURE_DIR=/tmp make test-live` draws one picture with each model to compare.
+
+- Tried on the Pi (2026-11-17, Michael's account, klein): the SVG chameleon as reference
+  pastes its side-on pose into every picture, and in 4 of 5 chores it isn't doing the
+  chore. Words alone draw it doing each chore well, but the character changes from picture
+  to picture. A chameleon klein drew itself, sent with "a new scene with a new pose; image
+  0 only shows what the character looks like", kept its face and markings in a new pose;
+  the reference's background leaked in. So BD4d replaces the reference.
+
+### BD4d · Body double: a Themi character sheet for the step pictures
+Status: [ ] waiting for Michael and Erin to pick a character (six drawn 2026-11-17)
+Depends on: BD4c
+Read first: BD4c's notes (what the Pi showed on 2026-11-17).
+- The chosen candidate (klein, words only: full body, standing, plain white background) is
+  committed as `themi_home/web/static/chameleon/reference.png`, under 512x512, and sent in
+  place of the SVG drawing (`chameleon_reference()` reads the file).
+- The prompt opens "A new scene with a new pose; image 0 only shows what the character
+  looks like." The Cloudflare form's added line drops "exactly" ("Keep <subject> as in
+  image N."), and the subject is "the chameleon's face, colours and markings".
+- `image_prompt`'s description of Themi is rewritten to match the chosen character, and
+  adds "no labels or writing on anything" (a spray bottle came out with a fake label).
+Tests: the reference is the committed PNG, under 512px; the prompt's wording; the form's
+line. A live check: five chores on the Pi, the same character in each, doing the chore.
+
+### BD3c · Body double: the session page's chameleon redrawn as the chosen Themi
+Status: [ ]
+Depends on: BD4d
+Read first: BD3b's notes (named parts, colours from tokens, no style in the SVG).
+- `chameleon.svg` redrawn by hand to look like BD4d's chosen character (standing,
+  front three-quarter, its colours as new tokens in both themes), keeping every named
+  part and prop, so every state and scene still works. Original art, drawn as SVG paths.
+Tests: BD3b's page tests (every flag has a CSS state, no style or script in the SVG);
+checked by eye at 360px, light and dark, every state.
+
+### BD4e · Body double: ready-made pictures when live ones can't be made
+Status: proposed (2026-11-17), Michael's call after BD4d is live
+Depends on: BD4d
+- About 20 generic pictures of the chosen Themi (dishes, laundry, sweeping, wiping,
+  tidying, trash, plants, cooking, paperwork, a phone call, ...), drawn once with BD4d's
+  reference and picked by hand, shipped with Themi. A step's keywords pick one when the
+  daily cap is reached or a picture fails, instead of text alone. If live pictures still
+  disappoint after BD4d, these become the main pictures.
 
 ### BD5a · Body double: built-in music
 Status: [x] 2026-11-06
