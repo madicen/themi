@@ -264,3 +264,143 @@ async def test_a_tablespoon_weighed_is_saved_as_a_tablespoon(
     await scenario.say("Erin", "The tablespoon of nutmeg was 7 g")
     assert weights.book().grams("ground nutmeg", 1, "tbsp") == 7
     assert titles(scenario) == []
+
+
+def cooked(scenario: Scenario, recipe_id: int, name: str, when: str = "2026-10-20") -> None:
+    scenario.app.db.execute(
+        "INSERT INTO cooking_sessions (member_id, recipe_id, phase, started_at, last_tap_at) "
+        "VALUES (?, ?, 'done', ?, ?)",
+        (scenario.member(name).id, recipe_id, when, when),
+    )
+
+
+def owner(scenario: Scenario, task_id: int) -> tuple[int | None, int]:
+    row = scenario.app.db.one("SELECT assignee, shared FROM tasks WHERE id = ?", (task_id,))
+    assert row is not None
+    return row["assignee"], row["shared"]
+
+
+async def test_reply_491_the_weighing_task_is_the_cooks(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    """F45d (reply 491): Michael cooked, and the tasks were all Erin's (the first admin's)."""
+    bread = cookbook_recipe(scenario, "No-Time Bread", ["¾ tsp balsamic vinegar"])
+    cooked(scenario, bread, "Erin", "2026-10-10")
+    cooked(scenario, bread, "Husband", "2026-10-20")  # the latest cook
+    weights.record("balsamic vinegar", "wanted")
+    await weights.look_up()
+    (task,) = tasks(scenario)
+    assert owner(scenario, task["id"]) == (scenario.member("Husband").id, 0)
+
+
+async def test_a_recipe_nobody_cooked_is_either_of_yours(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    cookbook_recipe(scenario, "Pumpkin Pie", ["½ tsp ground nutmeg"])
+    weights.record("ground nutmeg", "wanted")
+    await weights.look_up()
+    (task,) = tasks(scenario)
+    assert owner(scenario, task["id"])[1] == 1  # shared: on both lists
+
+
+async def test_a_saved_recipe_is_whoever_saved_its(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    import json
+
+    pie = cookbook_recipe(scenario, "Pumpkin Pie", ["½ tsp ground nutmeg"])
+    scenario.app.db.execute(
+        "INSERT INTO pending_actions (category, member_id, summary, executor, payload, status, "
+        "created_at, updated_at) VALUES ('cookbook_add', ?, 'Add', 'cookbook.add', ?, 'done', "
+        "'2026-10-20', '2026-10-20')",
+        (scenario.member("Husband").id, json.dumps({"recipe": pie, "section": "Desserts"})),
+    )
+    weights.record("ground nutmeg", "wanted")
+    await weights.look_up()
+    (task,) = tasks(scenario)
+    assert owner(scenario, task["id"]) == (scenario.member("Husband").id, 0)
+
+
+async def test_erins_open_task_moves_to_the_cook_once_quietly(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    pie = cookbook_recipe(scenario, "Pumpkin Pie", ["½ tsp ground nutmeg"])
+    weights.record("ground nutmeg", "wanted")
+    erin, husband = scenario.member("Erin"), scenario.member("Husband")
+    board = scenario.app.services.get(keys.taskboard)
+    made = await board.create(erin, "Weigh 1 tablespoon of ground nutmeg when you're next "
+                              "cooking", "physical", 1, assignee=erin, nudge=False)  # fmt: skip
+    scenario.app.db.execute(
+        "UPDATE gram_weights_meta SET task_id = ? WHERE key = 'ground nutmeg'", (made.id,)
+    )
+    cooked(scenario, pie, "Husband")
+    sent = len(scenario.inbox("Husband")) + len(scenario.inbox("Erin"))
+    await weights.look_up()
+    assert owner(scenario, made.id) == (husband.id, 0)
+    assert len(scenario.inbox("Husband")) + len(scenario.inbox("Erin")) == sent  # no message
+    await board.reassign(made.id, erin)  # Erin takes it back
+    await weights.look_up()
+    assert owner(scenario, made.id) == (erin.id, 0)  # moved once, not again
+
+
+async def test_nutmeg_told_for_a_ground_nutmeg_task_asks(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    """F45d (reply 491): "1 tbsp of nutmeg is about 7g" saved "nutmeg"; task 111 was for
+    "ground nutmeg" and stayed open."""
+    cookbook_recipe(scenario, "Pumpkin Pie", ["½ tsp ground nutmeg"])
+    weights.record("ground nutmeg", "wanted")
+    await weights.look_up()
+    (task,) = tasks(scenario)
+    scenario.primary.queue_tool_call(
+        "weighed_gram_weight", {"ingredient": "nutmeg", "amount": 1, "unit": "tbsp", "grams": 7}
+    )
+    (reply,) = await scenario.say("Husband", "1 tbsp of nutmeg is about 7g")
+    assert reply.startswith("Saved: 1 Tbsp Nutmeg: Weight in Grams 7g.")
+    assert reply.endswith("Is that the ground nutmeg for your weighing task too?")
+    assert scenario.last_buttons("Husband") == ["Yes, the same", "No"]
+    await scenario.tap("Husband", "Yes, the same")
+    assert scenario.app.db.scalar("SELECT status FROM tasks WHERE id = ?", (task["id"],)) == "done"
+    assert weights.book().grams("ground nutmeg", 1, "tbsp") == 7
+    assert (
+        weights.meta(key("ground nutmeg")) is None
+        or (weights.meta(key("ground nutmeg")) or {}).get("source") != "wanted"
+    )
+
+
+async def test_no_leaves_the_task_open(scenario: Scenario, weights: GramWeights) -> None:
+    cookbook_recipe(scenario, "Pumpkin Pie", ["½ tsp ground nutmeg"])
+    weights.record("ground nutmeg", "wanted")
+    await weights.look_up()
+    (task,) = tasks(scenario)
+    scenario.primary.queue_tool_call(
+        "weighed_gram_weight", {"ingredient": "nutmeg", "amount": 1, "unit": "tbsp", "grams": 7}
+    )
+    await scenario.say("Husband", "1 tbsp of nutmeg is about 7g")
+    await scenario.tap("Husband", "No")
+    assert scenario.app.db.scalar("SELECT status FROM tasks WHERE id = ?", (task["id"],)) == "open"
+    assert not weights.book().has("ground nutmeg")
+
+
+async def test_a_weighing_task_says_so_in_the_open_items(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    pie = cookbook_recipe(scenario, "Pumpkin Pie", ["½ tsp ground nutmeg"])
+    cooked(scenario, pie, "Husband")
+    weights.record("ground nutmeg", "wanted")
+    await weights.look_up()
+    scenario.primary.queue_tool_call("list_open_items", {})
+    scenario.primary.queue_text("ok")
+    await scenario.say("Husband", "What's open?")
+    from themi.ai.types import ToolResult
+
+    result = [
+        b.content
+        for m in scenario.primary.last_request.messages
+        for b in m.content
+        if isinstance(b, ToolResult)
+    ][-1]
+    assert (
+        "Weigh 1 tablespoon of ground nutmeg when you're next cooking. A weighing task, for "
+        "ground nutmeg in the weights guide." in result
+    )

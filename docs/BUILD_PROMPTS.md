@@ -294,7 +294,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F45a | Feedback: an imported recipe's apostrophes are apostrophes | Feedback | [x] 2026-11-16 |
 | F45b | Feedback: prep says how much to measure | Feedback | [x] 2026-11-16 |
 | F45c | Feedback: holding the mic button on an iPhone talks, not selects | Feedback | [x] 2026-11-16 |
-| F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [ ] |
+| F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [x] 2026-11-16 |
 | F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [ ] |
 | F45f | Feedback: the oven's preheat where the recipe says it; a cancelled timer stops the oven's | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -14649,7 +14649,7 @@ and captures the pointer (a synthetic press has nothing to capture, so that's tr
 reproduce iOS itself: Michael's check on his iPhone is the real test.
 
 ### F45d · Feedback (2026-11-16): weighing tasks are the cook's, and close when the weight is told
-Status: [ ]
+Status: [x] 2026-11-16
 Depends on: GW4, F44b, F44c
 Read first: `themi_home/gram_weights.py` (`_make_tasks`, `_needed`, `first_admin`,
 `weighed`, `_settle_task`, `weighed_gram_weight`, `same_ingredient`, `add_alias`); GW4's
@@ -14695,6 +14695,24 @@ of vinegar is 15 g" and it's done.
 
 Data: none needed (the next run moves 109, 111 and 114). Mark reply 491's label once live
 (`themi feedback --wrong-tool 491 complete_task`).
+
+Notes: `_needed` now maps each key to the recipes needing it; `_cook(recipe_ids)` is the
+latest `cooking_sessions.member_id` for them, else the member of the latest done
+`cookbook_add` for one of them, else None. New tasks are made with
+`Assignment(cook, cook, WEIGH_REASON)` (requester still the first admin); with no cook, made
+without a nudge and `reassign(shared=True)` onto both lists (which nudges both). An open task
+whose `assign_reason` isn't `WEIGH_REASON` (made before F45d) is moved once by
+`_to_the_cook` (`TaskBoard.reassign` gained `nudge=False`: no prompt, only the "reassigned"
+change), and its reason set, so a later hand-back stays. On the Pi: 109, 111 and 114 go to
+Michael if his sessions or saves are the latest for their recipes, otherwise onto both
+lists. `task_for_more(name)`: the one open weighing task whose key ends with " name" or
+"/name" (so "miso" finds "mild/yellow miso"); `weighed_gram_weight` then sends its reply
+with "Is that the ground nutmeg for your weighing task too?" and [Yes, the same] [No]
+(button kind `gram_weight`, actions `same_task`/`not_same_task`). Yes adds the alias, marks
+the task done and drops the `wanted` row. Open items: a display note "A weighing task, for
+<name> in the weights guide." after the title (not "(a weighing task)" in the title, which
+would rename the task). New tests at the end of `tests/scenarios/test_gram_tasks.py`. None
+changed, no golden file changed.
 
 ### F45e · Feedback (2026-11-16): nothing done is never "Done.", and a forgotten weight can come back
 Status: [ ]

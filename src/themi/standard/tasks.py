@@ -940,9 +940,12 @@ class TaskBoard:
                     member, row["telegram_message_id"], DONE_TEXT.format(title=task.title)
                 )
 
-    async def reassign(self, task_id: int, member: Member | None, *, shared: bool = False) -> Task:
+    async def reassign(
+        self, task_id: int, member: Member | None, *, shared: bool = False, nudge: bool = True
+    ) -> Task:
         """Give a one-off task to someone else, or to both of you (`shared`: on everyone's
-        list, either can do it). The nudge goes to whoever has it now."""
+        list, either can do it). The nudge goes to whoever has it now (none with
+        `nudge=False`: a quiet move, F45d)."""
         task = self.get(task_id)
         if task.status not in ("open", "snoozed"):
             return task
@@ -962,7 +965,7 @@ class TaskBoard:
             if assignee is not None
             else []
         )
-        for person in people:
+        for person in people if nudge else []:
             await self.prompt(task, member=person)
         await self._changed(task, "reassigned", False)
         return task
