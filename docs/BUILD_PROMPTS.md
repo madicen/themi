@@ -307,8 +307,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD3b | Body double: Themi the chameleon | Body double | [x] 2026-11-15 |
 | BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
 | BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
-| BD4c | Body double: better step pictures, the same Themi in each | Body double | [~] |
-| BD4d | Body double: a Themi character sheet for the step pictures | Body double | [ ] |
+| BD4c | Body double: better step pictures, the same Themi in each | Body double | [x] 2026-11-17 |
+| BD4d | Body double: a Themi character sheet for the step pictures | Body double | [x] 2026-11-17 |
 | BD3c | Body double: the session page's chameleon redrawn as the chosen Themi | Body double | [ ] |
 | BD4e | Body double: ready-made pictures when live ones can't be made | Body double | proposed |
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
@@ -15548,7 +15548,7 @@ Notes (2026-11-06):
   picture job and checks the step's picture actually loads on the page.
 
 ### BD4c · Body double: better step pictures, the same Themi in each
-Status: [~]
+Status: [x] 2026-11-17
 Depends on: BD4a, BD4b, BD3b
 Read first: BD4a's and BD4b's notes (the Cloudflare backend, the prompt built in code);
 Cloudflare's FLUX.2 [klein] 4B changelog (2026-01-15: multipart form, `prompt`, `width`,
@@ -15602,9 +15602,11 @@ Notes (2026-11-15):
   to picture. A chameleon klein drew itself, sent with "a new scene with a new pose; image
   0 only shows what the character looks like", kept its face and markings in a new pose;
   the reference's background leaked in. So BD4d replaces the reference.
+- Done (2026-11-17): klein and the multipart form ran live on the Pi (17 pictures, none
+  fell back to schnell). The reference itself is BD4d's.
 
 ### BD4d · Body double: a Themi character sheet for the step pictures
-Status: [ ] waiting for Michael and Erin to pick a character (six drawn 2026-11-17)
+Status: [x] 2026-11-17
 Depends on: BD4c
 Read first: BD4c's notes (what the Pi showed on 2026-11-17).
 - The chosen candidate (klein, words only: full body, standing, plain white background) is
@@ -15617,6 +15619,25 @@ Read first: BD4c's notes (what the Pi showed on 2026-11-17).
   adds "no labels or writing on anything" (a spray bottle came out with a fake label).
 Tests: the reference is the committed PNG, under 512px; the prompt's wording; the form's
 line. A live check: five chores on the Pi, the same character in each, doing the chore.
+
+Notes (2026-11-17):
+- Michael picked candidate 5 (teal, big round eyes, mint-striped belly, striped tail). A
+  spiral tail was tried (5 as reference, "curl the tail"): klein drew it as a snail shell
+  in every scene, so Michael kept the original tail. `reference.png` is candidate 5 with
+  its ground shadow whitened, 480x480.
+- Wording, as tried on the Pi: the Cloudflare form now opens the prompt with "Image 0 only
+  shows what the chameleon looks like: draw it in a new scene and a new pose, keeping its
+  face, colours and markings." (opening it, not appended; "exactly" is gone). The step
+  prompt says "turned toward the work and caught mid-action": without it Themi stood
+  facing the viewer holding the tools.
+- Deviation: no "no labels" line. "Plain unlabelled bottles and boxes" put bottles and
+  boxes in every picture, so the style names nothing to leave out (a test checks).
+- Live (2026-11-17, the Pi, this code loaded from the working copy): dishwasher, towels,
+  sweeping, mirror, plants: the same Themi in all five, each doing the chore. Two brooms
+  in the sweeping one.
+- `chameleon_reference()` reads the PNG (BD4c's SVG drawing is gone, with its tests);
+  missing file: pictures go without it.
+- Setup: update the Pi (the PNG ships in the package; `web/static/*/*` covers it).
 
 ### BD3c · Body double: the session page's chameleon redrawn as the chosen Themi
 Status: [ ]
