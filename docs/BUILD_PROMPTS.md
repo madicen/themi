@@ -291,7 +291,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [x] 2026-11-14 |
 | F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [x] 2026-11-14 |
 | F44d | Feedback: a split task can be put back together | Feedback | [x] 2026-11-15 |
-| F45a | Feedback: an imported recipe's apostrophes are apostrophes | Feedback | [ ] |
+| F45a | Feedback: an imported recipe's apostrophes are apostrophes | Feedback | [x] 2026-11-16 |
 | F45b | Feedback: prep says how much to measure | Feedback | [ ] |
 | F45c | Feedback: holding the mic button on an iPhone talks, not selects | Feedback | [ ] |
 | F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [ ] |
@@ -14501,7 +14501,7 @@ Notes (2026-11-15):
   bathroom task back together" (task 100 or 104), as Data says.
 
 ### F45a · Feedback (2026-11-15): an imported recipe's apostrophes are apostrophes
-Status: [ ]
+Status: [x] 2026-11-16
 Depends on: RC1b, GW2
 Read first: `themi_home/connectors/recipe_page.py` (`_text`, `_steps`, `schema_recipe`);
 `themi_home/web_recipes.py` (`_copied`, `read_picture`, `keep`); `themi_home/cookbook_save.py`
@@ -14538,6 +14538,16 @@ breakfast", taps Go ahead: one entry, "Here's what I do", nothing left waiting.
 
 Data: recipe 141 in the cookbook doc still says `Here&#x27;s`; Michael fixes that line in the
 Google Doc by hand (the next cookbook read picks it up). Mark #212 reviewed once live.
+
+Notes: `PageRecipe.__post_init__` runs `readable` over the name, ingredients, steps (and
+group names) and notes: `html.unescape` once, spaces tidied (`&nbsp;` too), and
+`STRAY_SEPARATOR` turns "(| note" / "( - note" / "(, note" into "(note". Every path makes a
+`PageRecipe` (JSON-LD, the model's reading of a page or a picture), so all are covered; `_text`
+is unchanged, so nothing is unescaped twice. `CookbookSave._replace_waiting` withdraws a
+pending or snoozed `cookbook_add` for the same recipe and member before staging the new one,
+with "Replaced: under <section> instead." on its card. Tests: two in
+`tests/unit/test_recipe_pages.py`, two in `tests/scenarios/test_cookbook_save.py`. None
+changed, no golden file changed.
 
 ### F45b · Feedback (2026-11-15): prep says how much to measure
 Status: [ ]

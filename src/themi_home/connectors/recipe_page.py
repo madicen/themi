@@ -22,6 +22,7 @@ import re
 import socket
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from html import unescape
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urljoin, urlsplit
@@ -222,6 +223,23 @@ class PageRecipe:
     minutes: int | None = None
     site: str = ""
     notes: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """F45a (bug #212): every way of reading a recipe ends up here, so entities
+        ("Here&#x27;s") are read once, as characters, whichever path made it."""
+        self.name = readable(self.name)
+        self.ingredients = [readable(line) for line in self.ingredients]
+        self.steps = [(readable(group), readable(text)) for group, text in self.steps]
+        self.notes = [readable(note) for note in self.notes]
+
+
+# "(| I used Red Star)": a site's note separator left at the start of a bracket
+STRAY_SEPARATOR = re.compile("\\(\\s*[|\\-\u2013\u2014,;:]+\\s*")
+
+
+def readable(text: str) -> str:
+    """Entities as characters, spaces tidied, no stray separator opening a bracket."""
+    return STRAY_SEPARATOR.sub("(", " ".join(unescape(text).split()))
 
 
 def _types(node: dict[str, Any]) -> set[str]:

@@ -17,6 +17,7 @@ Changing a recipe already in the cookbook is the doc's job: Themi says so, with 
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import replace
@@ -137,6 +138,7 @@ class CookbookSave:
         preview = self.preview(recipe, chosen)
         await outbox.send(member, preview, priority=Priority.REPLY, kind="recipes",
                           link_preview=False)  # fmt: skip
+        await self._replace_waiting(member, recipe, chosen)
         await self.services.autonomy.stage(
             CATEGORY,
             member,
@@ -146,6 +148,19 @@ class CookbookSave:
             interactive=True,
         )
         return preview
+
+    async def _replace_waiting(self, member: Member, recipe: Recipe, section: str) -> None:
+        """F45a (bug #212): "save it under breakfast" after the Sides card: the card still
+        waiting for this recipe gives way, so only one waits."""
+        for row in self.db.query(
+            "SELECT id, payload FROM pending_actions WHERE category = ? AND member_id = ? "
+            "AND status IN ('pending', 'snoozed') ORDER BY id",
+            (CATEGORY, member.id),
+        ):
+            if json.loads(row["payload"]).get("recipe") == recipe.id:
+                await self.services.autonomy.withdraw(
+                    row["id"], f"Replaced: under {section} instead."
+                )
 
     # ----- writing ------------------------------------------------------------------------
 
