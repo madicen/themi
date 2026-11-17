@@ -291,6 +291,12 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [x] 2026-11-14 |
 | F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [x] 2026-11-14 |
 | F44d | Feedback: a split task can be put back together | Feedback | [x] 2026-11-15 |
+| F45a | Feedback: an imported recipe's apostrophes are apostrophes | Feedback | [ ] |
+| F45b | Feedback: prep says how much to measure | Feedback | [ ] |
+| F45c | Feedback: holding the mic button on an iPhone talks, not selects | Feedback | [ ] |
+| F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [ ] |
+| F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [ ] |
+| F45f | Feedback: the oven's preheat where the recipe says it; a cancelled timer stops the oven's | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -14493,6 +14499,251 @@ Notes (2026-11-15):
   description), as the new tool needs.
 - Setup: restart `themi run` (no migration). Then, on the Pi, ask Themi to "put the
   bathroom task back together" (task 100 or 104), as Data says.
+
+### F45a · Feedback (2026-11-15): an imported recipe's apostrophes are apostrophes
+Status: [ ]
+Depends on: RC1b, GW2
+Read first: `themi_home/connectors/recipe_page.py` (`_text`, `_steps`, `schema_recipe`);
+`themi_home/web_recipes.py` (`_copied`, `read_picture`, `keep`); `themi_home/cookbook_save.py`
+(the `cookbook_add` approval). From Michael's bug #212 (2026-11-15, 9:39 am, "imported recipes
+use escaped apostrophes that end up in the final recipe as the code instead of an actual
+apostrophe").
+
+What the Pi shows: reply 483. "Ingest this recipe" with noracooks.com's vegan cinnamon rolls.
+The page's JSON-LD step 4 says `Here&#x27;s what I do`, and `_text` strips tags but never
+unescapes entities, so the chat card, the cookbook entry (recipe 141, saved under Breakfast in
+the Google Doc) and the cook screen all show `Here&#x27;s`. The yeast line reads
+"2 packets (4 1/2 tsp) Quick Rise Yeast (| I used Red Star)": the site's ingredient note
+starts with a "|" separator. Also: "Save it under breakfast" made a second approval (854)
+while the first, "under Sides" (853), stayed waiting for 17 hours until Michael declined it.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `_text` unescapes HTML entities (`html.unescape`) after the tags go, so `&#x27;`, `&amp;`,
+  `&quot;`, `&#8217;` and `&nbsp;` read as the characters. Every `PageRecipe` field goes
+  through it (name, ingredients, steps, groups). Text read by the model from a copied page or
+  a picture is unescaped once too, at `PageRecipe` level, so every path is covered.
+- An ingredient note that begins with a stray separator ("(| I used Red Star)", "( - note)")
+  loses it: "(I used Red Star)".
+- Restaging `cookbook_add` for the same recipe (a new section) replaces the one still
+  waiting: the old card is edited to "Replaced: under Breakfast instead." and its pending
+  action is cancelled, so only one waits.
+
+Tests: start with failing ones: `schema_recipe` on a fixture with `&#x27;`, `&amp;` and
+`&#8217;` in a step, an ingredient and the name returns plain characters; the "(| I used Red
+Star)" line reads "(I used Red Star)"; staging under Sides, then Breakfast, leaves one pending
+action (Breakfast), and the Sides card is edited.
+Scenario: Michael sends the noracooks link, saves it under Sides, says "save it under
+breakfast", taps Go ahead: one entry, "Here's what I do", nothing left waiting.
+
+Data: recipe 141 in the cookbook doc still says `Here&#x27;s`; Michael fixes that line in the
+Google Doc by hand (the next cookbook read picks it up). Mark #212 reviewed once live.
+
+### F45b · Feedback (2026-11-15): prep says how much to measure
+Status: [ ]
+Depends on: RC3a, CK1, GW2
+Read first: `themi_home/cooking.py` (`PREP_SYSTEM`, `prep_jobs`, `_rule_jobs`, the `prep`
+phase in the card); `themi_home/cooking_screen.py` (the prep list on /session);
+`themi_home/gram_weights.py` (`viewer_lines`); RC3a's and CK2's notes. From Michael's bug #213
+(2026-11-15, 9:45 am, "the prep instructions are basically useless since it doesn't list how
+much to measure").
+
+What the Pi shows: reply 484, session 19 (1 Hour Vegan Cinnamon Rolls). The prep card read
+"soy milk: measure", "granulated sugar: measure", … "vegan butter: measure, melt": twelve
+lines, every one "measure" with no amount, while the gather list just before had "2 cups
+(480 g) unsweetened soy milk". Session 21 (No-Time Bread, 2026-11-16) the same: "yeast:
+measure", "water: measure". Each job keeps the number of the ingredient line it came from
+(`line`), so the amount is at hand.
+
+Build:
+- Bug fix: start with the failing tests below.
+- A prep job shows the amount from its ingredient line, at the session's scale and in the
+  viewer's units (with grams when that's their setting), as the gather list does: "Soy milk:
+  measure 2 cups (480 g)", "Vegan butter: measure ½ cup (115 g), then melt". A knife job keeps
+  its amount too ("Onion (1 large): dice"). Built at draw time from `line`, so the cached
+  `recipe_prep` rows and a scale change need no new model call.
+- In Telegram's card and on the cook screen (the same text). A line with no amount ("salt to
+  taste") shows the job as now.
+- `PREP_SYSTEM` asks for the job without the amount (the amount comes from the line), so
+  amounts are never written twice.
+
+Tests: start with failing ones: session 19's prep jobs (cached rows as on the Pi) draw "Soy
+milk: measure 2 cups (480 g)" for a viewer with grams on and "2 cups" with it off; at scale 2,
+"4 cups (960 g)"; a job whose line has no amount is unchanged; the cook screen's prep list has
+the same words.
+Scenario: Michael cooks the cinnamon rolls, taps All here, and the prep card lists each
+measure with its amount.
+
+Data: none needed (the cached jobs draw with amounts). Mark #213 reviewed once live.
+
+### F45c · Feedback (2026-11-15): holding the mic button on an iPhone talks, not selects
+Status: [ ]
+Depends on: CK8
+Read first: `themi_home/web/static/cook.js` (`setupVoice`);
+`themi_home/web/templates/cook/_company.html` (`.cook-mic`); the cook screen's CSS;
+`tests/integration/test_cook_screen_browser.py`; CK8's notes. From Michael's bug #214
+(2026-11-15, 9:46 am, "when trying to hold down the microphone button it just selects the
+text and doesn't take in any recording or take action"), with a screenshot.
+
+What the Pi shows: the screenshot is iPhone Safari on the cook screen: a long press on "Hold
+to talk" selected the word "Hold" with the magnifier loupe. The log has "Session page (member
+2, iPhone … iOS 18_7): voice: aborted" at 9:46 am. The long press starts text selection, the
+pointer is cancelled, and the recognizer is aborted; `setupVoice` has no `pointercancel`,
+`contextmenu` or `selectstart` handling, and the button's text is selectable.
+
+Build:
+- Bug fix: start with the failing browser test below.
+- `.cook-mic` (and its icon and label) can't be selected or called out:
+  `user-select: none`, `-webkit-user-select: none`, `-webkit-touch-callout: none`,
+  `touch-action: none`. `contextmenu` and `selectstart` on it are prevented.
+- `pointerdown` prevents the default and captures the pointer (`setPointerCapture`), so the
+  press stays on the button. `pointercancel` and `pointerleave` while held stop listening the
+  way letting go does.
+- While listening the button reads "Listening…" (aria-pressed true, a visible state). An
+  `aborted`, `not-allowed` or `audio-capture` error shows a short line under the button
+  ("Didn't catch that. Tap to try again." / "The microphone isn't allowed for this page.")
+  instead of nothing; the report goes to the log as now.
+
+Tests: start with a failing one: the browser test with a faked recognizer: a press dispatched
+as pointerdown, then pointercancel, stops the recognizer and leaves no text selected
+(`getSelection().toString()` is ""); the button's computed `user-select` is "none"; an
+`aborted` error shows the try-again line; a hold (pointerdown, 600 ms, pointerup) still sends
+"next" and moves the session.
+Scenario: none (the browser test is the person's view).
+
+Data: none needed. Mark #214 reviewed once live; Michael checks a hold on his iPhone.
+
+### F45d · Feedback (2026-11-16): weighing tasks are the cook's, and close when the weight is told
+Status: [ ]
+Depends on: GW4, F44b, F44c
+Read first: `themi_home/gram_weights.py` (`_make_tasks`, `_needed`, `first_admin`,
+`weighed`, `_settle_task`, `weighed_gram_weight`, `same_ingredient`, `add_alias`); GW4's
+notes; the Gram Conversion plan's "Tasks for weights no one could find". From Michael's 👎 on
+reply 491 (2026-11-16, 1:52 pm).
+
+What the Pi shows: the weighing tasks (109 garlic clove, 110 mild/yellow miso, 111 ground
+nutmeg, 114 vinegar) were all made for Erin, the first admin, though Michael is the one who
+cooked (sessions 19, 21) and saved those recipes. At 1:34 pm Michael said "1 tbsp of nutmeg is
+about 7g": `weighed_gram_weight` saved "nutmeg", but task 111 is keyed "ground nutmeg" (GW1
+keeps "ground"), so it stayed open. At 1:52 pm "Remove the related tasks" (meaning the
+weighing tasks) went to `forget_gram_weight {"ingredient": "miso"}`: Michael's tasks list had
+no weighing task, since they were Erin's. At 1:54 pm "The 2 about weighing that I just did"
+went to `cancel_task`/`complete_task` on task 67 (laundry), and the reply was "Done." (F45e).
+Task 111 is still open.
+
+Decided (Michael, 2026-11-16, reply 491): a weighing task belongs to whoever cooked it: the
+person whose cooking session or cookbook save needed the weight. With nobody to name (only a
+cookbook read), it's "either of you".
+
+Build:
+- Bug fix: start with the failing tests below.
+- `_make_tasks` makes each weighing task for the member who most recently cooked a recipe
+  needing it (`cooking_sessions.member_id`), else who saved it to the cookbook
+  (`cookbook_add`'s member), else an `either` task. The requester stays the first admin.
+- Open weighing tasks on the wrong person move once, quietly (`board.update` assignee, no
+  message): on the Pi 109, 111 and 114 go to Michael.
+- A weight told for a shorter name that's the end of exactly one open weighing task's
+  ingredient ("nutmeg" for "ground nutmeg", "miso" for "mild/yellow miso") saves as said, and
+  the reply adds "Is that the ground nutmeg for your weighing task too?" with [Yes, the same]
+  [No]. Yes makes them one ingredient (`add_alias`, as `same_ingredient` does) and closes the
+  task as done; No leaves it open.
+- A weighing task is named by its ingredient in the open items ("Weigh 1 tablespoon of ground
+  nutmeg (a weighing task)"), so "the weighing tasks" finds it.
+
+Tests: start with failing ones: a recipe cooked by Michael that needs a weight makes his task;
+one only read from the cookbook makes an either task; Erin's open weighing task for a recipe
+Michael cooked moves to him once, with no message; "1 tbsp of nutmeg is 7g" with an open
+"ground nutmeg" task asks, and Yes closes it as done and gives "ground nutmeg" recipes grams;
+No leaves it open; an exact name closes the task as before.
+Scenario: Michael cooks No-Time Bread; the vinegar weighing task is his; he says "a tablespoon
+of vinegar is 15 g" and it's done.
+
+Data: none needed (the next run moves 109, 111 and 114). Mark reply 491's label once live
+(`themi feedback --wrong-tool 491 complete_task`).
+
+### F45e · Feedback (2026-11-16): nothing done is never "Done.", and a forgotten weight can come back
+Status: [ ]
+Depends on: F42c, GW5
+Read first: `themi/core/agent.py` (`_honest`, `CLAIMS_DONE`, the "Done." fallback, F42c's
+notes); `themi/standard/tasks.py` (`SETTLED_TEXT` and where it's returned);
+`themi_home/gram_weights.py` (`forget`, `undo`, `forget_gram_weight`, `undo_gram_weight`).
+From Michael's 👎 on reply 491 (2026-11-16, 1:52 pm) and the replies around it.
+
+What the Pi shows:
+- Reply 495, "The 2 about weighing that I just did": `cancel_task {"task_id": 67}` → "That
+  one's already settled.", then `complete_task 67` refused. The reply was "Done.". `SETTLED_TEXT`
+  is returned as a success, so the outcome is `ok` and F42c's fallback says "Done.".
+- Reply 491, "Remove the related tasks" → `forget_gram_weight {"ingredient": "miso"}`: "Removed
+  miso from the weights guide." The next message, "Put it back", got `undo_gram_weight` →
+  "There's no change to miso to undo.": a forget can't be undone. Michael had to type the
+  weight again.
+- Reply 487, "1 tbsp of miso is about 18g": only `look_up_guide` ran, and the reply was "Got
+  it." Nothing was saved (the same words for nutmeg a minute later did save).
+
+Build:
+- Bug fix: start with the failing tests below.
+- A task tool answering `SETTLED_TEXT` (complete, cancel, reschedule, skip) is a no-op: its
+  outcome is `declined`, not `ok`, and the text names the task ("Bring the laundry upstairs was
+  already done."). A turn with only such outcomes never ends "Done.".
+- `forget_gram_weight` keeps what it took out (`previous`), and its message has an Undo button
+  for 24 h, as a correction's does; `undo_gram_weight` after a forget puts the line back.
+  Its description says it's only for a weight they say is wrong to have, never for tasks.
+- A turn that ran only read tools (look-ups, lists) can't end with a bare acknowledgement
+  ("Got it.", "Noted.", "OK.", "Saved."): the model gets one more step with a note that nothing
+  was kept and to call the tool for what they told it, or say plainly that it didn't keep it.
+
+Tests: start with failing ones: reply 495 faked (cancel on a done task, complete refused, the
+model says "Done.") doesn't reply "Done." and names the task; a real completion still can;
+forget miso, then "put it back", restores "1 Tbsp Miso: Weight in Grams 18g"; the Undo button
+does the same; reply 487 faked (`look_up_guide`, then "Got it.") gets the extra step and saves
+via `weighed_gram_weight`.
+Scenario: Michael tells Themi a weight, it's forgotten by mistake, and "put it back" brings it
+back.
+
+Data: none needed. Mark reply 491's label once live, together with F45d.
+
+### F45f · Feedback (2026-11-16): the oven's preheat is offered where the recipe says it, and a cancelled timer stops the oven's at once
+Status: [ ]
+Depends on: OV4, OV5
+Read first: the Oven Module plan's OV4 and OV5 sections; `themi_home/cooking_oven.py`
+(`preheat_buttons`, `heat_for`, `oven_timer`); `themi_home/cooking_screen.py` (the strip, the
+`ready` phase, `timer_cancel`); `themi_home/cooking_ahead.py` (`strip`); `themi_home/oven.py`
+(`set_timer`, `_follow_cook_timers`). From Michael's bug #215 (2026-11-16, 5:38 pm, "the
+cooking companion didn't give the option to preheat the oven/set the temperature and
+cancelling the timer didn't cancel on the oven").
+
+What the Pi shows: session 21, No-Time Bread (recipe 122), on Themi 0.8.10, the oven linked
+(ovens 1 and 2, the CHS950). Step 2 is "Preheat the oven to 450 degrees", so the session's
+`ahead` list (the ready phase) had "preheat the oven to 450°F" as a tick-box, which he ticked
+and moved past. OV4's [Preheat] buttons are only on the look-ahead strip ("preheat:N" offers),
+which skips a preheat already in `ahead`, and step 2 itself has no button: nothing ever
+offered the oven. Timers: step 3's 7 min and step 7's 5 min went to the oven (oven_actions 1-2,
+took). He cancelled both on the screen at 5:36:54-55 pm; the oven heard "0000" at 5:37:19 and
+5:37:21, 25 s later, when `_follow_cook_timers` ran on the watcher's next reading. Each cancel
+was also recorded as a new 0-minute `oven_timers` row (3, 4) that's never done.
+
+Build:
+- Bug fix: start with the failing tests below.
+- A preheat in the ready phase's list has the [Preheat] buttons (`preheat_buttons`, by the
+  step it came from), as the strip's offer does; tapping one heats the oven and ticks the line.
+  A step whose own text is a preheat ("Preheat the oven to 450 degrees") has them on the step
+  too, unless that oven is already heating for this session.
+- `heat_for` reads "450 degrees" with no F or C as °F (check it does; the plan's words).
+- `timer_cancel` on the cook screen (and "cancel the timer" by text or voice) clears the linked
+  oven timer in the same request (`set_timer(…, 0)`), and the screen says "Timer cancelled,
+  and the oven's too." `_follow_cook_timers` stays as the catch for anything missed.
+- Clearing the oven's timer marks its row done and adds no 0-minute row.
+
+Tests: start with failing ones: No-Time Bread's ready phase, oven linked, draws [Preheat] on
+"preheat the oven to 450°F" with BAKE 450; the tap heats the fake oven and ticks the line;
+step 2 shows the buttons, and not once heating; cancelling a linked timer sends 0 to the fake
+oven before the response returns and leaves no open 0-minute `oven_timers` row; without an
+oven, nothing changes.
+Scenario: Michael cooks No-Time Bread on the cook screen, taps Preheat in the first list, sets
+the 7-minute knead timer, cancels it, and the oven's timer is cleared at once.
+
+Data: oven_timers rows 3 and 4 on the Pi (0 minutes, never done) can stay. Mark #215 reviewed
+once live; Michael checks the oven's display after a cancel.
 
 ## Conversation mode
 
