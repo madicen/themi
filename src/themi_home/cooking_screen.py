@@ -155,8 +155,9 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
             for n, (line, source) in enumerate(zip(lines, recipe.ingredients, strict=False))
         ]  # fmt: skip
     elif session.phase == "prep":
+        shown_prep = cooking.prep_lines(session, recipe, viewer)  # F45b: with amounts
         out["prep"] = [
-            {"n": n, "text": job["text"], "done": bool(job.get("done"))}
+            {"n": n, "text": shown_prep[n], "done": bool(job.get("done"))}
             for n, job in enumerate(session.prep)
         ]
     elif session.phase == "cook" and parts:

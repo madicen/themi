@@ -74,7 +74,8 @@ async def test_alfredo_from_cook_this_to_prep_done(cookbook: Scenario) -> None:
     )
     await cookbook.tap("Erin", "All here")
     assert card(cookbook) == (
-        "Prep for Alfredo Sauce:\n> Garlic: peel, keep whole\n> Lemon juice: measure 1 tsp"
+        "Prep for Alfredo Sauce:\n> Garlic (2 cloves): peel, keep whole\n"
+        "> Lemon juice: measure 1 tsp"  # F45b: the line's amount goes with the job
     )
     prompt = cookbook.primary.requests[-1].prompt
     assert prompt.startswith('<data source="recipe Alfredo Sauce">')
@@ -341,3 +342,53 @@ async def test_ending_with_a_timer_running_asks(cookbook: Scenario) -> None:
     assert cookbook.inbox("Erin")[-1] == "There's a timer still running. Keep it going?"
     await cookbook.tap("Erin", "Cancel them")
     assert card(cookbook) == "Timers cancelled."
+
+
+async def to_prep(cookbook: Scenario, jobs: list[dict], scale: float = 1.0):  # type: ignore[no-untyped-def]
+    cooking = cookbook.app.services.maybe(keys.cooking)
+    recipes = cookbook.app.services.maybe(keys.recipes)
+    assert cooking is not None and recipes is not None
+    alfredo = next(r for r in recipes.all() if r.name == "Alfredo Sauce")
+    cookbook.primary.queue_structured(items(ALFREDO))
+    session = await cooking.start(cookbook.member("Erin"), alfredo, scale=scale)
+    cookbook.primary.queue_structured({"jobs": jobs})
+    for action in ("next", "next"):  # ready, gather
+        await cooking.advance(session, action)
+    assert session.phase == "prep"
+    return cooking, session
+
+
+MEASURES = [
+    {"text": "cashews: measure", "line": 1, "tool": "measure"},
+    {"text": "water: measure", "line": 2, "tool": "measure"},
+    {"text": "salt to taste: measure", "line": 99, "tool": "measure"},  # dropped: no line
+    {"text": "nutmeg: measure", "line": 7, "tool": "measure"},
+]
+
+
+async def test_prep_says_how_much(cookbook: Scenario) -> None:
+    """F45b (bug #213): "soy milk: measure" with no amount, twelve times over."""
+    from themi_home.cooking_screen import state
+
+    cooking, _ = await to_prep(cookbook, MEASURES)
+    assert card(cookbook).splitlines() == [
+        "Prep for Alfredo Sauce:",
+        "> Cashews: measure 1 Cup",
+        "> Water: measure 1.5 Cups",
+        "> Nutmeg: measure ¼ tsp",
+    ]
+    shown = state(cooking, cookbook.member("Erin"))["prep"]
+    assert [p["text"] for p in shown] == [
+        "Cashews: measure 1 Cup", "Water: measure 1.5 Cups", "Nutmeg: measure ¼ tsp",
+    ]  # fmt: skip
+
+
+async def test_prep_amounts_follow_the_scale_and_grams(cookbook: Scenario) -> None:
+    from themi_home.cooking import CookingPreferences
+
+    erin = cookbook.member("Erin")
+    cookbook.app.store.save_preferences(erin, erin.id, CookingPreferences, cooking_units="grams")
+    await to_prep(cookbook, MEASURES, scale=2)
+    lines = card(cookbook).splitlines()
+    assert lines[1].startswith("> Cashews: measure 2 Cups (260")
+    assert lines[2] == "> Water: measure 3 Cups"  # no weight for water in this guide

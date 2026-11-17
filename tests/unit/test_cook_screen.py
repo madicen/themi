@@ -87,7 +87,9 @@ async def test_the_state_in_every_phase(scenario: Scenario, cooking: Cooking) ->
     )
     await cooking.advance(session, "next")
     prep = cooking.state(erin)
-    assert prep["prep"] == [{"n": 0, "text": "Garlic: peel, keep whole", "done": False}]
+    assert prep["prep"] == [
+        {"n": 0, "text": "Garlic (4 cloves): peel, keep whole", "done": False}
+    ]  # F45b: with the amount
     assert [b["label"] for b in prep["buttons"]] == ["Prep done", "Skip prep"]
     no_energy(prep)
 

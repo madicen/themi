@@ -292,7 +292,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [x] 2026-11-14 |
 | F44d | Feedback: a split task can be put back together | Feedback | [x] 2026-11-15 |
 | F45a | Feedback: an imported recipe's apostrophes are apostrophes | Feedback | [x] 2026-11-16 |
-| F45b | Feedback: prep says how much to measure | Feedback | [ ] |
+| F45b | Feedback: prep says how much to measure | Feedback | [x] 2026-11-16 |
 | F45c | Feedback: holding the mic button on an iPhone talks, not selects | Feedback | [ ] |
 | F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [ ] |
 | F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [ ] |
@@ -14550,7 +14550,7 @@ with "Replaced: under <section> instead." on its card. Tests: two in
 changed, no golden file changed.
 
 ### F45b · Feedback (2026-11-15): prep says how much to measure
-Status: [ ]
+Status: [x] 2026-11-16
 Depends on: RC3a, CK1, GW2
 Read first: `themi_home/cooking.py` (`PREP_SYSTEM`, `prep_jobs`, `_rule_jobs`, the `prep`
 phase in the card); `themi_home/cooking_screen.py` (the prep list on /session);
@@ -14585,6 +14585,19 @@ Scenario: Michael cooks the cinnamon rolls, taps All here, and the prep card lis
 measure with its amount.
 
 Data: none needed (the cached jobs draw with amounts). Mark #213 reviewed once live.
+
+Notes: `cooking.with_amount(job, line)` puts the line's amount (CK12's `name_and_amount`) in
+the job: after "measure" ("Soy milk: measure 2 cups (480 g)"), otherwise in brackets after
+the name ("Onion (1 large): dice"). A bare count takes the line's words that say what's
+counted ("2 cloves", "2 packets (4 1/2 tsp) quick rise"); a line that's all amount ("2 eggs")
+gives the number. A job that already says its amount, or a line with none, is unchanged
+(capitalised). `Cooking.prep_lines(session, recipe, viewer)` draws them at the session's
+scale and in the viewer's units (`shown`, with the weights guide), for Telegram's card (the
+session's owner) and the cook screen's `prep` (the viewer). `recipe_prep` rows are unchanged.
+`PREP_SYSTEM` asks for jobs without the amount. Tests changed (the knife job now shows its
+amount, as the prompt asks): `test_alfredo_from_cook_this_to_prep_done` and
+`test_cook_screen.py::test_the_state_in_every_phase`. New: `tests/unit/test_prep_amounts.py`
+and two scenarios at the end of `tests/scenarios/test_cooking.py`. No golden file changed.
 
 ### F45c · Feedback (2026-11-15): holding the mic button on an iPhone talks, not selects
 Status: [ ]
