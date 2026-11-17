@@ -32,7 +32,7 @@ from themi.core.capabilities import PICTURES
 from themi.core.prompts import OpenItem
 from themi.core.services import Services
 from themi.core.tools import Done as DoneLine
-from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.core.which_task import ALL_OF_THEM, SHORT_ANSWER, Said
 from themi.core.wording import near_twin, title_matches, words_in_common
 from themi.energy import EnergyModel
@@ -2402,6 +2402,21 @@ def clock_words(moment: datetime | time) -> str:
     return f"{hour}:{moment.minute:02d} {suffix}" if moment.minute else f"{hour} {suffix}"
 
 
+def _not_settled(task: Task) -> None:
+    """F45e (reply 495): a task done or taken off already is nothing to do: declined, so
+    the turn can't end "Done." over it."""
+    if task.status == "done":
+        raise ToolDeclined(
+            f"{task.title} was already done; nothing changed. Say so, and if it isn't the "
+            "task they meant, ask which one."
+        )
+    if task.status == "cancelled":
+        raise ToolDeclined(
+            f"{task.title} was already taken off the list; nothing changed. Say so, and if "
+            "it isn't the task they meant, ask which one."
+        )
+
+
 @tool(
     "complete_task",
     "Mark a task done when someone says it's been taken care of. Themi tells them it's done "
@@ -2413,6 +2428,7 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         task = _board(ctx).get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    _not_settled(task)
     if task.medicine and UNSURE.search(ctx.request_text):
         raise ToolFailed(  # Rx1, idea #48: "take it if you aren't sure" was the wrong advice
             "Not marked done: they aren't sure they took it. Leave it open. Say, gently, that "
@@ -2535,6 +2551,7 @@ async def cancel_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         task = _board(ctx).get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    _not_settled(task)
     await _check_meant(ctx, task, "Not taken off")
     return await _board(ctx).cancel(task.id, ctx.member, interactive=True)
 
@@ -2561,6 +2578,7 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         task = board.get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    _not_settled(task)
     await _check_meant(ctx, task, "Not changed")
     said = str(args["due_date"]).strip().lower()
     try:
@@ -2633,6 +2651,7 @@ async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         elif until <= now:
             raise ToolFailed("That time has passed; ask when they'd like it.")
     try:
+        _not_settled(board.get(args["task_id"]))
         text = board.snooze(args["task_id"], until=until, by=ctx.member)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
@@ -2657,6 +2676,7 @@ async def skip_round(ctx: ToolContext, args: dict[str, Any]) -> DoneLine:
     board = _board(ctx)
     said = str(args.get("day") or "").strip()
     try:
+        _not_settled(board.get(int(args["task_id"])))
         day = day_arg(said, board._today()) if said else None
         text = await board.skip_round(int(args["task_id"]), ctx.member, day, interactive=True)
     except NotFound as exc:

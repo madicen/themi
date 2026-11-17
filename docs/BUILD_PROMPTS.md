@@ -295,7 +295,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F45b | Feedback: prep says how much to measure | Feedback | [x] 2026-11-16 |
 | F45c | Feedback: holding the mic button on an iPhone talks, not selects | Feedback | [x] 2026-11-16 |
 | F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [x] 2026-11-16 |
-| F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [ ] |
+| F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [x] 2026-11-16 |
 | F45f | Feedback: the oven's preheat where the recipe says it; a cancelled timer stops the oven's | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -14715,7 +14715,7 @@ would rename the task). New tests at the end of `tests/scenarios/test_gram_tasks
 changed, no golden file changed.
 
 ### F45e · Feedback (2026-11-16): nothing done is never "Done.", and a forgotten weight can come back
-Status: [ ]
+Status: [x] 2026-11-16
 Depends on: F42c, GW5
 Read first: `themi/core/agent.py` (`_honest`, `CLAIMS_DONE`, the "Done." fallback, F42c's
 notes); `themi/standard/tasks.py` (`SETTLED_TEXT` and where it's returned);
@@ -14754,6 +14754,23 @@ Scenario: Michael tells Themi a weight, it's forgotten by mistake, and "put it b
 back.
 
 Data: none needed. Mark reply 491's label once live, together with F45d.
+
+Notes: `tasks._not_settled(task)` raises `ToolDeclined` ("Bring the laundry upstairs was
+already done; nothing changed. Say so, and if it isn't the task they meant, ask which
+one.", or "already taken off the list") at the start of `complete_task`, `cancel_task`,
+`reschedule_task`, `skip_round` and `snooze_task`. The board's own methods still return
+`SETTLED_TEXT` for buttons and the website. `GramWeights.forget` returns the words and an
+[Undo] (button action `undo`), sent as a card by `forget_gram_weight`; `undo` handles a
+`forgotten` meta row within `UNDO_FOR` by putting its `previous` line back (meta row
+cleared, so the weight's old source isn't kept). Descriptions: `forget_gram_weight` "only
+when they say that weight is wrong to have… Never for tasks"; `undo_gram_weight` also
+"took out", "put it back". Agent: `_kept_nothing` (every call matches `LOOKUP`, names
+starting look_up, list_, find_, show_, search, get_, day_summary or more_tools; the reply is
+a bare `BARE_ACK`; nothing done, carded, staged or said by a tool) gives the model one more
+step with `NOTHING_KEPT_NOTE`. Golden `tools.json`: the two gram tools' specs (their
+descriptions), as the prompt asks. Test changed: `test_gram_corrections.py::test_forget`
+(the reply gains "Say undo to put it back."; `forget` returns a tuple now). New:
+`tests/scenarios/test_settled_and_forgotten.py`.
 
 ### F45f · Feedback (2026-11-16): the oven's preheat is offered where the recipe says it, and a cancelled timer stops the oven's at once
 Status: [ ]

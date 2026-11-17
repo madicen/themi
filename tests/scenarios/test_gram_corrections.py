@@ -123,12 +123,13 @@ async def test_forget(scenario: Scenario, weights: GramWeights) -> None:
     replies = await scenario.say("Erin", "Stop converting the garlic powder")
     assert replies == [
         "Taken out of your weights guide: 1 tsp garlic powder: Weight in Grams 3g. "
-        "Recipes show it as written now."
+        "Recipes show it as written now. Say undo to put it back."  # F45e: undoable
     ]
     assert not weights.book().has("garlic powder")
     weights.ask("garlic powder", "tsp", None, None)
     assert weights.queued() == []  # not looked up again
-    said = await weights.forget(scenario.member("Erin"), "water")
+    said, buttons = await weights.forget(scenario.member("Erin"), "water")
+    assert buttons == []
     assert said.startswith("water shares a line with another weight")
 
 

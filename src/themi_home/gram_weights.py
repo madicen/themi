@@ -1186,10 +1186,22 @@ class GramWeights:
         """The last correction of `name` put back, within a day of it."""
         k = self.book().resolve(name)
         meta = self.meta(k)
-        if meta is None or meta["source"] != "corrected" or not meta["previous"]:
+        if meta is None and k != key(name):
+            meta = self.meta(key(name))
+        if meta is None or meta["source"] not in ("corrected", "forgotten") or not meta["previous"]:
             return f"There's no change to {name} to undo."
         if clock.now() - datetime.fromisoformat(meta["found_at"]) > UNDO_FOR:
             return f"The change to {name} was more than a day ago; tell me the weight instead."
+        if meta["source"] == "forgotten":  # F45e (reply 491): a forget comes back too
+            outcome = await self.services.autonomy.stage(
+                SAVE_CATEGORY, member, f"Put back in your weights guide: {meta['previous']}",
+                {"name": meta["name"] or name, "line": meta["previous"], "undo": True,
+                 "source": "family"},
+                SAVE_EXECUTOR, requested=True,
+            )  # fmt: skip
+            if outcome.action.status != "done":
+                return f"Not put back yet: {outcome.message}"
+            return f"Put back: {meta['previous']}"
         current = self.book().line_for(name)
         if current is None:
             return f"{name} isn't in your weights guide any more."
@@ -1203,24 +1215,29 @@ class GramWeights:
             return f"Not put back yet: {outcome.message}"
         return f"Put back: {meta['previous']}"
 
-    async def forget(self, member: Member, name: str) -> str:
-        """`name`'s line taken out, and not looked up again until they give a weight."""
+    async def forget(self, member: Member, name: str) -> tuple[str, list[Button]]:
+        """`name`'s line taken out, and not looked up again until they give a weight. The
+        words and an [Undo] for a day (F45e)."""
         entry = self.book().line_for(name)
         if entry is None:
-            return f"{name} isn't in your weights guide."
+            return f"{name} isn't in your weights guide.", []
         if len(parse_line(entry.line) or []) > 1:
             return (
                 f'{name} shares a line with another weight ("{entry.line}"); change that line '
                 "on the Guides page, or tell me the right weight."
-            )
+            ), []
         outcome = await self.services.autonomy.stage(
             SAVE_CATEGORY, member, f"Take out of your weights guide: {entry.line}",
             {"name": name, "line": None, "old": entry.line, "source": "forgotten"},
             SAVE_EXECUTOR, requested=True,
         )  # fmt: skip
         if outcome.action.status != "done":
-            return f"Not taken out yet: {outcome.message}"
-        return f"Taken out of your weights guide: {entry.line}. Recipes show it as written now."
+            return f"Not taken out yet: {outcome.message}", []
+        undo = Button("Undo", BUTTON_KIND, {"action": "undo", "name": name})
+        return (
+            f"Taken out of your weights guide: {entry.line}. Recipes show it as written now. "
+            "Say undo to put it back."
+        ), [undo]
 
     async def on_button(self, event: InboundEvent) -> None:
         """[Undo] on a correction; [15 g] / [150 g] on a question about one."""
@@ -1683,7 +1700,8 @@ async def correct_gram_weight(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool(
     "undo_gram_weight",
-    "Put back the weight a correction just changed ('undo that', within a day): ingredient.",
+    "Put back the weight a correction just changed or took out ('undo that', 'put it "
+    "back', within a day): ingredient.",
     {"ingredient": {"type": "string"}},
 )
 async def undo_gram_weight(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -1716,15 +1734,21 @@ async def same_ingredient(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool(
     "forget_gram_weight",
-    "Take an ingredient's weight out of the weights guide when they say it shouldn't be "
-    "there or shouldn't be converted ('stop converting the nutmeg'): ingredient.",
+    "Take an ingredient's weight out of the weights guide, only when they say that weight "
+    "is wrong to have or shouldn't be converted ('stop converting the nutmeg'). Never for "
+    "tasks (weighing tasks are task tools): ingredient.",
     {"ingredient": {"type": "string"}},
 )
 async def forget_gram_weight(ctx: ToolContext, args: dict[str, Any]) -> str:
-    said = await _weights(ctx).forget(ctx.member, clean_name(str(args.get("ingredient") or "")))
-    ctx.replies.append(said)
-    ctx.asked.append(said)
-    return said
+    name = clean_name(str(args.get("ingredient") or ""))
+    said, buttons = await _weights(ctx).forget(ctx.member, name)
+    if not buttons:
+        ctx.replies.append(said)
+        ctx.asked.append(said)
+        return said
+    await ctx.services.outbox.send(ctx.member, said, priority=Priority.REPLY, buttons=buttons)
+    ctx.cards.append(said)
+    return f"Sent them this, with an Undo button: {said}"
 
 
 def viewer_lines(services: Services, member_id: int) -> Callable[[str], str]:
