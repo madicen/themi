@@ -241,3 +241,82 @@ async def test_no_proof_while_the_upper_oven_is_hot(
     assert shown["said"].endswith("so it can't proof now.")
     await scenario.run_periodic("devices.oven")
     assert (await screen.state())["proof"] is None  # not offered with it on
+
+
+BREAD_STEPS = [
+    "Mix yeast, sugar, and water in a stand mixer",
+    "Preheat the oven to 450 degrees",
+    "Add the flour, salt, and vinegar and knead for 7 minutes",
+    "Bake for 30 minutes",
+]
+
+
+@pytest.fixture
+async def bread(scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ) -> Screen:
+    """Bug #215: No-Time Bread, whose step 2 is the preheat (session 21 on the Pi)."""
+    from tests.fixtures.cookbook import recipe
+
+    lines = ["14g active dry yeast", "1 Tbsp sugar", "1½ Cups water", "3½ Cups bread flour"]
+    load(scenario.app.services, recipe("No-Time Bread", lines, BREAD_STEPS))
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "no-time bread", "scale": ""})
+    scenario.primary.queue_structured(
+        {"lines": [{"n": n, "item": i, "quantity": "", "unit": "", "note": "", "optional": False,
+                    "staple": False}
+                   for n, i in enumerate(["yeast", "sugar", "water", "flour"], 1)]}
+    )  # fmt: skip
+    await scenario.say("Erin", "Let's make the no-time bread")
+    return Screen(scenario, site, csrf)
+
+
+async def test_bug_215_the_first_list_offers_the_preheat(
+    bread: Screen, kitchen: FakeSmartHQ
+) -> None:
+    state = await bread.state()
+    assert state["phase"] == "ready"
+    (ahead,) = state["ahead"]
+    assert ahead["text"] == "preheat the oven to 450°F"
+    assert [b["label"] for b in ahead["oven"]] == ["Preheat lower oven", "Preheat upper oven"]
+    assert (ahead["oven"][0]["mode"], ahead["oven"][0]["temp"]) == (ov.BAKE, 450)
+    page = (await bread.site.get("/session/cook/view")).text
+    assert 'value="oven_heat"' in page and "Preheat lower oven" in page
+    kitchen.remote_enable()
+    button = ahead["oven"][0]
+    shown = await bread.act(
+        "oven_heat", oven=button["oven"], mode=button["mode"], temp=button["temp"],
+        key=button["key"], ahead=ahead["n"], at=state["oven_at"],
+    )  # fmt: skip
+    assert shown["said"] == "The lower oven is preheating to 450°F."
+    assert shown["ahead"][0]["done"] is True
+
+
+async def test_the_preheat_step_has_the_buttons(bread: Screen, kitchen: FakeSmartHQ) -> None:
+    bread.scenario.primary.queue_structured({"jobs": []})
+    for said in ("skip", "all here", "skip prep", "go to step 2"):
+        await bread.scenario.say("Erin", said)
+    state = await bread.state()
+    assert [b["label"] for b in state["step_oven"]] == ["Preheat lower oven", "Preheat upper oven"]
+    kitchen.remote_enable()
+    button = state["step_oven"][0]
+    await bread.act(
+        "oven_heat", oven=button["oven"], mode=button["mode"], temp=button["temp"],
+        key=button["key"], at=state["oven_at"],
+    )  # fmt: skip
+    assert (await bread.state())["step_oven"] == []  # heating now: not offered again
+
+
+async def test_no_oven_no_buttons_in_the_first_list(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    from tests.fixtures.cookbook import recipe
+
+    load(scenario.app.services, recipe("No-Time Bread", ["1 Tbsp sugar"], BREAD_STEPS))
+    await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "no-time bread", "scale": ""})
+    scenario.primary.queue_structured(
+        {"lines": [{"n": 1, "item": "sugar", "quantity": "", "unit": "", "note": "",
+                    "optional": False, "staple": False}]}
+    )  # fmt: skip
+    await scenario.say("Erin", "Let's make the no-time bread")
+    state = (await site.get("/session/state")).json()
+    assert state["ahead"][0].get("oven", []) == []

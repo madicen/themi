@@ -107,6 +107,29 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     return reply
 
 
+# F45e (reply 487): "1 tbsp of miso is about 18g" ran look_up_guide, then said "Got it.":
+# nothing was kept. A bare acknowledgement over look-ups alone gets one more step.
+BARE_ACK = re.compile(
+    r"(?:got it|noted|ok(?:ay)?|saved|will do|understood|all set|sure)[.!]?", re.IGNORECASE
+)
+LOOKUP = re.compile(r"^(?:look_up|list_|find_|show_|search|get_|day_summary|more_tools)")
+NOTHING_KEPT_NOTE = (
+    "(Themi's note: you said that, but nothing was kept: only look-ups ran. If they told you "
+    "something to keep or change, call the tool for it now. Otherwise answer them, saying "
+    "plainly that you didn't keep it.)"
+)
+
+
+def _kept_nothing(reply: str, ctx: ToolContext) -> bool:
+    calls = [name for name, _, _ in ctx.calls]
+    return (
+        bool(calls)
+        and all(LOOKUP.match(name) for name in calls)
+        and bool(BARE_ACK.fullmatch(reply.strip()))
+        and not (ctx.done or ctx.cards or ctx.staged or ctx.replies)
+    )
+
+
 JUST_ADDED = re.compile(
     r"\b(?:i|we)(?:'ve| have)?\s+(?:just\s+)?(?:added|put|made|created|booked|scheduled)\b"
     r"[^.?!]{0,80}\b(?:calendar|appointment|appt|event|from the app)\b",
@@ -712,6 +735,7 @@ class Agent:
         # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
+        acked = False  # F45e: one more step after a bare "Got it." over look-ups alone
         try:
             for step in range(1, self.max_steps + 2):
                 # F34gb: a picture with no words is only described, and asked about.
@@ -732,6 +756,11 @@ class Agent:
                         # The tools said it all (bug #118); a retry's repeat once (#119).
                         return "\n".join(dict.fromkeys(ctx.replies))
                     reply = _unquoted(response.text)
+                    if not acked and _kept_nothing(reply, ctx):  # F45e (reply 487)
+                        acked = True
+                        messages.append(response.message)
+                        messages.append(Message.user(NOTHING_KEPT_NOTE))
+                        continue
                     if ctx.answered and not reply:  # F22b: the tool's message said it
                         return _done_first(ctx.done, _unsaid_failure(ctx))
                     reply = reply or ("Done." if used_tools else TANGLED_TEXT)

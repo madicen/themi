@@ -24,6 +24,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.localtime import next_waking_start, to_utc_iso
 from themi.modules import Module, ModuleContext
 
@@ -210,6 +211,18 @@ class CookingTimers:
             )
         )
 
+    async def changed(self) -> bool:
+        """F45f (bug #215): the oven's timer follows a cancel or more time now. True when
+        the oven's timer changed with it."""
+        oven = self.services.maybe(keys.oven)
+        if oven is None:
+            return False
+        try:
+            return bool(await oven.follow_timers())
+        except Exception:
+            log.exception("The oven's timer didn't follow the cook screen's")
+            return False
+
     def clear(self, member_id: int, timer_id: int) -> bool:
         """A fired timer tapped on the screen: the chime and the pulse stop."""
         return bool(
@@ -274,6 +287,7 @@ class CookingTimers:
         if action in ("keep", "cancel"):
             if action == "cancel":
                 self.cancel_all(member)
+                await self.changed()
             self.cooking.answer_timers(member, kept=action == "keep")  # CK3: the screen too
             text = "Timers cancelled." if action == "cancel" else "The timers keep running."
             if event.button.message_id is not None:
@@ -315,6 +329,8 @@ class CookingTimers:
         elif CANCEL.match(said):
             count = self.cancel_all(member)
             reply = "Timer cancelled." if count == 1 else f"{count} timers cancelled."
+            if await self.changed():
+                reply = reply.removesuffix(".") + ", and the oven's too."
         elif found := ADD.match(said):
             row = self.running(member)[-1]
             ends = self.add(member.id, row["id"], int(found.group(1))) or clock.now()

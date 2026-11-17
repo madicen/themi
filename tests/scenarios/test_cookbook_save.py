@@ -195,3 +195,44 @@ async def test_saved_with_the_grams_themi_knows(scenario: Scenario, ready: FakeG
         ("½ cup cocoa", "NORMAL_TEXT"),  # no weight known: as written
         ("1 cup (190 g) sugar", "NORMAL_TEXT"),  # its own, not the guide's 200 g
     ]
+
+
+async def test_a_new_section_replaces_the_card_still_waiting(
+    scenario: Scenario, ready: FakeGdocs
+) -> None:
+    """F45a (bug #212): "Save it under breakfast" left the Sides card waiting 17 hours."""
+    await show(scenario)
+    await scenario.tap("Erin", "Save to cookbook")
+    scenario.primary.queue_tool_call(
+        "save_recipe_to_cookbook", {"recipe": "Vegan Brownies", "section": "Breakfast"}
+    )
+    await scenario.say("Erin", "Save it under breakfast")
+    rows = scenario.app.db.query(
+        "SELECT status, payload FROM pending_actions WHERE category = 'cookbook_add' ORDER BY id"
+    )
+    assert [r["status"] for r in rows] == ["declined", "pending"]
+    assert '"Breakfast"' in rows[1]["payload"]
+    assert any("Replaced: under Breakfast instead." in e["text"] for e in scenario.edits("Erin"))
+    await scenario.tap("Erin", "Go ahead")
+    assert (
+        scenario.app.db.scalar("SELECT section FROM recipes WHERE name = 'Vegan Brownies'")
+        == "Breakfast"
+    )
+    assert not scenario.app.db.scalar(
+        "SELECT COUNT(*) FROM pending_actions WHERE status IN ('pending', 'snoozed')"
+    )
+
+
+async def test_an_imported_recipes_apostrophe_reaches_the_doc(
+    scenario: Scenario, ready: FakeGdocs
+) -> None:
+    """F45a (bug #212): the noracooks step's "Here&#x27;s what I do", in the doc as "Here's"."""
+    fake = FakeRecipeSite()
+    fake.page(URL, recipe_page({**BROWNIES, "recipeInstructions": [
+        "Here&#x27;s what I do: mix.", "Bake for 25 minutes."]}))  # fmt: skip
+    scenario.app.services.maybe(keys.web_recipes).reader = fake.reader()  # type: ignore[union-attr]
+    card = await show(scenario)
+    assert "Here's what I do: mix." in card and "&#x27;" not in card
+    await scenario.tap("Erin", "Save to cookbook")
+    await scenario.tap("Erin", "Go ahead")
+    assert ("Here's what I do: mix.", "NORMAL_TEXT") in entry_in_doc(ready)

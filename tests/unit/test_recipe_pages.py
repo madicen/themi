@@ -128,3 +128,34 @@ def test_vegan_flags_and_excuses() -> None:
         ("buttermilk", "buttermilk"),
     ]  # fmt: skip
     assert flags(["1 cup oat milk", "1 block tofu", "1 eggplant", "1 butternut squash"]) == []
+
+
+def test_entities_read_as_characters() -> None:
+    """F45a (bug #212): noracooks.com's step said "Here&#x27;s what I do"."""
+    page = recipe_page(
+        {"name": "Mac &amp; Cheese", "recipeIngredient": ["1 cup flour &amp; salt",
+         "2 packets (4 1/2 tsp) Quick Rise Yeast (| I used Red Star)"],
+         "recipeInstructions": [{"@type": "HowToStep", "text":
+             "Here&#x27;s what I do: it&#8217;s &quot;warm&quot;,&nbsp;not hot."}]}
+    )  # fmt: skip
+    found = schema_recipe(page, "https://www.noracooks.com/vegan-cinnamon-rolls/")
+    assert found is not None
+    assert found.name == "Mac & Cheese"
+    assert found.ingredients == [
+        "1 cup flour & salt",
+        "2 packets (4 1/2 tsp) Quick Rise Yeast (I used Red Star)",
+    ]
+    assert found.steps == [("", 'Here\'s what I do: it\u2019s "warm", not hot.')]
+
+
+def test_a_recipe_read_any_way_is_unescaped_once() -> None:
+    from themi_home.connectors.recipe_page import PageRecipe
+
+    read = PageRecipe(
+        name="Rolls",
+        ingredients=["1 cup milk ( - warm)"],
+        steps=[("Dough &amp; more", "Don&#x27;t.")],
+    )
+    assert read.ingredients == ["1 cup milk (warm)"]
+    assert read.steps == [("Dough & more", "Don't.")]
+    assert PageRecipe(name="A &amp;amp; B", ingredients=[], steps=[]).name == "A &amp; B"

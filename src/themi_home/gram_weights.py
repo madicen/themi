@@ -42,6 +42,7 @@ from themi.connectors.search import SearchError, SearchResult
 from themi.core import keys
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
+from themi.energy.matching import Assignment
 from themi.localtime import start_of_local_day, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.standard.guides import Guide, GuideNotes, Guides
@@ -151,6 +152,8 @@ NOW_WITH_GRAMS = " {recipes} now show grams for it."
 # GW5: corrections from chat
 UNDO_FOR = timedelta(hours=24)
 BUTTON_KIND = "gram_weight"
+SAME_TASK_TEXT = "Is that the {name} for your weighing task too?"
+WEIGH_REASON = "Whoever cooked it weighs it."  # F45d (Michael, reply 491)
 UNIT_SAID = {"cup": "cup", "tbsp": "Tbsp", "tsp": "tsp", "ml": "ml", "l": "l", "each": ""}
 # F44b (bug #210): a cup of nutmeg is a lot to weigh. A volume this big or more (or any
 # cups) is weighed by the cup; spoonfuls by the tablespoon.
@@ -683,6 +686,14 @@ class GramWeights:
         guides = self.guides()
         if guides is not None:
             guides.annotators.append(self.notes)
+        board = self._board()
+        if board is not None:
+            board.display_notes.append(self._task_note)  # F45d
+
+    def _task_note(self, task: Any) -> str:
+        """F45d (reply 491): "the weighing tasks" finds them in the open items."""
+        row = self.db.one("SELECT name FROM gram_weights_meta WHERE task_id = ?", (task.id,))
+        return f"A weighing task, for {row['name']} in the weights guide." if row else ""
 
     def guides(self) -> Guides | None:
         return self.services.maybe(keys.guides)
@@ -967,21 +978,58 @@ class GramWeights:
         self.db.execute("UPDATE gram_weights_meta SET task_id = NULL WHERE task_id = ?",
                         (task_id,))  # fmt: skip
 
-    def _needed(self) -> set[str]:
-        """Keys a cooked or cookbook recipe can't weigh: the only ones worth a task
-        (browsing a web recipe never makes chores)."""
+    def _needed(self) -> dict[str, set[int]]:
+        """Keys a cooked or cookbook recipe can't weigh (the only ones worth a task: browsing
+        a web recipe never makes chores), each with the recipes that need it."""
         rows = self.db.query(
-            "SELECT ingredients FROM recipes WHERE removed_at IS NULL AND kind = 'recipe' "
+            "SELECT id, ingredients FROM recipes WHERE removed_at IS NULL AND kind = 'recipe' "
             "AND (source = 'doc' OR id IN (SELECT recipe_id FROM cooking_sessions))"
         )
         book = self.book()
-        needed: set[str] = set()
+        needed: dict[str, set[int]] = {}
         for row in rows:
             for item in json.loads(row["ingredients"]):
                 found = weigh(str(item.get("text") or ""), book)
                 if found.missing:
-                    needed.add(key(found.missing))
+                    needed.setdefault(key(found.missing), set()).add(int(row["id"]))
         return needed
+
+    def _cook(self, recipe_ids: set[int]) -> Member | None:
+        """F45d (Michael, reply 491): who weighs it: whoever cooked one of these recipes
+        last, else whoever saved one to the cookbook; None for either of you."""
+        if not recipe_ids:
+            return None
+        marks = ",".join("?" * len(recipe_ids))
+        row = self.db.one(
+            f"SELECT member_id FROM cooking_sessions WHERE recipe_id IN ({marks}) "
+            "ORDER BY started_at DESC, id DESC LIMIT 1",
+            tuple(recipe_ids),
+        )
+        if row is None:
+            for saved in self.db.query(
+                "SELECT member_id, payload FROM pending_actions WHERE category = 'cookbook_add' "
+                "AND status = 'done' ORDER BY id DESC"
+            ):
+                if json.loads(saved["payload"]).get("recipe") in recipe_ids:
+                    row = saved
+                    break
+        if row is None:
+            return None
+        found = self.db.one("SELECT id FROM members WHERE id = ?", (row["member_id"],))
+        return self.services.store.get_member(int(found["id"])) if found else None
+
+    async def _to_the_cook(self, board: TaskBoard, task_id: int, cook: Member | None) -> None:
+        """F45d: a weighing task made before F45d (on the first admin's list) goes to the
+        cook, or onto both lists, once and quietly; a task someone moved since stays."""
+        row = self.db.one("SELECT assignee, shared, assign_reason FROM tasks WHERE id = ?",
+                          (task_id,))  # fmt: skip
+        if row is None or row["assign_reason"] == WEIGH_REASON:
+            return
+        self.db.execute("UPDATE tasks SET assign_reason = ? WHERE id = ?", (WEIGH_REASON, task_id))
+        if cook is None and not row["shared"]:
+            await board.reassign(task_id, None, shared=True, nudge=False)
+        elif cook is not None and (row["assignee"] != cook.id or row["shared"]):
+            await board.reassign(task_id, cook, nudge=False)
 
     async def _make_tasks(self) -> None:
         """Wanted weights become weighing tasks, at most 3 open; a wanted weight the guide
@@ -1001,10 +1049,13 @@ class GramWeights:
                     await self._settle_task(int(row["task_id"]), member, done=False)
                 self.db.execute("DELETE FROM gram_weights_meta WHERE key = ?", (row["key"],))
                 continue
+        needed = self._needed()
+        for row in rows:
             if self._open_task(row["task_id"]):
                 open_count += 1
                 await self._reword_task(board, member, int(row["task_id"]), row)
-        needed = self._needed()
+                cook = self._cook(needed.get(row["key"], set()))
+                await self._to_the_cook(board, int(row["task_id"]), cook)
         for row in rows:
             if open_count >= OPEN_TASKS:
                 break
@@ -1012,8 +1063,14 @@ class GramWeights:
                 continue  # one task per ingredient, ever; only for recipes they use
             unit = self._wanted_unit(row["key"])
             title, steps = weighing(row["name"], unit)
-            task = await board.create(member, title, "physical", 1, importance="low",
-                                      steps=steps)  # fmt: skip
+            cook = self._cook(needed[row["key"]])
+            task = await board.create(
+                member, title, "physical", 1, importance="low", steps=steps,
+                assignment=Assignment(cook or member, cook or member, WEIGH_REASON),
+                nudge=cook is not None,
+            )  # fmt: skip
+            if cook is None:  # nobody to name: either of you
+                task = await board.reassign(task.id, None, shared=True)
             self.db.execute(
                 "UPDATE gram_weights_meta SET task_id = ? WHERE key = ?", (task.id, row["key"])
             )
@@ -1129,10 +1186,22 @@ class GramWeights:
         """The last correction of `name` put back, within a day of it."""
         k = self.book().resolve(name)
         meta = self.meta(k)
-        if meta is None or meta["source"] != "corrected" or not meta["previous"]:
+        if meta is None and k != key(name):
+            meta = self.meta(key(name))
+        if meta is None or meta["source"] not in ("corrected", "forgotten") or not meta["previous"]:
             return f"There's no change to {name} to undo."
         if clock.now() - datetime.fromisoformat(meta["found_at"]) > UNDO_FOR:
             return f"The change to {name} was more than a day ago; tell me the weight instead."
+        if meta["source"] == "forgotten":  # F45e (reply 491): a forget comes back too
+            outcome = await self.services.autonomy.stage(
+                SAVE_CATEGORY, member, f"Put back in your weights guide: {meta['previous']}",
+                {"name": meta["name"] or name, "line": meta["previous"], "undo": True,
+                 "source": "family"},
+                SAVE_EXECUTOR, requested=True,
+            )  # fmt: skip
+            if outcome.action.status != "done":
+                return f"Not put back yet: {outcome.message}"
+            return f"Put back: {meta['previous']}"
         current = self.book().line_for(name)
         if current is None:
             return f"{name} isn't in your weights guide any more."
@@ -1146,24 +1215,29 @@ class GramWeights:
             return f"Not put back yet: {outcome.message}"
         return f"Put back: {meta['previous']}"
 
-    async def forget(self, member: Member, name: str) -> str:
-        """`name`'s line taken out, and not looked up again until they give a weight."""
+    async def forget(self, member: Member, name: str) -> tuple[str, list[Button]]:
+        """`name`'s line taken out, and not looked up again until they give a weight. The
+        words and an [Undo] for a day (F45e)."""
         entry = self.book().line_for(name)
         if entry is None:
-            return f"{name} isn't in your weights guide."
+            return f"{name} isn't in your weights guide.", []
         if len(parse_line(entry.line) or []) > 1:
             return (
                 f'{name} shares a line with another weight ("{entry.line}"); change that line '
                 "on the Guides page, or tell me the right weight."
-            )
+            ), []
         outcome = await self.services.autonomy.stage(
             SAVE_CATEGORY, member, f"Take out of your weights guide: {entry.line}",
             {"name": name, "line": None, "old": entry.line, "source": "forgotten"},
             SAVE_EXECUTOR, requested=True,
         )  # fmt: skip
         if outcome.action.status != "done":
-            return f"Not taken out yet: {outcome.message}"
-        return f"Taken out of your weights guide: {entry.line}. Recipes show it as written now."
+            return f"Not taken out yet: {outcome.message}", []
+        undo = Button("Undo", BUTTON_KIND, {"action": "undo", "name": name})
+        return (
+            f"Taken out of your weights guide: {entry.line}. Recipes show it as written now. "
+            "Say undo to put it back."
+        ), [undo]
 
     async def on_button(self, event: InboundEvent) -> None:
         """[Undo] on a correction; [15 g] / [150 g] on a question about one."""
@@ -1177,6 +1251,9 @@ class GramWeights:
         elif payload.get("action") == "keep":  # GW6: never asked again for these words
             self._mark(str(payload["line"]), int(payload.get("part") or 0), "kept")
             text = "Kept as it is."
+        elif payload.get("action") in ("same_task", "not_same_task"):  # F45d
+            text = await self.same_task(member, name, str(payload.get("task_key") or ""),
+                                        same=payload["action"] == "same_task")  # fmt: skip
         elif payload.get("action") == "correct":
             amount, unit = float(payload["amount"]), str(payload["unit"])
             text, buttons = await self.correct(member, name, amount, unit, float(payload["grams"]))
@@ -1312,6 +1389,51 @@ class GramWeights:
         if recipes:
             said += NOW_WITH_GRAMS.format(recipes=names_said(recipes))
         return said
+
+    def task_for_more(self, name: str) -> dict[str, Any] | None:
+        """F45d (reply 491): the one open weighing task whose ingredient ends with the name
+        they said ("ground nutmeg" for "nutmeg"); None when none, or several, or exact."""
+        said = key(name)
+        found = [
+            row
+            for row in self.db.query(
+                "SELECT * FROM gram_weights_meta WHERE task_id IS NOT NULL AND key != ?",
+                (said,),
+            )
+            if self._open_task(row["task_id"])
+            and (row["key"].endswith(" " + said) or row["key"].endswith("/" + said))
+        ]
+        return found[0] if len(found) == 1 else None
+
+    def same_task_question(self, name: str) -> tuple[str, list[Button]]:
+        """The question after a weight told for a shorter name, with its buttons; ("", [])
+        when no weighing task is like it."""
+        row = self.task_for_more(name)
+        if row is None:
+            return "", []
+        payload = {"name": name, "task_key": row["key"]}
+        return SAME_TASK_TEXT.format(name=row["name"]), [
+            Button("Yes, the same", BUTTON_KIND, {"action": "same_task", **payload}),
+            Button("No", BUTTON_KIND, {"action": "not_same_task", **payload}),
+        ]
+
+    async def same_task(self, member: Member, name: str, task_key: str, *, same: bool) -> str:
+        """[Yes, the same]: one ingredient now (an alias), and its weighing task done.
+        [No]: the task stays open."""
+        row = self.meta(task_key)
+        if row is None:
+            return "That weighing task is settled already."
+        if not same:
+            return f"Left the weighing task for {row['name']} open."
+        self.add_alias(row["name"], name, member)
+        if row["task_id"]:
+            await self._settle_task(int(row["task_id"]), member, done=True)
+        if row["source"] == "wanted":
+            self.db.execute("DELETE FROM gram_weights_meta WHERE key = ?", (task_key,))
+        return (
+            f"Done: {row['name']} uses the weight for {name} now, and its weighing task is "
+            "ticked off."
+        )
 
     async def learn(self, member: Member, lines: list[str]) -> list[str]:
         """Weights a recipe states for ingredients the guide doesn't have yet, added to it
@@ -1527,6 +1649,12 @@ async def weighed_gram_weight(ctx: ToolContext, args: dict[str, Any]) -> str:
             "the scale's number."
         )
     said = await weights.weighed(ctx.member, name, amount, unit, grams)
+    question, buttons = weights.same_task_question(name)  # F45d: "nutmeg" for "ground nutmeg"
+    if buttons:
+        said = f"{said} {question}"
+        await ctx.services.outbox.send(ctx.member, said, priority=Priority.REPLY, buttons=buttons)
+        ctx.cards.append(said)
+        return f"Sent them this, with buttons: {said}"
     ctx.replies.append(said)
     ctx.asked.append(said)
     return said
@@ -1572,7 +1700,8 @@ async def correct_gram_weight(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool(
     "undo_gram_weight",
-    "Put back the weight a correction just changed ('undo that', within a day): ingredient.",
+    "Put back the weight a correction just changed or took out ('undo that', 'put it "
+    "back', within a day): ingredient.",
     {"ingredient": {"type": "string"}},
 )
 async def undo_gram_weight(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -1605,15 +1734,21 @@ async def same_ingredient(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool(
     "forget_gram_weight",
-    "Take an ingredient's weight out of the weights guide when they say it shouldn't be "
-    "there or shouldn't be converted ('stop converting the nutmeg'): ingredient.",
+    "Take an ingredient's weight out of the weights guide, only when they say that weight "
+    "is wrong to have or shouldn't be converted ('stop converting the nutmeg'). Never for "
+    "tasks (weighing tasks are task tools): ingredient.",
     {"ingredient": {"type": "string"}},
 )
 async def forget_gram_weight(ctx: ToolContext, args: dict[str, Any]) -> str:
-    said = await _weights(ctx).forget(ctx.member, clean_name(str(args.get("ingredient") or "")))
-    ctx.replies.append(said)
-    ctx.asked.append(said)
-    return said
+    name = clean_name(str(args.get("ingredient") or ""))
+    said, buttons = await _weights(ctx).forget(ctx.member, name)
+    if not buttons:
+        ctx.replies.append(said)
+        ctx.asked.append(said)
+        return said
+    await ctx.services.outbox.send(ctx.member, said, priority=Priority.REPLY, buttons=buttons)
+    ctx.cards.append(said)
+    return f"Sent them this, with an Undo button: {said}"
 
 
 def viewer_lines(services: Services, member_id: int) -> Callable[[str], str]:

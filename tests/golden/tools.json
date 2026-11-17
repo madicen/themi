@@ -177,7 +177,7 @@
   },
   "forget_gram_weight": {
     "group": "recipes",
-    "spec": "32df344c3e8f"
+    "spec": "b46736b5b30f"
   },
   "forward_email": {
     "group": "email",
@@ -589,7 +589,7 @@
   },
   "undo_gram_weight": {
     "group": "recipes",
-    "spec": "0765c57fab5a"
+    "spec": "a0650670192d"
   },
   "unskip_email_sender": {
     "group": "calendar",

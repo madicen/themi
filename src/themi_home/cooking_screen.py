@@ -125,6 +125,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         "ahead": [],
         "gather": [],
         "prep": [],
+        "step_oven": [],  # F45f: [Preheat] on a step that is the preheat
         "offers": [],
         "view": {
             "text_size": prefs.cooking_text_size,
@@ -155,8 +156,9 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
             for n, (line, source) in enumerate(zip(lines, recipe.ingredients, strict=False))
         ]  # fmt: skip
     elif session.phase == "prep":
+        shown_prep = cooking.prep_lines(session, recipe, viewer)  # F45b: with amounts
         out["prep"] = [
-            {"n": n, "text": job["text"], "done": bool(job.get("done"))}
+            {"n": n, "text": shown_prep[n], "done": bool(job.get("done"))}
             for n, job in enumerate(session.prep)
         ]
     elif session.phase == "cook" and parts:
@@ -204,7 +206,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
                 for found in durations(part.text)
                 if not found.reminder
             ]
-    from themi_home.cooking_ahead import strip
+    from themi_home.cooking_ahead import look_ahead, strip
 
     out["strip"] = (
         strip(cooking, session, recipe, must_only=lighter) if session.ended_at is None else None
@@ -215,6 +217,16 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         heat = cooking_oven.preheat_buttons(cooking, recipe, out["strip"]["key"])
         if heat:  # without an oven, the strip is as it was
             out["strip"]["oven"], out["strip"]["at"] = heat, cooking_oven.drawn_at()
+    if session.phase == "ready":  # F45f (bug #215): the first list's preheat, with buttons
+        heat_key = next((a.key for a in look_ahead(recipe) if a.kind == "preheat"), "")
+        for item in out["ahead"]:
+            if heat_key and item["text"].startswith("preheat"):
+                item["oven"] = cooking_oven.preheat_buttons(cooking, recipe, heat_key)
+    elif session.phase == "cook" and parts and not cooking_oven.started_here(cooking, session):
+        n = min(session.step, len(parts) - 1)
+        if cooking_oven.heat_for(parts[n].text) is not None:
+            out["step_oven"] = cooking_oven.preheat_buttons(cooking, recipe, f"preheat:{n}")
+    out["oven_at"] = cooking_oven.drawn_at()
     out["oven_line"] = cooking_oven.oven_line(cooking, session)
     out["oven_off"] = cooking_oven.off_question(cooking, session)  # OV6
     proofing = cooking_oven.proof_offer(cooking, session, recipe)  # OV7
@@ -456,7 +468,12 @@ async def act(
     log.info("Cook screen tap %r on session %s", action, session_id)
     said = ""
     if action in TIMER_TAPS:
-        return Tapped(timer_tap(cooking, session, action, form))
+        tapped = timer_tap(cooking, session, action, form)
+        moved = tapped and action != "timer_clear" and cooking.timers is not None
+        if moved and await cooking.timers.changed():  # type: ignore[union-attr]  # F45f
+            words = "Timer cancelled" if "cancel" in action else "More time"
+            return Tapped(True, f"{words}, and the oven's too.")
+        return Tapped(tapped)
     if action in WRAP_TAPS:
         from themi_home import cooking_wrap
 
@@ -511,6 +528,8 @@ async def act(
             return Tapped(False)
         if heated.ok and str(form.get("key", "")):
             answer(session, str(form["key"]), "done")
+            if str(form.get("ahead", "")).isdigit():  # F45f: the first list's line, ticked
+                tick(session, "ahead", int(str(form["ahead"])), True)
             cooking.save(session)
         return Tapped(heated.ok, heated.words)
     if action in ("ahead_done", "ahead_later"):  # CK4: the look-ahead strip

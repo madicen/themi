@@ -205,13 +205,13 @@ class OvenControl:
         except OvenRefused as exc:
             self._why[ctx.action_id] = str(exc)
             raise
+        if not minutes:  # F45f: a clear isn't a timer, so no 0-minute row left open
+            return "The oven timer's cleared."
         self.db.execute(
             "INSERT INTO oven_timers (oven_id, member_id, minutes, cooking_timer_id, set_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (oven.id, ctx.member.id, minutes, payload.get("link"), to_utc_iso(clock.now())),
         )
-        if not minutes:
-            return "The oven timer's cleared."
         return f"The oven's timer is set for {_minutes(minutes)}."
 
     async def _off(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
@@ -337,6 +337,16 @@ class OvenControl:
             kind="oven",
             dedupe_key=f"oven-timer-{row['id']}",
         )
+
+    async def follow_timers(self) -> bool:
+        """F45f (bug #215): a cook-screen timer cancelled or given more time reaches the
+        oven's at once, not at the oven's next reading. True when the oven's changed."""
+        oven = self.oven(ov.TIMER_OVEN)
+        if oven is None or not self.linked():
+            return False
+        before = self.db.scalar("SELECT COUNT(*) FROM oven_actions")
+        await self._follow_cook_timers(oven)
+        return bool(self.db.scalar("SELECT COUNT(*) FROM oven_actions") != before)
 
     async def _follow_cook_timers(self, oven: Oven) -> None:
         """OV5: a cook-screen timer cancelled clears the oven's; one given more time moves
