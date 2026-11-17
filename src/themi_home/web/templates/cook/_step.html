@@ -4,7 +4,7 @@
 {% if state.phase == "ready" %}
   <h1 class="cook-title">Before anything else</h1>
   <ul class="cook-list">
-  {% for a in state.ahead %}<li>{{ act(state, csrf, "untick" if a.done else "tick", ("✓ " if a.done else "") ~ a.text, {"list": "ahead", "n": a.n}, cls="cook-item", pressed=a.done) }}</li>
+  {% for a in state.ahead %}<li>{{ act(state, csrf, "untick" if a.done else "tick", ("✓ " if a.done else "") ~ a.text, {"list": "ahead", "n": a.n}, cls="cook-item", pressed=a.done) }}{% if a.oven and not a.done %}<div class="cook-strip-moves">{% for b in a.oven %}{{ act(state, csrf, "oven_heat", b.label, {"key": b.key, "oven": b.oven, "mode": b.mode, "temp": b.temp, "ahead": a.n, "at": state.oven_at}, cls="primary") }}{% endfor %}</div>{% endif %}</li>
   {% endfor %}
   </ul>
 {% elif state.phase == "gather" %}
@@ -30,6 +30,7 @@
   <div class="cook-step-top">
     <p class="cook-count" data-field="step">{{ state.step.words }}{% if state.step.group %} ({{ state.step.group }}){% endif %}</p>
     {% if state.offers or state.proof %}<div class="cook-offers">
+    {% for b in state.step_oven %}{{ act(state, csrf, "oven_heat", b.label, {"key": b.key, "oven": b.oven, "mode": b.mode, "temp": b.temp, "at": state.oven_at}, cls="cook-chip primary") }}{% endfor %}
     {% if state.proof %}{{ act(state, csrf, "oven_proof", state.proof.label, {"minutes": state.proof.minutes, "at": state.proof.at}, cls="cook-chip") }}{% endif %}
     {% for o in state.offers %}{{ act(state, csrf, "timer", o.label, {"minutes": o.minutes, "step": o.step}, cls="cook-chip") }}{% if o.oven %}{{ act(state, csrf, "oven_timer", "Oven timer", {"minutes": o.minutes, "step": o.step}, cls="cook-chip", aria="Oven timer too, " ~ o.label) }}{% endif %}{% endfor %}
     </div>{% endif %}

@@ -97,3 +97,33 @@ async def test_cleared_at_the_range_cancels_themis(
     await scenario.run_jobs()
     await scenario.app.outbox.flush()
     assert not [t for t in scenario.inbox("Erin") if "Time's up" in t]
+
+
+async def test_bug_215_a_cancel_clears_the_ovens_at_once(
+    scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ
+) -> None:
+    """F45f (bug #215): the oven heard the cancel 25 s later, at its next reading, and each
+    clear was kept as a 0-minute oven timer never done."""
+    screen = await at_step_5(scenario, site)
+    offer = (await screen.state())["offers"][0]
+    shown = await screen.act("oven_timer", minutes=offer["minutes"], step=offer["step"])
+    assert oven_timer(kitchen) == 2
+    cancelled = await screen.act("timer_cancel", timer=shown["timers"][0]["id"])
+    assert oven_timer(kitchen) == 0  # no reading needed
+    assert cancelled["said"] == "Timer cancelled, and the oven's too."
+    assert not scenario.app.db.scalar(
+        "SELECT COUNT(*) FROM oven_timers WHERE done_at IS NULL"
+    )  # the cleared one is done, and the clear isn't a timer of its own
+    await poll(scenario)
+    assert oven_timer(kitchen) == 0
+
+
+async def test_cancel_the_timer_in_chat_clears_the_ovens_too(
+    scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ
+) -> None:
+    screen = await at_step_5(scenario, site)
+    offer = (await screen.state())["offers"][0]
+    await screen.act("oven_timer", minutes=offer["minutes"], step=offer["step"])
+    (reply,) = await scenario.say("Erin", "cancel the timer")
+    assert reply == "Timer cancelled, and the oven's too."
+    assert oven_timer(kitchen) == 0

@@ -296,7 +296,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F45c | Feedback: holding the mic button on an iPhone talks, not selects | Feedback | [x] 2026-11-16 |
 | F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [x] 2026-11-16 |
 | F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [x] 2026-11-16 |
-| F45f | Feedback: the oven's preheat where the recipe says it; a cancelled timer stops the oven's | Feedback | [ ] |
+| F45f | Feedback: the oven's preheat where the recipe says it; a cancelled timer stops the oven's | Feedback | [x] 2026-11-16 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -14773,7 +14773,7 @@ descriptions), as the prompt asks. Test changed: `test_gram_corrections.py::test
 `tests/scenarios/test_settled_and_forgotten.py`.
 
 ### F45f · Feedback (2026-11-16): the oven's preheat is offered where the recipe says it, and a cancelled timer stops the oven's at once
-Status: [ ]
+Status: [x] 2026-11-16
 Depends on: OV4, OV5
 Read first: the Oven Module plan's OV4 and OV5 sections; `themi_home/cooking_oven.py`
 (`preheat_buttons`, `heat_for`, `oven_timer`); `themi_home/cooking_screen.py` (the strip, the
@@ -14814,6 +14814,22 @@ the 7-minute knead timer, cancels it, and the oven's timer is cleared at once.
 
 Data: oven_timers rows 3 and 4 on the Pi (0 minutes, never done) can stay. Mark #215 reviewed
 once live; Michael checks the oven's display after a cancel.
+
+Notes: the plan's OV4 puts [Preheat] on the look-ahead cue; this adds it where the cue was
+hidden (the ready list ticked it off, `_ready_done`) and on the preheat step itself, which
+the plan doesn't rule out. `draw`: in the ready phase each `ahead` line starting "preheat"
+gets `oven` (`preheat_buttons` for the recipe's first look-ahead preheat key); in the cook
+phase, a step whose text `heat_for` reads gets `step_oven`, unless an oven this session
+started is on (`started_here`). `oven_at` (`drawn_at`) is in every state for those taps.
+An `oven_heat` tap with `ahead=<n>` also ticks that line. `heat_for` already read "450
+degrees" as °F. Timers: `OvenControl.follow_timers()` runs `_follow_cook_timers` at once;
+`CookingTimers.changed()` calls it (errors logged, never raised) after a cook-screen
+`timer_cancel`, `timer_add` or `timers_cancel`, typed or spoken "cancel the timer", and the
+chat's [Cancel them]. The screen says "Timer cancelled, and the oven's too." (or "More time,
+and the oven's too."); chat "Timer cancelled, and the oven's too.". The oven's `_timer`
+executor no longer keeps a row for a clear. New tests at the end of
+`tests/scenarios/test_oven_timers.py` and `tests/scenarios/test_oven_cook_screen.py`. None
+changed, no golden file changed.
 
 ## Conversation mode
 
