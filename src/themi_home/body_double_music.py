@@ -19,21 +19,52 @@ from themi.modules import Module, ModuleContext
 
 
 @dataclass(frozen=True)
-class Loop:
-    key: str
+class Track:
     name: str
     file: str  # under themi_home/web/static/audio/ (CR17b)
+
+
+@dataclass(frozen=True)
+class Loop:
+    """A kind of sound (a genre): its tracks, the first the one it started with (CK14: Next
+    on the cook screen plays another of them, at random)."""
+
+    key: str
+    name: str
+    tracks: tuple[Track, ...]
+
+    @property
+    def file(self) -> str:
+        return self.tracks[0].file
 
 
 LOOPS = {
     loop.key: loop
     for loop in (
-        Loop("lofi", "Lofi", "lofi.m4a"),
-        Loop("rain", "Rain", "rain.m4a"),
-        Loop("soft_piano", "Soft piano", "soft-piano.m4a"),
-        Loop("brown_noise", "Brown noise", "brown-noise.m4a"),
+        Loop("lofi", "Lofi", (
+            Track("Sunday kitchen", "lofi.m4a"),
+            Track("Slow simmer", "lofi-simmer.m4a"),
+            Track("Window light", "lofi-window.m4a"),
+            Track("Late supper", "lofi-supper.m4a"),
+            Track("Warm bread", "lofi-bread.m4a"),
+        )),
+        Loop("rain", "Rain", (
+            Track("Steady rain", "rain.m4a"),
+            Track("Light drizzle", "rain-drizzle.m4a"),
+            Track("Rain on the roof", "rain-roof.m4a"),
+        )),
+        Loop("soft_piano", "Soft piano", (
+            Track("Four slow chords", "soft-piano.m4a"),
+            Track("Evening", "soft-piano-evening.m4a"),
+            Track("Snowfall", "soft-piano-snowfall.m4a"),
+            Track("Little waltz", "soft-piano-waltz.m4a"),
+        )),
+        Loop("brown_noise", "Brown noise", (
+            Track("Deep", "brown-noise.m4a"),
+            Track("Soft hum", "brown-noise-hum.m4a"),
+        )),
     )
-}
+}  # fmt: skip
 ALIASES = {
     "lofi": "lofi", "lo-fi": "lofi", "lo fi": "lofi", "beats": "lofi",
     "rain": "rain", "rain sounds": "rain",

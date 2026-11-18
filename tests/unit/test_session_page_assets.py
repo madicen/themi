@@ -54,12 +54,22 @@ def test_every_loop_exists_small_and_licensed() -> None:
     from themi_home.body_double_music import LOOPS
 
     licences = (AUDIO / "LICENCES.md").read_text()
+    for track in (t for loop in LOOPS.values() for t in loop.tracks):
+        path = AUDIO / track.file
+        assert path.is_file(), track.file
+        assert 10_000 < path.stat().st_size < 5_000_000, track.file
+        line = next((x for x in licences.splitlines() if x.startswith(f"| {track.file} ")), "")
+        assert "CC0" in line, track.file
+
+
+def test_each_kind_of_sound_has_more_than_one_track() -> None:
+    """CK14: Next on the cook screen plays another track of the same kind, so there's one."""
+    from themi_home.body_double_music import LOOPS
+
     for loop in LOOPS.values():
-        path = AUDIO / loop.file
-        assert path.is_file(), loop.file
-        assert 10_000 < path.stat().st_size < 5_000_000, loop.file
-        line = next((x for x in licences.splitlines() if x.startswith(f"| {loop.file} ")), "")
-        assert "CC0" in line, loop.file
+        files = [t.file for t in loop.tracks]
+        assert len(files) >= 2 and len(set(files)) == len(files), loop.key
+        assert loop.file == files[0]  # the one it always played is still the first
 
 
 def test_the_loops_are_named_in_chat_words() -> None:
