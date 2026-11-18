@@ -136,3 +136,48 @@ async def test_next_plays_another_track_of_the_same_kind(scenario: Scenario) -> 
         assert await tab.value("document.querySelector('[data-live=playing]').textContent") == (
             "Playing"
         )
+
+
+async def test_a_mix_plays_live_from_its_settings(scenario: Scenario) -> None:
+    """CK15a: a track with a mix and no file plays through mix.js: its chords in order at its
+    tempo, and Pause stops it. (The audio context may stay suspended without a real tap;
+    what's scheduled is still the mix's.)"""
+    from themi_home.music_mix import BUILT_IN
+
+    clock.unfreeze()
+    mix = dict(BUILT_IN)["lofi-simmer.m4a"]
+    page = json.dumps(mix.for_page())
+    await to_step_three(scenario)
+    async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves",
+                              width=1180, height=820) as tab:  # fmt: skip
+        assert await tab.value("window.themiMix.supported")
+        plan = json.loads(await tab.value(
+            f"JSON.stringify(window.themiMix.events({page}, 0, {mix.bar_seconds * 2}))"
+        ))  # fmt: skip
+        strikes = [e for e in plan if e["kind"] == "strike"]
+        step = mix.bar_seconds / mix.strikes
+        assert [round(e["at"], 3) for e in strikes] == [round(k * step, 3) for k in range(4)]
+        assert [e["chord"] for e in strikes] == [0, 0, 1, 1]
+        assert [e["at"] for e in plan if e["kind"] == "kick"][:2] == pytest.approx(
+            [0, 2 * mix.bar_seconds / mix.beats]
+        )
+        await tab.value(
+            "(() => { const li = document.createElement('li');"
+            f" li.dataset.mix = JSON.stringify({page}); li.textContent = 'Mushroom simmer';"
+            " document.querySelector('.cook-tracks[data-sound=lofi]').appendChild(li);"
+            " window.themiCook.music.load(li, true); })()"
+        )
+        assert await tab.value("window.themiCook.music.player().mix.bpm") == mix.bpm
+        assert await until(lambda: tab.value(
+            "window.themiCook.music.player().scheduled.length > 0"
+        ))  # fmt: skip
+        assert await tab.value("window.themiCook.music.player().scheduled[0]") == 0
+        name = "document.querySelector('[data-live=track-name]').textContent"
+        assert await tab.value(name) == "Mushroom simmer"
+        assert await tab.value("document.querySelector('.cook-play-label').textContent") == "Pause"
+        assert await tab.value("document.querySelector('.cook-music audio').paused")
+        await tab.value("document.querySelector('.session-play').click()")
+        assert not await tab.value("window.themiCook.music.playing()")
+        assert await tab.value("document.querySelector('[data-live=playing]').textContent") == (
+            "Paused"
+        )

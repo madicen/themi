@@ -4,7 +4,9 @@ synthesised from code, so they're ours to give away (CC0, see static/audio/LICEN
     python3 tools/make_loops.py [name ...]   # writes src/themi_home/web/static/audio/*.m4a
 
 Each is mono AAC (plays on every phone browser), about a minute, slow (60-90 BPM) and
-made to loop: chord loops are whole bars, noise loops have nothing to line up.
+made to loop: chord loops are whole bars, noise loops have nothing to line up. CK15a: what
+each track is (its chords, tempo, noise) lives in `themi_home/music_mix.py`, which the cook
+screen's player reads too.
 """
 
 from __future__ import annotations
@@ -13,9 +15,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-OUT = Path(__file__).parents[1] / "src" / "themi_home" / "web" / "static" / "audio"
+SRC = Path(__file__).parents[1] / "src"
+OUT = SRC / "themi_home" / "web" / "static" / "audio"
 RATE = 48000
-MIX = "[0]lowpass=f=2600[a];[1]highpass=f=3000[c];[a][c]amix=inputs=2:normalize=0"
+
+sys.path.insert(0, str(SRC))
+from themi_home.music_mix import BUILT_IN, CHORDS, Mix, Noise  # noqa: E402
 
 
 def note(name: str) -> float:
@@ -24,60 +29,8 @@ def note(name: str) -> float:
     return 261.6256 * 2 ** (semis / 12)
 
 
-# Cmaj7, Am7, Fmaj7, G6: soft, unresolved, easy to sit with
-CHORDS = [
-    ["C3", "E4", "G4", "B4"],
-    ["A2", "C4", "E4", "G4"],
-    ["F2", "A3", "C4", "E4"],
-    ["G2", "B3", "D4", "E4"],
-]
-# CK14: more of each kind, so the cook screen's Next has somewhere to go
-SIMMER = [  # Dm9, G13, Cmaj9, Am9
-    ["D3", "F4", "A4", "E5"],
-    ["G2", "F4", "B4", "E5"],
-    ["C3", "E4", "B4", "D5"],
-    ["A2", "G4", "C5", "B4"],
-]
-WINDOW = [  # Fmaj7, Em7, Dm7, Cmaj7
-    ["F2", "A3", "E4", "C5"],
-    ["E2", "G3", "D4", "B4"],
-    ["D2", "F3", "C4", "A4"],
-    ["C2", "E3", "B3", "G4"],
-]
-SUPPER = [  # Am9, Dm9, Gmaj7, Cmaj7
-    ["A2", "C4", "G4", "B4"],
-    ["D3", "F4", "C5", "E5"],
-    ["G2", "B3", "F#4", "D5"],
-    ["C3", "E4", "B4", "G4"],
-]
-BREAD = [  # D#maj7, Cm7, G#maj7, A#6
-    ["D#3", "G4", "A#4", "D5"],
-    ["C3", "D#4", "G4", "A#4"],
-    ["G#2", "C4", "D#4", "G4"],
-    ["A#2", "D4", "F4", "G4"],
-]
-EVENING = [  # Em9, Cmaj7, G, D/F#
-    ["E3", "G4", "B4", "F#5"],
-    ["C3", "E4", "G4", "B4"],
-    ["G2", "B3", "D4", "G4"],
-    ["F#2", "A3", "D4", "F#4"],
-]
-SNOWFALL = [  # Dmaj7, Bm7, Gmaj7, A
-    ["D3", "F#4", "A4", "C#5"],
-    ["B2", "D4", "F#4", "A4"],
-    ["G2", "B3", "D4", "F#4"],
-    ["A2", "C#4", "E4", "A4"],
-]
-WALTZ = [  # Fmaj7, Dm7, Gm7, C
-    ["F3", "A4", "C5", "E5"],
-    ["D3", "F4", "A4", "C5"],
-    ["G3", "A#4", "D5", "F5"],
-    ["C3", "E4", "G4", "C5"],
-]
-
-
-def piano(bar: float, decay: float, level: float, strikes_per_bar: int = 1,
-          chords: list[list[str]] = CHORDS) -> str:  # fmt: skip
+def piano(bar: float, decay: float, level: float, strikes_per_bar: int,
+          chords: list[tuple[str, ...]]) -> str:  # fmt: skip
     """An ffmpeg expression: the chords struck each bar (or more), a soft piano-like tone
     (a sine with a quieter octave), fading after each strike."""
     tau = f"mod(t,{bar / strikes_per_bar:.6f})"
@@ -100,59 +53,52 @@ def run(name: str, args: list[str]) -> None:
     print(f"{target.name}: {target.stat().st_size // 1024} kB")
 
 
-def noise(color: str, amplitude: float, filters: str, seconds: int = 60) -> list[str]:
-    return ["-f", "lavfi", "-i",
-            f"anoisesrc=color={color}:amplitude={amplitude}:sample_rate={RATE}:duration={seconds}",
-            "-af", filters]  # fmt: skip
+def noise_filters(n: Noise) -> str:
+    return ",".join(f for f in (
+        f"highpass=f={n.highpass}" if n.highpass else "",
+        f"lowpass=f={n.lowpass}" if n.lowpass else "",
+        f"tremolo=f={n.swell_hz}:d={n.swell_depth}" if n.swell_hz else "",
+        f"volume={n.gain}" if n.gain != 1 else "",
+    ) if f)  # fmt: skip
 
 
-def keys_only(bpm: int, chords: list[list[str]], decay: float, level: float, echo: str,
-              beats: int = 4, strikes: int = 1, bars: int = 16) -> list[str]:  # fmt: skip
-    bar = beats * 60 / bpm
-    return ["-f", "lavfi", "-i",
-            f"aevalsrc='{piano(bar, decay, level, strikes, chords)}':s={RATE}:d={bar * bars:.4f}",
-            "-af", f"lowpass=f=3000,{echo}"]  # fmt: skip
+def noise_source(n: Noise, seconds: float | str) -> str:
+    return (
+        f"anoisesrc=color={n.color}:amplitude={n.amplitude}:sample_rate={RATE}:duration={seconds}"
+    )
 
 
-def lofi(bpm: int, chords: list[list[str]], strikes: int = 2, crackle: float = 0.012,
-         bars: int = 16) -> list[str]:  # fmt: skip
-    bar = 4 * 60 / bpm
-    beat = bar / 4
-    kick = f"0.5*sin(2*PI*52*mod(t,{2 * beat:.6f}))*exp(-14*mod(t,{2 * beat:.6f}))"
-    hat = f"0.04*(random(0)*2-1)*exp(-45*mod(t+{beat / 2:.6f},{beat:.6f}))"
-    keys = piano(bar, 1.4, 0.045, strikes_per_bar=strikes, chords=chords)
-    length = f"{bar * bars:.4f}"
-    return ["-f", "lavfi", "-i",
-            f"aevalsrc='{keys}+{kick}+{hat}':s={RATE}:d={length}",
-            "-f", "lavfi", "-i",
-            f"anoisesrc=color=white:amplitude={crackle}:sample_rate={RATE}:duration={length}",
-            "-filter_complex", MIX]  # fmt: skip
+def args(mix: Mix) -> list[str]:
+    """ffmpeg's inputs and filters for a mix (CK15a: the settings live in music_mix.py)."""
+    if not mix.chords:  # noise alone: rain, brown noise
+        assert mix.noise is not None
+        return ["-f", "lavfi", "-i", noise_source(mix.noise, mix.seconds),
+                "-af", noise_filters(mix.noise)]  # fmt: skip
+    bar = mix.bar_seconds
+    length = f"{bar * mix.bars:.4f}"
+    chords = [CHORDS[c] for c in mix.chords]
+    expr = piano(bar, mix.decay, mix.level, mix.strikes, chords)
+    if mix.beat:
+        beat = bar / mix.beats
+        kick = f"0.5*sin(2*PI*52*mod(t,{2 * beat:.6f}))*exp(-14*mod(t,{2 * beat:.6f}))"
+        hat = f"0.04*(random(0)*2-1)*exp(-45*mod(t+{beat / 2:.6f},{beat:.6f}))"
+        expr = f"{expr}+{kick}+{hat}"
+    keys = ["-f", "lavfi", "-i", f"aevalsrc='{expr}':s={RATE}:d={length}"]
+    echo = ""
+    if mix.echoes:
+        delays = "|".join(str(d) for d, _ in mix.echoes)
+        louds = "|".join(str(v) for _, v in mix.echoes)
+        echo = f",aecho=0.8:{mix.echo_out}:{delays}:{louds}"
+    if mix.noise is None:
+        return [*keys, "-af", f"lowpass=f={mix.tone}{echo}"]
+    crackle = noise_filters(mix.noise)
+    mixdown = (f"[0]lowpass=f={mix.tone}{echo}[a];[1]{crackle}[c];"
+               "[a][c]amix=inputs=2:normalize=0")  # fmt: skip
+    return [*keys, "-f", "lavfi", "-i", noise_source(mix.noise, length),
+            "-filter_complex", mixdown]  # fmt: skip
 
 
-TRACKS = {
-    "brown-noise": noise("brown", 0.5, "lowpass=f=900,volume=0.9"),
-    "brown-noise-hum": noise("brown", 0.5, "lowpass=f=420,volume=1.3"),
-    "rain": noise("pink", 0.6, "highpass=f=500,lowpass=f=7000,tremolo=f=0.15:d=0.35,volume=1.6"),
-    "rain-drizzle": noise(
-        "white", 0.35, "highpass=f=1800,lowpass=f=9000,tremolo=f=0.4:d=0.25,volume=0.9"
-    ),
-    "rain-roof": noise(
-        "pink", 0.6, "highpass=f=200,lowpass=f=2400,tremolo=f=0.1:d=0.45,volume=1.8"
-    ),
-    "soft-piano": keys_only(66, CHORDS, 0.9, 0.16, "aecho=0.8:0.6:180:0.25"),
-    "soft-piano-evening": keys_only(60, EVENING, 0.7, 0.15, "aecho=0.8:0.7:260:0.3"),
-    "soft-piano-snowfall": keys_only(
-        70, SNOWFALL, 1.1, 0.14, "aecho=0.8:0.5:120|360:0.25|0.15", strikes=2
-    ),
-    "soft-piano-waltz": keys_only(
-        84, WALTZ, 1.6, 0.13, "aecho=0.8:0.6:200:0.2", beats=3, strikes=3, bars=24
-    ),
-    "lofi": lofi(80, CHORDS),
-    "lofi-simmer": lofi(72, SIMMER),
-    "lofi-window": lofi(84, WINDOW, crackle=0.008),
-    "lofi-supper": lofi(76, SUPPER, strikes=1, crackle=0.015),
-    "lofi-bread": lofi(82, BREAD),
-}
+TRACKS = {file.removesuffix(".m4a"): args(mix) for file, mix in BUILT_IN}
 
 
 def main() -> int:

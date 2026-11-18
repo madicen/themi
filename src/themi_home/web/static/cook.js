@@ -360,6 +360,7 @@
 
   // CK5/CK14: the built-in mixes. Each kind (lofi, soft piano...) has a few tracks: one at
   // random to start, and Next plays another of the same kind. Nothing plays until they tap.
+  // CK15a: a track with a mix (data-mix, no file) plays live through mix.js.
   function music() {
     var box = document.querySelector(".cook-music");
     if (!box) return;
@@ -368,7 +369,8 @@
     var next = box.querySelector(".cook-track-next");
     var kindName = box.querySelector('[data-live="track"]'), trackName = box.querySelector('[data-live="track-name"]');
     var playing = box.querySelector('[data-live="playing"]'), label = play.querySelector(".cook-play-label");
-    var current = -1;
+    var current = null, mix = null, live = null, started = false;
+    var canMix = !!(window.themiMix && window.themiMix.supported);
     audio.volume = Number(volume.value) / 100;
     function save(fields) {
       fields.csrf = body.dataset.csrf;
@@ -380,40 +382,70 @@
     }
     function tracks() {
       var list = box.querySelector('.cook-tracks[data-sound="' + sound.value + '"]');
-      return list ? Array.prototype.slice.call(list.querySelectorAll("li")) : [];
+      return list ? Array.prototype.slice.call(list.querySelectorAll("li")).filter(function (li) {
+        return li.dataset.src || (li.dataset.mix && canMix);
+      }) : [];
     }
+    function isPlaying() { return live ? live.playing : !audio.paused; }
     function shown(on) {
       label.textContent = on ? "Pause" : "Play";
       play.setAttribute("aria-pressed", on ? "true" : "false");
       box.classList.toggle("is-playing", on);
-      if (playing) playing.textContent = on ? "Playing" : (audio.currentTime > 0 ? "Paused" : "Ready to play");
+      if (on) started = true;
+      if (playing) playing.textContent = on ? "Playing" : (started ? "Paused" : "Ready to play");
     }
-    function start() { audio.play().then(function () { shown(true); }, function () { shown(false); }); }
+    function stop() {
+      if (live) { live.stop(); live = null; }
+      audio.pause();
+    }
+    function start() {
+      if (mix) {
+        live = window.themiMix.play(mix, { volume: Number(volume.value) / 100 });
+        shown(!!live);
+        return;
+      }
+      audio.play().then(function () { shown(true); }, function () { shown(false); });
+    }
+    // set this track up (and play it, if something was playing or they asked)
+    function load(li, andPlay) {
+      stop();
+      current = li;
+      mix = null;
+      if (li.dataset.mix) {
+        try { mix = JSON.parse(li.dataset.mix); } catch (e) { mix = null; }
+      } else {
+        audio.src = li.dataset.src;
+      }
+      if (kindName) kindName.textContent = sound.options[sound.selectedIndex].textContent;
+      if (trackName) trackName.textContent = li.textContent;
+      if (andPlay) start(); else shown(false);
+    }
     // another of this kind, never the one just playing (when there's more than one)
-    function choose(keepPlaying) {
+    function choose(andPlay) {
       var all = tracks();
       if (!all.length) return;
-      var pick = Math.floor(Math.random() * all.length);
-      if (all.length > 1 && pick === current) pick = (pick + 1 + Math.floor(Math.random() * (all.length - 1))) % all.length;
-      current = pick;
-      audio.src = all[pick].dataset.src;
-      if (kindName) kindName.textContent = sound.options[sound.selectedIndex].textContent;
-      if (trackName) trackName.textContent = all[pick].textContent;
-      if (keepPlaying) start(); else shown(false);
+      var others = all.filter(function (li) { return li !== current; });
+      var pool = others.length ? others : all;
+      load(pool[Math.floor(Math.random() * pool.length)], andPlay);
     }
     choose(false);
     play.addEventListener("click", function () {
-      if (audio.paused) start();
-      else { audio.pause(); shown(false); }
+      if (isPlaying()) { stop(); shown(false); }
+      else start();
     });
     next.addEventListener("click", function () { choose(true); });
     sound.addEventListener("change", function () {
-      current = -1;
-      choose(!audio.paused);
+      var was = isPlaying();
+      current = null;
+      choose(was);
       save({ sound: sound.value });
     });
-    volume.addEventListener("input", function () { audio.volume = Number(volume.value) / 100; });
+    volume.addEventListener("input", function () {
+      audio.volume = Number(volume.value) / 100;
+      if (live) live.setVolume(Number(volume.value) / 100);
+    });
     volume.addEventListener("change", function () { save({ volume: volume.value }); });
+    window.themiCook.music = { load: load, tracks: tracks, playing: isPlaying, player: function () { return live; } };
   }
 
   // CK14: "Cooking mixes" or "Spotify playlists"; the one they chose is kept on this device

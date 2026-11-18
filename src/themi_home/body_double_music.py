@@ -16,12 +16,14 @@ from themi.accounts import Member
 from themi.core import keys
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.modules import Module, ModuleContext
+from themi_home.music_mix import BUILT_IN, Mix
 
 
 @dataclass(frozen=True)
 class Track:
     name: str
     file: str  # under themi_home/web/static/audio/ (CR17b)
+    mix: Mix | None = None  # CK15a: what it is, as settings (make_loops.py renders it)
 
 
 @dataclass(frozen=True)
@@ -38,33 +40,19 @@ class Loop:
         return self.tracks[0].file
 
 
+def _tracks(kind: str) -> tuple[Track, ...]:
+    return tuple(Track(mix.name, file, mix) for file, mix in BUILT_IN if mix.kind == kind)
+
+
 LOOPS = {
     loop.key: loop
     for loop in (
-        Loop("lofi", "Lofi", (
-            Track("Sunday kitchen", "lofi.m4a"),
-            Track("Slow simmer", "lofi-simmer.m4a"),
-            Track("Window light", "lofi-window.m4a"),
-            Track("Late supper", "lofi-supper.m4a"),
-            Track("Warm bread", "lofi-bread.m4a"),
-        )),
-        Loop("rain", "Rain", (
-            Track("Steady rain", "rain.m4a"),
-            Track("Light drizzle", "rain-drizzle.m4a"),
-            Track("Rain on the roof", "rain-roof.m4a"),
-        )),
-        Loop("soft_piano", "Soft piano", (
-            Track("Four slow chords", "soft-piano.m4a"),
-            Track("Evening", "soft-piano-evening.m4a"),
-            Track("Snowfall", "soft-piano-snowfall.m4a"),
-            Track("Little waltz", "soft-piano-waltz.m4a"),
-        )),
-        Loop("brown_noise", "Brown noise", (
-            Track("Deep", "brown-noise.m4a"),
-            Track("Soft hum", "brown-noise-hum.m4a"),
-        )),
+        Loop("lofi", "Lofi", _tracks("lofi")),
+        Loop("rain", "Rain", _tracks("rain")),
+        Loop("soft_piano", "Soft piano", _tracks("soft_piano")),
+        Loop("brown_noise", "Brown noise", _tracks("brown_noise")),
     )
-}  # fmt: skip
+}
 ALIASES = {
     "lofi": "lofi", "lo-fi": "lofi", "lo fi": "lofi", "beats": "lofi",
     "rain": "rain", "rain sounds": "rain",
