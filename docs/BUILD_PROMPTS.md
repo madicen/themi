@@ -297,6 +297,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [x] 2026-11-16 |
 | F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [x] 2026-11-16 |
 | F45f | Feedback: the oven's preheat where the recipe says it; a cancelled timer stops the oven's | Feedback | [x] 2026-11-16 |
+| F46a | Feedback: "Something else" goes on to tasks with no day once today's are offered | Feedback | [ ] |
+| F46b | Feedback: an address they give for an event's place is used, and remembered for that place | Feedback | [ ] |
+| F46c | Feedback: where they said they'll leave from stays with the event, and the heads-up uses it | Feedback | [ ] |
+| F46d | Feedback: "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -14833,6 +14837,168 @@ and the oven's too."); chat "Timer cancelled, and the oven's too.". The oven's `
 executor no longer keeps a row for a clear. New tests at the end of
 `tests/scenarios/test_oven_timers.py` and `tests/scenarios/test_oven_cook_screen.py`. None
 changed, no golden file changed.
+
+### F46a · Feedback (2026-11-17): "Something else" goes on to tasks with no day once today's are offered
+Status: [ ]
+Depends on: MM4, F42e
+Read first: the Build Plan's MM4 section (the morning message's Just one thing);
+`themi/standard/focus.py` (`pick`, `send`, `_something_else`, the texts);
+`themi/standard/day_summary.py` (`due`). From Michael's bug #216 (2026-11-17, 9:43 am, "the
+'just one thing' option doesn't seem to have access to all my tasks, just overdue ones. Is that
+by design?").
+
+What the Pi shows: Themi 0.8.10. Michael tapped Just one thing on the morning message at 9:42
+am: "1 pm: Move Mimi's box upstairs for Rosie" (task 59), then Something else twice: task 10
+(Split Merlin's cat box), then task 84 (Vacuum maintenance) with "That's all of them for now."
+Those are the three with a due day on or before today. It is by design so far: `pick` reads
+`DaySummary.due`, which skips every task with no `due_on`, so his eight undated tasks (14, 15,
+18, 91, 101, 104, 113, and the either-of-you ones) were never offered, though he asked for
+something else twice.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `_something_else`, once today's are all offered, goes on to their open tasks with no due day
+  (theirs and either-of-you; not held, not put off past today, not a chore waiting its turn),
+  important first (`importance`), then the lightest (`effort`), then the oldest. The line says
+  it isn't due: "For now, just this:\n- Unjam the vacuum\nNo day on that one; nothing's
+  dropped." "That's all of them for now." only when those are used up too.
+- Just one thing on a day with nothing due offers the first undated one the same way (with
+  Something else), not "Nothing's due today. All clear."
+- The count in "The other N are kept" stays today's (undated ones aren't "kept" from today).
+- Too much today (`focus_now`, the plain few) is unchanged: it's about today.
+
+Tests: start with failing ones: three due and two undated tasks; Just one thing, then
+Something else four times offers the three, then the important undated one, then the other,
+then "That's all of them for now." with no button; held and put-off undated tasks are skipped;
+nothing due: Just one thing offers an undated one with Something else; `focus_now` unchanged.
+Scenario: Michael taps Just one thing and Something else until the undated "Unjam the vacuum"
+comes up.
+
+Data: none. Mark #216 reviewed once live, and answer Michael's question in the release
+notes: yes, it was today's only; now it goes on.
+
+### F46b · Feedback (2026-11-17): an address they give for an event's place is used, and remembered for that place
+Status: [ ]
+Depends on: F29e, F41d
+Read first: `themi_google/travel.py` (`drive_time`, `drive_to_event`, `address_for`,
+`_too_far`); `themi/standard/places.py` (`named_place`); the `remember_fact` tool. From
+Michael's bug #217 (2026-11-17, 4:10 pm, "not answering my question") and his 👎 on replies
+499 and 500.
+
+What the Pi shows: reply 497 added "Visit Erin in Stanford psych ward", 6:30-8:30 pm, at
+"Stanford visitor parking", which `drive_time` found 4048 km away (`_too_far`) and asked to
+check. Michael gave the address, "200 S Pasteur Dr, Palo Alto, CA 94304". Reply 499 called
+`drive_time` with `event` and that `address`, and reply 500 again: both times the event branch
+ran and the `address` argument was ignored, so the same "4048 km" came back; reply 499 also
+saved a fact ("Stanford visitor parking address is 200 S Pasteur Dr, Palo Alto, CA 94304") that
+`named_place` never reads, since it only knows kin's places ("in-laws", "my parent's house"),
+and then said only "Saved." Reply 500: "The address came up as very far away." Only when reply
+501 changed the event's location did the drive work.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `drive_time` with both `event` and `address`: the address is where the drive goes, for that
+  event's time. When the event's own location is missing, not found, too far, or a name no
+  address is known for, the result says so and what the model can do: "The calendar has
+  'Stanford visitor parking' for it; change_calendar_event can put this address there." (The
+  change itself still goes through the trust tiers; `drive_time` changes nothing.)
+- A remembered fact giving a named place's address ("Stanford visitor parking address is
+  <address>", "<place> is at <address>") is read by `named_place` for that phrase (name_key
+  match, newest first), so the event's location and the heads-up job find it too. Kin places
+  work as before.
+- The tool's description: "address: where it is, when they gave one (it wins over the event's
+  place)".
+
+Tests: start with failing ones: reply 499's call, faked (event with "Stanford visitor parking",
+geocoded far; `address` given) gives the drive to the address, with the line about the
+calendar's place; a fact "Stanford visitor parking address is 200 S Pasteur Dr, Palo Alto, CA
+94304" makes `address_for(member, "Stanford visitor parking")` that address, and the heads-up
+for an event there is timed to it; kin facts unchanged.
+Scenario: Michael's turns from reply 497 to 500, the model faked to call `drive_time` with the
+address: the second answer is the leave line, not "very far away".
+
+Data: fact saved by reply 499 stays, and starts working once live. Mark #217 reviewed once
+live; label replies 499 and 500 `--wrong-tool <id> none` only if Michael agrees the tool was
+right and Themi wasn't.
+
+### F46c · Feedback (2026-11-17): where they said they'll leave from stays with the event, and the heads-up uses it
+Status: [ ]
+Depends on: F41d, F46b
+Read first: `themi_google/travel.py` (`origin`, `_named_origin`, `_before`, `heads_up`,
+`travel_headsups`, `_event_key`); the drive_time tool's description. From Michael's bug #218
+(2026-11-17, 4:12 pm, "didn't pick up that I am leaving from my in-law's").
+
+What the Pi shows: at 4:08 pm Michael said "I'm at my in-law's place right now" with the event.
+Replies 497-501 passed `from` (the in-laws, or their address 790 La Para Ave); reply 502 ("How
+long will it take to drive there?") passed `from: ''` and got "about 21 min from home". When
+told again, reply 503 gave "about 20 min from the in-laws". The heads-up job never hears
+`from`: at 5:35 pm it sent "about 21 min with traffic: leave around 5:54 pm", the drive from
+home (`heads_up` uses `_before` or home only).
+
+Build:
+- Bug fix: start with the failing tests below.
+- A `from` given to `drive_time` for an event is kept with it: a new `travel_plans` table
+  (member, event key as `_event_key`, starts_at, origin words; migration), replaced by a later
+  `from`, and cleared by `from: 'home'`. A later `drive_time` for the same event with `from:
+  ''` uses it and says so ("from the in-laws (790 La Para Ave), as you said"); the heads-up job
+  uses it too, and its line names it ("…about 20 min from the in-laws: leave there around 5:55
+  pm."). A moved event keeps its plan when its key matches and the day is the same.
+- With no plan, as now: an event ending just before, else home.
+- Origin words that can't be found when the heads-up runs fall back to home, and the heads-up
+  says "from home (the in-laws' address wasn't found)".
+
+Tests: start with failing ones: `drive_time(from='in-laws')` then `drive_time(from='')` for the
+same event gives the in-laws' drive both times; the heads-up for it is timed from the in-laws
+and says so; `from: 'home'` clears it; another event isn't affected; the event moved by 15
+minutes keeps the plan.
+Scenario: Michael's turns 497-503, faked: 502 says from the in-laws, and the heads-up at 5:40
+pm says leave there around 5:55 pm.
+
+Data/Setup: migration (new table). Mark #218 reviewed once live.
+
+### F46d · Feedback (2026-11-17): "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder
+Status: [ ]
+Depends on: F46c
+Read first: `themi_google/travel.py` (`drive_to_event`, `_leave_line`, `heads_up`); the
+`add_reminder` tool in `themi/standard/reminders.py`; the calendar tools' descriptions. From
+Michael's bug #219 (2026-11-17, 4:13 pm, "it's not respecting that I want to arrive 15 minutes
+early").
+
+What the Pi shows: Michael asked for the 6:30-8:30 visit "so I arrive at Stanford's visitor
+parking at 6:15", then "you'll remind me to leave so I arrive at 6:15?" twice, and "I want to
+arrive at 6:15". `drive_time` has no way to say it: every leave time was for 6:30. After the
+bug report, the model moved the event itself to 6:15-8:30 pm (4:13 pm), which isn't what the
+visit is. Also, replies 497 and 501 each called `add_reminder` for 6 pm, "Leave for Stanford
+visitor parking", Themi's guess; the 6 pm reminder came after the 5:55 pm leave time it had
+just given, next to the heads-up at 5:35.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `drive_time` gains `arrive_by` ("18:15", '' for the event's start): the leave and getting-
+  ready times count back from it, and the lines say it: "Visit Erin in Stanford psych ward at
+  6:30 pm, there by 6:15 pm: about 20 min from the in-laws with traffic. Leave there around
+  5:55 pm; start getting ready around 5:40 pm." It's kept in F46c's `travel_plans` (an
+  `arrive_by` column, minutes before the start, so it follows a moved event), and the heads-up
+  uses it. An `arrive_by` after the start is refused ("that's after it starts").
+- The tool description: "arrive_by: when they want to be there, if earlier than the start;
+  don't move the event for it". `change_calendar_event`'s description says the same about
+  arriving early.
+- `add_reminder` whose text is about leaving for an event Themi times a heads-up for (the
+  words "leave"/"head out" and a match of that event's title or place, the same day) isn't
+  set: "The heads-up to get ready already comes at 5:40 pm, and says when to leave; no
+  separate reminder set." Unless they said they want one too (`also: true`).
+
+Tests: start with failing ones: `drive_time(arrive_by='18:15')` for a 6:30 event gives the
+6:15 lines and the heads-up at 5:40; later `drive_time` with `arrive_by ''` keeps 6:15 from the
+plan; an `arrive_by` of 18:45 is refused; `add_reminder("Leave for Stanford visitor parking",
+18:00)` with that event is declined with the heads-up's time; with `also` it's set; a reminder
+unrelated to the event is set as before.
+Scenario: Michael's 4:08 pm request, faked: the event stays 6:30-8:30, the reply says leave
+the in-laws around 5:55 pm to be there by 6:15, and there's one heads-up, no 6 pm reminder.
+
+Data/Setup: migration (a column). Golden `tools.json` changes (drive_time's and add_reminder's
+specs). Mark #219 reviewed once live. Michael may want the Pi's event put back to 6:30 (it's
+past now; no action).
 
 ## Conversation mode
 
