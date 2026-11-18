@@ -30,6 +30,7 @@ from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
+from themi.usage import NO_TALLY, Tally
 
 log = logging.getLogger(__name__)
 
@@ -101,6 +102,8 @@ def pkce_pair() -> tuple[str, str]:
 
 
 class SpotifyClient:
+    tally: Tally = NO_TALLY  # UC3: set by the module
+
     def __init__(
         self, config: SpotifyConfig, *, transport: httpx.AsyncBaseTransport | None = None
     ) -> None:
@@ -224,6 +227,7 @@ class SpotifyClient:
             )
         except httpx.HTTPError as exc:
             raise SpotifyError(f"Spotify couldn't be reached ({type(exc).__name__})") from exc
+        self.tally(response.status_code)
         reason = str(_json(response).get("error", {}).get("reason", "")) if response.content else ""
         if response.status_code == 401:
             raise LinkRevoked("Spotify turned down the access token.")

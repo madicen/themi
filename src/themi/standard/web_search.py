@@ -38,6 +38,7 @@ from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import start_of_local_day, to_utc_iso
 from themi.modules import Module, ModuleContext, ModuleSetup
+from themi.usage import Limits, Meter
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -470,6 +471,19 @@ async def read_web_page(ctx: ToolContext, args: dict[str, Any]) -> str:
     return await _web(ctx).read(ctx.member.id, url)
 
 
+# UC3: Tavily's free Researcher plan, 1,000 credits a month (a basic search 1, an advanced
+# one 2). Firecrawl's free credits are a one-off, so no limit is drawn.
+TAVILY_METER = Meter(
+    "tavily.credits",
+    "Tavily search",
+    "credits",
+    group="Web",
+    order=10,
+    limits=Limits(per_month=1000, resets="UTC", source="docs.tavily.com", checked="2026-11"),
+)
+FIRECRAWL_METER = Meter("firecrawl.credits", "Firecrawl", "credits", group="Web", order=11)
+
+
 class WebSearchModule(Module):
     """F30d: searching the web and reading a page. Without a backend it says how to set
     one up."""
@@ -504,4 +518,10 @@ class WebSearchModule(Module):
         return None
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi.connectors.search import FirecrawlSearch, TavilySearch
+
+        if isinstance(self.backend, TavilySearch):  # UC3
+            self.backend.tally = ctx.usage_meter(TAVILY_METER)
+        elif isinstance(self.backend, FirecrawlSearch):
+            self.backend.tally = ctx.usage_meter(FIRECRAWL_METER)
         ctx.provide(WebSearch(ctx.services, self.backend, self.daily_lookups)).install()

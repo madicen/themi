@@ -153,13 +153,24 @@
   ],
   "usage_meters": [
     "anthropic.requests",
+    "catgenie.calls",
     "cloudflare.pictures",
     "gemini.embeddings",
     "gemini.pictures",
     "gemini.requests",
+    "google.requests",
+    "homeconnect.calls",
     "lm_studio.requests",
+    "nws.calls",
     "ollama.requests",
     "openai_compat.pictures",
-    "openai_compat.requests"
+    "openai_compat.requests",
+    "openmeteo.calls",
+    "ourgroceries.calls",
+    "spotify.requests",
+    "tavily.credits",
+    "thinq.calls",
+    "tomtom.requests",
+    "tuya.calls"
   ]
 }

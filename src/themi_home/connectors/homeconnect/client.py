@@ -34,6 +34,7 @@ from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
+from themi.usage import NO_TALLY, Tally
 
 log = logging.getLogger(__name__)
 
@@ -94,6 +95,8 @@ class Appliance:
 
 
 class HomeConnectClient:
+    tally: Tally = NO_TALLY  # UC3: set by the module
+
     def __init__(
         self, config: HomeConnectConfig, *, transport: httpx.AsyncBaseTransport | None = None
     ) -> None:
@@ -181,6 +184,7 @@ class HomeConnectClient:
             raise HomeConnectError(
                 f"Home Connect couldn't be reached ({type(exc).__name__})"
             ) from exc
+        self.tally(response.status_code)
         self._raise_for_limits(response)
         body = _json(response)
         if response.status_code in (400, 401):
@@ -203,6 +207,7 @@ class HomeConnectClient:
             raise HomeConnectError(
                 f"Home Connect couldn't be reached ({type(exc).__name__})"
             ) from exc
+        self.tally(response.status_code)
         self._raise_for_limits(response)
         if response.status_code == 401:
             raise LinkRevoked("Home Connect turned down the access token.")

@@ -51,11 +51,13 @@ class CalendarSync:
         self.google = google
 
     def client(self, account_id: int) -> CalendarClient:
-        return CalendarClient(
+        client = CalendarClient(
             self.google.oauth.config.calendar_url,
             lambda: self.google.access_token(account_id),
             lambda: self.google.forget_access_token(account_id),
         )
+        client.tally = self.google.tally  # UC3
+        return client
 
     # ----- settings -----------------------------------------------------------
 

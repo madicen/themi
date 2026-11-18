@@ -23,6 +23,7 @@ from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup, as_jo
 from themi.modules.prompt import PromptFragment
 from themi.modules.web import WaitingLink
 from themi.standard.tasks import TaskBoard
+from themi.usage import Meter
 from themi_google import email_forward, google_groups
 from themi_google.calendar import TaskCalendar
 from themi_google.calendar_copies import CalendarCopies
@@ -53,6 +54,11 @@ def needs_of(modules: list[Module]) -> list[ScopeNeed]:
     return [need for m in modules for need in getattr(m, "google_scopes", ())]
 
 
+# UC3: Gmail, Calendar, Tasks, Docs and Sheets together. Google's quotas are per Cloud
+# project and far above a household's use (Gmail's is a billion units a day), so no limit.
+GOOGLE_METER = Meter("google.requests", "Google", "requests", group="Google", order=10)
+
+
 class GoogleModule(Module):
     """Linking Google accounts, for the Google modules that read and write through them."""
 
@@ -79,6 +85,7 @@ class GoogleModule(Module):
         store = ctx.services.store
         google = GoogleAccounts(store, GoogleOAuth(store.db, store.cipher, self.config))
         google.wants = lambda: needs_of(ctx.modules)  # CR18a: asked when linking
+        google.tally = ctx.usage_meter(GOOGLE_METER)  # UC3
         ctx.provide(google)
         from themi_google.web import google_pages
 

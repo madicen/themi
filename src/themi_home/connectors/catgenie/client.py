@@ -45,6 +45,7 @@ from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
+from themi.usage import NO_TALLY, Tally
 
 log = logging.getLogger(__name__)
 
@@ -252,7 +253,14 @@ def _expiry(value: Any, now: datetime) -> datetime:
 
 
 class CatGenieClient:
-    def __init__(self, config: CatGenieConfig, refresh_token: Secret | None = None) -> None:
+    def __init__(
+        self,
+        config: CatGenieConfig,
+        refresh_token: Secret | None = None,
+        *,
+        tally: Tally = NO_TALLY,
+    ) -> None:
+        self.tally = tally  # UC3
         self.config = config
         self._wire = wire_for(config)
         self._base = config.base_url.rstrip("/")
@@ -366,7 +374,9 @@ class CatGenieClient:
         if token:
             headers["authorization"] = f"Bearer {token}"
         data = json.dumps(body, separators=(",", ":")).encode() if body is not None else None
-        return await self._wire.request(method, f"{self._base}/{path}", headers, data, params)
+        answer = await self._wire.request(method, f"{self._base}/{path}", headers, data, params)
+        self.tally(answer.status)
+        return answer
 
 
 def _json(answer: Answer) -> Any:
@@ -386,6 +396,7 @@ class CatGenieAccount:
     number is only used to sign in, never kept."""
 
     def __init__(self, db: Database, cipher: Cipher, config: CatGenieConfig) -> None:
+        self.tally: Tally = NO_TALLY  # UC3: set by the module, handed to each client
         self.db = db
         self.cipher = cipher
         self.config = config
@@ -402,7 +413,7 @@ class CatGenieAccount:
     async def send_code(self, phone: str) -> str:
         """Ask for the code; returns the number as it was used."""
         phone = normal_phone(phone)
-        client = CatGenieClient(self.config)
+        client = CatGenieClient(self.config, tally=self.tally)
         try:
             await client.send_code(phone)
         finally:
@@ -414,7 +425,7 @@ class CatGenieAccount:
         phone, code = normal_phone(phone), code.strip()
         if not code:
             raise BadCode("Enter the code PetNovations texted.")
-        client = CatGenieClient(self.config)
+        client = CatGenieClient(self.config, tally=self.tally)
         try:
             await client.sign_in(phone, code)
             found = await client.devices()
@@ -466,7 +477,9 @@ class CatGenieAccount:
                 raise SignInLost("The litter box isn't linked.")
             if row["problem"]:
                 raise SignInLost(str(row["problem"]))
-            self._client = CatGenieClient(self.config, self.cipher.decrypt(row["refresh_token"]))
+            self._client = CatGenieClient(
+                self.config, self.cipher.decrypt(row["refresh_token"]), tally=self.tally
+            )
         return self._client
 
     async def _with_client(self, call: Any) -> Any:

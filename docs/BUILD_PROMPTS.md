@@ -463,7 +463,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV8 | Oven: preheat ahead of a planned dinner | Oven | [~] |
 | UC1 | Usage: meters and the daily table | Usage | [x] 2026-11-18 |
 | UC2 | Usage: AI requests and tokens | Usage | [x] 2026-11-18 |
-| UC3 | Usage: device and API meters | Usage | [ ] |
+| UC3 | Usage: device and API meters | Usage | [x] 2026-11-18 |
 | UC4 | Usage: the usage card and /usage | Usage | [ ] |
 | UC5 | Usage: the Usage page and limit overrides | Usage | [ ] |
 
@@ -21191,7 +21191,7 @@ Notes:
 - `tests/golden/handlers.json` now lists the meters (`usage_meters`), so a dropped one shows.
 
 ### UC3 · Usage: device and API meters
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: UC1
 Read first: the plan's "Device and API meters"; each connector's client.
 - Count at each client's one request site: Home Connect, ThinQ, CatGenie, Tuya, SmartHQ,
@@ -21203,6 +21203,26 @@ Tests: per connector, a fake call counts one; a fake 429 counts a refusal; a con
 whose module isn't installed registers nothing.
 
 Notes:
+- `themi.usage.Tally`: what a client calls once a request (`tally(status)`; a 429 counts
+  `<meter>.refused`). `ctx.usage_meter` returns one. Clients carry `tally = NO_TALLY`
+  (nothing counted, for their own tests); the module sets it at install, or hands it to
+  the account that makes clients (ThinQ, Tuya, CatGenie take `tally=`). Google's five
+  clients share `GoogleAccounts.tally` (one `google.requests` meter), set by the google
+  module and handed on in each `client()`.
+- Counted: Home Connect (API calls and token requests), ThinQ, Tuya, CatGenie, Spotify,
+  OurGroceries (one a call), TomTom (only TomTom's URLs, not the free geocoder), Tavily
+  (credits: an advanced search counts 2) or Firecrawl, whichever backend is in use,
+  Open-Meteo and NWS apart, Google.
+- Not counted: Keep, Roborock and SmartHQ. Their libraries make the requests (Keep in a
+  thread, Roborock and SmartHQ over their own sessions and websockets), with no request
+  site of Themi's, and none has a published limit. A follow-up can wrap their calls.
+- Limits, checked 2026-11-18: Home Connect 1,000 a day (from the code), TomTom 2,500
+  non-tile requests a day (guides quoting TomTom's pricing page; one says it's monthly
+  now), Tavily 1,000 credits a month (docs.tavily.com), Open-Meteo 10,000 a day
+  (open-meteo.com/en/terms). ThinQ, CatGenie, Tuya: no published limit found, so they
+  count with none. Google's quotas are far above use: no limit. Reset zones are UTC
+  where the provider doesn't say.
+- `handlers.json` golden gained the new meters.
 
 ### UC4 · Usage: the usage card and /usage
 Status: [ ]

@@ -20,6 +20,7 @@ from themi.modules.loader import order
 from themi.modules.registry import Key, name_of
 from themi.modules.web import AccountsSection, MenuEntry, Panel, Values, Waiting, WebPages
 from themi.storage.migrations import apply_track
+from themi.usage import Meter, Tally
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -42,7 +43,6 @@ if TYPE_CHECKING:
     from themi.modules.mirrors import Mirror
     from themi.modules.prompt import PromptFragment
     from themi.scheduler import Scheduler
-    from themi.usage import Meter
     from themi.web.kit import Kit
 
 T = TypeVar("T")
@@ -276,14 +276,15 @@ class ModuleContext:
         a member's backends of that kind with it."""
         self.services.ai_adapters[kind] = builder
 
-    def usage_meter(self, meter: Meter) -> None:
+    def usage_meter(self, meter: Meter) -> Tally:
         """UC1: something this module uses up (an API's calls, a backend's requests), for
-        the usage card, with its free-tier limit. The module counts with
-        `services.usage.count(meter.key)`."""
+        the usage card, with its free-tier limit. UC3: the `Tally` it gives back is what
+        the module's client calls for each request it sends."""
         try:
             self.services.usage.add(replace(meter, module=self._current))
         except ValueError as exc:
             raise ModuleError(f"{exc} (asked by {self._who()})") from exc
+        return Tally(self.services.usage, meter.key)
 
     def channel(self, name: str, channel: Channel) -> None:
         """CR20b: a channel people talk to Themi on ("telegram", "web_chat")."""

@@ -22,6 +22,7 @@ from datetime import timedelta
 from themi import clock
 from themi.accounts import SYSTEM, AccountStore, Actor, LinkedAccount, Member
 from themi.storage.secrets import Secret
+from themi.usage import NO_TALLY, Tally
 from themi_google.connectors.google.oauth import (
     GMAIL_SCOPE,
     LINK_SCOPES,
@@ -56,6 +57,7 @@ class GoogleAccounts:
         # CR18a: what the loaded modules need from an account (the google module sets it;
         # unset, a link asks for everything, as before modules said what they need).
         self.wants: Callable[[], list[ScopeNeed]] | None = None
+        self.tally: Tally = NO_TALLY  # UC3: every Google client's requests (the module's)
 
     def needs(self) -> list[ScopeNeed]:
         return self.wants() if self.wants is not None else []

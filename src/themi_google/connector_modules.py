@@ -15,6 +15,7 @@ from themi.core.agent import Agent
 from themi.modules import Module, ModuleContext, ModuleSetup
 from themi.modules.prompt import PromptFragment
 from themi.standard.tasks import TaskBoard
+from themi.usage import Limits, Meter
 from themi_google import google_groups
 from themi_google.connectors.google import TASKS_SCOPE, GoogleAccounts, ScopeNeed
 from themi_google.email_audit import EmailAudit
@@ -85,6 +86,15 @@ TRAVEL_PROMPT_RULES = (
 )
 
 
+# UC3: TomTom's free plan, 2,500 non-tile requests a day (developer.tomtom.com/pricing, as
+# guides quote it; one 2026 report says it is now monthly).
+TOMTOM_METER = Meter(
+    "tomtom.requests", "TomTom", "requests", group="Web", order=20,
+    limits=Limits(per_day=2500, resets="UTC", source="developer.tomtom.com/pricing",
+                  checked="2026-11"),
+)  # fmt: skip
+
+
 class TravelModule(Module):
     """K4: travel times, and "time to get ready"."""
 
@@ -113,6 +123,7 @@ class TravelModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.prompt(*TRAVEL_PROMPT_RULES)
+        self.client.tally = ctx.usage_meter(TOMTOM_METER)  # UC3
         heads_ups = ctx.provide(TravelHeadsUps(ctx.services, self.client))
         heads_ups.install()
         ctx.periodic("travel.heads_up", JOB_EVERY, heads_ups.heads_up)

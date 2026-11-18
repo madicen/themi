@@ -334,3 +334,26 @@ class UsageBook:
         """Delete days older than 400 (the core's `usage.prune` job)."""
         cutoff = clock.now().date() - timedelta(days=KEPT_DAYS)
         return self.db.update("DELETE FROM usage_daily WHERE day < ?", (cutoff.isoformat(),))
+
+
+class Tally:
+    """What a connector's client calls once for each request it sends (UC3): the module
+    sets it on the client (`client.tally = ctx.usage_meter(...)`). `status` is the answer's
+    HTTP status when there is one: a 429 counts as refused (`<meter>.refused`)."""
+
+    def __init__(self, usage: UsageBook | None, key: str, scope: str | int = "") -> None:
+        self.usage = usage
+        self.key = key
+        self.scope = scope
+
+    def __call__(self, status: int | None = None, n: int = 1) -> None:
+        if self.usage is None:
+            return
+        key = f"{self.key}.refused" if status == 429 else self.key
+        self.usage.count(key, n, scope=self.scope)
+
+    def for_scope(self, scope: str | int) -> Tally:
+        return Tally(self.usage, self.key, scope)
+
+
+NO_TALLY = Tally(None, "")  # a client nobody counts (its own unit tests)

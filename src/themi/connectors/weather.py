@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from themi.http import tls
+from themi.usage import NO_TALLY, Tally
 
 log = logging.getLogger(__name__)
 
@@ -146,6 +147,9 @@ class WeatherSource(Protocol):
 
 
 class WeatherClient:
+    tally: Tally = NO_TALLY  # UC3: Open-Meteo's calls, set by the module
+    nws_tally: Tally = NO_TALLY  # the National Weather Service's
+
     def __init__(
         self,
         *,
@@ -233,6 +237,7 @@ class WeatherClient:
             raise WeatherError(
                 f"couldn't reach the weather service ({type(exc).__name__})"
             ) from exc
+        (self.nws_tally if nws else self.tally)(response.status_code)
         if response.status_code != 200:
             raise WeatherError(
                 f"the weather service said {response.status_code}", response.status_code
