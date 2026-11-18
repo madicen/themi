@@ -349,6 +349,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK11 | Cooking companion: the kitchen tablet | Cooking companion | [x] 2026-11-08 |
 | CK12 | Cooking companion: the tablet layout | Cooking companion | [x] 2026-11-09 |
 | CK13 | Cooking companion: quiet chat while a screen is open | Cooking companion | [x] |
+| CK14 | Cooking companion: set the mood | Cooking companion | [x] 2026-11-18 |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -17610,6 +17611,41 @@ Notes:
   behaviour this prompt reverses) and CK8's voice "Repeat" in `test_cook_voice.py` (it sent
   a fresh step card; from the screen it's now an edit). New: `test_quiet_page.py`.
 - Mark #192 reviewed once live.
+
+### CK14 · Cooking companion: set the mood
+
+Status: [x] 2026-11-18
+
+Asked for directly (Michael, 2026-11-18, with a mock-up): the cook screen's bottom bar as a
+"Set the mood" card, more built-in music so it isn't always the same lofi or piano, a way
+to play another track of the same kind, and a link that opens Spotify itself.
+
+Depends on: CK5, CK12, BD5a, F34i.
+
+Build:
+- Each built-in sound becomes a kind with a few tracks (`body_double_music.Track`,
+  `Loop.tracks`; `Loop.file` stays the first, so the session page and saved choices are
+  unchanged). New original tracks from `tools/make_loops.py` (CC0, LICENCES.md): lofi 5,
+  soft piano 4, rain 3, brown noise 2.
+- The card: Themi's chameleon and line stay to its left. A heading with BD5c's offer, tabs
+  for "Cooking mixes" and "Spotify playlists" (the second only with their playlists), the
+  kind and track now chosen with Ready to play / Playing / Paused, the kind, Play, Next
+  (another track of this kind at random, never the one just playing), and the volume.
+- A random track of the chosen kind to start. Nothing plays until a tap.
+- Spotify: their playlists with Play, Pause and Next as before, plus "Open in Spotify" at the
+  chosen playlist (`open.spotify.com`; in the Mini App through `web_app_open_link`).
+
+Tests: every track exists, is small and CC0; each kind has more than one track; the page
+lists each kind's tracks, with tabs and the link only with Spotify; in Chrome, Next changes
+the track within the kind and starts it.
+
+Notes:
+- Only the cook screen gets Next and the tabs. The body double page keeps its single picker
+  and still plays the first track of each kind; it could share this card later.
+- The chosen tab is kept on the device (localStorage), not as a preference.
+- `make_loops.py` takes track names now (`make_loops.py lofi-simmer`), so adding a track
+  doesn't remake the others (their noise is random each run).
+- The cooking companion plan doc doesn't describe this card yet.
 
 ## Core refactor
 
