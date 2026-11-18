@@ -282,6 +282,7 @@ def routes(kit: Kit) -> APIRouter:
             website=cls.website,
             problems=problems,
             in_list=name in portal().planner(view.draft).desired(),
+            metered=any(m.module == name for m in app.services.usage.meters.values()),  # UC5
         )
         response.status_code = status
         return response

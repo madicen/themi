@@ -167,6 +167,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         dev_pages,
         modules_page,
         passkey_pages,
+        usage_pages,
     )
 
     kit = Kit(ctx)
@@ -243,6 +244,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(ai_pages.routes(kit))
     web.include_router(dev_pages.routes(kit))
     web.include_router(modules_page.routes(kit))  # SP4
+    web.include_router(usage_pages.routes(kit))  # UC5
     web.include_router(claim_pages.routes(kit))  # SP7a
     web.include_router(passkey_pages.routes(kit))  # SP7b
     for pages in modules_pages:  # CR4: each loaded module's pages
@@ -637,6 +639,15 @@ CORE_MENU = (
         admin_only=True,
         bar_label="Modules",
         icon=icons.MODULES,
+    ),
+    MenuEntry(  # UC5
+        "/admin/usage",
+        "Usage",
+        "What Themi used, against the free tiers",
+        "Admin",
+        8,
+        admin_only=True,
+        bar_label="Usage",
     ),
     MenuEntry(
         "/dev",

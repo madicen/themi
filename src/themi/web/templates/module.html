@@ -38,6 +38,7 @@
 <h1>{{ card.title }} {{ badge(card) }}</h1>
 <p>{{ card.summary }}</p>
 {% if cls.cost %}<p class="muted">{{ cls.cost }}</p>{% endif %}
+{% if metered %}<p><a href="/admin/usage#module-{{ card.name }}">What it used, against its free tier</a></p>{% endif %}
 {% if card.reason and card.badge != "on" %}<p class="alert">{{ card.reason }}</p>{% endif %}
 
 <div class="module-detail">

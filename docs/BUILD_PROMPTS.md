@@ -465,7 +465,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | UC2 | Usage: AI requests and tokens | Usage | [x] 2026-11-18 |
 | UC3 | Usage: device and API meters | Usage | [x] 2026-11-18 |
 | UC4 | Usage: the usage card and /usage | Usage | [x] 2026-11-18 |
-| UC5 | Usage: the Usage page and limit overrides | Usage | [ ] |
+| UC5 | Usage: the Usage page and limit overrides | Usage | [x] 2026-11-18 |
 
 ## Fixed technical choices
 
@@ -21259,7 +21259,7 @@ Notes:
 - Golden: `handlers.json` (`/usage`), `tools.json` (`show_usage` in `usage`).
 
 ### UC5 · Usage: the Usage page and limit overrides
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: UC4
 Read first: the plan's "Limits" and "Where it shows"; the Modules page (SP prompts).
 - `/admin/usage` in the menu's Admin group: the card as SVG in the page, a table of each
@@ -21271,3 +21271,17 @@ Tests: admins only; an override changes the card; clearing it goes back to the d
 "check this" mark. A scenario: an admin lowers the Gemini limit and sees the bar move.
 
 Notes:
+- `themi/web/usage_pages.py`: `GET /admin/usage` (the card as SVG in the page, scaled by
+  `.usage-card svg` in `themi.css`, then a row for every registered meter, used or not, so
+  a limit can be set before the first call) and `POST /admin/usage/{key}/limit`
+  (`per_day`, `per_month`, whole numbers or blank; `clear` goes back to the module's). The
+  menu's Admin group gains Usage (order 8, between Modules and Development).
+- Overrides here are for every scope of a meter (`scope=''`). The book takes per-scope
+  ones (UC1), but the page doesn't offer them yet: one form a meter was enough for the
+  household's backends. A follow-up if two keys need different limits.
+- "Check this": a module's `checked` more than six months before the meter's today.
+- A module with meters links from its own page (`/modules/<name>`) to
+  `/admin/usage#module-<name>`, not from the Modules list's cards.
+- `test_menu`'s expected Admin group gains the Usage entry; `routes.json` golden gains the
+  two routes.
+- Not looked at in a browser, only through the page tests and the card's PNG.
