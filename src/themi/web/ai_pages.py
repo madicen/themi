@@ -32,6 +32,7 @@ TASK_LABELS = {
     AITask.RECIPES: "Recipes: reading ingredients, prep and recipe pages",
     AITask.BODY_DOUBLE_STEPS: "Body double: steps for a guided session",
     AITask.EXPENSE_SHEET_FIELDS: "Expense sheets: the fields a new sheet has",
+    AITask.MUSIC_MIX: "Cooking: music made from the recipe's name",
     AITask.STEP_IMAGE: "Pictures for guided steps (Gemini or OpenAI image models)",
 }
 KIND_LABELS = {

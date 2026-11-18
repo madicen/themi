@@ -420,24 +420,73 @@
       if (trackName) trackName.textContent = li.textContent;
       if (andPlay) start(); else shown(false);
     }
-    // another of this kind, never the one just playing (when there's more than one)
-    function choose(andPlay) {
+    // another of this kind, never the one just playing (when there's more than one); to start,
+    // the recipe's own mix if it has one (CK15b)
+    function choose(andPlay, first) {
       var all = tracks();
       if (!all.length) return;
+      var made = all.filter(function (li) { return li.dataset.made; });
+      if (first && made.length) { load(made[0], andPlay); return; }
       var others = all.filter(function (li) { return li !== current; });
       var pool = others.length ? others : all;
       load(pool[Math.floor(Math.random() * pool.length)], andPlay);
     }
-    choose(false);
+
+    // CK15b: a mix made for this recipe. On the first Play of a kind that has none, the
+    // built-in track plays while it's made, then the mix takes over; Next asks for a fresh one
+    // while the session may (the server says when it can't: null), else picks as before.
+    var asked = {}, noMore = {}, waiting = false;
+    function list() { return box.querySelector('.cook-tracks[data-sound="' + sound.value + '"]'); }
+    function musical() { var l = list(); return !!(canMix && l && l.dataset.musical); }
+    function ask(fresh, then) {
+      var kind = sound.value;
+      waiting = true;
+      fetch("/session/cook/mix", {
+        method: "POST", credentials: "same-origin",
+        headers: auth({ "Content-Type": "application/x-www-form-urlencoded" }),
+        body: new URLSearchParams({ csrf: body.dataset.csrf, kind: kind, fresh: fresh ? "1" : "0" }).toString()
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (answer) {
+          waiting = false;
+          var mix = answer && answer.mix;
+          if (!mix) { noMore[kind] = true; then(null); return; }
+          var l = box.querySelector('.cook-tracks[data-sound="' + kind + '"]');
+          var li = l && l.querySelector('li[data-made="' + mix.id + '"]');
+          if (l && !li) {
+            li = document.createElement("li");
+            li.dataset.made = String(mix.id);
+            li.dataset.mix = JSON.stringify(mix.page);
+            li.textContent = mix.name;
+            l.insertBefore(li, l.firstChild);
+          }
+          then(kind === sound.value ? li : null);
+        }, function () { waiting = false; then(null); });
+    }
+    choose(false, true);
     play.addEventListener("click", function () {
-      if (isPlaying()) { stop(); shown(false); }
-      else start();
+      if (isPlaying()) { stop(); shown(false); return; }
+      start();
+      var l = list();
+      if (!musical() || asked[sound.value] || l.querySelector("li[data-made]")) return;
+      asked[sound.value] = true;
+      var startedWith = current;
+      ask(false, function (li) {
+        // still on the track that Play started, so nobody chose another meanwhile
+        if (li && current === startedWith) load(li, isPlaying());
+      });
     });
-    next.addEventListener("click", function () { choose(true); });
+    next.addEventListener("click", function () {
+      if (waiting) return;
+      if (!musical() || noMore[sound.value]) { choose(true); return; }
+      if (playing) playing.textContent = "Making another";
+      ask(true, function (li) {
+        if (li) load(li, true); else choose(true);
+      });
+    });
     sound.addEventListener("change", function () {
       var was = isPlaying();
       current = null;
-      choose(was);
+      choose(was, true);
       save({ sound: sound.value });
     });
     volume.addEventListener("input", function () {

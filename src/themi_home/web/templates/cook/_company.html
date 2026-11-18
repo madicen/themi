@@ -33,7 +33,8 @@
         <select name="sound" aria-label="Which kind of music">
           {% for track in state.music.loops %}<option value="{{ track.key }}" data-src="{{ asset('home/audio/' ~ track.file) }}" {% if track.key == state.music.sound %}selected{% endif %}>{{ track.name }}</option>{% endfor %}
         </select>
-        {% for kind in state.music.loops %}<ul class="cook-tracks" data-sound="{{ kind.key }}" hidden>{% for t in kind.tracks %}<li data-src="{{ asset('home/audio/' ~ t.file) }}">{{ t.name }}</li>{% endfor %}</ul>{% endfor %}
+        {# CK15b: a recipe's own mixes first (played live by mix.js), then the built-in tracks #}
+        {% for kind in state.music.loops %}<ul class="cook-tracks" data-sound="{{ kind.key }}"{% if kind.key in state.music.musical %} data-musical="1"{% endif %} hidden>{% for m in state.music.mixes.get(kind.key, []) %}<li data-mix='{{ m.page | tojson }}' data-made="{{ m.id }}">{{ m.name }}</li>{% endfor %}{% for t in kind.tracks %}<li data-src="{{ asset('home/audio/' ~ t.file) }}">{{ t.name }}</li>{% endfor %}</ul>{% endfor %}
         <div class="cook-music-moves">
           <button class="session-play primary" type="button" aria-pressed="false"><svg class="cook-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="cook-play-mark" d="M7 4.5v15l12-7.5z"/><path class="cook-pause-mark" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg><span class="cook-play-label">Play</span></button>
           <button class="cook-track-next" type="button" aria-label="Another track of this kind">Next</button>

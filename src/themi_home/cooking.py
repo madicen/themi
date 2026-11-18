@@ -54,6 +54,7 @@ from themi.modules import Module, ModuleContext
 from themi.standard.lists import name_key
 from themi_home import home_groups
 from themi_home.cooking_links import UNITS, StepLinks
+from themi_home.cooking_mixes import CookingMixes
 from themi_home.cooking_titles import TITLES_FIELD, TITLES_RULE, StepTitles
 from themi_home.quantities import AMOUNT, NeedsYield, describe, scale_for, scale_line
 from themi_home.recipe_groceries import Ingredient, resolve
@@ -422,6 +423,7 @@ class Cooking:
         self.timers: CookingTimers | None = None  # RC3c, once the scheduler exists
         self.links = StepLinks(services)  # CK2: which lines each step uses
         self.titles = StepTitles(services)  # CK12: the step strip's titles
+        self.mixes = CookingMixes(services)  # CK15b: music made from the recipe's name
         self.playlists: dict[int, list[dict[str, str]]] = {}  # CK5: their Spotify, per session
 
     def preferences(self, member_id: int) -> CookingPreferences:
@@ -840,6 +842,17 @@ class Cooking:
             return  # the links are shown with the steps
         await self.links.ensure(self._owner(session), recipe, self.groceries.known(recipe))
         await self.titles.ensure(self._owner(session), recipe)  # CK12: prep read before CK12
+
+    async def mix(self, member: Member, kind: str, *, fresh: bool = False) -> dict[str, Any] | None:
+        """CK15b: a mix made for the recipe on their cook screen (`CookingMixes.make`)."""
+        from themi_home import cooking_screen
+
+        session = cooking_screen.session_for(self, member)
+        recipe = self.recipes.get(session.recipe_id) if session is not None else None
+        if session is None or recipe is None or session.ended_at is not None:
+            return None
+        owner = self._owner(session)
+        return await self.mixes.make(owner, session.id, recipe.id, recipe.name, kind, fresh=fresh)
 
     def state(self, member: Member) -> dict[str, Any]:
         """What the cook screen shows, as JSON (`cooking_screen`). Never the energy level."""

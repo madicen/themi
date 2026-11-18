@@ -48,6 +48,7 @@ class AITask(StrEnum):
     BODY_DOUBLE_STEPS = "body_double_steps"  # BD1b: proposed steps for a guided session
     STEP_IMAGE = "step_image"  # BD4a: a picture for each step of a guided session
     EXPENSE_SHEET_FIELDS = "expense_sheet_fields"  # EX1b: the fields a new expense sheet has
+    MUSIC_MIX = "music_mix"  # CK15b: a cooking mix's settings from the recipe's name
 
 
 ADAPTER_KINDS: tuple[str, ...] = get_args(AdapterKind)
