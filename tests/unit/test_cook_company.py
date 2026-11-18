@@ -166,6 +166,11 @@ async def test_their_spotify_on_the_cook_screen(
     assert "My Spotify" in page
     spotify = (await site.get("/session/state")).json()["music"]["spotify"]
     assert spotify[0]["name"] == "Kitchen Dance"  # one that fits cooking first
+    assert 'role="tab"' in page and "Spotify playlists" in page  # CK14: a tab of its own
+    # CK14: a link to open Spotify itself, at the first playlist
+    first = spotify[0]["link"] or "https://open.spotify.com/"
+    assert f'class="cook-spotify-open" href="{first}"' in page
+    assert f'data-link="{first}"' in page
     played = await site.post(
         "/session/spotify",
         headers={"X-Requested-With": "fetch"},
@@ -173,3 +178,25 @@ async def test_their_spotify_on_the_cook_screen(
     )
     assert played.json()["said"].startswith("Playing")
     assert fake_spotify.playing["context_uri"] == spotify[0]["uri"]  # type: ignore[index]
+
+
+async def test_set_the_mood_offers_every_track_of_each_kind(
+    scenario: Scenario, site: httpx.AsyncClient, cooking: Cooking
+) -> None:
+    """CK14: the cooking mixes, each kind with all its tracks for Next, and no Spotify tab
+    without Spotify."""
+    from themi_home.body_double_music import LOOPS
+
+    await sign_in(scenario, site, "Erin")
+    await start(scenario, cooking)
+    page = (await site.get("/session")).text
+    assert "Set the mood" in page and "Some lofi while you cook?" in page
+    assert 'class="cook-track-next"' in page and "autoplay" not in page
+    for loop in LOOPS.values():
+        assert f'<ul class="cook-tracks" data-sound="{loop.key}" hidden>' in page
+        for track in loop.tracks:
+            assert f">{track.name}</li>" in page and track.file.removesuffix(".m4a") in page
+    assert 'role="tab"' not in page and "cook-spotify-open" not in page
+    music = (await site.get("/session/state")).json()["music"]
+    lofi = next(loop for loop in music["loops"] if loop["key"] == "lofi")
+    assert lofi["tracks"][0] == {"name": "Sunday kitchen", "file": "lofi.m4a"}

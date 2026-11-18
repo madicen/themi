@@ -1,7 +1,8 @@
-{# CK5/CK12: company in the kitchen: Themi the chameleon by the counter, Themi's line and
-   music in a slim bar, then the footer: the wake lock's note, push-to-talk and [Need help?]
-   (Ask Themi). Drawn once with the page and kept live by cook.js (not redrawn with the
-   regions), so the music keeps playing. #}
+{# CK5/CK12/CK14: company in the kitchen: Themi the chameleon by the counter, Themi's line and
+   "Set the mood" (the built-in cooking mixes, or their own Spotify playlists, on two tabs),
+   then the footer: the wake lock's note, push-to-talk and [Need help?] (Ask Themi). Drawn
+   once with the page and kept live by cook.js (not redrawn with the regions), so the music
+   keeps playing. #}
 <section class="cook-company" aria-label="Themi">
   <div class="session-scene cook-scene" data-mode="cooking" data-state="{{ state.scene }}">
     {{ inline_svg("home/chameleon/scenes.svg") }}
@@ -10,29 +11,53 @@
   <div class="cook-company-side">
     <p class="cook-line" data-live="line">{{ state.line }}</p>
     {% if state.music %}
-    <section class="cook-music session-music" aria-label="Music">
-      <p class="muted cook-music-offer">{{ state.music.offer }}</p>
-      <button class="session-play" type="button" aria-pressed="false">Play</button>
-      <select name="sound" aria-label="Which sound">
-        {% for track in state.music.loops %}<option value="{{ track.key }}" data-src="{{ asset('home/audio/' ~ track.file) }}" {% if track.key == state.music.sound %}selected{% endif %}>{{ track.name }}</option>{% endfor %}
-      </select>
-      <input type="range" name="volume" min="0" max="100" value="{{ state.music.volume }}" aria-label="Volume">
-      <audio loop preload="none" src="{{ asset('home/audio/' ~ state.music.file) }}"></audio>
-    </section>
-    {% if state.music.spotify %}
-    <section class="session-spotify cook-spotify" aria-label="My Spotify">
-      <form method="post" action="/session/spotify">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <select name="uri" aria-label="Which playlist">
-          {% for p in state.music.spotify %}<option value="{{ p.uri }}">{{ p.name }}</option>{% endfor %}
+    {% set spotify = state.music.spotify %}
+    {% set chosen = state.music.loops | selectattr("key", "equalto", state.music.sound) | first %}
+    <section class="cook-mood cook-card" aria-labelledby="cook-mood-title">
+      <div class="cook-mood-head">
+        <h2 id="cook-mood-title">Set the mood</h2>
+        <p class="muted cook-music-offer">{{ state.music.offer }}</p>
+        {% if spotify %}
+        <div class="cook-mood-tabs" role="tablist" aria-label="Which music">
+          <button type="button" role="tab" id="cook-tab-mixes" aria-controls="cook-mixes" aria-selected="true">Cooking mixes</button>
+          <button type="button" role="tab" id="cook-tab-spotify" aria-controls="cook-spotify" aria-selected="false" tabindex="-1">Spotify playlists</button>
+        </div>
+        {% endif %}
+      </div>
+      <section class="cook-music session-music" id="cook-mixes" aria-label="Music"{% if spotify %} role="tabpanel" aria-labelledby="cook-tab-mixes"{% endif %}>
+        <div class="cook-now">
+          <svg class="cook-now-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4M9 7v10M13 4v16M17 8v8M21 11v2"/></svg>
+          <p><span class="cook-now-name" data-live="track">{{ chosen.name }}</span>
+            <span class="cook-now-sub muted"><span data-live="track-name">{{ chosen.tracks[0].name }}</span> · <span data-live="playing">Ready to play</span></span></p>
+        </div>
+        <select name="sound" aria-label="Which kind of music">
+          {% for track in state.music.loops %}<option value="{{ track.key }}" data-src="{{ asset('home/audio/' ~ track.file) }}" {% if track.key == state.music.sound %}selected{% endif %}>{{ track.name }}</option>{% endfor %}
         </select>
-        <button name="action" value="play" class="primary">Play</button>
-        <button name="action" value="pause">Pause</button>
-        <button name="action" value="next">Next</button>
-      </form>
-      <p class="session-spotify-said" role="status" aria-live="polite"></p>
+        {% for kind in state.music.loops %}<ul class="cook-tracks" data-sound="{{ kind.key }}" hidden>{% for t in kind.tracks %}<li data-src="{{ asset('home/audio/' ~ t.file) }}">{{ t.name }}</li>{% endfor %}</ul>{% endfor %}
+        <div class="cook-music-moves">
+          <button class="session-play primary" type="button" aria-pressed="false"><svg class="cook-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="cook-play-mark" d="M7 4.5v15l12-7.5z"/><path class="cook-pause-mark" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg><span class="cook-play-label">Play</span></button>
+          <button class="cook-track-next" type="button" aria-label="Another track of this kind">Next</button>
+        </div>
+        <label class="cook-volume"><span class="muted">Volume</span>
+          <input type="range" name="volume" min="0" max="100" value="{{ state.music.volume }}"></label>
+        <audio loop preload="none" src="{{ asset('home/audio/' ~ state.music.file) }}"></audio>
+      </section>
+      {% if spotify %}
+      <section class="session-spotify cook-spotify" id="cook-spotify" role="tabpanel" aria-labelledby="cook-tab-spotify" aria-label="My Spotify" hidden>
+        <form method="post" action="/session/spotify">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <select name="uri" aria-label="Which playlist">
+            {% for p in spotify %}<option value="{{ p.uri }}" data-link="{{ p.link or 'https://open.spotify.com/' }}">{{ p.name }}</option>{% endfor %}
+          </select>
+          <button name="action" value="play" class="primary">Play</button>
+          <button name="action" value="pause">Pause</button>
+          <button name="action" value="next">Next</button>
+        </form>
+        <a class="cook-spotify-open" href="{{ spotify[0].link or 'https://open.spotify.com/' }}" target="_blank" rel="noopener">Open in Spotify<svg class="cook-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+        <p class="session-spotify-said" role="status" aria-live="polite"></p>
+      </section>
+      {% endif %}
     </section>
-    {% endif %}
     {% endif %}
   </div>
 </section>

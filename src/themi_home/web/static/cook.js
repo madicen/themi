@@ -358,12 +358,17 @@
     }
   });
 
-  // CK5: the built-in loop, as on the body double page; nothing plays until they tap Play
+  // CK5/CK14: the built-in mixes. Each kind (lofi, soft piano...) has a few tracks: one at
+  // random to start, and Next plays another of the same kind. Nothing plays until they tap.
   function music() {
     var box = document.querySelector(".cook-music");
     if (!box) return;
     var audio = box.querySelector("audio"), play = box.querySelector(".session-play");
-    var sound = box.querySelector("select"), volume = box.querySelector("input[type=range]");
+    var sound = box.querySelector("select[name=sound]"), volume = box.querySelector("input[type=range]");
+    var next = box.querySelector(".cook-track-next");
+    var kindName = box.querySelector('[data-live="track"]'), trackName = box.querySelector('[data-live="track-name"]');
+    var playing = box.querySelector('[data-live="playing"]'), label = play.querySelector(".cook-play-label");
+    var current = -1;
     audio.volume = Number(volume.value) / 100;
     function save(fields) {
       fields.csrf = body.dataset.csrf;
@@ -373,19 +378,88 @@
         body: new URLSearchParams(fields).toString()
       }).then(function () {}, function () {});
     }
-    function shown(on) { play.textContent = on ? "Pause" : "Play"; play.setAttribute("aria-pressed", on ? "true" : "false"); }
+    function tracks() {
+      var list = box.querySelector('.cook-tracks[data-sound="' + sound.value + '"]');
+      return list ? Array.prototype.slice.call(list.querySelectorAll("li")) : [];
+    }
+    function shown(on) {
+      label.textContent = on ? "Pause" : "Play";
+      play.setAttribute("aria-pressed", on ? "true" : "false");
+      box.classList.toggle("is-playing", on);
+      if (playing) playing.textContent = on ? "Playing" : (audio.currentTime > 0 ? "Paused" : "Ready to play");
+    }
+    function start() { audio.play().then(function () { shown(true); }, function () { shown(false); }); }
+    // another of this kind, never the one just playing (when there's more than one)
+    function choose(keepPlaying) {
+      var all = tracks();
+      if (!all.length) return;
+      var pick = Math.floor(Math.random() * all.length);
+      if (all.length > 1 && pick === current) pick = (pick + 1 + Math.floor(Math.random() * (all.length - 1))) % all.length;
+      current = pick;
+      audio.src = all[pick].dataset.src;
+      if (kindName) kindName.textContent = sound.options[sound.selectedIndex].textContent;
+      if (trackName) trackName.textContent = all[pick].textContent;
+      if (keepPlaying) start(); else shown(false);
+    }
+    choose(false);
     play.addEventListener("click", function () {
-      if (audio.paused) audio.play().then(function () { shown(true); }, function () { shown(false); });
+      if (audio.paused) start();
       else { audio.pause(); shown(false); }
     });
+    next.addEventListener("click", function () { choose(true); });
     sound.addEventListener("change", function () {
-      var playing = !audio.paused;
-      audio.src = sound.options[sound.selectedIndex].dataset.src;
-      if (playing) audio.play().then(function () {}, function () { shown(false); });
+      current = -1;
+      choose(!audio.paused);
       save({ sound: sound.value });
     });
     volume.addEventListener("input", function () { audio.volume = Number(volume.value) / 100; });
     volume.addEventListener("change", function () { save({ volume: volume.value }); });
+  }
+
+  // CK14: "Cooking mixes" or "Spotify playlists"; the one they chose is kept on this device
+  function moodTabs() {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.cook-mood-tabs [role="tab"]'));
+    if (!tabs.length) return;
+    function pick(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.tabIndex = on ? 0 : -1;
+        var panel = document.getElementById(t.getAttribute("aria-controls"));
+        if (panel) panel.hidden = !on;
+      });
+      if (focus) tab.focus();
+      try { localStorage.setItem("themi_cook_mood", tab.id); } catch (e) { /* storage off */ }
+    }
+    tabs.forEach(function (tab, i) {
+      tab.addEventListener("click", function () { pick(tab, false); });
+      tab.addEventListener("keydown", function (e) {
+        var step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (step) { e.preventDefault(); pick(tabs[(i + step + tabs.length) % tabs.length], true); }
+      });
+    });
+    var kept = null;
+    try { kept = localStorage.getItem("themi_cook_mood"); } catch (e) { /* storage off */ }
+    var first = tabs.filter(function (t) { return t.id === kept; })[0];
+    if (first) pick(first, false);
+  }
+
+  // CK14: "Open in Spotify" goes to the chosen playlist; in Telegram, through Telegram, which
+  // hands open.spotify.com to the Spotify app
+  function spotifyLink() {
+    var link = document.querySelector(".cook-spotify-open");
+    if (!link) return;
+    var which = document.querySelector('.cook-spotify select[name="uri"]');
+    if (which) which.addEventListener("change", function () {
+      var chosen = which.options[which.selectedIndex];
+      if (chosen && chosen.dataset.link) link.href = chosen.dataset.link;
+    });
+    link.addEventListener("click", function (e) {
+      var tg = window.themiMiniApp;
+      if (!tg || !tg.inTelegram) return;
+      e.preventDefault();
+      tg.send("web_app_open_link", { url: link.href });
+    });
   }
 
   // CK2: what a tap says once ("Now for 6."), for a few seconds
@@ -545,6 +619,8 @@
   fullscreenButton();
   setupVoice();
   music();
+  moodTabs();
+  spotifyLink();
   alerts();
   tick();
   setInterval(tick, 1000);

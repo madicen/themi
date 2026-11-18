@@ -1,7 +1,7 @@
 """CK12: the tablet layout in a real (headless) Chrome: a tap on the step strip jumps to that
 step, a timer's bar empties as it counts, an ingredient ticks the moment it's tapped, and
-the footer says the screen stays awake only once the wake lock took. Skipped where Chrome
-isn't installed."""
+the footer says the screen stays awake only once the wake lock took. CK14: the mixes' Next
+plays another track of the same kind. Skipped where Chrome isn't installed."""
 
 from __future__ import annotations
 
@@ -98,3 +98,41 @@ async def test_the_footer_says_awake_only_with_the_wake_lock(scenario: Scenario)
     async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves",
                               before=no_lock) as tab:  # fmt: skip
         assert await tab.value("document.querySelector('.cook-awake').hidden")
+
+
+QUIET_AUDIO = (  # no sound in a test: play() resolves, as after a tap
+    "HTMLMediaElement.prototype.play = function () {"
+    " Object.defineProperty(this, 'paused', {value: false, configurable: true});"
+    " return Promise.resolve(); };"
+)
+
+
+async def test_next_plays_another_track_of_the_same_kind(scenario: Scenario) -> None:
+    clock.unfreeze()
+    await to_step_three(scenario)
+    async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves",
+                              width=1180, height=820) as tab:  # fmt: skip
+        await tab.value(QUIET_AUDIO)
+        lofi = json.loads(await tab.value(
+            "JSON.stringify([...document.querySelectorAll('.cook-tracks[data-sound=lofi] li')]"
+            ".map(li => li.textContent))"
+        ))  # fmt: skip
+        assert len(lofi) >= 2
+        name = "document.querySelector('[data-live=track-name]').textContent"
+        src = "document.querySelector('.cook-music audio').getAttribute('src')"
+        before = (await tab.value(name), await tab.value(src))
+        assert before[0] in lofi
+        assert await tab.value("document.querySelector('[data-live=playing]').textContent") == (
+            "Ready to play"
+        )
+        for _ in range(4):  # never the same one twice running
+            await tab.value("document.querySelector('.cook-track-next').click()")
+            after = (await tab.value(name), await tab.value(src))
+            assert after[0] in lofi and after != before
+            before = after
+        assert await until(lambda: tab.value(
+            "document.querySelector('.session-play').getAttribute('aria-pressed') === 'true'"
+        ))  # fmt: skip
+        assert await tab.value("document.querySelector('[data-live=playing]').textContent") == (
+            "Playing"
+        )
