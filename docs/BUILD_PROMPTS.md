@@ -353,6 +353,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK12 | Cooking companion: the tablet layout | Cooking companion | [x] 2026-11-09 |
 | CK13 | Cooking companion: quiet chat while a screen is open | Cooking companion | [x] |
 | CK14 | Cooking companion: set the mood | Cooking companion | [x] 2026-11-18 |
+| CK15a | Cooking companion: a mix played from its recipe | Cooking companion | [ ] |
+| CK15b | Cooking companion: Themi picks the mix from the title | Cooking companion | [ ] |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -17654,6 +17656,74 @@ Notes:
 - `make_loops.py` takes track names now (`make_loops.py lofi-simmer`), so adding a track
   doesn't remake the others (their noise is random each run).
 - The cooking companion plan doc doesn't describe this card yet.
+
+### CK15a · Cooking companion: a mix played from its recipe
+
+Status: [ ]
+
+Asked for directly (Michael, 2026-11-18): music made on the fly from the recipe's title,
+starting with Themi's own synth rather than a hosted music model (that's a later option,
+and none has a usable free tier). This half moves the synth into the page; CK15b has the
+model choose what it plays.
+
+Depends on: CK14.
+
+Build:
+- A mix as data: a recipe of settings, not a file. `themi_home/music_mix.py`: a `Mix`
+  dataclass (name, kind, bpm, beats per bar, key, a progression of chords by name, strikes
+  per bar, decay, echo, beat on or off, crackle, noise colour and level), with `check()`
+  that keeps every value in a safe range (60-90 BPM, chords only from `CHORDS`, a list of
+  named chords in the module; levels capped so nothing is loud or harsh) and raises on
+  anything else.
+- The page's player: `static/home/mix.js`, Web Audio only (no library, the CSP stays
+  'self'). It plays a `Mix` as `make_loops.py` renders one: chords as a sine with a
+  quieter octave and a soft attack, the kick and hat, noise through filters, an echo, all
+  looped by whole bars. Starts only on a tap (browsers block anything else). Volume and
+  pause as the audio element had them.
+- The built-in tracks as mixes too: each `Track` gets its `Mix` (the settings
+  `make_loops.py` already uses, moved into `music_mix.py` and read by the script), so
+  the page can play either. The `.m4a` files stay as the fallback where Web Audio is
+  missing, and for the body double page.
+- The card shows a generated mix like any track ("Lofi · Mushroom Simmer · Playing").
+
+Tests: `check()` refuses an out-of-range or unknown value; every built-in track's `Mix`
+passes `check()` and matches what `make_loops.py` renders (the same settings object); in
+Chrome, with the audio context's output faked, a mix starts on Play, its tempo and chords
+are the mix's, and Pause stops it; the layout tests still fit.
+
+### CK15b · Cooking companion: Themi picks the mix from the title
+
+Status: [ ]
+
+Depends on: CK15a.
+
+Build:
+- A new `AITask.MUSIC_MIX` and one structured call through `themi.ai.router`, cheap and
+  in the background: given the recipe's title (or a body double task's title, later), the
+  kind they chose (lofi, soft piano...), and the list of allowed chords, return a `Mix`
+  and a short name for it. The title is data inside a delimited block, never
+  instructions. The answer goes through `Mix.check()`; a refusal or a bad answer falls
+  back to a built-in track, silently.
+- Asked once when a cook session starts (next to `Cooking.playlists`), so the mix is
+  ready before anyone taps Play; the built-in track plays until it is.
+- Kept: a table `music_mixes` (migration in `cooking_schema`) by recipe and kind, so the
+  same recipe gets the same mix next time. Next on the card: another built-in track or a
+  fresh mix for this recipe (one new call, at most a few a session).
+- No energy scores or anything about the person go to the model: the title and the kind
+  only.
+
+Tests: with the fake model, starting Creamy mushroom pasta asks once and the state carries
+the mix; a second start of the same recipe doesn't ask; a bad answer (a chord not in the
+list, 140 BPM) falls back to the built-in track; Next asks for a fresh one and keeps it;
+a scenario: the card says the mix's name after the session starts.
+
+Notes for later (option 2, not planned): a hosted music model behind the router (an
+`audio()` call with a daily cap, as `image()` has `image_cap`), its mix's settings as the
+text prompt, the file kept under `data/`. As of 2026-11-18 none had a free tier usable
+for this: ElevenLabs' free plan has no music downloads or API, Google's Lyria needs a
+paid key, Stability gives 25 credits (about one clip). A free route is a model run at
+home on a computer with a GPU (MusicGen, Stable Audio Open), reached over the network as
+Ollama is; check their licences for the family's use first.
 
 ## Core refactor
 
