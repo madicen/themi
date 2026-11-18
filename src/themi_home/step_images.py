@@ -51,7 +51,13 @@ EXTENSIONS = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 
 # Themi does the step itself, keeping them company (Michael, 2026-11-07): the session page's
 # chameleon, described in words so every picture shows the same character.
-THEMI = "Themi, a small round teal-green cartoon chameleon with big friendly eyes and a curled tail"
+# BD4d: the words match the reference picture (Michael's pick, 2026-11-17), for the models
+# that get only the words. Don't name things to leave out: "plain unlabelled bottles and
+# boxes" put bottles and boxes in every picture (tried on the Pi, 2026-11-17).
+THEMI = (
+    "Themi, a small cute teal cartoon chameleon standing on two legs, with big round eyes, "
+    "a mint-striped belly and a striped gently curled tail"
+)
 STYLE = "Soft colours, simple shapes, clean flat art, textless."
 MAX_WORDS = 160  # characters of the step, and of their words for a redo
 NOT_PLAIN = re.compile(r"[^\w\s,'-]")
@@ -74,55 +80,30 @@ def image_prompt(step: str, *, notes: str = "", earlier: str = "") -> str:
     the step and their words, so a redo never stacks one change on another's."""
     prompt = (
         f"A cosy cartoon illustration of {THEMI}, busy with a household chore "
-        f"({plain(step)}), holding the right tools in the room where it happens."
+        f"({plain(step)}), turned toward the work and caught mid-action, holding the right "
+        "tools in the room where it happens."
     )
     if notes and plain(notes):
         prompt += f" Shown this way: {plain(notes)}."
     return f"{prompt} {STYLE}"
 
 
-# BD4c: the session page's chameleon, drawn to a PNG and sent with each picture, so the
-# models that take a reference picture (FLUX.2 on Cloudflare) draw the same Themi every
-# time. The SVG has no colours of its own (the site's stylesheet gives them), so the light
-# theme's are put in here; the props are hidden. Cloudflare wants it under 512x512.
-CHAMELEON = Path(__file__).parent / "web" / "static" / "chameleon" / "chameleon.svg"
-REFERENCE_WIDTH = 480
-REFERENCE_VIEW = 'viewBox="-4 26 136 88"'  # the chameleon, without the props' room above
-REFERENCE_STYLE = """<style>
-path, rect, circle { stroke-linecap: round; stroke-linejoin: round; }
-.cham-skin { fill: #3d6f6a; stroke: #2b2a28; stroke-width: 1.6; }
-.cham-tail path { fill: none; stroke: #3d6f6a; stroke-width: 7; }
-.cham-belly, .cham-mouth, .cham-crest {
-  fill: none; stroke: #2b2a28; stroke-width: 1.6; opacity: .7; }
-.cham-spots { fill: #eef4f3; opacity: .6; }
-.cham-foot path, .cham-hand path { fill: none; stroke: #3d6f6a; stroke-width: 5; }
-.cham-eyeball { fill: #ffffff; stroke: #2b2a28; stroke-width: 1.6; }
-.cham-pupil { fill: #2b2a28; }
-.cham-lid { opacity: 0; }
-.prop, .cham-zz { display: none; }
-</style><rect x="-10" y="0" width="160" height="130" fill="#ffffff"/>"""
-
-
-def reference_svg() -> str:
-    """The chameleon on white, in the light theme's colours, props hidden."""
-    svg = CHAMELEON.read_text()
-    svg = svg.replace('viewBox="0 0 140 110"', REFERENCE_VIEW, 1)
-    opened = svg.index(">", svg.index("<svg")) + 1
-    return svg[:opened] + REFERENCE_STYLE + svg[opened:]
+# BD4d: Themi's look for the picture model, sent with each picture so the models that take
+# a reference (FLUX.2 on Cloudflare) draw the same character every time. Michael's pick of
+# six klein drew on 2026-11-17 (number 5; a spiral tail came out as a snail shell), on
+# white, 480x480 (Cloudflare wants references under 512x512). BD4c sent the session page's
+# SVG instead, whose pose klein pasted into every picture.
+REFERENCE = Path(__file__).parent / "web" / "static" / "chameleon" / "reference.png"
 
 
 @cache
 def chameleon_reference() -> ImageReference | None:
-    """Themi's look for the picture model, made once per process; None (and the pictures
-    go without it) when it can't be drawn."""
-    from themi.drawing.render import to_png
-
+    """Themi's look, read once per process; None (pictures go without it) if it's missing."""
     try:
-        png = to_png(reference_svg(), REFERENCE_WIDTH)
-    except Exception as exc:  # resvg missing or the SVG changed: words alone still work
-        log.warning("Couldn't draw the chameleon for step pictures: %r", exc)
+        return ImageReference(REFERENCE.read_bytes(), "image/png", "the chameleon")
+    except OSError as exc:
+        log.warning("No chameleon reference for step pictures: %r", exc)
         return None
-    return ImageReference(png, "image/png", "the chameleon")
 
 
 class StepPictures:

@@ -208,3 +208,21 @@ async def test_nothing_on_and_nothing_waiting_is_skipped_unless_asked(
     to(at(8, 15, day=23))
     await scenario.run_periodic("calendar.morning")
     assert scenario.inbox("Erin")[-1] == "Good morning, Erin. Nothing on the calendar today."
+
+
+async def test_just_one_thing_goes_on_to_a_task_with_no_day(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """F46a (Michael's bug #216): Something else, after today's two, offers the undated
+    one."""
+    await overnight(scenario, linked)
+    erin = scenario.member("Erin")
+    await board(scenario).create(erin, "Unjam the vacuum", "errand", 1, None, assignee=erin)
+    await scenario.advance(minutes=45)
+    await scenario.tap("Erin", "Just one thing")
+    await scenario.tap("Erin", "Something else")
+    assert scenario.edits("Erin")[-1]["text"].startswith("For now, just this:\n- Post the letter")
+    await scenario.tap("Erin", "Something else")
+    assert scenario.edits("Erin")[-1]["text"] == (
+        "For now, just this:\n- Unjam the vacuum\nThat's all of them for now."
+    )

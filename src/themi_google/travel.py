@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
 
@@ -61,6 +61,7 @@ log = logging.getLogger(__name__)
 
 LOOK_AHEAD = timedelta(hours=24)
 AT_HOME_KM = 0.5  # closer than this is home: nothing to drive to
+LEAVE_WORDS = {"leave", "leaving", "head", "heading", "time", "remind", "reminder", "drive"}
 FAR_KM = 100  # a place named with no street or town found further away is checked first
 MARGIN = timedelta(minutes=45)  # traffic can be worse than the estimate: look early
 JOB_EVERY = timedelta(minutes=5)  # how often `travel.heads_up` runs
@@ -182,24 +183,68 @@ class TravelHeadsUps:
             return False
         if self._too_far(address or "", home, place) is not None:
             return False
-        start = await self._before(member, entry) or Origin(home)  # F41d: back to back
+        start, lost, arrive = await self._planned_start(member, entry, home)
         rough = timedelta(minutes=estimate(start.place, place).minutes)
-        if now < entry.starts_at - rough - ready - MARGIN:
+        if now < arrive - rough - ready - MARGIN:
             return False  # not close yet: no lookup
         try:
-            route = await self.client.route(start.place, place, entry.starts_at)
+            route = await self.client.route(start.place, place, arrive)
         except TravelError as exc:
             log.info("No route to an event for member %s (%s); estimating", member.id, exc)
             route = estimate(start.place, place)
-        leave_by = entry.starts_at - timedelta(minutes=route.minutes)
+        leave_by = arrive - timedelta(minutes=route.minutes)
         if now < leave_by - ready - SLACK:
             return False
-        await self._send(member, entry, route.minutes, route.traffic, leave_by, now, start)
+        await self._send(
+            member, entry, route.minutes, route.traffic, leave_by, now, start, lost, arrive
+        )
         return True
+
+    async def _planned_start(
+        self, member: Member, entry: Entry, home: Place
+    ) -> tuple[Origin, str, datetime]:
+        """Where the drive starts, the place they'd said if it's no longer found, and when to
+        be there: what they said for the event (F46c, F46d), else the event just before,
+        else home, for its start."""
+        kept, early = self._plan(member, entry)
+        start: Origin | None = None
+        lost = ""
+        if kept:
+            said = await self._named_origin(member, kept, entry.starts_at)
+            start, lost = (said, "") if isinstance(said, Origin) else (None, kept)
+        start = start or await self._before(member, entry) or Origin(home)  # F41d
+        return start, lost, entry.starts_at - timedelta(minutes=early)
+
+    async def heads_up_at(self, member: Member, text: str, day: date) -> datetime | None:
+        """F46d (bug #219): when the heads-up to get ready comes for an event of theirs that
+        day that `text` names (its title's or place's words), or None."""
+        found = self.home()
+        reader = self.services.maybe(keys.calendars)
+        prefs = self.services.store.preferences(member.id, TravelPreferences)
+        if found is None or reader is None or not prefs.leave_heads_up:
+            return None
+        said = {w for w in name_key(text).split() if len(w) > 3 and w not in LEAVE_WORDS}
+        tz = self._tz()
+        start_of_day = datetime(day.year, day.month, day.day, tzinfo=tz)
+        now = clock.now()
+        for entry in reader.entries(member, start_of_day, start_of_day + timedelta(days=1)):
+            if entry.all_day or entry.video or not entry.location or entry.starts_at <= now:
+                continue
+            if not said & set(name_key(f"{entry.title} {entry.location}").split()):
+                continue
+            place = await self._event_place(member, entry, found[1])
+            if isinstance(place, str):
+                continue
+            start, _, arrive = await self._planned_start(member, entry, found[1])
+            route = await self._route(start.place, place, arrive)
+            leave_by = arrive - timedelta(minutes=route.minutes)
+            return leave_by - timedelta(minutes=prefs.getting_ready_minutes)
+        return None
 
     async def _send(
         self, member: Member, entry: Entry, minutes: int, traffic: bool, leave_by: datetime,
-        now: datetime, start: Origin | None = None,
+        now: datetime, start: Origin | None = None, lost: str = "",
+        arrive: datetime | None = None,
     ) -> None:  # fmt: skip
         tz = self._tz()
         how = "with traffic" if traffic else "(a rough guess, without traffic)"
@@ -221,7 +266,17 @@ class TravelHeadsUps:
         drive = f"{_duration(minutes)} {how}"
         if start is not None and start.label:  # F41d: from the event before
             drive = f"{_duration(minutes)} {start.words} {how}"
-        text = f"{entry.title} at {_clock(entry.starts_at.astimezone(tz))}, about {drive}: {when}."
+        elif lost:  # F46c: where they said wasn't found now
+            drive = f"{_duration(minutes)} from home ({_the(lost)} wasn't found) {how}"
+        there_by = (
+            f", there by {_clock(arrive.astimezone(tz))}"
+            if arrive is not None and arrive < entry.starts_at
+            else ""
+        )  # F46d
+        text = (
+            f"{entry.title} at {_clock(entry.starts_at.astimezone(tz))}{there_by}, about "
+            f"{drive}: {when}."
+        )
         self.db.execute(
             "INSERT INTO travel_headsups (member_id, event_id, starts_at, sent_at) "
             "VALUES (?, ?, ?, ?)",
@@ -276,12 +331,15 @@ class TravelHeadsUps:
 
     async def drive_to_event(
         self, viewer: Member, owner: Member, entry: Entry, ctx: ToolContext | None = None,
-        start_from: str = "",
+        start_from: str = "", address: str = "", arrive_by: str = "",
     ) -> str:  # fmt: skip
         """The drive to `entry`, for the model. With `ctx` (the drive_time tool), the leave
         line is also said by Themi itself, word for word (F41c, bug #199: the model cut
         "leave around 12:43 pm, and start getting ready around 12:28 pm" to "Leave at
-        12:43 PM.", and then said it again after the plan had changed)."""
+        12:43 PM.", and then said it again after the plan had changed). `address`: where it
+        is, as they said; it wins over the event's place (F46b, bug #217). `arrive_by`
+        ("18:15"): when they want to be there, before it starts (F46d, bug #219). Where they
+        leave from and when they want to be there are kept with the event (F46c)."""
         found = self.home()
         if found is None:
             raise TravelError("there's no home address yet (the Family page on the website)")
@@ -293,21 +351,48 @@ class TravelHeadsUps:
         )
         if entry.video:
             return as_data("calendars", line) + "\nThat one is a video call: no drive."
-        if not entry.location:
-            return as_data("calendars", line) + "\nThat event has no address on the calendar."
-        address = self.address_for(owner, entry.location)
-        if address is None:
-            return as_data("calendars", line) + "\n" + NOT_SURE_TEXT.format(phrase=entry.location)
-        place = await self._place(address)
-        if place is None:
-            return as_data("calendars", line) + "\nIts address wasn't found on the map."
-        if (far := self._too_far(address, found[1], place)) is not None:
-            return as_data("calendars", line) + "\n" + far
+        own = await self._event_place(owner, entry, found[1])
+        note = ""
+        if address:
+            given = await self._given_place(viewer, address, found[1])
+            if isinstance(given, str):
+                return as_data("calendars", line) + "\n" + given
+            place = given
+            if isinstance(own, str):  # the calendar's place didn't work: say how to fix it
+                note = (
+                    f"\nThe calendar has '{entry.location}' for it; change_calendar_event can "
+                    "put this address there."
+                    if entry.location
+                    else "\nThe calendar has no place for it; change_calendar_event can put "
+                    "this address there."
+                )
+        elif isinstance(own, str):
+            return as_data("calendars", line) + "\n" + own
+        else:
+            place = own
+        kept, early = self._plan(owner, entry)
+        new_early = self._early(entry, arrive_by) if arrive_by.strip() else None
+        said_from = bool(start_from.strip())
+        if not said_from and kept:
+            start_from = kept  # F46c (bug #218): what they said earlier for this event
         start = await self.origin(viewer, owner, entry, start_from)
         if isinstance(start, str):
             return as_data("calendars", line) + "\n" + start
-        route = await self._route(start.place, place, entry.starts_at)
-        leave_by = entry.starts_at - timedelta(minutes=route.minutes)
+        if said_from or new_early is not None:
+            self._save_plan(
+                owner, entry,
+                origin=(start_from if start.label else "") if said_from else None,
+                early=new_early,
+            )  # fmt: skip
+        if kept and not said_from:
+            note += (
+                f"\nFrom {start.label}, as they said earlier for this event; from: 'home' if "
+                "they'll leave from home now."
+            )
+        early = early if new_early is None else new_early
+        arrive = entry.starts_at - timedelta(minutes=early)
+        route = await self._route(start.place, place, arrive)
+        leave_by = arrive - timedelta(minutes=route.minutes)
         ready = leave_by - timedelta(
             minutes=self.services.store.preferences(
                 viewer.id, TravelPreferences
@@ -320,21 +405,51 @@ class TravelHeadsUps:
             plan = f"leave around {_clock(leave_by.astimezone(tz))}"
             if ready > now:
                 plan += f", and start getting ready around {_clock(ready.astimezone(tz))}"
+        if early:
+            plan = f"to be there by {_clock(arrive.astimezone(tz))}, {plan}"
         how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
         heads_up = self._heads_up_words(viewer, owner, leave_by, now)
         if ctx is not None:
-            said, leave = self._leave_line(whose, entry, route, leave_by, ready, now, how, start)
+            said, leave = self._leave_line(
+                whose, entry, route, leave_by, ready, now, how, start, arrive
+            )
             ctx.done.append(said)
             ctx.done_keys.append(leave)
         if start.label:
             plan = plan.replace("leave around", "leave there around")
         return as_data("calendars", line) + (
-            f"\nAbout {_duration(route.minutes)} {start.words} {how}: {plan}.{heads_up}"
+            f"\nAbout {_duration(route.minutes)} {start.words} {how}: {plan}.{heads_up}{note}"
         )
+
+    async def _event_place(self, owner: Member, entry: Entry, home: Place) -> Place | str:
+        """Where the event is on the map, or why it can't be said."""
+        if not entry.location:
+            return "That event has no address on the calendar."
+        address = self.address_for(owner, entry.location)
+        if address is None:
+            return NOT_SURE_TEXT.format(phrase=entry.location)
+        place = await self._place(address)
+        if place is None:
+            return "Its address wasn't found on the map."
+        if (far := self._too_far(address, home, place)) is not None:
+            return far
+        return place
+
+    async def _given_place(self, member: Member, said: str, home: Place) -> Place | str:
+        """The address they gave for an event (F46b), on the map, or why not."""
+        address = self.address_for(member, said)
+        if address is None:
+            return NOT_SURE_TEXT.format(phrase=said)
+        place = await self._place(address)
+        if place is None:
+            return f"{said} wasn't found on the map. Adding the city might help."
+        if (far := self._too_far(address, home, place)) is not None:
+            return far
+        return place
 
     def _leave_line(
         self, whose: str, entry: Entry, route: Route, leave_by: datetime, ready: datetime,
-        now: datetime, how: str, start: Origin,
+        now: datetime, how: str, start: Origin, arrive: datetime | None = None,
     ) -> tuple[str, str]:  # fmt: skip
         """ "ND psych in person at 1 pm: about 17 min with traffic. Leave around 12:43 pm;
         start getting ready around 12:28 pm." and the leave time it names. Every leave time
@@ -342,6 +457,8 @@ class TravelHeadsUps:
         tz = self._tz()
         leave = _clock(leave_by.astimezone(tz))
         head = f"{whose}{entry.title} at {_clock(entry.starts_at.astimezone(tz))}"
+        if arrive is not None and arrive < entry.starts_at:  # F46d
+            head += f", there by {_clock(arrive.astimezone(tz))}"
         drive = f"about {_duration(route.minutes)} {how}"
         if start.label:  # F41d
             drive = f"about {_duration(route.minutes)} {start.words} {how}"
@@ -598,6 +715,62 @@ class TravelHeadsUps:
         )
         return place
 
+    # ----- where they said they'd leave from, kept with the event (F46c) -------------------
+
+    def _plan_key(self, entry: Entry) -> tuple[str, str]:
+        """The event (its id, else its title: a place changed later keeps it) and its day."""
+        key = f"id:{entry.event_id}" if entry.event_id else name_key(entry.title)
+        return key[:200], entry.starts_at.astimezone(self._tz()).date().isoformat()
+
+    def _plan(self, member: Member, entry: Entry) -> tuple[str, int]:
+        """Where they said they'd leave from ('' home or unsaid), and how many minutes before
+        the start they want to be there (F46d)."""
+        key, day = self._plan_key(entry)
+        row = self.db.one(
+            "SELECT origin, arrive_early FROM travel_plans WHERE member_id = ? "
+            "AND event_key = ? AND day = ?",
+            (member.id, key, day),
+        )
+        return (str(row["origin"]), int(row["arrive_early"])) if row else ("", 0)
+
+    def _save_plan(
+        self, member: Member, entry: Entry, *, origin: str | None = None,
+        early: int | None = None,
+    ) -> None:  # fmt: skip
+        """Only what's given changes (origin '': from home). Days gone by are dropped."""
+        kept, was = self._plan(member, entry)
+        key, day = self._plan_key(entry)
+        today = clock.now().astimezone(self._tz()).date().isoformat()
+        self.db.execute("DELETE FROM travel_plans WHERE day < ?", (today,))
+        self.db.execute(
+            "INSERT INTO travel_plans (member_id, event_key, day, origin, arrive_early, "
+            "updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (member_id, event_key, day) "
+            "DO UPDATE SET origin = excluded.origin, arrive_early = excluded.arrive_early, "
+            "updated_at = excluded.updated_at",
+            (
+                member.id, key, day,
+                " ".join((kept if origin is None else origin).split()),
+                was if early is None else early,
+                to_utc_iso(clock.now()),
+            ),
+        )  # fmt: skip
+
+    def _early(self, entry: Entry, arrive_by: str) -> int:
+        """Minutes before the start of `arrive_by` ("18:15") on the event's day."""
+        tz = self._tz()
+        start = entry.starts_at.astimezone(tz)
+        try:
+            at = time.fromisoformat(arrive_by.strip())
+        except ValueError as exc:
+            raise ToolFailed("Not timed: arrive_by looks like 18:15.") from exc
+        there = start.replace(hour=at.hour, minute=at.minute, second=0, microsecond=0)
+        if there > start:
+            raise ToolFailed(
+                f"Not timed: {_clock(there)} is after it starts ({_clock(start)}). Ask when "
+                "they want to be there."
+            )
+        return int((start - there).total_seconds() // 60)
+
     # ----- small things ---------------------------------------------------------------------
 
     def _sent(self, member: Member, entry: Entry) -> bool:
@@ -655,13 +828,19 @@ def _duration(minutes: int) -> str:
     "drive_time",
     "How long the drive takes, and when to leave: to their next event whose title has these "
     "words (event: 'pediatrics'; timed for arriving at its start, with traffic where it can), "
-    "or to an address (address; leaving now). One of the two, the other ''. from: where "
-    "they'll leave from, when it isn't home: a place they named ('in-laws'), an address, or "
-    "an event's words; '' for home (an event of theirs ending just before is used then).",
+    "or to an address (address; leaving now). One of the two, the other ''; but with an "
+    "event, address is where it is when they gave one (it wins over the event's place). "
+    "from: where they'll leave from, when it isn't home: a place they named ('in-laws'), an "
+    "address, or an event's words; '' for home or what they said before for that event (an "
+    "event of theirs ending just before is used then); 'home' when they'll leave from home "
+    "after all. arrive_by: HH:MM, when they want to be there, if earlier than the start "
+    "('arrive at 6:15' for a 6:30 visit: 18:15), '' for the start or what they said before; "
+    "don't move the event for it.",
     {
         "event": {"type": "string"},
         "address": {"type": "string"},
         "from": {"type": "string", "default": ""},
+        "arrive_by": {"type": "string", "default": ""},
     },
 )
 async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -684,7 +863,9 @@ async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
                 raise ToolFailed(
                     f'No upcoming event of theirs matches "{words}" in the next two weeks.' + hidden
                 )
-            result = await travel.drive_to_event(ctx.member, *found, ctx, start_from)
+            result = await travel.drive_to_event(
+                ctx.member, *found, ctx, start_from, address, str(args.get("arrive_by") or "")
+            )
             if ctx.done:  # F41c: the leave line is Themi's own
                 result += (
                     f'\nThemi tells them itself, word for word: "{ctx.done[-1]}" Don\'t say '

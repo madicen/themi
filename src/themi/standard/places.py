@@ -1,4 +1,4 @@
-"""Places they name instead of an address (F29e, bug #154).
+"""Places they name instead of an address (F29e, bug #154; F46b, bug #217).
 
 "When should we leave for tutoring at my parent's house?" sent "parent's house" to the
 map, which found a place called that near Oroville: 3 hr 20 min, "leave at 12:10 pm". The
@@ -81,7 +81,7 @@ def named_place(
         return Named(phrase, home)
     kin = _kin(phrase)
     if kin is None:
-        return None
+        return _remembered(db, member, phrase)
     others = [m for m in family if m.id != member.id]
     if kin == "in-laws":  # with one partner, their parents
         whose, kin = (others[0] if len(others) == 1 else None), "parent"
@@ -105,3 +105,31 @@ def named_place(
         if not named:  # "Grandma's address is ...": whose, unsaid
             best = best or found
     return Named(phrase, best)
+
+
+def _words(text: str) -> str:
+    """Lower-case words only: "Stanford's visitor parking" → "stanford visitor parking"."""
+    text = text.lower().replace("\N{RIGHT SINGLE QUOTATION MARK}", "'").replace("'s", "")
+    return " ".join(WORD.findall(text))
+
+
+def _remembered(db: Database, member: Member, phrase: str) -> Named | None:
+    """F46b (bug #217): a place named with no kin word ("Stanford visitor parking") whose
+    address they told Themi ("Stanford visitor parking address is 200 S Pasteur Dr, ..."),
+    newest first: the phrase comes before the address in the fact. None when no fact names
+    it, so the phrase goes to the map as before."""
+    said = _words(phrase)
+    if not said:
+        return None
+    rows = db.query(
+        "SELECT fact FROM facts WHERE scope = 'family' OR member_id = ? ORDER BY id DESC",
+        (member.id,),
+    )
+    for row in rows:
+        fact = str(row["fact"])
+        address = ADDRESS.search(fact)
+        if address is None:
+            continue
+        if re.search(rf"\b{re.escape(said)}\b", _words(fact[: address.start()])):
+            return Named(phrase, address.group(0).strip().rstrip("."))
+    return None

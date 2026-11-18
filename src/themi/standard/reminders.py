@@ -49,6 +49,12 @@ MEDICINE = re.compile(
     r"\b(?:pills?|meds?|medicine|medication|drops|cream|tabs?|insulin|dose)\b", re.IGNORECASE
 )
 REMINDER_TEXT = "Reminder: {text}"
+# F46d (bug #219): a reminder to leave for an event Themi already gives a heads-up for.
+LEAVING = re.compile(r"\b(?:leave|leaving|head(?:ing)? out|set(?:ting)? off|go(?:ing)? to)\b", re.I)
+HEADS_UP_TEXT = (
+    "Not set: the heads-up to get ready already comes at {at}, and says when to leave; no "
+    "separate reminder set. If they want one as well, add_reminder with also."
+)
 REMINDER_USEFUL_FOR = timedelta(hours=2)  # held longer (quiet hours, a pause): dropped
 _TAG = re.compile(r"^\((?:low|medium|high|optional[^)]*)\)\s*", re.IGNORECASE)
 
@@ -339,8 +345,15 @@ async def set_task_importance(ctx: ToolContext, args: dict[str, Any]) -> str:
     "'remind me to pay the water bill'), is create_task. date: YYYY-MM-DD, read from the "
     "whole conversation (an event's reminders are on its day); time: HH:MM, 24-hour "
     "(morning 09:00, afternoon 14:00, evening 18:00 when they give no hour); text: short, "
-    "in their words, with the event's time if it has one ('Tutoring at 4 pm').",
-    {"text": {"type": "string"}, "date": {"type": "string"}, "time": {"type": "string"}},
+    "in their words, with the event's time if it has one ('Tutoring at 4 pm'). A reminder to "
+    "leave for an event isn't needed: drive_time's heads-up says when; also: true only when "
+    "they asked for one as well.",
+    {
+        "text": {"type": "string"},
+        "date": {"type": "string"},
+        "time": {"type": "string"},
+        "also": {"type": "boolean", "default": False},
+    },
 )
 async def add_reminder(ctx: ToolContext, args: dict[str, Any]) -> str:
     family = ctx.services.store.get_family()
@@ -357,6 +370,11 @@ async def add_reminder(ctx: ToolContext, args: dict[str, Any]) -> str:
     when = f"{moment:%a %d %b}, {clock_words(moment)}"
     if moment <= clock.now():
         raise ToolFailed(f"Not set: {when} has passed. Ask when they'd like it instead.")
+    travel = ctx.services.maybe(keys.travel)
+    if travel is not None and not args.get("also") and LEAVING.search(text):
+        heads_up = await travel.heads_up_at(ctx.member, text, day)
+        if heads_up is not None:  # replies 497, 501: 6 pm, after the 5:55 leave time
+            return HEADS_UP_TEXT.format(at=clock_words(heads_up.astimezone(tz)))
     await ctx.services.outbox.send(
         ctx.member,
         REMINDER_TEXT.format(text=text),

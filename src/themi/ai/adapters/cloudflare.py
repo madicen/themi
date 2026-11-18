@@ -197,11 +197,16 @@ def _form(
     prompt: str, size: str, references: Sequence[ImageReference]
 ) -> list[tuple[str, tuple[str | None, bytes | str, str | None]]]:
     """FLUX.2's multipart fields. Each reference goes as `input_image_N` (Cloudflare wants
-    each under 512x512), and the prompt says what to keep from it ("image 0" is the first,
-    as Cloudflare's examples count). Sent as files so the body is multipart even with no
+    each under 512x512), and the prompt opens by saying it shows only the look ("image 0" is
+    the first, as Cloudflare's examples count). Sent as files so the body is multipart even with no
     reference."""
-    for i, ref in enumerate(references[:MAX_REFERENCES]):
-        prompt += f" Draw {ref.subject} exactly as in image {i}."
+    # BD4d (tried on the Pi, 2026-11-17): "exactly as in image 0" pasted the reference's pose
+    # into the picture; saying the image shows only the look lets the model pose it anew.
+    for i, ref in reversed(list(enumerate(references[:MAX_REFERENCES]))):
+        prompt = (
+            f"Image {i} only shows what {ref.subject} looks like: draw it in a new scene and a "
+            f"new pose, keeping its face, colours and markings. {prompt}"
+        )
     width, _, height = size.partition("x")
     fields: list[tuple[str, tuple[str | None, bytes | str, str | None]]] = [
         ("prompt", (None, prompt[:MAX_PROMPT], None)),

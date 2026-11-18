@@ -297,6 +297,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [x] 2026-11-16 |
 | F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [x] 2026-11-16 |
 | F45f | Feedback: the oven's preheat where the recipe says it; a cancelled timer stops the oven's | Feedback | [x] 2026-11-16 |
+| F46a | Feedback: "Something else" goes on to tasks with no day once today's are offered | Feedback | [x] 2026-11-17 |
+| F46b | Feedback: an address they give for an event's place is used, and remembered for that place | Feedback | [x] 2026-11-17 |
+| F46c | Feedback: where they said they'll leave from stays with the event, and the heads-up uses it | Feedback | [x] 2026-11-17 |
+| F46d | Feedback: "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder | Feedback | [x] 2026-11-17 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -307,7 +311,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD3b | Body double: Themi the chameleon | Body double | [x] 2026-11-15 |
 | BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
 | BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
-| BD4c | Body double: better step pictures, the same Themi in each | Body double | [~] |
+| BD4c | Body double: better step pictures, the same Themi in each | Body double | [x] 2026-11-17 |
+| BD4d | Body double: a Themi character sheet for the step pictures | Body double | [x] 2026-11-17 |
+| BD3c | Body double: the session page's chameleon redrawn as the chosen Themi | Body double | [ ] |
+| BD4e | Body double: ready-made pictures when live ones can't be made | Body double | proposed |
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
 | BD5b | Spotify: playing their own music | Body double | [x] 2026-11-06 |
 | BD5c | Body double: music that suits the task | Body double | [x] 2026-11-06 |
@@ -14831,6 +14838,210 @@ executor no longer keeps a row for a clear. New tests at the end of
 `tests/scenarios/test_oven_timers.py` and `tests/scenarios/test_oven_cook_screen.py`. None
 changed, no golden file changed.
 
+### F46a · Feedback (2026-11-17): "Something else" goes on to tasks with no day once today's are offered
+Status: [x] 2026-11-17
+Depends on: MM4, F42e
+Read first: the Build Plan's MM4 section (the morning message's Just one thing);
+`themi/standard/focus.py` (`pick`, `send`, `_something_else`, the texts);
+`themi/standard/day_summary.py` (`due`). From Michael's bug #216 (2026-11-17, 9:43 am, "the
+'just one thing' option doesn't seem to have access to all my tasks, just overdue ones. Is that
+by design?").
+
+What the Pi shows: Themi 0.8.10. Michael tapped Just one thing on the morning message at 9:42
+am: "1 pm: Move Mimi's box upstairs for Rosie" (task 59), then Something else twice: task 10
+(Split Merlin's cat box), then task 84 (Vacuum maintenance) with "That's all of them for now."
+Those are the three with a due day on or before today. It is by design so far: `pick` reads
+`DaySummary.due`, which skips every task with no `due_on`, so his eight undated tasks (14, 15,
+18, 91, 101, 104, 113, and the either-of-you ones) were never offered, though he asked for
+something else twice.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `_something_else`, once today's are all offered, goes on to their open tasks with no due day
+  (theirs and either-of-you; not held, not put off past today, not a chore waiting its turn),
+  important first (`importance`), then the lightest (`effort`), then the oldest. The line says
+  it isn't due: "For now, just this:\n- Unjam the vacuum\nNo day on that one; nothing's
+  dropped." "That's all of them for now." only when those are used up too.
+- Just one thing on a day with nothing due offers the first undated one the same way (with
+  Something else), not "Nothing's due today. All clear."
+- The count in "The other N are kept" stays today's (undated ones aren't "kept" from today).
+- Too much today (`focus_now`, the plain few) is unchanged: it's about today.
+
+Tests: start with failing ones: three due and two undated tasks; Just one thing, then
+Something else four times offers the three, then the important undated one, then the other,
+then "That's all of them for now." with no button; held and put-off undated tasks are skipped;
+nothing due: Just one thing offers an undated one with Something else; `focus_now` unchanged.
+Scenario: Michael taps Just one thing and Something else until the undated "Unjam the vacuum"
+comes up.
+
+Data: none. Mark #216 reviewed once live, and answer Michael's question in the release
+notes: yes, it was today's only; now it goes on.
+
+Notes: `Focus.undated(member)`: open tasks with no `due_on` (theirs and shared), not held,
+not put off past today's end, by importance, effort, id. `_something_else` goes on to them
+once today's are offered (the offered ids stay in the button's payload, as F42e); the line is
+"No day on that one; nothing's dropped." (`UNDATED_TEXT`), the last one "That's all of them
+for now." with no button. Today's last one now keeps Something else when undated ones are
+left. `send(count=1)` on a day with nothing due starts with the first undated one; the plain
+`focus_now` (no count) still says "Nothing's due today. All clear." The MM4 plan isn't in the
+Build Plan doc (no hits for focus or Just one thing), so the prompts were the design source.
+New tests at the end of `tests/scenarios/test_one_thing_else.py` and
+`tests/scenarios/test_morning_message.py`; none changed, no golden file changed.
+
+### F46b · Feedback (2026-11-17): an address they give for an event's place is used, and remembered for that place
+Status: [x] 2026-11-17
+Depends on: F29e, F41d
+Read first: `themi_google/travel.py` (`drive_time`, `drive_to_event`, `address_for`,
+`_too_far`); `themi/standard/places.py` (`named_place`); the `remember_fact` tool. From
+Michael's bug #217 (2026-11-17, 4:10 pm, "not answering my question") and his 👎 on replies
+499 and 500.
+
+What the Pi shows: reply 497 added "Visit Erin in Stanford psych ward", 6:30-8:30 pm, at
+"Stanford visitor parking", which `drive_time` found 4048 km away (`_too_far`) and asked to
+check. Michael gave the address, "200 S Pasteur Dr, Palo Alto, CA 94304". Reply 499 called
+`drive_time` with `event` and that `address`, and reply 500 again: both times the event branch
+ran and the `address` argument was ignored, so the same "4048 km" came back; reply 499 also
+saved a fact ("Stanford visitor parking address is 200 S Pasteur Dr, Palo Alto, CA 94304") that
+`named_place` never reads, since it only knows kin's places ("in-laws", "my parent's house"),
+and then said only "Saved." Reply 500: "The address came up as very far away." Only when reply
+501 changed the event's location did the drive work.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `drive_time` with both `event` and `address`: the address is where the drive goes, for that
+  event's time. When the event's own location is missing, not found, too far, or a name no
+  address is known for, the result says so and what the model can do: "The calendar has
+  'Stanford visitor parking' for it; change_calendar_event can put this address there." (The
+  change itself still goes through the trust tiers; `drive_time` changes nothing.)
+- A remembered fact giving a named place's address ("Stanford visitor parking address is
+  <address>", "<place> is at <address>") is read by `named_place` for that phrase (name_key
+  match, newest first), so the event's location and the heads-up job find it too. Kin places
+  work as before.
+- The tool's description: "address: where it is, when they gave one (it wins over the event's
+  place)".
+
+Tests: start with failing ones: reply 499's call, faked (event with "Stanford visitor parking",
+geocoded far; `address` given) gives the drive to the address, with the line about the
+calendar's place; a fact "Stanford visitor parking address is 200 S Pasteur Dr, Palo Alto, CA
+94304" makes `address_for(member, "Stanford visitor parking")` that address, and the heads-up
+for an event there is timed to it; kin facts unchanged.
+Scenario: Michael's turns from reply 497 to 500, the model faked to call `drive_time` with the
+address: the second answer is the leave line, not "very far away".
+
+Data: fact saved by reply 499 stays, and starts working once live. Mark #217 reviewed once
+live; label replies 499 and 500 `--wrong-tool <id> none` only if Michael agrees the tool was
+right and Themi wasn't.
+
+Notes: `drive_to_event(address=)`: the given address (through `address_for`, so a named
+place works) is where the drive goes; when the event's own place doesn't work (`_event_place`:
+none, unknown name, not found, too far) the result adds "The calendar has '<place>' for it;
+change_calendar_event can put this address there." An address the event already has adds
+nothing. `places._remembered`: a phrase with no kin word whose words come before an address in
+a remembered fact ("Stanford visitor parking address is 200 S Pasteur Dr, ...") is that
+address, newest fact first; none, and it goes to the map as before. drive_time's description
+says the address wins. Golden `tools.json`: drive_time's spec. New tests in
+`tests/scenarios/test_travel_plans.py`; none changed.
+
+### F46c · Feedback (2026-11-17): where they said they'll leave from stays with the event, and the heads-up uses it
+Status: [x] 2026-11-17
+Depends on: F41d, F46b
+Read first: `themi_google/travel.py` (`origin`, `_named_origin`, `_before`, `heads_up`,
+`travel_headsups`, `_event_key`); the drive_time tool's description. From Michael's bug #218
+(2026-11-17, 4:12 pm, "didn't pick up that I am leaving from my in-law's").
+
+What the Pi shows: at 4:08 pm Michael said "I'm at my in-law's place right now" with the event.
+Replies 497-501 passed `from` (the in-laws, or their address 790 La Para Ave); reply 502 ("How
+long will it take to drive there?") passed `from: ''` and got "about 21 min from home". When
+told again, reply 503 gave "about 20 min from the in-laws". The heads-up job never hears
+`from`: at 5:35 pm it sent "about 21 min with traffic: leave around 5:54 pm", the drive from
+home (`heads_up` uses `_before` or home only).
+
+Build:
+- Bug fix: start with the failing tests below.
+- A `from` given to `drive_time` for an event is kept with it: a new `travel_plans` table
+  (member, event key as `_event_key`, starts_at, origin words; migration), replaced by a later
+  `from`, and cleared by `from: 'home'`. A later `drive_time` for the same event with `from:
+  ''` uses it and says so ("from the in-laws (790 La Para Ave), as you said"); the heads-up job
+  uses it too, and its line names it ("…about 20 min from the in-laws: leave there around 5:55
+  pm."). A moved event keeps its plan when its key matches and the day is the same.
+- With no plan, as now: an event ending just before, else home.
+- Origin words that can't be found when the heads-up runs fall back to home, and the heads-up
+  says "from home (the in-laws' address wasn't found)".
+
+Tests: start with failing ones: `drive_time(from='in-laws')` then `drive_time(from='')` for the
+same event gives the in-laws' drive both times; the heads-up for it is timed from the in-laws
+and says so; `from: 'home'` clears it; another event isn't affected; the event moved by 15
+minutes keeps the plan.
+Scenario: Michael's turns 497-503, faked: 502 says from the in-laws, and the heads-up at 5:40
+pm says leave there around 5:55 pm.
+
+Data/Setup: migration (new table). Mark #218 reviewed once live.
+
+Notes: migration `0169_travel_plans.sql` (member, event key, local day, origin words,
+and F46d's `arrive_early`). The key is the event's id (else its title), not its place, so the
+reply-501 change of location keeps it. Kept under the event's owner when `from` resolves to a
+place; `from: 'home'` saves '' (home). A later `drive_time` with `from ''` uses it and says
+"From <the in-laws (790 La Para Ave)>, as they said earlier for this event; from: 'home' if
+they'll leave from home now." The heads-up (`_planned_start`) uses it; if it's no longer found
+the heads-up is from home and says "(the in-laws wasn't found)". Rows for past days are pruned
+on each save. New tests in `tests/scenarios/test_travel_plans.py`.
+Setup: restart Themi (migration).
+
+### F46d · Feedback (2026-11-17): "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder
+Status: [x] 2026-11-17
+Depends on: F46c
+Read first: `themi_google/travel.py` (`drive_to_event`, `_leave_line`, `heads_up`); the
+`add_reminder` tool in `themi/standard/reminders.py`; the calendar tools' descriptions. From
+Michael's bug #219 (2026-11-17, 4:13 pm, "it's not respecting that I want to arrive 15 minutes
+early").
+
+What the Pi shows: Michael asked for the 6:30-8:30 visit "so I arrive at Stanford's visitor
+parking at 6:15", then "you'll remind me to leave so I arrive at 6:15?" twice, and "I want to
+arrive at 6:15". `drive_time` has no way to say it: every leave time was for 6:30. After the
+bug report, the model moved the event itself to 6:15-8:30 pm (4:13 pm), which isn't what the
+visit is. Also, replies 497 and 501 each called `add_reminder` for 6 pm, "Leave for Stanford
+visitor parking", Themi's guess; the 6 pm reminder came after the 5:55 pm leave time it had
+just given, next to the heads-up at 5:35.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `drive_time` gains `arrive_by` ("18:15", '' for the event's start): the leave and getting-
+  ready times count back from it, and the lines say it: "Visit Erin in Stanford psych ward at
+  6:30 pm, there by 6:15 pm: about 20 min from the in-laws with traffic. Leave there around
+  5:55 pm; start getting ready around 5:40 pm." It's kept in F46c's `travel_plans` (an
+  `arrive_by` column, minutes before the start, so it follows a moved event), and the heads-up
+  uses it. An `arrive_by` after the start is refused ("that's after it starts").
+- The tool description: "arrive_by: when they want to be there, if earlier than the start;
+  don't move the event for it". `change_calendar_event`'s description says the same about
+  arriving early.
+- `add_reminder` whose text is about leaving for an event Themi times a heads-up for (the
+  words "leave"/"head out" and a match of that event's title or place, the same day) isn't
+  set: "The heads-up to get ready already comes at 5:40 pm, and says when to leave; no
+  separate reminder set." Unless they said they want one too (`also: true`).
+
+Tests: start with failing ones: `drive_time(arrive_by='18:15')` for a 6:30 event gives the
+6:15 lines and the heads-up at 5:40; later `drive_time` with `arrive_by ''` keeps 6:15 from the
+plan; an `arrive_by` of 18:45 is refused; `add_reminder("Leave for Stanford visitor parking",
+18:00)` with that event is declined with the heads-up's time; with `also` it's set; a reminder
+unrelated to the event is set as before.
+Scenario: Michael's 4:08 pm request, faked: the event stays 6:30-8:30, the reply says leave
+the in-laws around 5:55 pm to be there by 6:15, and there's one heads-up, no 6 pm reminder.
+
+Data/Setup: migration (a column). Golden `tools.json` changes (drive_time's and add_reminder's
+specs). Mark #219 reviewed once live. Michael may want the Pi's event put back to 6:30 (it's
+past now; no action).
+
+Notes: `drive_time` takes `arrive_by` (HH:MM, on the event's day), kept in
+`travel_plans.arrive_early` as minutes before the start (so a moved event keeps it); after the
+start is refused ("Not timed: 6:45 pm is after it starts (6:30 pm)"). The route is timed for
+then; Themi's line is "<title> at 6:30 pm, there by 6:15 pm: about …", and the heads-up "…at
+6:30 pm, there by 6:15 pm, about …: leave …". `add_reminder` gains `also`; a text about leaving
+(leave, head out, set off, going to) with a word (4+ letters) of a timed event's title or place
+that day is not set and says when the heads-up comes (`TravelHeadsUps.heads_up_at`). The
+descriptions of drive_time, add_reminder and change_calendar_event say not to move the event
+for an early arrival. Golden `tools.json`: those three specs. New tests at the end of
+`tests/scenarios/test_travel_plans.py`.
+
 ## Conversation mode
 
 From the spec "Themi AI Agent: Conversation Mode & Silent Sidecar State Engine" (shared
@@ -15545,7 +15756,7 @@ Notes (2026-11-06):
   picture job and checks the step's picture actually loads on the page.
 
 ### BD4c · Body double: better step pictures, the same Themi in each
-Status: [~]
+Status: [x] 2026-11-17
 Depends on: BD4a, BD4b, BD3b
 Read first: BD4a's and BD4b's notes (the Cloudflare backend, the prompt built in code);
 Cloudflare's FLUX.2 [klein] 4B changelog (2026-01-15: multipart form, `prompt`, `width`,
@@ -15592,6 +15803,68 @@ Notes (2026-11-15):
   `@cf/black-forest-labs/flux-1-schnell`, clear it. Restart `themi run`. Live check:
   `THEMI_LIVE_CLOUDFLARE_TOKEN=... THEMI_LIVE_CLOUDFLARE_ACCOUNT=...
   THEMI_LIVE_PICTURE_DIR=/tmp make test-live` draws one picture with each model to compare.
+
+- Tried on the Pi (2026-11-17, Michael's account, klein): the SVG chameleon as reference
+  pastes its side-on pose into every picture, and in 4 of 5 chores it isn't doing the
+  chore. Words alone draw it doing each chore well, but the character changes from picture
+  to picture. A chameleon klein drew itself, sent with "a new scene with a new pose; image
+  0 only shows what the character looks like", kept its face and markings in a new pose;
+  the reference's background leaked in. So BD4d replaces the reference.
+- Done (2026-11-17): klein and the multipart form ran live on the Pi (17 pictures, none
+  fell back to schnell). The reference itself is BD4d's.
+
+### BD4d · Body double: a Themi character sheet for the step pictures
+Status: [x] 2026-11-17
+Depends on: BD4c
+Read first: BD4c's notes (what the Pi showed on 2026-11-17).
+- The chosen candidate (klein, words only: full body, standing, plain white background) is
+  committed as `themi_home/web/static/chameleon/reference.png`, under 512x512, and sent in
+  place of the SVG drawing (`chameleon_reference()` reads the file).
+- The prompt opens "A new scene with a new pose; image 0 only shows what the character
+  looks like." The Cloudflare form's added line drops "exactly" ("Keep <subject> as in
+  image N."), and the subject is "the chameleon's face, colours and markings".
+- `image_prompt`'s description of Themi is rewritten to match the chosen character, and
+  adds "no labels or writing on anything" (a spray bottle came out with a fake label).
+Tests: the reference is the committed PNG, under 512px; the prompt's wording; the form's
+line. A live check: five chores on the Pi, the same character in each, doing the chore.
+
+Notes (2026-11-17):
+- Michael picked candidate 5 (teal, big round eyes, mint-striped belly, striped tail). A
+  spiral tail was tried (5 as reference, "curl the tail"): klein drew it as a snail shell
+  in every scene, so Michael kept the original tail. `reference.png` is candidate 5 with
+  its ground shadow whitened, 480x480.
+- Wording, as tried on the Pi: the Cloudflare form now opens the prompt with "Image 0 only
+  shows what the chameleon looks like: draw it in a new scene and a new pose, keeping its
+  face, colours and markings." (opening it, not appended; "exactly" is gone). The step
+  prompt says "turned toward the work and caught mid-action": without it Themi stood
+  facing the viewer holding the tools.
+- Deviation: no "no labels" line. "Plain unlabelled bottles and boxes" put bottles and
+  boxes in every picture, so the style names nothing to leave out (a test checks).
+- Live (2026-11-17, the Pi, this code loaded from the working copy): dishwasher, towels,
+  sweeping, mirror, plants: the same Themi in all five, each doing the chore. Two brooms
+  in the sweeping one.
+- `chameleon_reference()` reads the PNG (BD4c's SVG drawing is gone, with its tests);
+  missing file: pictures go without it.
+- Setup: update the Pi (the PNG ships in the package; `web/static/*/*` covers it).
+
+### BD3c · Body double: the session page's chameleon redrawn as the chosen Themi
+Status: [ ]
+Depends on: BD4d
+Read first: BD3b's notes (named parts, colours from tokens, no style in the SVG).
+- `chameleon.svg` redrawn by hand to look like BD4d's chosen character (standing,
+  front three-quarter, its colours as new tokens in both themes), keeping every named
+  part and prop, so every state and scene still works. Original art, drawn as SVG paths.
+Tests: BD3b's page tests (every flag has a CSS state, no style or script in the SVG);
+checked by eye at 360px, light and dark, every state.
+
+### BD4e · Body double: ready-made pictures when live ones can't be made
+Status: proposed (2026-11-17), Michael's call after BD4d is live
+Depends on: BD4d
+- About 20 generic pictures of the chosen Themi (dishes, laundry, sweeping, wiping,
+  tidying, trash, plants, cooking, paperwork, a phone call, ...), drawn once with BD4d's
+  reference and picked by hand, shipped with Themi. A step's keywords pick one when the
+  daily cap is reached or a picture fails, instead of text alone. If live pictures still
+  disappoint after BD4d, these become the main pictures.
 
 ### BD5a · Body double: built-in music
 Status: [x] 2026-11-06
