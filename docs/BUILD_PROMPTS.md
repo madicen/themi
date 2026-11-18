@@ -297,10 +297,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F45d | Feedback: weighing tasks are the cook's, and close when the weight is told | Feedback | [x] 2026-11-16 |
 | F45e | Feedback: nothing done is never "Done."; a forgotten weight can come back | Feedback | [x] 2026-11-16 |
 | F45f | Feedback: the oven's preheat where the recipe says it; a cancelled timer stops the oven's | Feedback | [x] 2026-11-16 |
-| F46a | Feedback: "Something else" goes on to tasks with no day once today's are offered | Feedback | [ ] |
-| F46b | Feedback: an address they give for an event's place is used, and remembered for that place | Feedback | [ ] |
-| F46c | Feedback: where they said they'll leave from stays with the event, and the heads-up uses it | Feedback | [ ] |
-| F46d | Feedback: "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder | Feedback | [ ] |
+| F46a | Feedback: "Something else" goes on to tasks with no day once today's are offered | Feedback | [x] 2026-11-17 |
+| F46b | Feedback: an address they give for an event's place is used, and remembered for that place | Feedback | [x] 2026-11-17 |
+| F46c | Feedback: where they said they'll leave from stays with the event, and the heads-up uses it | Feedback | [x] 2026-11-17 |
+| F46d | Feedback: "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder | Feedback | [x] 2026-11-17 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -14839,7 +14839,7 @@ executor no longer keeps a row for a clear. New tests at the end of
 changed, no golden file changed.
 
 ### F46a · Feedback (2026-11-17): "Something else" goes on to tasks with no day once today's are offered
-Status: [ ]
+Status: [x] 2026-11-17
 Depends on: MM4, F42e
 Read first: the Build Plan's MM4 section (the morning message's Just one thing);
 `themi/standard/focus.py` (`pick`, `send`, `_something_else`, the texts);
@@ -14877,8 +14877,19 @@ comes up.
 Data: none. Mark #216 reviewed once live, and answer Michael's question in the release
 notes: yes, it was today's only; now it goes on.
 
+Notes: `Focus.undated(member)`: open tasks with no `due_on` (theirs and shared), not held,
+not put off past today's end, by importance, effort, id. `_something_else` goes on to them
+once today's are offered (the offered ids stay in the button's payload, as F42e); the line is
+"No day on that one; nothing's dropped." (`UNDATED_TEXT`), the last one "That's all of them
+for now." with no button. Today's last one now keeps Something else when undated ones are
+left. `send(count=1)` on a day with nothing due starts with the first undated one; the plain
+`focus_now` (no count) still says "Nothing's due today. All clear." The MM4 plan isn't in the
+Build Plan doc (no hits for focus or Just one thing), so the prompts were the design source.
+New tests at the end of `tests/scenarios/test_one_thing_else.py` and
+`tests/scenarios/test_morning_message.py`; none changed, no golden file changed.
+
 ### F46b · Feedback (2026-11-17): an address they give for an event's place is used, and remembered for that place
-Status: [ ]
+Status: [x] 2026-11-17
 Depends on: F29e, F41d
 Read first: `themi_google/travel.py` (`drive_time`, `drive_to_event`, `address_for`,
 `_too_far`); `themi/standard/places.py` (`named_place`); the `remember_fact` tool. From
@@ -14921,8 +14932,18 @@ Data: fact saved by reply 499 stays, and starts working once live. Mark #217 rev
 live; label replies 499 and 500 `--wrong-tool <id> none` only if Michael agrees the tool was
 right and Themi wasn't.
 
+Notes: `drive_to_event(address=)`: the given address (through `address_for`, so a named
+place works) is where the drive goes; when the event's own place doesn't work (`_event_place`:
+none, unknown name, not found, too far) the result adds "The calendar has '<place>' for it;
+change_calendar_event can put this address there." An address the event already has adds
+nothing. `places._remembered`: a phrase with no kin word whose words come before an address in
+a remembered fact ("Stanford visitor parking address is 200 S Pasteur Dr, ...") is that
+address, newest fact first; none, and it goes to the map as before. drive_time's description
+says the address wins. Golden `tools.json`: drive_time's spec. New tests in
+`tests/scenarios/test_travel_plans.py`; none changed.
+
 ### F46c · Feedback (2026-11-17): where they said they'll leave from stays with the event, and the heads-up uses it
-Status: [ ]
+Status: [x] 2026-11-17
 Depends on: F41d, F46b
 Read first: `themi_google/travel.py` (`origin`, `_named_origin`, `_before`, `heads_up`,
 `travel_headsups`, `_event_key`); the drive_time tool's description. From Michael's bug #218
@@ -14956,8 +14977,18 @@ pm says leave there around 5:55 pm.
 
 Data/Setup: migration (new table). Mark #218 reviewed once live.
 
+Notes: migration `0169_travel_plans.sql` (member, event key, local day, origin words,
+and F46d's `arrive_early`). The key is the event's id (else its title), not its place, so the
+reply-501 change of location keeps it. Kept under the event's owner when `from` resolves to a
+place; `from: 'home'` saves '' (home). A later `drive_time` with `from ''` uses it and says
+"From <the in-laws (790 La Para Ave)>, as they said earlier for this event; from: 'home' if
+they'll leave from home now." The heads-up (`_planned_start`) uses it; if it's no longer found
+the heads-up is from home and says "(the in-laws wasn't found)". Rows for past days are pruned
+on each save. New tests in `tests/scenarios/test_travel_plans.py`.
+Setup: restart Themi (migration).
+
 ### F46d · Feedback (2026-11-17): "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder
-Status: [ ]
+Status: [x] 2026-11-17
 Depends on: F46c
 Read first: `themi_google/travel.py` (`drive_to_event`, `_leave_line`, `heads_up`); the
 `add_reminder` tool in `themi/standard/reminders.py`; the calendar tools' descriptions. From
@@ -14999,6 +15030,17 @@ the in-laws around 5:55 pm to be there by 6:15, and there's one heads-up, no 6 p
 Data/Setup: migration (a column). Golden `tools.json` changes (drive_time's and add_reminder's
 specs). Mark #219 reviewed once live. Michael may want the Pi's event put back to 6:30 (it's
 past now; no action).
+
+Notes: `drive_time` takes `arrive_by` (HH:MM, on the event's day), kept in
+`travel_plans.arrive_early` as minutes before the start (so a moved event keeps it); after the
+start is refused ("Not timed: 6:45 pm is after it starts (6:30 pm)"). The route is timed for
+then; Themi's line is "<title> at 6:30 pm, there by 6:15 pm: about …", and the heads-up "…at
+6:30 pm, there by 6:15 pm, about …: leave …". `add_reminder` gains `also`; a text about leaving
+(leave, head out, set off, going to) with a word (4+ letters) of a timed event's title or place
+that day is not set and says when the heads-up comes (`TravelHeadsUps.heads_up_at`). The
+descriptions of drive_time, add_reminder and change_calendar_event say not to move the event
+for an early arrival. Golden `tools.json`: those three specs. New tests at the end of
+`tests/scenarios/test_travel_plans.py`.
 
 ## Conversation mode
 
