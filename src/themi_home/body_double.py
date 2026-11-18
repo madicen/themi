@@ -934,6 +934,8 @@ class BodyDouble:
 
     def state(self, member: Member) -> dict[str, Any]:
         """What the session page shows, as JSON. Never the energy level or any score."""
+        from themi_home.music import choices  # the spotify module's; a cycle at the top
+
         now = clock.now()
         session = self.current(member)
         if session is None:
@@ -965,7 +967,7 @@ class BodyDouble:
             **steps,
             **(self.pictures.page_state(session) if self.pictures is not None else {}),
             "music": self.music_state(member),
-            "spotify": json.loads(session.row.get("playlists") or "[]"),  # F34i
+            "spotify": choices(json.loads(session.row.get("playlists") or "[]")),  # F34i
             "spotify_playing": music if (music := session.row.get("music") or "").startswith(
                 "spotify:"
             ) else "",  # the one that played, still chosen on the page

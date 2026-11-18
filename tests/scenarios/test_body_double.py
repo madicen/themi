@@ -768,6 +768,78 @@ async def test_the_session_page_has_my_spotify(
     assert fake_spotify.paused
 
 
+async def test_my_spotify_starts_with_liked_songs_then_a_random_playlist(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    """Michael, 2026-11-18: liked songs as the default, and a choice of a random playlist."""
+    await own_playlists(scenario, site, fake_spotify)
+    for n in range(1, 61):
+        fake_spotify.add_liked(f"Song {n}")
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    bd = scenario.app.services.get(keys.body_double)
+    names = [p["name"] for p in bd.state(scenario.member("Erin"))["spotify"]]
+    assert names[:3] == ["Liked songs", "A random playlist", "Deep Focus"]
+    page = (await site.get("/session")).text
+    assert page.index('value="spotify:liked"') < page.index('value="spotify:random"')
+    assert 'spotify:liked" selected' not in page  # nothing chosen yet: the first, liked songs
+    csrf = await sign_in(scenario, site, "Erin")
+    fetch = {"X-Requested-With": "fetch"}
+    played = await site.post("/session/spotify", headers=fetch, data={
+        "csrf": csrf, "action": "play", "uri": "spotify:liked"})  # fmt: skip
+    assert played.json()["said"] == "Playing your liked songs on Desk speaker."
+    uris = fake_spotify.playing["uris"]  # type: ignore[index]
+    liked = {t["uri"] for t in fake_spotify.liked}
+    assert len(uris) == 50 and set(uris) <= liked  # a page of them, shuffled
+    assert played.json()["spotify_playing"] == "spotify:liked"
+    assert (session_row(scenario)["music"], session_row(scenario)["music_name"]) == (
+        "spotify:liked", "Liked songs")  # fmt: skip
+
+    played = await site.post("/session/spotify", headers=fetch, data={
+        "csrf": csrf, "action": "play", "uri": "spotify:random"})  # fmt: skip
+    context = fake_spotify.playing["context_uri"]  # type: ignore[index]
+    assert context in {p["uri"] for p in fake_spotify.mine}
+    name = next(p["name"] for p in fake_spotify.mine if p["uri"] == context)
+    assert played.json()["said"] == f"Playing {name} on Desk speaker."
+    assert played.json()["spotify_playing"] == "spotify:random"  # the choice stays on the page
+
+
+async def test_liked_songs_on_a_link_made_before_them_says_to_link_again(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await own_playlists(scenario, site, fake_spotify)
+    fake_spotify.library_scope = False
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    csrf = await sign_in(scenario, site, "Erin")
+    played = await site.post(
+        "/session/spotify",
+        headers={"X-Requested-With": "fetch"},
+        data={"csrf": csrf, "action": "play", "uri": "spotify:liked"},
+    )
+    assert played.json()["said"].startswith("To play your liked songs, Spotify needs asking")
+    assert fake_spotify.playing is None
+
+
+async def test_liked_songs_on_a_free_account_is_the_link(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    fake_spotify.premium = False
+    await own_playlists(scenario, site, fake_spotify)
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    csrf = await sign_in(scenario, site, "Erin")
+    played = await site.post(
+        "/session/spotify",
+        headers={"X-Requested-With": "fetch"},
+        data={"csrf": csrf, "action": "play", "uri": "spotify:liked"},
+    )
+    assert played.json()["said"] == (
+        "Here it is on Spotify: https://open.spotify.com/collection/tracks"
+    )
+    assert "GET /v1/me/tracks" not in fake_spotify.calls
+
+
 async def test_not_linked_only_the_loop(scenario: Scenario) -> None:
     await start(scenario, "keep me company while I write", mode="quiet", what="my essay")
     assert scenario.last_buttons("Erin") == ["Play", "Not now"]

@@ -8,11 +8,17 @@ retries in a loop.
 
 During a body double session, what played is kept on the session row (`music`), as is a
 built-in loop they start on the session page, for BD5c's suggestions.
+
+The pages' choice of their music (the session page's "My Spotify", the cook screen's
+"Spotify playlists") starts with two of Themi's own: their liked songs (the default, a page
+of them shuffled) and a random one of their playlists. Both are kept as what played by
+those names (`LIKED`, `RANDOM`), so the choice stays on the page and BD5c can learn it.
 """
 
 from __future__ import annotations
 
 import logging
+import random
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +29,7 @@ from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi_home.connectors.spotify import (
     Item,
     LinkRevoked,
+    MissingScope,
     NeedsPremium,
     NoDevice,
     SpotifyError,
@@ -46,6 +53,18 @@ NOTHING_FOUND_TEXT = "I couldn't find {query!r} on Spotify."
 FREE_TEXT = "Here it is on Spotify: {link}"
 PLAYING_TEXT = "Playing {name} on {device}."
 PAUSED_TEXT = "Paused."
+LIKED = "spotify:liked"  # their liked songs, shuffled
+RANDOM = "spotify:random"  # one of their playlists, at random
+LIKED_NAME = "Liked songs"
+RANDOM_NAME = "A random playlist"
+LIKED_LINK = "https://open.spotify.com/collection/tracks"
+ANY_LINK = "https://open.spotify.com/"
+NO_LIKED_TEXT = "There aren't any liked songs on your Spotify yet."
+NO_PLAYLISTS_TEXT = "I couldn't find any playlists of yours on Spotify."
+RELINK_TEXT = (
+    "To play your liked songs, Spotify needs asking again: on the website's Accounts page, "
+    "unlink Spotify and link it again."
+)
 MINE = re.compile(r"\bmy\b", re.IGNORECASE)
 
 
@@ -54,6 +73,7 @@ class Music:
         self.services = services
         self.links = links
         self.db = services.store.db
+        self.rng = random.Random()  # liked songs' shuffle and the random playlist
 
     def install(self) -> None:
         s = self.services
@@ -79,10 +99,18 @@ class Music:
     async def _execute_play(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
         member = ctx.member
         query = str(payload.get("query", ""))
+        uri = str(payload.get("uri") or "")
         item: Item | None = None
+        noted: tuple[str, str] | None = None  # what the session keeps, when not the item
         try:
-            if payload.get("uri"):  # BD5c's offer: something that played before
-                uri = str(payload["uri"])
+            if uri == LIKED:
+                item = Item(LIKED, LIKED_NAME, "liked", LIKED_LINK)
+            elif uri == RANDOM:
+                mine = await self.playlists(member)
+                if not mine:
+                    return NO_PLAYLISTS_TEXT
+                item, noted = self.rng.choice(mine), (RANDOM, RANDOM_NAME)
+            elif uri:  # BD5c's offer: something that played before
                 kind = uri.split(":")[1] if uri.count(":") >= 2 else "playlist"
                 link = f"https://open.spotify.com/{kind}/{uri.rsplit(':', 1)[-1]}"
                 item = Item(uri, str(payload.get("name") or uri), kind, link)
@@ -90,19 +118,33 @@ class Music:
                 item = await self.find(member, query)
             if item is None:
                 return NOTHING_FOUND_TEXT.format(query=query)
+            noted = noted or (item.uri, item.name)
             if not self.premium(member):
-                self.note_session(member, item.uri, item.name)
+                self.note_session(member, *noted)
                 return FREE_TEXT.format(link=item.link or item.uri)
+            tracks: list[str] = []
+            if item.kind == "liked":
+                rng = self.rng
+                tracks = await self.links.with_token(
+                    member, lambda access: self.links.client.liked(access, rng)
+                )
+                if not tracks:
+                    return NO_LIKED_TEXT
             devices = await self.links.with_token(member, self.links.client.devices)
             if not devices:
                 return NO_DEVICE_TEXT
             device = next((d for d in devices if d.active), devices[0])
             chosen = item
+            client = self.links.client
             await self.links.with_token(
-                member, lambda access: self.links.client.play(access, chosen, device.id)
-            )
+                member,
+                lambda access: client.play_tracks(access, tracks, device.id) if tracks
+                else client.play(access, chosen, device.id),
+            )  # fmt: skip
         except NoDevice:
             return NO_DEVICE_TEXT
+        except MissingScope:
+            return RELINK_TEXT
         except NeedsPremium:
             self.db.execute(
                 "UPDATE spotify_links SET premium = 0 WHERE member_id = ?", (member.id,)
@@ -110,8 +152,9 @@ class Music:
             return FREE_TEXT.format(link=item.link or item.uri) if item else NO_DEVICE_TEXT
         except LinkRevoked:
             return NOT_LINKED_TEXT
-        self.note_session(member, item.uri, item.name)
-        return PLAYING_TEXT.format(name=item.name, device=device.name or "your Spotify")
+        self.note_session(member, *noted)
+        name = "your liked songs" if item.kind == "liked" else item.name
+        return PLAYING_TEXT.format(name=name, device=device.name or "your Spotify")
 
     async def _execute_pause(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
         try:
@@ -150,6 +193,17 @@ class Music:
         """What's playing, on the body double session going on (BD5c learns from it)."""
         if self.services.maybe(keys.body_double) is not None:
             self.services.get(keys.body_double).note_music(member, music, name)
+
+
+def choices(playlists: list[dict[str, str]]) -> list[dict[str, str]]:
+    """The pages' choice of their music: liked songs first (the default), then a random
+    playlist when there's more than one, then their playlists. [] stays [] (no Spotify)."""
+    if not playlists:
+        return []
+    extra = [{"uri": LIKED, "name": LIKED_NAME, "link": LIKED_LINK}]
+    if len(playlists) > 1:
+        extra.append({"uri": RANDOM, "name": RANDOM_NAME, "link": ANY_LINK})
+    return [*extra, *playlists]
 
 
 def _music(ctx: ToolContext) -> Music:

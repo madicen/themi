@@ -304,6 +304,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F46b | Feedback: an address they give for an event's place is used, and remembered for that place | Feedback | [x] 2026-11-17 |
 | F46c | Feedback: where they said they'll leave from stays with the event, and the heads-up uses it | Feedback | [x] 2026-11-17 |
 | F46d | Feedback: "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder | Feedback | [x] 2026-11-17 |
+| F47a | Idea: liked songs as the default, and a random playlist | Feedback | [x] 2026-11-18 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15052,6 +15053,32 @@ that day is not set and says when the heads-up comes (`TravelHeadsUps.heads_up_a
 descriptions of drive_time, add_reminder and change_calendar_event say not to move the event
 for an early arrival. Golden `tools.json`: those three specs. New tests at the end of
 `tests/scenarios/test_travel_plans.py`.
+
+### F47a · Idea (2026-11-18): liked songs as the default, and a random playlist
+Status: [x] 2026-11-18
+Depends on: F34i, CK5, CK14
+From Michael, in a coding session (2026-11-18): "under the Spotify playlists options, could
+the default be liked songs, and can we add an option to play from playlists randomly?"
+
+Notes (2026-11-18):
+- The pages' choice (the session page's "My Spotify", the cook screen's "Spotify
+  playlists") starts with "Liked songs" (first, so the default) and "A random playlist"
+  (with two or more playlists), then their playlists as F34i ranks them (`music.choices`).
+  The chat offer's buttons are unchanged.
+- Liked songs: `SpotifyClient.liked` reads a page of 50 from a random place in their liked
+  songs (the most recent page when there's only one), shuffled, local files left out, and
+  plays them as `uris`. A free account gets open.spotify.com/collection/tracks.
+- A random playlist: one of `Music.playlists`, at random (`Music.rng`), played as usual.
+- What played is kept as `spotify:liked` / `spotify:random`, so the page keeps the choice
+  and BD5c can learn it.
+- New scope `user-library-read`. **Setup:** a link made before today answers 403
+  "Insufficient client scope" for liked songs; Themi says to unlink and link again on
+  Accounts (`MissingScope`, `RELINK_TEXT`). The Accounts page says so too.
+- Play/Pause on the cook screen "not wired up": a browser test
+  (`test_spotify_on_the_cook_screen_plays_and_pauses_once_a_tap`) shows each tap reaching
+  Spotify once. The Pi's 22:26 taps all reached Spotify and played Wedding Dance on
+  "Michael Madicen KV4L4HGTQ4", which was the first listed device, since none was active.
+  Follow-up if that wasn't the device in use: how Themi picks a device when none is active.
 
 ## Conversation mode
 
