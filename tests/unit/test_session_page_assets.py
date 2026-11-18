@@ -80,3 +80,37 @@ def test_the_page_never_reads_a_forms_action_property() -> None:
     assert 'name="action"' in template  # the input that shadows the property
     assert not re.search(r"\bform\.action\b", script)
     assert 'getAttribute("action")' in script
+
+
+# ----- BD3c: the chameleon redrawn as the chosen Themi -------------------------------------
+
+CHAM_TOKENS = ("--cham", "--cham-belly", "--cham-stripe", "--cham-line", "--cham-eye")
+
+
+def test_every_chameleon_class_the_css_moves_is_drawn() -> None:
+    """The redraw keeps every named part: each `cham-*` class the stylesheet styles or
+    animates is in the SVG, so no state quietly stops working."""
+    styled = set(re.findall(r"\.(cham-[a-z-]+)", CSS))
+    drawn = set(re.findall(r'class="[^"]*?\b(cham-[a-z-]+)', CHAMELEON))
+    drawn |= {c for cls in re.findall(r'class="([^"]+)"', CHAMELEON) for c in cls.split()}
+    assert styled <= drawn, styled - drawn
+
+
+def test_the_chameleon_has_its_own_colours_in_both_themes() -> None:
+    """BD3c: Themi is teal with a mint belly (BD4d's look) whatever the site's accent is,
+    with its colours as tokens set for light and for dark."""
+    light = CSS.split("@media (prefers-color-scheme: dark)")[0]
+    dark = CSS.split("@media (prefers-color-scheme: dark)")[1].split("\n}\n")[0]
+    for token in CHAM_TOKENS:
+        assert f"{token}:" in light, token
+        assert f"{token}:" in dark, token
+    rules = CSS[CSS.index(".cham {") : CSS.index(".prop, .cham-zz")]
+    assert "var(--accent)" not in rules
+    assert "var(--cham)" in rules
+
+
+def test_the_cook_pages_dark_theme_dresses_the_chameleon_dark() -> None:
+    cook = (STATIC / "cook.css").read_text()
+    dark = cook.split('body.cook-page[data-theme="dark"] {')[-1].split("}")[0]  # the last wins
+    for token in CHAM_TOKENS:
+        assert f"{token}:" in dark, token

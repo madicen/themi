@@ -6,6 +6,8 @@
   --accent: #3d6f6a; --accent-fg: #ffffff; --soft: #eef4f3; --alert: #fff5e6; --error: #9b2c2c;
   --good: #2f6b3a; --good-bg: #e6f2e8; --warn: #8a5a00; --warn-bg: #fdf0d8;
   --bad: #9b2c2c; --bad-bg: #fbe7e7; --info: #3d5f8a; --info-bg: #e7eef8;
+  /* BD3c: Themi the chameleon's own colours (BD4d's chosen look), not the site's accent */
+  --cham: #3aa79b; --cham-belly: #b4ead6; --cham-stripe: #23857a; --cham-line: #1b4b46; --cham-eye: #ffffff;
   --space-1: .25rem; --space-2: .5rem; --space-3: .75rem; --space-4: 1rem; --space-5: 1.5rem;
   --radius: 12px; --radius-sm: 8px; --tap: 44px;
   --bar: 60px; --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -18,6 +20,7 @@
     --accent: #7fb3ad; --accent-fg: #1c1b1a; --soft: #24302e; --alert: #3a3022; --error: #f0a0a0;
     --good: #9fd3a8; --good-bg: #213326; --warn: #f0c878; --warn-bg: #3a3022;
     --bad: #f0a0a0; --bad-bg: #3a2424; --info: #a8c4ec; --info-bg: #232c3a;
+    --cham: #46b2a6; --cham-belly: #a3dcc7; --cham-stripe: #2a8a80; --cham-line: #0d2624; --cham-eye: #f4f4f0;
   }
 }
 
@@ -278,34 +281,45 @@ body.session-page { min-height: 100vh; min-height: 100dvh; }
 .scene-lamp { fill: var(--muted); }
 .scene-lampshade { fill: var(--warn-bg); stroke: var(--warn); stroke-width: 2; }
 
-.cham { position: absolute; width: 62%; max-width: 17rem; left: 3%; bottom: 9%; overflow: visible; }
+.cham { position: absolute; height: 78%; max-height: 15rem; width: auto; left: 4%; bottom: 6%; overflow: visible; }
 .cham path, .cham rect, .cham circle { stroke-linecap: round; stroke-linejoin: round; }
-.cham-skin, .cham-tail path { fill: var(--accent); stroke: var(--fg); stroke-width: 1.6; }
-.cham-tail path { fill: none; stroke: var(--accent); stroke-width: 7; }
-.cham-belly, .cham-mouth, .cham-crest { fill: none; stroke: var(--fg); stroke-width: 1.6; opacity: .7; }
-.cham-spots { fill: var(--soft); opacity: .6; }
-.cham-foot path, .cham-hand path { fill: none; stroke: var(--accent); stroke-width: 5; }
-.cham-eyeball { fill: var(--card); stroke: var(--fg); stroke-width: 1.6; }
-.cham-pupil { fill: var(--fg); }
-.cham-lid { fill: var(--accent); opacity: 0; }
+.cham-skin { fill: var(--cham); stroke: var(--cham-line); stroke-width: 1.8; }
+.cham-belly { fill: var(--cham-belly); }
+.cham-stripe { fill: none; stroke: var(--cham-stripe); stroke-width: 4; opacity: .5; }
+.cham-outline { fill: none; stroke: var(--cham-line); stroke-width: 9.6; }
+.cham-limb { fill: none; stroke: var(--cham); stroke-width: 6; }
+.cham-tail .cham-outline { stroke-width: 11.6; }
+.cham-tail .cham-limb { stroke-width: 8; }
+/* the tail's bands: dashes along it, cut square */
+.cham-tail .cham-stripe { stroke-width: 8; stroke-dasharray: 3 6; stroke-linecap: butt; opacity: .55; }
+.cham-mouth, .cham-crease, .cham-lash { fill: none; stroke: var(--cham-line); stroke-width: 1.6; }
+.cham-crease { opacity: .5; }
+.cham-eyeball { fill: var(--cham-eye); stroke: var(--cham-line); stroke-width: 1.6; }
+.cham-pupil { fill: var(--cham-line); }
+.cham-glint { fill: var(--cham-eye); }
+.cham-lid { opacity: 0; }
+.cham-lid circle { fill: var(--cham); stroke: var(--cham-line); stroke-width: 1.6; }
 .prop, .cham-zz { display: none; }
 .prop rect, .prop > path:not(.prop-line):not(.prop-paint) { fill: var(--warn-bg); stroke: var(--fg); stroke-width: 1.4; }
 .prop-line, .cham-zz path { fill: none; stroke: var(--fg); stroke-width: 2; }
 .prop-paint { fill: none; stroke: var(--bad); stroke-width: 3; }
 .prop-paper { fill: var(--card) !important; }
 .cham g { transform-box: fill-box; transform-origin: center; }
+.cham .cham-hand-front { transform-origin: top left; }
+.cham .cham-hand-back { transform-origin: top right; }
+.cham .cham-body { transform-origin: bottom; }
 
 /* each mode's place for the chameleon */
 .session-scene[data-mode="silent"] .prop-book,
 .session-scene[data-mode="silent"] .prop-mug { display: inline; }
 .session-scene[data-mode="sprint"] { flex-direction: column; justify-content: flex-end; padding-bottom: 2.5rem; }
 /* perched on the timer: its feet on the timer's top edge */
-.session-scene[data-mode="sprint"] .cham { z-index: 2; width: 46%; max-width: 13rem; left: 27%;
-  bottom: calc(2.5rem + clamp(2.5rem, 16vw, 4.5rem) * 1.1 + 22px - 12px); }
+.session-scene[data-mode="sprint"] .cham { z-index: 2; height: 8.5rem; width: 6.8rem; left: calc(50% - 3.4rem);
+  bottom: calc(2.5rem + clamp(2.5rem, 16vw, 4.5rem) * 1.1 + 22px - 7px); }
 .session-scene[data-mode="sprint"] .session-timer { position: relative; z-index: 1; line-height: 1.1; background: var(--card);
   border: 3px solid var(--line); border-radius: var(--radius); padding: var(--space-2) var(--space-4); }
 .session-scene[data-mode="guided"] { min-height: 7rem; flex: 0 0 auto; }
-.session-scene[data-mode="guided"] .cham { width: 34%; left: 2%; bottom: 10%; }
+.session-scene[data-mode="guided"] .cham { height: 80%; left: 4%; bottom: 7%; }
 .session-scene[data-mode="silent"] .session-timer,
 .session-scene[data-mode="guided"] .session-timer { position: absolute; top: var(--space-2); right: var(--space-3); }
 .session[data-mode="guided"] .session-line { position: relative; background: var(--card); border: 2px solid var(--line);
@@ -344,7 +358,7 @@ body.session-page { min-height: 100vh; min-height: 100dvh; }
 .scene-steam { opacity: 0; }
 .session-scene[data-mode="cooking"] .prop-apron { display: inline; }
 .session-scene[data-mode="cooking"] .prop-apron > path:not(.prop-line) { fill: var(--card); }
-.session-scene[data-mode="cooking"] .cham { width: 40%; max-width: 12rem; left: 4%; bottom: 20%; }
+.session-scene[data-mode="cooking"] .cham { height: 74%; left: 8%; bottom: 17%; }
 .session-scene[data-state="watching"] .cham-body { animation: breathe-body 5s ease-in-out infinite; }
 .session-scene[data-state="watching"] .cham-pupil { transform: translateX(2px); }
 .session-scene[data-state="watching"] .cham-lid { animation: blink 7s infinite; }
