@@ -110,9 +110,6 @@ body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-
 .cook-scene { flex: 0 0 auto; width: clamp(144px, 30%, 256px); min-height: 120px; }
 .cook-company-side { flex: 1 1 12rem; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .cook-company-side .cook-line { flex: 1 1 100%; }
-.cook-music { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
-.cook-music-offer { flex: 1 1 100%; margin: 0; }
-.cook-spotify form { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .cook-chat.session-chat { inset: var(--cook-top) var(--space-3) var(--space-3); }
 
 /* CK6: "might be out" on a gathered line, and the wrap-up's offers */
@@ -343,3 +340,54 @@ body.cook-page[data-theme="dark"] .cook-new > summary { color: var(--accent); }
   .cook-step.cook-card { align-self: start; position: sticky; top: var(--space-3); }
   .cook-step .cook-moves { margin-top: var(--space-2); }
 }
+
+/* CK14: "Set the mood": Themi's cooking mixes or their own Spotify playlists, on two tabs;
+   one row on a tablet (now playing, the kind, Play and Next, the volume), wrapping on a phone */
+.cook-company-side { align-items: stretch; flex-direction: column; flex-wrap: nowrap; }
+.cook-company-side .cook-line { flex: 0 0 auto; }
+.cook-mood { display: flex; flex-direction: column; gap: var(--space-3); }
+.cook-mood-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.cook-mood-head h2 { margin: 0; font-size: 1.3rem; color: var(--fg); }
+.cook-music-offer { flex: 1 1 10rem; margin: 0; font-size: 1rem; }
+.cook-mood-tabs { display: inline-flex; gap: var(--space-1); padding: var(--space-1); margin-left: auto;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px; }
+.cook-page .cook-mood-tabs button { min-height: calc(var(--cook-tap) - 12px); padding: 0 var(--space-4); border: none; border-radius: 10px;
+  background: transparent; color: var(--muted); font-size: 1rem; font-weight: 500; }
+.cook-page .cook-mood-tabs button[aria-selected="true"] { background: var(--card-2); color: var(--fg); font-weight: 600; }
+.cook-music.session-music, .cook-spotify form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.cook-music[hidden], .cook-spotify[hidden] { display: none; }
+.cook-now { flex: 1 1 13rem; min-width: 0; display: flex; align-items: center; gap: var(--space-3); }
+.cook-now p { margin: 0; display: flex; flex-direction: column; min-width: 0; }
+.cook-now-mark { flex: 0 0 auto; width: 3rem; height: 3rem; padding: .7rem; border-radius: 12px; background: var(--card-2);
+  fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; }
+.cook-music.is-playing .cook-now-mark path { animation: breathe 2.4s ease-in-out infinite; }
+.cook-now-name { font-size: 1.15rem; font-weight: 600; }
+.cook-now-sub { font-size: .95rem; }
+@media (min-width: 700px) { .cook-now-sub > span { white-space: nowrap; } }
+.cook-music.session-music select, .cook-spotify select { flex: 1 1 12rem; min-width: 0; min-height: var(--cook-tap); font-size: 1.1rem;
+  padding: 0 var(--space-3); border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.cook-music.session-music select { flex: 0 1 12rem; }
+.cook-music-moves { display: flex; flex-wrap: wrap; gap: var(--space-2); max-width: 100%; }
+.cook-music-moves button { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.cook-music-moves button, .cook-spotify form button { border-radius: 999px; padding: 0 var(--space-5, 1.75rem);
+  background: transparent; color: var(--fg); border: 1px solid var(--line); }
+.cook-music-moves button.primary, .cook-spotify form button.primary { background: var(--accent); color: var(--accent-fg);
+  border-color: var(--accent); font-weight: 600; }
+.cook-music .session-play { display: inline-flex; align-items: center; gap: var(--space-2); }
+.cook-music .session-play .cook-icon { margin: 0; }
+.cook-play-mark, .cook-pause-mark { fill: currentColor; stroke: none; }
+.cook-pause-mark, .cook-music .session-play[aria-pressed="true"] .cook-play-mark { display: none; }
+.cook-music .session-play[aria-pressed="true"] .cook-pause-mark { display: inline; }
+.cook-volume { flex: 1 1 10rem; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); font-size: .95rem; }
+.cook-volume input[type="range"] { flex: 0 0 auto; width: 100%; min-height: 2rem; margin: 0; padding: 0; }
+.cook-spotify { display: flex; flex-direction: column; gap: var(--space-2); }
+.cook-spotify-open { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--space-2);
+  min-height: var(--cook-tap); color: var(--accent); font-weight: 600; font-size: 1.1rem; text-decoration: none; }
+.cook-spotify-open .cook-icon { margin: 0; }
+.cook-spotify .session-spotify-said:empty { display: none; }
+@media (max-width: 699px) {
+  .cook-mood-tabs { flex: 1 1 100%; margin-left: 0; }
+  .cook-page .cook-mood-tabs button { flex: 1 1 0; min-width: 0; padding: 0 var(--space-2); overflow-wrap: anywhere; }
+  .cook-music.session-music select { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .cook-music.is-playing .cook-now-mark path { animation: none; } }

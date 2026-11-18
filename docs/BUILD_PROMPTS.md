@@ -30,6 +30,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 - Slack (SL prompts, at the end) has its own design doc, the
   [Themi Slack Module Plan](https://claude.ai/artifact/JrGh1duN5kCKLmZjx4eHjB): the work
   Themi in Slack direct messages instead of Telegram.
+- Usage (UC prompts, at the end) has its own design doc, the
+  [Themi Usage Plan](https://claude.ai/artifact/KfM9decJEit2wjhUeDoymq): a picture for
+  admins of AI and API use against the free-tier limits, with meters from each module.
 
 ## Progress
 
@@ -349,6 +352,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK11 | Cooking companion: the kitchen tablet | Cooking companion | [x] 2026-11-08 |
 | CK12 | Cooking companion: the tablet layout | Cooking companion | [x] 2026-11-09 |
 | CK13 | Cooking companion: quiet chat while a screen is open | Cooking companion | [x] |
+| CK14 | Cooking companion: set the mood | Cooking companion | [x] 2026-11-18 |
+| CK15a | Cooking companion: a mix played from its recipe | Cooking companion | [x] 2026-11-18 |
+| CK15b | Cooking companion: Themi picks the mix from the title | Cooking companion | [x] 2026-11-18 |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -455,6 +461,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV6 | Oven: Stop turns the oven off | Oven | [x] 2026-11-15 |
 | OV7 | Oven: proofing dough | Oven | [x] 2026-11-15 |
 | OV8 | Oven: preheat ahead of a planned dinner | Oven | [~] |
+| UC1 | Usage: meters and the daily table | Usage | [ ] |
+| UC2 | Usage: AI requests and tokens | Usage | [ ] |
+| UC3 | Usage: device and API meters | Usage | [ ] |
+| UC4 | Usage: the usage card and /usage | Usage | [ ] |
+| UC5 | Usage: the Usage page and limit overrides | Usage | [ ] |
 
 ## Fixed technical choices
 
@@ -17611,6 +17622,153 @@ Notes:
   a fresh step card; from the screen it's now an edit). New: `test_quiet_page.py`.
 - Mark #192 reviewed once live.
 
+### CK14 · Cooking companion: set the mood
+
+Status: [x] 2026-11-18
+
+Asked for directly (Michael, 2026-11-18, with a mock-up): the cook screen's bottom bar as a
+"Set the mood" card, more built-in music so it isn't always the same lofi or piano, a way
+to play another track of the same kind, and a link that opens Spotify itself.
+
+Depends on: CK5, CK12, BD5a, F34i.
+
+Build:
+- Each built-in sound becomes a kind with a few tracks (`body_double_music.Track`,
+  `Loop.tracks`; `Loop.file` stays the first, so the session page and saved choices are
+  unchanged). New original tracks from `tools/make_loops.py` (CC0, LICENCES.md): lofi 5,
+  soft piano 4, rain 3, brown noise 2.
+- The card: Themi's chameleon and line stay to its left. A heading with BD5c's offer, tabs
+  for "Cooking mixes" and "Spotify playlists" (the second only with their playlists), the
+  kind and track now chosen with Ready to play / Playing / Paused, the kind, Play, Next
+  (another track of this kind at random, never the one just playing), and the volume.
+- A random track of the chosen kind to start. Nothing plays until a tap.
+- Spotify: their playlists with Play, Pause and Next as before, plus "Open in Spotify" at the
+  chosen playlist (`open.spotify.com`; in the Mini App through `web_app_open_link`).
+
+Tests: every track exists, is small and CC0; each kind has more than one track; the page
+lists each kind's tracks, with tabs and the link only with Spotify; in Chrome, Next changes
+the track within the kind and starts it.
+
+Notes:
+- Only the cook screen gets Next and the tabs. The body double page keeps its single picker
+  and still plays the first track of each kind; it could share this card later.
+- The chosen tab is kept on the device (localStorage), not as a preference.
+- `make_loops.py` takes track names now (`make_loops.py lofi-simmer`), so adding a track
+  doesn't remake the others (their noise is random each run).
+- The cooking companion plan doc doesn't describe this card yet.
+
+### CK15a · Cooking companion: a mix played from its recipe
+
+Status: [x] 2026-11-18
+
+Asked for directly (Michael, 2026-11-18): music made on the fly from the recipe's title,
+starting with Themi's own synth rather than a hosted music model (that's a later option,
+and none has a usable free tier). This half moves the synth into the page; CK15b has the
+model choose what it plays.
+
+Depends on: CK14.
+
+Build:
+- A mix as data: a recipe of settings, not a file. `themi_home/music_mix.py`: a `Mix`
+  dataclass (name, kind, bpm, beats per bar, key, a progression of chords by name, strikes
+  per bar, decay, echo, beat on or off, crackle, noise colour and level), with `check()`
+  that keeps every value in a safe range (60-90 BPM, chords only from `CHORDS`, a list of
+  named chords in the module; levels capped so nothing is loud or harsh) and raises on
+  anything else.
+- The page's player: `static/home/mix.js`, Web Audio only (no library, the CSP stays
+  'self'). It plays a `Mix` as `make_loops.py` renders one: chords as a sine with a
+  quieter octave and a soft attack, the kick and hat, noise through filters, an echo, all
+  looped by whole bars. Starts only on a tap (browsers block anything else). Volume and
+  pause as the audio element had them.
+- The built-in tracks as mixes too: each `Track` gets its `Mix` (the settings
+  `make_loops.py` already uses, moved into `music_mix.py` and read by the script), so
+  the page can play either. The `.m4a` files stay as the fallback where Web Audio is
+  missing, and for the body double page.
+- The card shows a generated mix like any track ("Lofi · Mushroom Simmer · Playing").
+- Changed while building: the built-in tracks keep playing their recorded files, on every
+  page; only a mix without a file (CK15b's) plays through `mix.js`. The recordings are known
+  to play on the kitchen iPad, so nothing anyone hears today depends on the new player.
+
+Tests: `check()` refuses an out-of-range or unknown value; every built-in track's `Mix`
+passes `check()` and matches what `make_loops.py` renders (the same settings object); in
+Chrome, with the audio context's output faked, a mix starts on Play, its tempo and chords
+are the mix's, and Pause stops it; the layout tests still fit.
+
+Notes:
+- `themi_home/music_mix.py`: `Mix`, `Noise`, `CHORDS` (31 named voicings; some chords come
+  twice, as the built-in tracks voice them, e.g. "Cmaj7 low"), `check()`, `from_data()`,
+  `for_page()` (chords as notes) and `to_data()` (chords by name, for keeping), and
+  `BUILT_IN`. Standard library only, so `make_loops.py` imports it without the venv.
+- `make_loops.py` renders from `BUILT_IN`: its ffmpeg arguments were compared with the old
+  hard-coded ones for all 14 tracks and are identical, so the files weren't remade.
+- `body_double_music.Track` has its `mix`; `LOOPS` is built from `BUILT_IN`.
+- `static/mix.js` (`window.themiMix`): `events(mix, from, to)` is the pure timing (strikes,
+  kick, hat) the scheduler and the test read; `play(mix, {volume})` returns a player with
+  `stop`, `setVolume`, `playing`, `scheduled`. It looks 0.3 s ahead every 60 ms. Noise is
+  an 8 s looped buffer (white, pink by Paul Kellet's filter, brown).
+- `cook.js`: a track `<li>` with `data-mix` (JSON from `for_page()`) and no `data-src` plays
+  through it; `window.themiCook.music` exposes `load`, `tracks`, `playing`, `player`.
+- Not heard yet: the live player's loudness and tone against the recordings need a listen
+  on the iPad once CK15b makes a mix. The test checks timing and chords, not sound.
+
+### CK15b · Cooking companion: Themi picks the mix from the title
+
+Status: [x] 2026-11-18
+
+Depends on: CK15a.
+
+Build:
+- A new `AITask.MUSIC_MIX` and one structured call through `themi.ai.router`, cheap and
+  in the background: given the recipe's title (or a body double task's title, later), the
+  kind they chose (lofi, soft piano...), and the list of allowed chords, return a `Mix`
+  and a short name for it. The title is data inside a delimited block, never
+  instructions. The answer goes through `Mix.check()`; a refusal or a bad answer falls
+  back to a built-in track, silently.
+- Asked when the cook screen first plays a kind with chords (Play), not when the session
+  starts: the built-in track plays at once and the mix takes over when it comes (a second
+  or two). Changed while building: asking at the start spent a call for cooks who only use
+  chat, and an extra model call in the start or draw path takes answers queued for other
+  calls in many existing tests. From the second time on the recipe's kept mix plays at once.
+- Kept: a table `music_mixes` (migration in `cooking_schema`) by recipe and kind, so the
+  same recipe gets the same mix next time. Next on the card: another built-in track or a
+  fresh mix for this recipe (one new call, at most a few a session).
+- No energy scores or anything about the person go to the model: the title and the kind
+  only.
+
+Tests: with the fake model, starting Creamy mushroom pasta asks once and the state carries
+the mix; a second start of the same recipe doesn't ask; a bad answer (a chord not in the
+list, 140 BPM) falls back to the built-in track; Next asks for a fresh one and keeps it;
+a scenario: the card says the mix's name after the session starts.
+
+Notes:
+- `themi_home/cooking_mixes.py`: `CookingMixes` (on `Cooking.mixes`) with `kept(recipe_id)`
+  and `make(...)`; `Cooking.mix(member, kind, fresh=)` for the page. The model chooses only
+  name, bpm, beats, chords (an enum of `CHORDS`), strikes and decay; `mix_from_answer` puts
+  them on the kind's fixed sound (lofi: beat, crackle, tone 2600; soft piano: one echo) and
+  `check()` refuses anything off. `ASKS = 4` calls a session. Only lofi and soft piano get
+  mixes; rain and brown noise have no chords to choose.
+- `AITask.MUSIC_MIX`, labelled on the AI page; core migration `0170_music_mix_ai.sql` gives
+  everyone a route copied from their quick-jobs chain (as EX1b's 0164 did). Home migration
+  `cooking_schema/0003_mixes.sql`: `music_mixes` (recipe, kind, the mix as data).
+- `POST /session/cook/mix` (`kind`, `fresh`) answers `{"mix": {id, name, page} | null}`.
+  `tests/golden/routes.json` gains that route, and nothing else changes.
+- The page: a recipe's mixes come first in their kind's list (`data-made`) and the first
+  one is chosen to start. Next asks for a fresh one ("Making another") until the server
+  says no more, then picks at random as CK14 did.
+- Changed tests: CK14's Chrome test of Next now uses rain, since Next on lofi asks for a
+  made mix now; CK14's markup check names the new `data-musical` attribute.
+- To check by ear on the iPad: the live player's loudness against the recordings, and
+  whether the made mixes sound good. Mixes can be tuned in `mix_from_answer` (the kinds'
+  fixed sound) and `MIX_SYSTEM`.
+
+Notes for later (option 2, not planned): a hosted music model behind the router (an
+`audio()` call with a daily cap, as `image()` has `image_cap`), its mix's settings as the
+text prompt, the file kept under `data/`. As of 2026-11-18 none had a free tier usable
+for this: ElevenLabs' free plan has no music downloads or API, Google's Lyria needs a
+paid key, Stability gives 25 credits (about one clip). A free route is a model run at
+home on a computer with a GPU (MusicGen, Stable Audio Open), reached over the network as
+Ollama is; check their licences for the family's use first.
+
 ## Core refactor
 
 From Michael's request (2026-11-07): turn Themi into a small core plus modules, so the same
@@ -20939,3 +21097,109 @@ Notes:
   first. Once it exists, the card is OV4's `OvenControl.heat()` from a [Preheat] button
   (`offered_at` the card's time), sent at the dinner's time less the preheat (about 15
   minutes at 25°F a minute).
+
+## Usage
+
+Design source: the [Themi Usage Plan](https://claude.ai/artifact/KfM9decJEit2wjhUeDoymq).
+Read it with the Claude Docs tools, like the other plans. Michael asked for it on 2026-11-18.
+
+A picture for admins of today's and this month's use of each AI backend and each device or
+web API, against its free-tier limit. Modules add their own meters, the way they add
+settings sections. Rules every UC prompt keeps:
+
+- Counting never fails or slows the call it counts: a database error is logged and dropped,
+  as the router's `_record` does for `ai_calls`.
+- A meter's day is worked out from `themi.clock` in its limit's reset zone (Gemini: midnight
+  Pacific). Tests freeze the clock and cross midnights.
+- No test reaches a provider; counting is tested through the fakes in `tests/fakes`.
+- No secrets, key fragments, names or message text in `usage_daily` or on the card. A
+  backend is shown by its label from the AI page.
+- Admins only: `/usage`, `show_usage` and the Usage page.
+
+### UC1 · Usage: meters and the daily table
+Status: [ ]
+Depends on: none
+Read first: the plan's "Meters", "Storage" and "Limits"; `themi/modules/context.py`
+(`settings_section`, `dashboard_panel`) as the pattern.
+- `themi/usage.py`: `Meter` (key, label, unit, group, order, limits, read), `Limits`
+  (per_day, per_month, resets, source, checked), `Price` (input_per_mtok, output_per_mtok,
+  per_request, per_picture), and `UsageBook` on `keys.usage`: `count(meter, n=1, scope="",
+  model="", input_tokens=0, output_tokens=0, amount=0.0)`, `today(meter)`, `month(meter)`,
+  `days(meter, 30)`, `limit_for(meter, scope)`.
+- `ctx.usage_meter(meter)` in `ModuleContext`; a key registered twice is a `ModuleError`;
+  the `_Snapshot` takes a failed module's meters back.
+- Migration: `usage_daily` (as in the plan) and `usage_limits(meter, scope, per_day,
+  per_month, set_by, set_at)`. `limit_for`: an override for the scope, then for every scope,
+  then the meter's default.
+- A daily core job `usage.prune` deletes rows older than 400 days.
+Tests: counting upserts; the day turns at the reset zone's midnight (Pacific and UTC, with
+the family elsewhere); a database error in `count` is logged and doesn't raise; override
+order; duplicate key refused; a failed install leaves no meter; prune.
+
+Notes:
+
+### UC2 · Usage: AI requests and tokens
+Status: [ ]
+Depends on: UC1
+Read first: the plan's "AI metering"; `themi/ai/router.py` (`run`, `_attempt`, `_hedged`,
+`_record`); `themi/standard/ai_providers.py`.
+- The router counts each attempt that reaches a provider against `<kind>.requests`, scoped
+  to the backend id, with the response's model and `Usage` tokens. Retries and both halves
+  of a hedge count; a backend skipped by an open breaker doesn't.
+- The gemini, cloudflare, anthropic and openai provider modules register their meters.
+  Look up Gemini's free-tier requests a day for the default models (chat, transcription,
+  embedding) on Google's rate-limit page and record the date in `checked`. Cloudflare:
+  `cloudflare.neurons`, 10,000 a day, UTC, with `amount` per picture (about 104 for klein,
+  58 for schnell, from `defaults.py`).
+- Prices for the Anthropic default model and the OpenAI image model from their pricing
+  pages. Free-tier backends get none.
+Tests: one chat counts one request with its tokens; a retry counts two; a hedge counts two;
+an open breaker counts none; a Cloudflare picture adds its neurons; two members on their own
+keys get a row each; a fake priced backend gives an estimate.
+
+Notes:
+
+### UC3 · Usage: device and API meters
+Status: [ ]
+Depends on: UC1
+Read first: the plan's "Device and API meters"; each connector's client.
+- Count at each client's one request site: Home Connect, ThinQ, CatGenie, Tuya, SmartHQ,
+  TomTom, Tavily, Open-Meteo and NWS, Google (Gmail, Calendar, Tasks), Keep, OurGroceries,
+  Roborock. Each module registers its meter, with the limit from the code's comments where
+  there is one and the provider's page otherwise; none known is no limit.
+- A 429 from a counted client also counts `<meter>.refused`.
+Tests: per connector, a fake call counts one; a fake 429 counts a refusal; a connector
+whose module isn't installed registers nothing.
+
+Notes:
+
+### UC4 · Usage: the usage card and /usage
+Status: [ ]
+Depends on: UC2, UC3
+Read first: the plan's "The usage card" and "Where it shows"; `themi/standard/drawings.py`
+and `week_card.py` as the pattern.
+- `UsageView` from the book (groups, rows, today, limit, month, pace, projection, refused,
+  estimate), and `drawing/templates/usage_card.svg` in both themes. Colours: good under
+  75%, warning 75% to 99%, critical at 100% or after a refusal today. A row with no use this
+  month is left out; no rows says "Nothing used yet this month."
+- `/usage` and `show_usage` (admins only; anyone else: "That's for the household's
+  admins."), sent through the outbox as a picture, as text when drawing fails.
+Tests: golden SVGs (light, dark, empty, near, over, monthly, with an estimate); the view's
+pace and projection; the admin check. A scenario: an admin's `/usage` gets the card, a
+member's gets the refusal.
+
+Notes:
+
+### UC5 · Usage: the Usage page and limit overrides
+Status: [ ]
+Depends on: UC4
+Read first: the plan's "Limits" and "Where it shows"; the Modules page (SP prompts).
+- `/admin/usage` in the menu's Admin group: the card as SVG in the page, a table of each
+  meter's last 30 days, and its limit with where it came from. An override form per meter
+  (and per scope) writes `usage_limits`; a limit checked over 6 months ago is marked "check
+  this".
+- The Modules page links each module with meters to its rows here.
+Tests: admins only; an override changes the card; clearing it goes back to the default; the
+"check this" mark. A scenario: an admin lowers the Gemini limit and sees the bar move.
+
+Notes:

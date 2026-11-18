@@ -16,22 +16,41 @@ from themi.accounts import Member
 from themi.core import keys
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.modules import Module, ModuleContext
+from themi_home.music_mix import BUILT_IN, Mix
+
+
+@dataclass(frozen=True)
+class Track:
+    name: str
+    file: str  # under themi_home/web/static/audio/ (CR17b)
+    mix: Mix | None = None  # CK15a: what it is, as settings (make_loops.py renders it)
 
 
 @dataclass(frozen=True)
 class Loop:
+    """A kind of sound (a genre): its tracks, the first the one it started with (CK14: Next
+    on the cook screen plays another of them, at random)."""
+
     key: str
     name: str
-    file: str  # under themi_home/web/static/audio/ (CR17b)
+    tracks: tuple[Track, ...]
+
+    @property
+    def file(self) -> str:
+        return self.tracks[0].file
+
+
+def _tracks(kind: str) -> tuple[Track, ...]:
+    return tuple(Track(mix.name, file, mix) for file, mix in BUILT_IN if mix.kind == kind)
 
 
 LOOPS = {
     loop.key: loop
     for loop in (
-        Loop("lofi", "Lofi", "lofi.m4a"),
-        Loop("rain", "Rain", "rain.m4a"),
-        Loop("soft_piano", "Soft piano", "soft-piano.m4a"),
-        Loop("brown_noise", "Brown noise", "brown-noise.m4a"),
+        Loop("lofi", "Lofi", _tracks("lofi")),
+        Loop("rain", "Rain", _tracks("rain")),
+        Loop("soft_piano", "Soft piano", _tracks("soft_piano")),
+        Loop("brown_noise", "Brown noise", _tracks("brown_noise")),
     )
 }
 ALIASES = {

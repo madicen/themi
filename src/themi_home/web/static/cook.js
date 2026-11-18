@@ -358,12 +358,19 @@
     }
   });
 
-  // CK5: the built-in loop, as on the body double page; nothing plays until they tap Play
+  // CK5/CK14: the built-in mixes. Each kind (lofi, soft piano...) has a few tracks: one at
+  // random to start, and Next plays another of the same kind. Nothing plays until they tap.
+  // CK15a: a track with a mix (data-mix, no file) plays live through mix.js.
   function music() {
     var box = document.querySelector(".cook-music");
     if (!box) return;
     var audio = box.querySelector("audio"), play = box.querySelector(".session-play");
-    var sound = box.querySelector("select"), volume = box.querySelector("input[type=range]");
+    var sound = box.querySelector("select[name=sound]"), volume = box.querySelector("input[type=range]");
+    var next = box.querySelector(".cook-track-next");
+    var kindName = box.querySelector('[data-live="track"]'), trackName = box.querySelector('[data-live="track-name"]');
+    var playing = box.querySelector('[data-live="playing"]'), label = play.querySelector(".cook-play-label");
+    var current = null, mix = null, live = null, started = false;
+    var canMix = !!(window.themiMix && window.themiMix.supported);
     audio.volume = Number(volume.value) / 100;
     function save(fields) {
       fields.csrf = body.dataset.csrf;
@@ -373,19 +380,167 @@
         body: new URLSearchParams(fields).toString()
       }).then(function () {}, function () {});
     }
-    function shown(on) { play.textContent = on ? "Pause" : "Play"; play.setAttribute("aria-pressed", on ? "true" : "false"); }
+    function tracks() {
+      var list = box.querySelector('.cook-tracks[data-sound="' + sound.value + '"]');
+      return list ? Array.prototype.slice.call(list.querySelectorAll("li")).filter(function (li) {
+        return li.dataset.src || (li.dataset.mix && canMix);
+      }) : [];
+    }
+    function isPlaying() { return live ? live.playing : !audio.paused; }
+    function shown(on) {
+      label.textContent = on ? "Pause" : "Play";
+      play.setAttribute("aria-pressed", on ? "true" : "false");
+      box.classList.toggle("is-playing", on);
+      if (on) started = true;
+      if (playing) playing.textContent = on ? "Playing" : (started ? "Paused" : "Ready to play");
+    }
+    function stop() {
+      if (live) { live.stop(); live = null; }
+      audio.pause();
+    }
+    function start() {
+      if (mix) {
+        live = window.themiMix.play(mix, { volume: Number(volume.value) / 100 });
+        shown(!!live);
+        return;
+      }
+      audio.play().then(function () { shown(true); }, function () { shown(false); });
+    }
+    // set this track up (and play it, if something was playing or they asked)
+    function load(li, andPlay) {
+      stop();
+      current = li;
+      mix = null;
+      if (li.dataset.mix) {
+        try { mix = JSON.parse(li.dataset.mix); } catch (e) { mix = null; }
+      } else {
+        audio.src = li.dataset.src;
+      }
+      if (kindName) kindName.textContent = sound.options[sound.selectedIndex].textContent;
+      if (trackName) trackName.textContent = li.textContent;
+      if (andPlay) start(); else shown(false);
+    }
+    // another of this kind, never the one just playing (when there's more than one); to start,
+    // the recipe's own mix if it has one (CK15b)
+    function choose(andPlay, first) {
+      var all = tracks();
+      if (!all.length) return;
+      var made = all.filter(function (li) { return li.dataset.made; });
+      if (first && made.length) { load(made[0], andPlay); return; }
+      var others = all.filter(function (li) { return li !== current; });
+      var pool = others.length ? others : all;
+      load(pool[Math.floor(Math.random() * pool.length)], andPlay);
+    }
+
+    // CK15b: a mix made for this recipe. On the first Play of a kind that has none, the
+    // built-in track plays while it's made, then the mix takes over; Next asks for a fresh one
+    // while the session may (the server says when it can't: null), else picks as before.
+    var asked = {}, noMore = {}, waiting = false;
+    function list() { return box.querySelector('.cook-tracks[data-sound="' + sound.value + '"]'); }
+    function musical() { var l = list(); return !!(canMix && l && l.dataset.musical); }
+    function ask(fresh, then) {
+      var kind = sound.value;
+      waiting = true;
+      fetch("/session/cook/mix", {
+        method: "POST", credentials: "same-origin",
+        headers: auth({ "Content-Type": "application/x-www-form-urlencoded" }),
+        body: new URLSearchParams({ csrf: body.dataset.csrf, kind: kind, fresh: fresh ? "1" : "0" }).toString()
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (answer) {
+          waiting = false;
+          var mix = answer && answer.mix;
+          if (!mix) { noMore[kind] = true; then(null); return; }
+          var l = box.querySelector('.cook-tracks[data-sound="' + kind + '"]');
+          var li = l && l.querySelector('li[data-made="' + mix.id + '"]');
+          if (l && !li) {
+            li = document.createElement("li");
+            li.dataset.made = String(mix.id);
+            li.dataset.mix = JSON.stringify(mix.page);
+            li.textContent = mix.name;
+            l.insertBefore(li, l.firstChild);
+          }
+          then(kind === sound.value ? li : null);
+        }, function () { waiting = false; then(null); });
+    }
+    choose(false, true);
     play.addEventListener("click", function () {
-      if (audio.paused) audio.play().then(function () { shown(true); }, function () { shown(false); });
-      else { audio.pause(); shown(false); }
+      if (isPlaying()) { stop(); shown(false); return; }
+      start();
+      var l = list();
+      if (!musical() || asked[sound.value] || l.querySelector("li[data-made]")) return;
+      asked[sound.value] = true;
+      var startedWith = current;
+      ask(false, function (li) {
+        // still on the track that Play started, so nobody chose another meanwhile
+        if (li && current === startedWith) load(li, isPlaying());
+      });
+    });
+    next.addEventListener("click", function () {
+      if (waiting) return;
+      if (!musical() || noMore[sound.value]) { choose(true); return; }
+      if (playing) playing.textContent = "Making another";
+      ask(true, function (li) {
+        if (li) load(li, true); else choose(true);
+      });
     });
     sound.addEventListener("change", function () {
-      var playing = !audio.paused;
-      audio.src = sound.options[sound.selectedIndex].dataset.src;
-      if (playing) audio.play().then(function () {}, function () { shown(false); });
+      var was = isPlaying();
+      current = null;
+      choose(was, true);
       save({ sound: sound.value });
     });
-    volume.addEventListener("input", function () { audio.volume = Number(volume.value) / 100; });
+    volume.addEventListener("input", function () {
+      audio.volume = Number(volume.value) / 100;
+      if (live) live.setVolume(Number(volume.value) / 100);
+    });
     volume.addEventListener("change", function () { save({ volume: volume.value }); });
+    window.themiCook.music = { load: load, tracks: tracks, playing: isPlaying, player: function () { return live; } };
+  }
+
+  // CK14: "Cooking mixes" or "Spotify playlists"; the one they chose is kept on this device
+  function moodTabs() {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.cook-mood-tabs [role="tab"]'));
+    if (!tabs.length) return;
+    function pick(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.tabIndex = on ? 0 : -1;
+        var panel = document.getElementById(t.getAttribute("aria-controls"));
+        if (panel) panel.hidden = !on;
+      });
+      if (focus) tab.focus();
+      try { localStorage.setItem("themi_cook_mood", tab.id); } catch (e) { /* storage off */ }
+    }
+    tabs.forEach(function (tab, i) {
+      tab.addEventListener("click", function () { pick(tab, false); });
+      tab.addEventListener("keydown", function (e) {
+        var step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (step) { e.preventDefault(); pick(tabs[(i + step + tabs.length) % tabs.length], true); }
+      });
+    });
+    var kept = null;
+    try { kept = localStorage.getItem("themi_cook_mood"); } catch (e) { /* storage off */ }
+    var first = tabs.filter(function (t) { return t.id === kept; })[0];
+    if (first) pick(first, false);
+  }
+
+  // CK14: "Open in Spotify" goes to the chosen playlist; in Telegram, through Telegram, which
+  // hands open.spotify.com to the Spotify app
+  function spotifyLink() {
+    var link = document.querySelector(".cook-spotify-open");
+    if (!link) return;
+    var which = document.querySelector('.cook-spotify select[name="uri"]');
+    if (which) which.addEventListener("change", function () {
+      var chosen = which.options[which.selectedIndex];
+      if (chosen && chosen.dataset.link) link.href = chosen.dataset.link;
+    });
+    link.addEventListener("click", function (e) {
+      var tg = window.themiMiniApp;
+      if (!tg || !tg.inTelegram) return;
+      e.preventDefault();
+      tg.send("web_app_open_link", { url: link.href });
+    });
   }
 
   // CK2: what a tap says once ("Now for 6."), for a few seconds
@@ -545,6 +700,8 @@
   fullscreenButton();
   setupVoice();
   music();
+  moodTabs();
+  spotifyLink();
   alerts();
   tick();
   setInterval(tick, 1000);

@@ -996,7 +996,15 @@ class BodyDouble:
             "sound": loop.key,
             "volume": prefs.body_double_volume,
             "file": loop.file,
-            "loops": [{"key": k.key, "name": k.name, "file": k.file} for k in LOOPS.values()],
+            "loops": [
+                {
+                    "key": k.key,
+                    "name": k.name,
+                    "file": k.file,
+                    "tracks": [{"name": t.name, "file": t.file} for t in k.tracks],
+                }
+                for k in LOOPS.values()
+            ],
         }
 
     def scene(self, session: Session) -> str:

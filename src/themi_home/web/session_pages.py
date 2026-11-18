@@ -232,6 +232,19 @@ def routes(kit: Kit) -> APIRouter:
                  "open_chat": heard.ask}  # fmt: skip
         return JSONResponse(state, headers={"Cache-Control": "no-store"})
 
+    @router.post("/session/cook/mix")
+    async def cook_mix(request: Request) -> Response:
+        """CK15b: a mix made for the recipe, for the kind the cook screen plays: the kept one,
+        or (`fresh`) a new one. `{"mix": null}` when there's none to be had; the built-in
+        tracks play then."""
+        signed, form = await kit.checked(request)
+        if cooking() is None:
+            return Response(status_code=404)
+        member = app.store.get_member(signed.member.id)
+        kind, fresh = str(form.get("kind", "")), form.get("fresh") == "1"
+        made = await cooking().mix(member, kind, fresh=fresh)
+        return JSONResponse({"mix": made}, headers={"Cache-Control": "no-store"})
+
     @router.post("/session/cook/chime")
     async def cook_chime(request: Request) -> Response:
         """CK3: the chime's volume on the cook screen, kept for next time."""
