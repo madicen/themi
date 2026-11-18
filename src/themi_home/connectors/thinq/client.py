@@ -33,6 +33,7 @@ from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
+from themi.usage import NO_TALLY, Tally
 
 log = logging.getLogger(__name__)
 
@@ -112,7 +113,10 @@ class ThinqClient:
         country: str,
         client_id: str,
         config: ThinqConfig,
+        *,
+        tally: Tally = NO_TALLY,
     ) -> None:
+        self.tally = tally  # UC3
         self.country = country
         self.client_id = client_id
         self._token = token
@@ -198,6 +202,7 @@ class ThinqClient:
             response = await self._http.request(method, path, headers=self._headers(), json=json)
         except httpx.HTTPError as exc:
             raise ThinqError(f"LG ThinQ couldn't be reached ({type(exc).__name__})") from exc
+        self.tally(response.status_code)
         try:
             body = response.json() if response.content else {}
         except ValueError:
@@ -226,6 +231,7 @@ class ThinqAccount:
         cipher: Cipher,
         config: ThinqConfig,
     ) -> None:
+        self.tally: Tally = NO_TALLY  # UC3: set by the module, handed to each client
         self.db = db
         self.cipher = cipher
         self.config = config
@@ -314,7 +320,7 @@ class ThinqAccount:
             raise
 
     def _make(self, token: Secret, country: str, client_id: str) -> ThinqClient:
-        return ThinqClient(token, country, client_id, self.config)
+        return ThinqClient(token, country, client_id, self.config, tally=self.tally)
 
     def _row(self) -> dict[str, Any] | None:
         return self.db.one("SELECT * FROM thinq_account WHERE id = 1")

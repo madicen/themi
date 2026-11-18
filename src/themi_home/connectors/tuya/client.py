@@ -42,6 +42,7 @@ from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
+from themi.usage import NO_TALLY, Tally
 
 log = logging.getLogger(__name__)
 
@@ -137,7 +138,16 @@ class TuyaDevice:
 
 
 class TuyaClient:
-    def __init__(self, access_id: str, secret: Secret, region: str, config: TuyaConfig) -> None:
+    def __init__(
+        self,
+        access_id: str,
+        secret: Secret,
+        region: str,
+        config: TuyaConfig,
+        *,
+        tally: Tally = NO_TALLY,
+    ) -> None:
+        self.tally = tally  # UC3
         self.access_id = access_id
         self._secret = secret
         base = config.base_url.rstrip("/") or REGIONS[region][1]
@@ -291,6 +301,7 @@ class TuyaClient:
             )
         except httpx.HTTPError as exc:
             raise TuyaError(f"Tuya couldn't be reached ({type(exc).__name__})") from exc
+        self.tally(response.status_code)
         try:
             body = response.json() if response.content else {}
         except ValueError:
@@ -330,6 +341,7 @@ class TuyaAccount:
     """The family's Tuya cloud project. Admins link it; the feeders share it."""
 
     def __init__(self, db: Database, cipher: Cipher, config: TuyaConfig) -> None:
+        self.tally: Tally = NO_TALLY  # UC3: set by the module, handed to each client
         self.db = db
         self.cipher = cipher
         self.config = config
@@ -361,7 +373,7 @@ class TuyaAccount:
             raise TuyaError("Paste the cloud project's Access ID and Access Secret.")
         if region not in REGIONS:
             raise TuyaError(f"Tuya has no data centre called {region or '(blank)'}.")
-        client = TuyaClient(access_id, Secret(secret), region, self.config)
+        client = TuyaClient(access_id, Secret(secret), region, self.config, tally=self.tally)
         try:
             found = await client.devices()
         except BaseException:
@@ -439,6 +451,7 @@ class TuyaAccount:
                 self.cipher.decrypt(row["secret"]),
                 str(row["region"]),
                 self.config,
+                tally=self.tally,
             )
         return self._client
 

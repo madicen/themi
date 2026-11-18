@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="200" viewBox="0 0 760 200" font-family="Atkinson Hyperlegible">
+<rect width="760" height="200" fill="#FBFAF7"/>
+<text x="24" y="40" font-size="20" font-weight="700" fill="#1F2328">Usage, Wednesday 18 November</text>
+<text x="208" y="76" font-size="11.5" fill="#6B6F76">Today, against the daily limit</text>
+<text x="736" y="76" text-anchor="end" font-size="11.5" fill="#6B6F76">This month</text>
+<text x="24" y="110" font-size="11.5" font-weight="700" fill="#6B6F76">AI</text>
+<line x1="24" x2="736" y1="118" y2="118" stroke="#E6E3DC" stroke-width="1"/>
+<text x="24" y="158" font-size="13" font-weight="700" fill="#1F2328">Gemini</text>
+<rect x="208" y="147" width="220" height="12" rx="6" fill="#ECEAE4"/>
+<rect x="208" y="147" width="220" height="12" rx="6" fill="#C9483B"/>
+<text x="442" y="158" font-size="13" fill="#1F2328">530 of 500</text>
+<text x="736" y="158" text-anchor="end" font-size="12" fill="#6B6F76">900 requests</text>
+</svg>

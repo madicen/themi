@@ -73,11 +73,13 @@ class GoogleTasksInbox:
         self.services.provide(keys.google_tasks, self)
 
     def client(self, account_id: int) -> TasksClient:
-        return TasksClient(
+        client = TasksClient(
             self.base_url,
             lambda: self.google.access_token(account_id),
             lambda: self.google.forget_access_token(account_id),
         )
+        client.tally = self.google.tally  # UC3
+        return client
 
     async def run(self) -> int:
         """Scheduler job: keep Themi's list in step (GT1b), then handle new items in each

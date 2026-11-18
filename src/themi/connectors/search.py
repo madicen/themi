@@ -22,6 +22,7 @@ import httpx
 
 from themi.http import tls
 from themi.storage.secrets import Secret
+from themi.usage import NO_TALLY, Tally
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +58,8 @@ class SearchBackend(Protocol):
 
 
 class _Http:
+    tally: Tally = NO_TALLY  # UC3: set by the web search module
+
     def __init__(
         self, key: Secret, base_url: str, transport: httpx.AsyncBaseTransport | None
     ) -> None:
@@ -81,6 +84,7 @@ class _Http:
                 )
         except httpx.HTTPError as exc:
             raise SearchError(f"couldn't reach the search service ({type(exc).__name__})") from exc
+        self.tally(response.status_code)
         if response.status_code in (401, 403):
             raise SearchError("the search service turned the key down")
         if response.status_code == 429 or response.status_code == 432:
@@ -113,6 +117,8 @@ class TavilySearch(_Http):
 
     async def search(self, query: str, count: int = 5, *, deep: bool = False) -> list[SearchResult]:
         """`deep`: Tavily's advanced depth (2 credits), when a basic search missed (F31c)."""
+        if deep:
+            self.tally()  # UC3: the second credit
         body = await self._post(
             "/search",
             {

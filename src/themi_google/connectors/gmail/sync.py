@@ -87,11 +87,13 @@ class GmailSync:
         self.tabs_listeners: list[TabsListener] = []
 
     def client(self, account_id: int) -> GmailClient:
-        return GmailClient(
+        client = GmailClient(
             self.google.oauth.config.gmail_url,
             lambda: self.google.access_token(account_id),
             lambda: self.google.forget_access_token(account_id),
         )
+        client.tally = self.google.tally  # UC3
+        return client
 
     # ----- scheduling ---------------------------------------------------------
 

@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from themi.storage.secrets import Secret
+from themi.usage import NO_TALLY, Tally
 
 
 class MirrorError(Exception):
@@ -57,6 +58,8 @@ class OurGroceriesConfig:
 
 
 class OurGroceriesClient:
+    tally: Tally = NO_TALLY  # UC3: set by the module; one a call
+
     def __init__(self, config: OurGroceriesConfig) -> None:
         self.config = config
         self.list_name = config.list_name
@@ -88,6 +91,7 @@ class OurGroceriesClient:
         return self._api, self._list_id
 
     async def _call(self, what: str, action: Any) -> Any:
+        self.tally()
         try:
             return await action
         except MirrorError:

@@ -253,7 +253,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "9b18eafc54be"
+    "spec": "2b31ec254445"
   },
   "move_expense": {
     "group": "spending",
@@ -514,6 +514,10 @@
   "show_tasks_picture": {
     "group": "wall",
     "spec": "28a09241e670"
+  },
+  "show_usage": {
+    "group": "usage",
+    "spec": "58bc3e876366"
   },
   "show_weather": {
     "group": "calendar",

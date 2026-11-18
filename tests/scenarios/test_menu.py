@@ -50,6 +50,7 @@ ADMIN_GROUPS = [
         [
             # SP4: the Modules page joins the menu
             ("/modules", "Modules", "What Themi can do, and setting it up"),
+            ("/admin/usage", "Usage", "What Themi used, against the free tiers"),  # UC5
             ("/dev", "Development", "Update or restart the server"),
         ],
     ),

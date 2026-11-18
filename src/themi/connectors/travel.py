@@ -21,6 +21,7 @@ import httpx
 
 from themi.http import tls
 from themi.storage.secrets import Secret
+from themi.usage import NO_TALLY, Tally
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +68,8 @@ def estimate(a: Place, b: Place) -> Route:
 
 
 class TravelClient:
+    tally: Tally = NO_TALLY  # UC3: TomTom's requests (the free geocoder isn't counted)
+
     def __init__(
         self,
         tomtom_key: Secret | None = None,
@@ -136,6 +139,8 @@ class TravelClient:
                 response = await client.get(url, params=params)
         except httpx.HTTPError as exc:
             raise TravelError(f"couldn't reach the map service ({type(exc).__name__})") from exc
+        if "tomtom" in url:
+            self.tally(response.status_code)
         if response.status_code != 200:
             raise TravelError(f"the map service said {response.status_code}")
         try:

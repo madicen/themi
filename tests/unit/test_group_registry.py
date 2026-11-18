@@ -48,7 +48,7 @@ def test_two_modules_may_add_one_group_but_not_two_groups_with_one_name() -> Non
 
 def test_the_catalog_has_every_group_once_in_order() -> None:
     names = [g.name for g in all_groups()]
-    assert len(names) == len(set(names)) == 16  # F43a: task_pictures
+    assert len(names) == len(set(names)) == 17  # F43a: task_pictures; UC4: usage
     assert [g.order for g in all_groups()] == sorted(g.order for g in all_groups())
     tools = [t for g in all_groups() for t in g.tools]
     assert len(tools) == len(set(tools))  # a tool is in one group

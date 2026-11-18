@@ -50,6 +50,7 @@
     "break",
     "weather",
     "week",
+    "usage",
     "burnout",
     "bodydouble",
     "pause",
@@ -75,6 +76,7 @@
     "/rules",
     "/site",
     "/tracking",
+    "/usage",
     "/weather",
     "/week"
   ],
@@ -150,5 +152,27 @@
     "Cooking.on_text",
     "CookingTimers.on_text",
     "GuidedSteps.on_text"
+  ],
+  "usage_meters": [
+    "anthropic.requests",
+    "catgenie.calls",
+    "cloudflare.pictures",
+    "gemini.embeddings",
+    "gemini.pictures",
+    "gemini.requests",
+    "google.requests",
+    "homeconnect.calls",
+    "lm_studio.requests",
+    "nws.calls",
+    "ollama.requests",
+    "openai_compat.pictures",
+    "openai_compat.requests",
+    "openmeteo.calls",
+    "ourgroceries.calls",
+    "spotify.requests",
+    "tavily.credits",
+    "thinq.calls",
+    "tomtom.requests",
+    "tuya.calls"
   ]
 }

@@ -186,12 +186,14 @@ class Recipes:
     def client(self, account_id: int) -> DocsClient:
         assert self.google is not None and self.config is not None
         google = self.google
-        return DocsClient(
+        client = DocsClient(
             self.config.docs_url,
             self.config.drive_url,
             lambda: google.access_token(account_id),
             lambda: google.forget_access_token(account_id),
         )
+        client.tally = google.tally  # UC3
+        return client
 
     def accounts_for(self, member: Member) -> list[LinkedAccount]:
         """The member's linked accounts that can open a picked doc."""

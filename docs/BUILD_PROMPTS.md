@@ -461,11 +461,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV6 | Oven: Stop turns the oven off | Oven | [x] 2026-11-15 |
 | OV7 | Oven: proofing dough | Oven | [x] 2026-11-15 |
 | OV8 | Oven: preheat ahead of a planned dinner | Oven | [~] |
-| UC1 | Usage: meters and the daily table | Usage | [ ] |
-| UC2 | Usage: AI requests and tokens | Usage | [ ] |
-| UC3 | Usage: device and API meters | Usage | [ ] |
-| UC4 | Usage: the usage card and /usage | Usage | [ ] |
-| UC5 | Usage: the Usage page and limit overrides | Usage | [ ] |
+| UC1 | Usage: meters and the daily table | Usage | [x] 2026-11-18 |
+| UC2 | Usage: AI requests and tokens | Usage | [x] 2026-11-18 |
+| UC3 | Usage: device and API meters | Usage | [x] 2026-11-18 |
+| UC4 | Usage: the usage card and /usage | Usage | [x] 2026-11-18 |
+| UC5 | Usage: the Usage page and limit overrides | Usage | [x] 2026-11-18 |
 
 ## Fixed technical choices
 
@@ -21117,7 +21117,7 @@ settings sections. Rules every UC prompt keeps:
 - Admins only: `/usage`, `show_usage` and the Usage page.
 
 ### UC1 · Usage: meters and the daily table
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: none
 Read first: the plan's "Meters", "Storage" and "Limits"; `themi/modules/context.py`
 (`settings_section`, `dashboard_panel`) as the pattern.
@@ -21137,9 +21137,21 @@ the family elsewhere); a database error in `count` is logged and doesn't raise; 
 order; duplicate key refused; a failed install leaves no meter; prune.
 
 Notes:
+- `themi/usage.py`. The book is the router's (`AIRouter(usage=...)`, made from the AI
+  settings' database when not given), so the router can count without a lookup;
+  `services.usage` is a property over it. The module context's `_Snapshot` takes a failed
+  module's meters back.
+- `Meter.measure` ("count" or "amount") says which figure its limit counts: Cloudflare's
+  neurons are `amount`, requests are `count`. `Meter.pictures` prices a request per picture.
+- `Limit` is the limit in use (`limit_for`): the module's numbers with `source`/`checked`,
+  or an override with `set_by`/`set_at` (`overridden`). `set_limit`/`clear_limit` are here
+  already for UC5.
+- `usage.prune` runs every 6 hours (idempotent), so `tests/golden/jobs.json` gained it.
+- Migration 0171 made `make test-changed` run the whole suite, which counted as this
+  prompt's full run.
 
 ### UC2 · Usage: AI requests and tokens
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: UC1
 Read first: the plan's "AI metering"; `themi/ai/router.py` (`run`, `_attempt`, `_hedged`,
 `_record`); `themi/standard/ai_providers.py`.
@@ -21158,9 +21170,28 @@ an open breaker counts none; a Cloudflare picture adds its neurons; two members 
 keys get a row each; a fake priced backend gives an estimate.
 
 Notes:
+- `themi/ai/metering.py`: `Counted` wraps each backend's provider (in `run` and in
+  `test_connection`, which spends a request too). A request is counted as it's sent, so a
+  hedge's cancelled copy counts; tokens are added when the answer comes. A provider's own
+  `CapabilityError` or a 429 takes the request back; a 429 counts `<meter>.refused`.
+- Three meters a kind, not one: `<kind>.requests` (chat, structured, transcription),
+  `<kind>.embeddings`, `<kind>.pictures`, since Gemini's limits and prices differ by
+  model. Rows are kept under the backend's configured model.
+- `PROVIDER_METERS` lives in `themi/ai/metering.py` (code outside `themi.ai` may not
+  import the adapters' defaults); each AI provider module registers its kinds' meters.
+- Numbers, checked 2026-11-18: Google no longer publishes per-model free-tier limits (its
+  rate-limit page points at AI Studio's, per project); 500 requests a day for
+  gemini-3.5-flash-lite is what third-party guides report, reset at midnight Pacific, and
+  the meter's `source` says so. Embeddings: no number known. Gemini pictures $0.0336
+  (BD4a), Cloudflare 10,000 neurons a day with 104 a klein picture and 58 a schnell one
+  (BD4c), Claude Opus 5.5 $4/$20 a million tokens, gpt-image-2 about $0.006 a low-quality
+  picture. Local servers count with no limit or price.
+- `Meter.amounts` (what one request of a model adds to `amount`) replaces UC1's
+  `pictures` flag; `Price.per_request` is a picture model's price per picture.
+- `tests/golden/handlers.json` now lists the meters (`usage_meters`), so a dropped one shows.
 
 ### UC3 · Usage: device and API meters
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: UC1
 Read first: the plan's "Device and API meters"; each connector's client.
 - Count at each client's one request site: Home Connect, ThinQ, CatGenie, Tuya, SmartHQ,
@@ -21172,9 +21203,29 @@ Tests: per connector, a fake call counts one; a fake 429 counts a refusal; a con
 whose module isn't installed registers nothing.
 
 Notes:
+- `themi.usage.Tally`: what a client calls once a request (`tally(status)`; a 429 counts
+  `<meter>.refused`). `ctx.usage_meter` returns one. Clients carry `tally = NO_TALLY`
+  (nothing counted, for their own tests); the module sets it at install, or hands it to
+  the account that makes clients (ThinQ, Tuya, CatGenie take `tally=`). Google's five
+  clients share `GoogleAccounts.tally` (one `google.requests` meter), set by the google
+  module and handed on in each `client()`.
+- Counted: Home Connect (API calls and token requests), ThinQ, Tuya, CatGenie, Spotify,
+  OurGroceries (one a call), TomTom (only TomTom's URLs, not the free geocoder), Tavily
+  (credits: an advanced search counts 2) or Firecrawl, whichever backend is in use,
+  Open-Meteo and NWS apart, Google.
+- Not counted: Keep, Roborock and SmartHQ. Their libraries make the requests (Keep in a
+  thread, Roborock and SmartHQ over their own sessions and websockets), with no request
+  site of Themi's, and none has a published limit. A follow-up can wrap their calls.
+- Limits, checked 2026-11-18: Home Connect 1,000 a day (from the code), TomTom 2,500
+  non-tile requests a day (guides quoting TomTom's pricing page; one says it's monthly
+  now), Tavily 1,000 credits a month (docs.tavily.com), Open-Meteo 10,000 a day
+  (open-meteo.com/en/terms). ThinQ, CatGenie, Tuya: no published limit found, so they
+  count with none. Google's quotas are far above use: no limit. Reset zones are UTC
+  where the provider doesn't say.
+- `handlers.json` golden gained the new meters.
 
 ### UC4 · Usage: the usage card and /usage
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: UC2, UC3
 Read first: the plan's "The usage card" and "Where it shows"; `themi/standard/drawings.py`
 and `week_card.py` as the pattern.
@@ -21189,9 +21240,26 @@ pace and projection; the admin check. A scenario: an admin's `/usage` gets the c
 member's gets the refusal.
 
 Notes:
+- `themi/standard/usage_card.py`: `collect` (book to `UsageData`: groups, rows, the AI's
+  requests for 30 days), `view`, `usage_svg`, `usage_text`, `UsageCard.send`. The drawings
+  module holds it (`drawings.usage_card`) and registers `/usage` and `show_usage`.
+- Admins only, three ways: `UsageCard.send` and the tool refuse anyone else ("That's for
+  the household's admins."), and the tool is offered in an admin's conversation only:
+  `ctx.tool(t, admin_only=True)` puts it in `ToolRegistry.admin_only`, and
+  `specs_for(..., admin=False)` leaves those out (the agent passes `member.is_admin`).
+- `show_usage` has its own small tool group, `usage` (so it isn't core and sent with
+  every message), with 10 examples and two routing cases. `test_group_registry`'s catalog
+  count went from 16 to 17 for it.
+- A row per scope used this month. AI backends are labelled by the AI page's label, with
+  a number when two share one ("Gemini (free tier) 2"); no names. Read meters are skipped
+  (none exist yet).
+- 760 wide (PNG 1520), height grows with the rows. Colours: the day card's themes plus
+  `USAGE_COLORS` (good, near, over). Goldens: `usage_busy`, `usage_busy_dark`,
+  `usage_over`, `usage_empty`; `make golden` writes them too.
+- Golden: `handlers.json` (`/usage`), `tools.json` (`show_usage` in `usage`).
 
 ### UC5 · Usage: the Usage page and limit overrides
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: UC4
 Read first: the plan's "Limits" and "Where it shows"; the Modules page (SP prompts).
 - `/admin/usage` in the menu's Admin group: the card as SVG in the page, a table of each
@@ -21203,3 +21271,17 @@ Tests: admins only; an override changes the card; clearing it goes back to the d
 "check this" mark. A scenario: an admin lowers the Gemini limit and sees the bar move.
 
 Notes:
+- `themi/web/usage_pages.py`: `GET /admin/usage` (the card as SVG in the page, scaled by
+  `.usage-card svg` in `themi.css`, then a row for every registered meter, used or not, so
+  a limit can be set before the first call) and `POST /admin/usage/{key}/limit`
+  (`per_day`, `per_month`, whole numbers or blank; `clear` goes back to the module's). The
+  menu's Admin group gains Usage (order 8, between Modules and Development).
+- Overrides here are for every scope of a meter (`scope=''`). The book takes per-scope
+  ones (UC1), but the page doesn't offer them yet: one form a meter was enough for the
+  household's backends. A follow-up if two keys need different limits.
+- "Check this": a module's `checked` more than six months before the meter's today.
+- A module with meters links from its own page (`/modules/<name>`) to
+  `/admin/usage#module-<name>`, not from the Modules list's cards.
+- `test_menu`'s expected Admin group gains the Usage entry; `routes.json` golden gains the
+  two routes.
+- Not looked at in a browser, only through the page tests and the card's PNG.

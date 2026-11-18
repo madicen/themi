@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from themi.ai.metering import PROVIDER_METERS
 from themi.ai.router import ProviderFactory, builders_for
 from themi.modules import Module, ModuleContext
 
@@ -22,6 +23,8 @@ class AIProviderModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         for adapter_kind, builder in self.adapters.items():
             ctx.ai_adapter(adapter_kind, builder)
+            for meter in PROVIDER_METERS.get(adapter_kind, ()):  # UC2
+                ctx.usage_meter(meter)
 
 
 class ClaudeModule(AIProviderModule):

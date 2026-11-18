@@ -43,6 +43,7 @@ from themi.localtime import to_utc_iso
 from themi.modules import Module
 from themi.modules.base import AccountNeed, ModuleSetup
 from themi.modules.settings import ModuleSettings, env_field
+from themi.usage import Limits, Meter
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -457,6 +458,16 @@ def noteworthy(
     return None
 
 
+# UC3: Open-Meteo's free, non-commercial API: 10,000 calls a day (also 600 a minute, 5,000
+# an hour, 300,000 a month). The NWS publishes no limit.
+OPEN_METEO_METER = Meter(
+    "openmeteo.calls", "Open-Meteo", "calls", group="Web", order=30,
+    limits=Limits(per_day=10_000, resets="UTC", source="open-meteo.com/en/terms",
+                  checked="2026-11"),
+)  # fmt: skip
+NWS_METER = Meter("nws.calls", "Weather Service (NWS)", "calls", group="Web", order=31)
+
+
 class WeatherModule(Module):
     """WX1: the forecast at home, for the morning message's weather line (MM5)."""
 
@@ -506,6 +517,10 @@ class WeatherModule(Module):
         )
 
     def install(self, ctx: ModuleContext) -> None:
+        open_meteo = ctx.usage_meter(OPEN_METEO_METER)  # UC3
+        nws = ctx.usage_meter(NWS_METER)
+        if isinstance(self.source, WeatherClient):
+            self.source.tally, self.source.nws_tally = open_meteo, nws
         weather = ctx.provide(Weather(ctx.services, self.source, self.weather_settings))
         weather.install()
         ctx.periodic("weather.refresh", REFRESH_EVERY, weather.refresh)

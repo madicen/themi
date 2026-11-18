@@ -406,6 +406,7 @@ def build_app(
     ctx.periodic("approvals.expire", timedelta(hours=1), approvals.expire)
     ctx.periodic("rules.expire_drafts", timedelta(hours=1), rulebook.expire_drafts)
     ctx.periodic("energy.expire_outcomes", timedelta(minutes=15), as_job(outcomes.expire))
+    ctx.periodic("usage.prune", timedelta(hours=6), as_job(services.usage.prune))  # UC1
 
     # ----- the modules ----------------------------------------------------------------
     loaded = ctx.load(*modules, tolerant=report is not None)

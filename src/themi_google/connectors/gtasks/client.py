@@ -19,6 +19,7 @@ import httpx
 
 from themi.http import tls
 from themi.storage.secrets import Secret
+from themi.usage import NO_TALLY, Tally
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +43,8 @@ class _Gone(TasksError):
 
 
 class TasksClient:
+    tally: Tally = NO_TALLY  # UC3: the Google meter, from GoogleAccounts
+
     def __init__(
         self, base_url: str, token: TokenSource, on_unauthorized: Callable[[], None]
     ) -> None:
@@ -112,6 +115,7 @@ class TasksClient:
                 raise TasksError(
                     f"Google Tasks couldn't be reached ({type(exc).__name__})"
                 ) from exc
+            self.tally(response.status_code)
             if response.status_code == 401 and attempt == 1:
                 self.on_unauthorized()
                 continue

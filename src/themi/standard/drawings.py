@@ -75,6 +75,9 @@ class Drawings:
         self.day_card = DayCard(services)  # DC3
         self.week_card = WeekCard(services, self.day_card)  # DC6
         self.weather_card = WeatherCard(services)  # DC8
+        from themi.standard.usage_card import UsageCard
+
+        self.usage_card = UsageCard(services)  # UC4
 
     def install(self) -> None:
         pass
@@ -102,6 +105,10 @@ class Drawings:
     async def week_command(self, member: Member, text: str) -> None:
         """`/week` (DC6)."""
         await self.week_card.send(member)
+
+    async def usage_command(self, member: Member, text: str) -> None:
+        """`/usage` (UC4): admins only; anyone else is told so."""
+        await self.usage_card.send(member)
 
     def svg(self, template: str, extra: Sequence[Path] = (), **values: Any) -> str:
         return write_svg(template, extra, **values)
@@ -142,6 +149,25 @@ async def show_weather(ctx: ToolContext, args: dict[str, Any]) -> str:
     return "Sent the weather as a picture." if pictured else "Sent the weather, in words."
 
 
+@tool(
+    "show_usage",
+    "Sends an admin a picture of how much Themi has used today and this month: each AI "
+    "backend's requests and each device or web service's calls, against its free-tier limit. "
+    "For 'how are we doing on usage?', 'are we near the Gemini limit?', 'how much have we "
+    "spent on AI?'. It's sent as it is: don't describe it; a short line at most.",
+    {},
+)
+async def show_usage(ctx: ToolContext, args: dict[str, Any]) -> str:
+    drawings = ctx.services.maybe(keys.drawings)
+    if drawings is None:
+        raise ToolFailed("Pictures aren't set up.")
+    if not ctx.member.is_admin:
+        raise ToolFailed("That's for the household's admins.")
+    pictured = await drawings.usage_card.send(ctx.member)
+    ctx.answered.append("show_usage")
+    return "Sent the usage as a picture." if pictured else "Sent the usage, in words."
+
+
 class DrawingsModule(Module):
     """DC1: pictures drawn from Themi's own data, as SVG and PNG."""
 
@@ -152,7 +178,7 @@ class DrawingsModule(Module):
     preferences = DrawingsPreferences
     # show_week (DC6), show_weather (DC8), show_day (F42g); show_step_plan (DC11); the
     # tasks and routines pictures (F42g) are listed beside show_routines, in groups.py
-    tool_groups = (groups.CALENDAR, groups.SCHEDULES)
+    tool_groups = (groups.CALENDAR, groups.SCHEDULES, groups.USAGE)  # UC4: show_usage
 
     def __init__(self, renderer: Renderer | None = None) -> None:
         self.renderer = renderer
@@ -183,3 +209,5 @@ class DrawingsModule(Module):
         ctx.tool(show_day)
         ctx.command("/weather", drawings.weather_command, "The weather today and tomorrow")
         ctx.command("/week", drawings.week_command, "Your week ahead, as a picture")
+        ctx.tool(show_usage, admin_only=True)  # UC4
+        ctx.command("/usage", drawings.usage_command, "How much Themi used (admins)")

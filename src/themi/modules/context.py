@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
@@ -19,6 +20,7 @@ from themi.modules.loader import order
 from themi.modules.registry import Key, name_of
 from themi.modules.web import AccountsSection, MenuEntry, Panel, Values, Waiting, WebPages
 from themi.storage.migrations import apply_track
+from themi.usage import Meter, Tally
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -188,8 +190,11 @@ class ModuleContext:
 
         return job
 
-    def tool(self, t: Tool) -> None:
+    def tool(self, t: Tool, *, admin_only: bool = False) -> None:
+        """`admin_only` (UC4): offered in an admin's conversation only."""
         self.services.tools.register(t)
+        if admin_only:
+            self.services.tools.admin_only.add(t.spec.name)
 
     def command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.services.add_command(name, handler, description)
@@ -274,6 +279,16 @@ class ModuleContext:
         a member's backends of that kind with it."""
         self.services.ai_adapters[kind] = builder
 
+    def usage_meter(self, meter: Meter) -> Tally:
+        """UC1: something this module uses up (an API's calls, a backend's requests), for
+        the usage card, with its free-tier limit. UC3: the `Tally` it gives back is what
+        the module's client calls for each request it sends."""
+        try:
+            self.services.usage.add(replace(meter, module=self._current))
+        except ValueError as exc:
+            raise ModuleError(f"{exc} (asked by {self._who()})") from exc
+        return Tally(self.services.usage, meter.key)
+
     def channel(self, name: str, channel: Channel) -> None:
         """CR20b: a channel people talk to Themi on ("telegram", "web_chat")."""
         self.services.channels.add(name, channel)
@@ -311,6 +326,7 @@ class _Snapshot:
             services.channels,
             services.mirrors,
             getattr(services.autonomy, "executors", None),
+            services.usage,  # UC1: its meters
         ]
         for target in targets:
             if target is None:

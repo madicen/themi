@@ -24,6 +24,7 @@ from themi.modules import (
     as_job,
 )
 from themi.standard.tasks import TaskBoard
+from themi.usage import Limits, Meter
 from themi_home import home_groups
 from themi_home.connectors.catgenie import CatGenieAccount, CatGenieConfig, CatGenieWatcher
 from themi_home.connectors.gkeep import KeepFactory
@@ -77,6 +78,9 @@ class SpotifyModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         store = ctx.services.store
+        self.client.tally = ctx.usage_meter(  # UC3: no published limit
+            Meter("spotify.requests", "Spotify", "requests", group="Web", order=40)
+        )
         links = SpotifyLinks(store.db, store.cipher, self.client)
         ctx.provide(Music(ctx.services, links)).install()
         from themi_home.web import device_pages
@@ -137,6 +141,13 @@ class OurGroceriesModule(Module):
         return None
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi_home.connectors.ourgroceries import OurGroceriesClient
+
+        tally = ctx.usage_meter(  # UC3: unofficial, no published limit
+            Meter("ourgroceries.calls", "OurGroceries", "calls", group="Devices", order=60)
+        )
+        if isinstance(self.client, OurGroceriesClient):  # not a fake list
+            self.client.tally = tally
         mirror = GroceryMirror(ctx.services.store.db, self.client, bought=_bought(ctx))
         ctx.periodic("groceries.mirror", timedelta(minutes=1), mirror.sync)
 
@@ -205,6 +216,13 @@ class HomeConnectModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
+        self.client.tally = ctx.usage_meter(  # UC3: about 290 a day for the dishwasher
+            Meter(
+                "homeconnect.calls", "Home Connect", "calls", group="Devices", order=10,
+                limits=Limits(per_day=1000, resets="UTC", source="developer.home-connect.com",
+                              checked="2026-11"),
+            )
+        )  # fmt: skip
         account = HomeConnectAccount(s.store.db, s.store.cipher, self.client)
         ctx.provide(account)
         dishwasher = ctx.provide(Dishwasher(s, ctx.get(TaskBoard), account))
@@ -245,6 +263,11 @@ class ThinqModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
         account = ThinqAccount(s.store.db, s.store.cipher, self.config)
+        account.tally = (
+            ctx.usage_meter(  # UC3: about 580 a day for a washer and a dryer; no limit known
+                Meter("thinq.calls", "LG ThinQ", "calls", group="Devices", order=20)
+            )
+        )
         watcher = ThinqWatcher(s.store, account, ThinqPush(account, self.config.mqtt))
         ctx.provide(watcher)
         ctx.periodic("devices.thinq", timedelta(minutes=5), watcher.poll)
@@ -319,6 +342,9 @@ class TuyaModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
         account = TuyaAccount(s.store.db, s.store.cipher, self.config)
+        account.tally = ctx.usage_meter(  # UC3: about 170 a day a feeder; no limit known
+            Meter("tuya.calls", "Tuya feeders", "calls", group="Devices", order=30)
+        )
         watcher = TuyaWatcher(s.store, account)
         ctx.provide(watcher)
         ctx.on_shutdown("tuya", account.close)
@@ -351,6 +377,9 @@ class CatGenieModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
         account = CatGenieAccount(s.store.db, s.store.cipher, self.config)
+        account.tally = ctx.usage_meter(  # UC3: about 290 a day; no limit known
+            Meter("catgenie.calls", "CatGenie", "calls", group="Devices", order=40)
+        )
         watcher = CatGenieWatcher(s.store, account)
         ctx.provide(watcher)
         ctx.on_shutdown("catgenie", account.close)

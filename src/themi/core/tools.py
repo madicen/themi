@@ -360,6 +360,7 @@ class ToolRegistry:
         self._tool_words: dict[str, dict[str, Any]] = {}
         self._group_words: dict[str, str] = {}
         self.installing = ""  # set by the module loader while a module installs
+        self.admin_only: set[str] = set()  # UC4: tools offered in an admin's conversation only
         for t in tools or []:
             self.register(t)
 
@@ -472,15 +473,23 @@ class ToolRegistry:
         return sorted([*rest, offer], key=lambda spec: spec.name)
 
     def specs_for(
-        self, groups: set[str], routing: str = "groups", allowed: set[str] | None = None
+        self,
+        groups: set[str],
+        routing: str = "groups",
+        allowed: set[str] | None = None,
+        *,
+        admin: bool = True,
     ) -> list[ToolSpec]:
         """The tools one model call gets. P5's "all" is every tool but more_tools, which
         would have nothing to add. `allowed`: the modules this person's role may use (CR9);
-        None is all of them, and the core's tools always go."""
+        None is all of them, and the core's tools always go. `admin` False (UC4): without
+        the admins-only tools."""
         if routing == "all":
             specs = [spec for spec in self.specs() if spec.name != more_tools.spec.name]
         else:
             specs = self.specs(groups)
+        if not admin:
+            specs = [s for s in specs if s.name not in self.admin_only]
         if allowed is None:
             return specs
         return [s for s in specs if self.module_of(s.name) in allowed | {"core"}]
