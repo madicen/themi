@@ -353,7 +353,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK12 | Cooking companion: the tablet layout | Cooking companion | [x] 2026-11-09 |
 | CK13 | Cooking companion: quiet chat while a screen is open | Cooking companion | [x] |
 | CK14 | Cooking companion: set the mood | Cooking companion | [x] 2026-11-18 |
-| CK15a | Cooking companion: a mix played from its recipe | Cooking companion | [ ] |
+| CK15a | Cooking companion: a mix played from its recipe | Cooking companion | [x] 2026-11-18 |
 | CK15b | Cooking companion: Themi picks the mix from the title | Cooking companion | [ ] |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
@@ -17659,7 +17659,7 @@ Notes:
 
 ### CK15a · Cooking companion: a mix played from its recipe
 
-Status: [ ]
+Status: [x] 2026-11-18
 
 Asked for directly (Michael, 2026-11-18): music made on the fly from the recipe's title,
 starting with Themi's own synth rather than a hosted music model (that's a later option,
@@ -17685,11 +17685,31 @@ Build:
   the page can play either. The `.m4a` files stay as the fallback where Web Audio is
   missing, and for the body double page.
 - The card shows a generated mix like any track ("Lofi · Mushroom Simmer · Playing").
+- Changed while building: the built-in tracks keep playing their recorded files, on every
+  page; only a mix without a file (CK15b's) plays through `mix.js`. The recordings are known
+  to play on the kitchen iPad, so nothing anyone hears today depends on the new player.
 
 Tests: `check()` refuses an out-of-range or unknown value; every built-in track's `Mix`
 passes `check()` and matches what `make_loops.py` renders (the same settings object); in
 Chrome, with the audio context's output faked, a mix starts on Play, its tempo and chords
 are the mix's, and Pause stops it; the layout tests still fit.
+
+Notes:
+- `themi_home/music_mix.py`: `Mix`, `Noise`, `CHORDS` (31 named voicings; some chords come
+  twice, as the built-in tracks voice them, e.g. "Cmaj7 low"), `check()`, `from_data()`,
+  `for_page()` (chords as notes) and `to_data()` (chords by name, for keeping), and
+  `BUILT_IN`. Standard library only, so `make_loops.py` imports it without the venv.
+- `make_loops.py` renders from `BUILT_IN`: its ffmpeg arguments were compared with the old
+  hard-coded ones for all 14 tracks and are identical, so the files weren't remade.
+- `body_double_music.Track` has its `mix`; `LOOPS` is built from `BUILT_IN`.
+- `static/mix.js` (`window.themiMix`): `events(mix, from, to)` is the pure timing (strikes,
+  kick, hat) the scheduler and the test read; `play(mix, {volume})` returns a player with
+  `stop`, `setVolume`, `playing`, `scheduled`. It looks 0.3 s ahead every 60 ms. Noise is
+  an 8 s looped buffer (white, pink by Paul Kellet's filter, brown).
+- `cook.js`: a track `<li>` with `data-mix` (JSON from `for_page()`) and no `data-src` plays
+  through it; `window.themiCook.music` exposes `load`, `tracks`, `playing`, `player`.
+- Not heard yet: the live player's loudness and tone against the recordings need a listen
+  on the iPad once CK15b makes a mix. The test checks timing and chords, not sound.
 
 ### CK15b · Cooking companion: Themi picks the mix from the title
 
