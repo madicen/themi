@@ -1241,8 +1241,9 @@ CALENDAR_ARG = {"type": "string", "enum": ["", "mine", "family"]}
     "whichever has it (the same event on both changes on both). date, start, end as for "
     "add_calendar_event, all three '' to keep its time; location, title: the new one, or '' "
     "to keep it (a calendar's name is never a location). notes: text for its description, "
-    "or ''; notes_mode 'add' (after what's there) or 'replace'. Events Themi made change at "
-    "once; others need their yes.",
+    "or ''; notes_mode 'add' (after what's there) or 'replace'. Wanting to arrive early "
+    "isn't a new time: that's drive_time arrive_by, and the event stays. Events Themi made "
+    "change at once; others need their yes.",
     {
         "event": {"type": "string"},
         "on": {"type": "string"},
