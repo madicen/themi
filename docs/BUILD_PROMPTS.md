@@ -464,7 +464,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | UC1 | Usage: meters and the daily table | Usage | [x] 2026-11-18 |
 | UC2 | Usage: AI requests and tokens | Usage | [x] 2026-11-18 |
 | UC3 | Usage: device and API meters | Usage | [x] 2026-11-18 |
-| UC4 | Usage: the usage card and /usage | Usage | [ ] |
+| UC4 | Usage: the usage card and /usage | Usage | [x] 2026-11-18 |
 | UC5 | Usage: the Usage page and limit overrides | Usage | [ ] |
 
 ## Fixed technical choices
@@ -21225,7 +21225,7 @@ Notes:
 - `handlers.json` golden gained the new meters.
 
 ### UC4 · Usage: the usage card and /usage
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: UC2, UC3
 Read first: the plan's "The usage card" and "Where it shows"; `themi/standard/drawings.py`
 and `week_card.py` as the pattern.
@@ -21240,6 +21240,23 @@ pace and projection; the admin check. A scenario: an admin's `/usage` gets the c
 member's gets the refusal.
 
 Notes:
+- `themi/standard/usage_card.py`: `collect` (book to `UsageData`: groups, rows, the AI's
+  requests for 30 days), `view`, `usage_svg`, `usage_text`, `UsageCard.send`. The drawings
+  module holds it (`drawings.usage_card`) and registers `/usage` and `show_usage`.
+- Admins only, three ways: `UsageCard.send` and the tool refuse anyone else ("That's for
+  the household's admins."), and the tool is offered in an admin's conversation only:
+  `ctx.tool(t, admin_only=True)` puts it in `ToolRegistry.admin_only`, and
+  `specs_for(..., admin=False)` leaves those out (the agent passes `member.is_admin`).
+- `show_usage` has its own small tool group, `usage` (so it isn't core and sent with
+  every message), with 10 examples and two routing cases. `test_group_registry`'s catalog
+  count went from 16 to 17 for it.
+- A row per scope used this month. AI backends are labelled by the AI page's label, with
+  a number when two share one ("Gemini (free tier) 2"); no names. Read meters are skipped
+  (none exist yet).
+- 760 wide (PNG 1520), height grows with the rows. Colours: the day card's themes plus
+  `USAGE_COLORS` (good, near, over). Goldens: `usage_busy`, `usage_busy_dark`,
+  `usage_over`, `usage_empty`; `make golden` writes them too.
+- Golden: `handlers.json` (`/usage`), `tools.json` (`show_usage` in `usage`).
 
 ### UC5 · Usage: the Usage page and limit overrides
 Status: [ ]

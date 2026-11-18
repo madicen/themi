@@ -50,6 +50,7 @@
     "break",
     "weather",
     "week",
+    "usage",
     "burnout",
     "bodydouble",
     "pause",
@@ -75,6 +76,7 @@
     "/rules",
     "/site",
     "/tracking",
+    "/usage",
     "/weather",
     "/week"
   ],

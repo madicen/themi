@@ -162,6 +162,29 @@ WEB = ToolGroup(
 )
 
 
+USAGE = ToolGroup(  # UC4: admins only (the tool is offered in an admin's conversation)
+    name="usage",
+    description="how much Themi has used against the free-tier limits",
+    words=(
+        "usage|quota|free tier|rate limit|how much (?:have we|did we|has themi)"
+        "|(?:spent|spend|spending) on (?:ai|gemini|claude)|near (?:the|our) limit"
+    ),
+    examples=(
+        "How are we doing on usage this month?",
+        "Are we close to the Gemini limit?",
+        "How much have we spent on AI?",
+        "Show me the quota picture",
+        "Did we hit any rate limits today?",
+        "How many calls has the dishwasher used today?",
+        "Are any of the services refusing us?",
+        "What's left of the search credits?",
+        "Usage picture please",
+        "Have we gone over a limit anywhere?",
+    ),
+    tools=("show_usage",),
+    order=175,
+)
+
 LISTS = ToolGroup(
     name="lists",
     description="named lists, the wall's lists, usual stores",

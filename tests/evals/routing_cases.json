@@ -988,6 +988,22 @@
    "tools": [
     "tasks_from_picture"
    ]
+  },
+  {
+   "id": "usage-plain",
+   "kind": "plain",
+   "message": "What's our Gemini quota looking like today?",
+   "tools": [
+    "show_usage"
+   ]
+  },
+  {
+   "id": "usage-spend",
+   "kind": "plain",
+   "message": "How much has Themi used this month against the free tier?",
+   "tools": [
+    "show_usage"
+   ]
   }
  ]
 }

@@ -190,8 +190,11 @@ class ModuleContext:
 
         return job
 
-    def tool(self, t: Tool) -> None:
+    def tool(self, t: Tool, *, admin_only: bool = False) -> None:
+        """`admin_only` (UC4): offered in an admin's conversation only."""
         self.services.tools.register(t)
+        if admin_only:
+            self.services.tools.admin_only.add(t.spec.name)
 
     def command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.services.add_command(name, handler, description)
