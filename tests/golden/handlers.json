@@ -150,5 +150,16 @@
     "Cooking.on_text",
     "CookingTimers.on_text",
     "GuidedSteps.on_text"
+  ],
+  "usage_meters": [
+    "anthropic.requests",
+    "cloudflare.pictures",
+    "gemini.embeddings",
+    "gemini.pictures",
+    "gemini.requests",
+    "lm_studio.requests",
+    "ollama.requests",
+    "openai_compat.pictures",
+    "openai_compat.requests"
   ]
 }

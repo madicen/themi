@@ -462,7 +462,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV7 | Oven: proofing dough | Oven | [x] 2026-11-15 |
 | OV8 | Oven: preheat ahead of a planned dinner | Oven | [~] |
 | UC1 | Usage: meters and the daily table | Usage | [x] 2026-11-18 |
-| UC2 | Usage: AI requests and tokens | Usage | [ ] |
+| UC2 | Usage: AI requests and tokens | Usage | [x] 2026-11-18 |
 | UC3 | Usage: device and API meters | Usage | [ ] |
 | UC4 | Usage: the usage card and /usage | Usage | [ ] |
 | UC5 | Usage: the Usage page and limit overrides | Usage | [ ] |
@@ -21151,7 +21151,7 @@ Notes:
   prompt's full run.
 
 ### UC2 · Usage: AI requests and tokens
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: UC1
 Read first: the plan's "AI metering"; `themi/ai/router.py` (`run`, `_attempt`, `_hedged`,
 `_record`); `themi/standard/ai_providers.py`.
@@ -21170,6 +21170,25 @@ an open breaker counts none; a Cloudflare picture adds its neurons; two members 
 keys get a row each; a fake priced backend gives an estimate.
 
 Notes:
+- `themi/ai/metering.py`: `Counted` wraps each backend's provider (in `run` and in
+  `test_connection`, which spends a request too). A request is counted as it's sent, so a
+  hedge's cancelled copy counts; tokens are added when the answer comes. A provider's own
+  `CapabilityError` or a 429 takes the request back; a 429 counts `<meter>.refused`.
+- Three meters a kind, not one: `<kind>.requests` (chat, structured, transcription),
+  `<kind>.embeddings`, `<kind>.pictures`, since Gemini's limits and prices differ by
+  model. Rows are kept under the backend's configured model.
+- `PROVIDER_METERS` lives in `themi/ai/metering.py` (code outside `themi.ai` may not
+  import the adapters' defaults); each AI provider module registers its kinds' meters.
+- Numbers, checked 2026-11-18: Google no longer publishes per-model free-tier limits (its
+  rate-limit page points at AI Studio's, per project); 500 requests a day for
+  gemini-3.5-flash-lite is what third-party guides report, reset at midnight Pacific, and
+  the meter's `source` says so. Embeddings: no number known. Gemini pictures $0.0336
+  (BD4a), Cloudflare 10,000 neurons a day with 104 a klein picture and 58 a schnell one
+  (BD4c), Claude Opus 5.5 $4/$20 a million tokens, gpt-image-2 about $0.006 a low-quality
+  picture. Local servers count with no limit or price.
+- `Meter.amounts` (what one request of a model adds to `amount`) replaces UC1's
+  `pictures` flag; `Price.per_request` is a picture model's price per picture.
+- `tests/golden/handlers.json` now lists the meters (`usage_meters`), so a dropped one shows.
 
 ### UC3 · Usage: device and API meters
 Status: [ ]

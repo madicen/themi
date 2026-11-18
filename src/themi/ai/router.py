@@ -48,6 +48,7 @@ from themi.ai.errors import (
     RetriesExhausted,
     RetryableError,
 )
+from themi.ai.metering import Counted
 from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Provider
 from themi.ai.retry import DEFAULT_POLICY, OnRetry, RetryPolicy, Sleep, call_with_retry
 from themi.ai.settings import AISettingsStore, AITask, ResolvedEntry
@@ -210,7 +211,7 @@ class AIRouter:
                 continue
             call.backend = entry.label
             try:
-                provider = self._factory(entry.config)
+                provider = self._counted(entry)
                 result = await self._attempt(member_id, entry, provider, operation, kind, noted)
                 self._record(member_id, task, kind, call, ok=True)
                 return result
@@ -235,6 +236,10 @@ class AIRouter:
             raise errors[-1][1]
         failure = Deferred if kind is CallKind.BACKGROUND else AllProvidersFailed
         raise failure(f"no AI backend could handle {task.value}", errors)
+
+    def _counted(self, entry: ResolvedEntry) -> Provider:
+        """UC2: the backend's provider, each request it sends counted in the usage book."""
+        return Counted(self._factory(entry.config), self.usage, entry.config.kind, entry.backend_id)
 
     def image_cap(self, member_id: int) -> int:
         row = self.settings.db.one("SELECT image_daily_cap FROM members WHERE id = ?", (member_id,))
@@ -347,7 +352,7 @@ class AIRouter:
         entry = entries[position]
         model = entry.config.resolved_model
         try:
-            provider = self._factory(entry.config)
+            provider = self._counted(entry)
             if task is AITask.TRANSCRIPTION and not provider.capabilities.audio:
                 raise CapabilityError(f"{provider.name} can't transcribe voice notes")
             response = await call_with_retry(

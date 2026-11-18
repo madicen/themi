@@ -55,14 +55,12 @@ class Price:
 
     input_per_mtok: float = 0.0
     output_per_mtok: float = 0.0
-    per_request: float = 0.0
-    per_picture: float = 0.0
+    per_request: float = 0.0  # a picture model's price per picture
 
-    def estimate(self, totals: Totals, pictures: bool = False) -> float:
+    def estimate(self, totals: Totals) -> float:
         cost = totals.input_tokens / 1e6 * self.input_per_mtok
         cost += totals.output_tokens / 1e6 * self.output_per_mtok
-        cost += totals.count * (self.per_picture if pictures else self.per_request)
-        return cost
+        return cost + totals.count * self.per_request
 
 
 @dataclass(frozen=True)
@@ -93,7 +91,8 @@ class Reading:
 class Meter:
     """One thing that's used up. `measure` is what its limit counts: "count" (requests,
     calls) or "amount" (neurons, credits: what `count(amount=...)` adds). `prices` are by
-    model, for paid backends; `pictures` says a request is a picture (priced per picture).
+    model, for paid backends. `amounts` is what one request of a model adds to `amount`
+    when the caller doesn't say (Cloudflare's neurons a picture).
     """
 
     key: str  # module-prefixed: "gemini.requests", "homeconnect.calls"
@@ -105,7 +104,7 @@ class Meter:
     measure: str = "count"
     read: Callable[[], Reading] | None = None
     prices: dict[str, Price] = field(default_factory=dict)
-    pictures: bool = False
+    amounts: dict[str, float] = field(default_factory=dict)
     module: str = ""  # set when it's registered
 
 
@@ -174,6 +173,9 @@ class UsageBook:
         amount: float = 0.0,
     ) -> None:
         """Add to today's row. Never raises: a note about a call never costs the call."""
+        meter = self.meters.get(key)
+        if not amount and meter is not None and model in meter.amounts:
+            amount = meter.amounts[model] * n
         try:
             self.db.execute(
                 "INSERT INTO usage_daily (day, meter, scope, model, count, input_tokens, "
@@ -282,7 +284,7 @@ class UsageBook:
             price = meter.prices.get(model)
             if price is not None:
                 priced = True
-                cost += price.estimate(totals, meter.pictures)
+                cost += price.estimate(totals)
         return cost if priced else None
 
     # ----- limits ---------------------------------------------------------------------

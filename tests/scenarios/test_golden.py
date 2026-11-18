@@ -119,6 +119,7 @@ def handlers_of(app: App) -> dict[str, Any]:
         "awaiting_sources": _named(s.awaiting_sources),
         "open_item_sources": _named(s.open_item_sources),
         "executors": s.autonomy.executors.names(),
+        "usage_meters": sorted(s.usage.meters),  # UC2: a dropped meter shows here
     }
 
 
