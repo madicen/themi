@@ -354,7 +354,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK13 | Cooking companion: quiet chat while a screen is open | Cooking companion | [x] |
 | CK14 | Cooking companion: set the mood | Cooking companion | [x] 2026-11-18 |
 | CK15a | Cooking companion: a mix played from its recipe | Cooking companion | [x] 2026-11-18 |
-| CK15b | Cooking companion: Themi picks the mix from the title | Cooking companion | [ ] |
+| CK15b | Cooking companion: Themi picks the mix from the title | Cooking companion | [x] 2026-11-18 |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -17713,7 +17713,7 @@ Notes:
 
 ### CK15b · Cooking companion: Themi picks the mix from the title
 
-Status: [ ]
+Status: [x] 2026-11-18
 
 Depends on: CK15a.
 
@@ -17724,8 +17724,11 @@ Build:
   and a short name for it. The title is data inside a delimited block, never
   instructions. The answer goes through `Mix.check()`; a refusal or a bad answer falls
   back to a built-in track, silently.
-- Asked once when a cook session starts (next to `Cooking.playlists`), so the mix is
-  ready before anyone taps Play; the built-in track plays until it is.
+- Asked when the cook screen first plays a kind with chords (Play), not when the session
+  starts: the built-in track plays at once and the mix takes over when it comes (a second
+  or two). Changed while building: asking at the start spent a call for cooks who only use
+  chat, and an extra model call in the start or draw path takes answers queued for other
+  calls in many existing tests. From the second time on the recipe's kept mix plays at once.
 - Kept: a table `music_mixes` (migration in `cooking_schema`) by recipe and kind, so the
   same recipe gets the same mix next time. Next on the card: another built-in track or a
   fresh mix for this recipe (one new call, at most a few a session).
@@ -17736,6 +17739,27 @@ Tests: with the fake model, starting Creamy mushroom pasta asks once and the sta
 the mix; a second start of the same recipe doesn't ask; a bad answer (a chord not in the
 list, 140 BPM) falls back to the built-in track; Next asks for a fresh one and keeps it;
 a scenario: the card says the mix's name after the session starts.
+
+Notes:
+- `themi_home/cooking_mixes.py`: `CookingMixes` (on `Cooking.mixes`) with `kept(recipe_id)`
+  and `make(...)`; `Cooking.mix(member, kind, fresh=)` for the page. The model chooses only
+  name, bpm, beats, chords (an enum of `CHORDS`), strikes and decay; `mix_from_answer` puts
+  them on the kind's fixed sound (lofi: beat, crackle, tone 2600; soft piano: one echo) and
+  `check()` refuses anything off. `ASKS = 4` calls a session. Only lofi and soft piano get
+  mixes; rain and brown noise have no chords to choose.
+- `AITask.MUSIC_MIX`, labelled on the AI page; core migration `0170_music_mix_ai.sql` gives
+  everyone a route copied from their quick-jobs chain (as EX1b's 0164 did). Home migration
+  `cooking_schema/0003_mixes.sql`: `music_mixes` (recipe, kind, the mix as data).
+- `POST /session/cook/mix` (`kind`, `fresh`) answers `{"mix": {id, name, page} | null}`.
+  `tests/golden/routes.json` gains that route, and nothing else changes.
+- The page: a recipe's mixes come first in their kind's list (`data-made`) and the first
+  one is chosen to start. Next asks for a fresh one ("Making another") until the server
+  says no more, then picks at random as CK14 did.
+- Changed tests: CK14's Chrome test of Next now uses rain, since Next on lofi asks for a
+  made mix now; CK14's markup check names the new `data-musical` attribute.
+- To check by ear on the iPad: the live player's loudness against the recordings, and
+  whether the made mixes sound good. Mixes can be tuned in `mix_from_answer` (the kinds'
+  fixed sound) and `MIX_SYSTEM`.
 
 Notes for later (option 2, not planned): a hosted music model behind the router (an
 `audio()` call with a daily cap, as `image()` has `image_cap`), its mix's settings as the
