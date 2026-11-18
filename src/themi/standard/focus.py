@@ -15,6 +15,10 @@ than the day (or the morning list the button is on), never under one. Asked agai
 day, it's the lightest one; a third time, nothing ("It's all kept"). Medicines stay each
 time.
 
+Just one thing (MM4) has "Something else" (F42e). Once today's are all offered, it goes on to
+their open tasks with no due day, important first, then the lightest (F46a, bug #216); on a
+day with nothing due, Just one thing starts with those.
+
 The rest (O1b) can be spread over the next two weeks, the most pressing first, each to the
 first day with room under a budget: the person's setting, or what they usually get done in
 a day (the median of the last four weeks, 2 to 8; 4 with nothing to go by). It's offered
@@ -80,6 +84,7 @@ LEFT_ONE_TEXT = "The other one stays where it is; nothing's dropped."
 SPREAD_BUTTON = "Spread them out"
 ELSE_BUTTON = "Something else"  # F42e (idea #203): on the one-task message
 NO_MORE_TEXT = "That's all of them for now."
+UNDATED_TEXT = "No day on that one; nothing's dropped."  # F46a (bug #216)
 LEAVE_BUTTON = "Leave them for now"
 LOOK_AHEAD = 14  # days the rest can be spread over
 HISTORY = timedelta(days=28)  # what usually gets done in a day, from these weeks
@@ -250,7 +255,11 @@ class Focus:
         else:
             few, rest = self.pick(member, among, times, count)
             text = self.text(member, few, rest)
-            if count == 1 and few and rest:
+            if count == 1 and not few and not rest and (undated := self.undated(member)):
+                text = self._undated_text(undated[0], more=len(undated) > 1)  # F46a
+                if len(undated) > 1:
+                    buttons.append(self._else_button(member, [undated[0].id]))
+            if count == 1 and few and (rest or self.undated(member)):
                 buttons.append(self._else_button(member, [t.id for t in few]))
             if few and rest:
                 which = {"list": among, "times": times}
@@ -303,15 +312,42 @@ class Focus:
         offered = [int(i) for i in payload.get("offered", [])]
         ordered, _ = self.pick(member, None, 1, count=10_000)
         left = [t for t in ordered if t.id not in offered]
-        if not left:
+        undated = [t for t in self.undated(member) if t.id not in offered]
+        if not left and not undated:
             await self.services.outbox.edit(member, message_id, NO_MORE_TEXT)
             return
-        chosen = left[0]
-        rest = [t for t in ordered if t.id != chosen.id]
-        more = bool(left[1:])
-        text = self.text(member, [chosen], rest, "" if more else NO_MORE_TEXT)
+        if left:
+            chosen = left[0]
+            rest = [t for t in ordered if t.id != chosen.id]
+            more = bool(left[1:] or undated)
+            text = self.text(member, [chosen], rest, "" if more else NO_MORE_TEXT)
+        else:  # F46a (bug #216): today's are all offered; on to the ones with no day
+            chosen, more = undated[0], bool(undated[1:])
+            text = self._undated_text(chosen, more=more)
         buttons = [self._else_button(member, [*offered, chosen.id])] if more else []
         await self.services.outbox.edit(member, message_id, text, buttons)
+
+    def undated(self, member: Member) -> list[Task]:
+        """F46a (bug #216): their open tasks with no due day, for "Something else" once
+        today's are offered: not waiting for the chart, not put off past today, important
+        first, then the lightest, then the oldest."""
+        today = self.summary.today(member)
+        ends = datetime(today.year, today.month, today.day, tzinfo=self._tz()) + timedelta(days=1)
+        found = [
+            t
+            for t in self.board.open_for(member)
+            if t.due_on is None
+            and not self.board.held(t, member)
+            and ((until := self.board.put_off_until(t, member)) is None or until < ends)
+        ]
+        return sorted(
+            found, key=lambda t: (priority.IMPORTANCE_ORDER.get(t.importance, 1), t.effort, t.id)
+        )
+
+    def _undated_text(self, task: Task, *, more: bool) -> str:
+        return FOCUS_TEXT.format(these="this", items=f"- {task.title}") + (
+            f"\n{UNDATED_TEXT}" if more else f"\n{NO_MORE_TEXT}"
+        )
 
     # ----- the rest, spread out (O1b) -----------------------------------------------------
 

@@ -10,7 +10,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_focus import board, task
 from themi import clock
 from themi.core import keys
-from themi.standard.focus import ELSE_BUTTON, NO_MORE_TEXT
+from themi.standard.focus import CLEAR_TEXT, ELSE_BUTTON, NO_MORE_TEXT, UNDATED_TEXT
 
 
 async def three(scenario: Scenario) -> None:
@@ -62,3 +62,52 @@ async def test_the_next_day_starts_fresh(scenario: Scenario) -> None:
     clock.advance(timedelta(days=1))
     await scenario.tap("Erin", ELSE_BUTTON)
     assert scenario.inbox("Erin")[-1].startswith("For now, just this:\n- Sort the mail")
+
+
+# ----- F46a (Michael's bug #216): on to the ones with no day ------------------------------
+
+
+async def three_and_two_undated(scenario: Scenario) -> None:
+    await three(scenario)
+    await task(scenario, "Erin", "Unjam the vacuum", None, effort=1)
+    await task(scenario, "Erin", "Call the bank", None, effort=3, importance="high")
+
+
+async def test_after_todays_it_goes_on_to_the_undated_ones(scenario: Scenario) -> None:
+    await three_and_two_undated(scenario)
+    await one(scenario)
+    await scenario.tap("Erin", ELSE_BUTTON)
+    await scenario.tap("Erin", ELSE_BUTTON)
+    assert shown(scenario).startswith("For now, just this:\n- Deep clean the oven")
+    assert NO_MORE_TEXT not in shown(scenario)
+    await scenario.tap("Erin", ELSE_BUTTON)
+    assert shown(scenario) == f"For now, just this:\n- Call the bank\n{UNDATED_TEXT}"
+    await scenario.tap("Erin", ELSE_BUTTON)
+    assert shown(scenario) == f"For now, just this:\n- Unjam the vacuum\n{NO_MORE_TEXT}"
+    assert not scenario.edits("Erin")[-1].get("reply_markup")
+
+
+async def test_put_off_undated_ones_are_skipped(scenario: Scenario) -> None:
+    await task(scenario, "Erin", "Sort the mail", effort=1)
+    later = await task(scenario, "Erin", "Call the bank", None, importance="high")
+    await task(scenario, "Erin", "Unjam the vacuum", None)
+    board(scenario).snooze(later.id, until=clock.now() + timedelta(days=2))
+    await one(scenario)
+    await scenario.tap("Erin", ELSE_BUTTON)
+    assert shown(scenario) == f"For now, just this:\n- Unjam the vacuum\n{NO_MORE_TEXT}"
+
+
+async def test_nothing_due_offers_an_undated_one(scenario: Scenario) -> None:
+    await task(scenario, "Erin", "Unjam the vacuum", None, effort=1)
+    await task(scenario, "Erin", "Call the bank", None, effort=3)
+    text = await one(scenario)
+    assert text == f"For now, just this:\n- Unjam the vacuum\n{UNDATED_TEXT}"
+    assert scenario.last_buttons("Erin")[0] == ELSE_BUTTON
+    await scenario.tap("Erin", ELSE_BUTTON)
+    assert shown(scenario) == f"For now, just this:\n- Call the bank\n{NO_MORE_TEXT}"
+
+
+async def test_too_much_today_is_still_about_today(scenario: Scenario) -> None:
+    await task(scenario, "Erin", "Unjam the vacuum", None)
+    sent = await scenario.app.services.get(keys.focus).send(scenario.member("Erin"))
+    assert sent == CLEAR_TEXT
