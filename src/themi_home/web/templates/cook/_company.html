@@ -50,6 +50,7 @@
           <select name="uri" aria-label="Which playlist">
             {% for p in spotify %}<option value="{{ p.uri }}" data-link="{{ p.link or 'https://open.spotify.com/' }}">{{ p.name }}</option>{% endfor %}
           </select>
+          <label class="session-spotify-shuffle"><input type="hidden" name="shuffle" value="off"><input type="checkbox" name="shuffle" value="on"{% if state.music.spotify_shuffle %} checked{% endif %}> Shuffle</label>
           <button name="action" value="play" class="primary">Play</button>
           <button name="action" value="pause">Pause</button>
           <button name="action" value="next">Next</button>

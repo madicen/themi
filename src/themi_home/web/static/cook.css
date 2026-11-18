@@ -385,6 +385,7 @@ body.cook-page[data-theme="dark"] .cook-new > summary { color: var(--accent); }
   min-height: var(--cook-tap); color: var(--accent); font-weight: 600; font-size: 1.1rem; text-decoration: none; }
 .cook-spotify-open .cook-icon { margin: 0; }
 .cook-spotify .session-spotify-said:empty { display: none; }
+.session-spotify-shuffle { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--cook-tap); }
 @media (max-width: 699px) {
   .cook-mood-tabs { flex: 1 1 100%; margin-left: 0; }
   .cook-page .cook-mood-tabs button { flex: 1 1 0; min-width: 0; padding: 0 var(--space-2); overflow-wrap: anywhere; }

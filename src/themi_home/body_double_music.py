@@ -118,8 +118,8 @@ FITS = {
 }
 
 
-def ranked(playlists: list[dict[str, str]], category: str | None,
-           last: str | None) -> list[dict[str, str]]:  # fmt: skip
+def ranked(playlists: list[dict[str, Any]], category: str | None,
+           last: str | None) -> list[dict[str, Any]]:  # fmt: skip
     """F34i: the one from their last session of this kind first, then names that fit the
     job, then the rest as Spotify lists them (most recent first)."""
     fits = FITS.get(category or "", ())
@@ -200,13 +200,13 @@ class MusicOffers:
         )
         return str(row["music"]) if row else None
 
-    async def _playlists(self, session: Any) -> list[dict[str, str]]:
+    async def _playlists(self, session: Any) -> list[dict[str, Any]]:
         """F34i: their own playlists, read once for the session and kept on its row."""
         music = self.services.maybe(keys.music)
         if music is None:
             return []
         member = self.services.store.get_member(session.member_id)
-        found = [{"uri": p.uri, "name": p.name, "link": p.link}
+        found = [{"uri": p.uri, "name": p.name, "link": p.link, "count": p.count}
                  for p in await music.playlists(member)]  # fmt: skip
         found = ranked(found, session.category, self._last_playlist(session))
         if found:
@@ -216,7 +216,7 @@ class MusicOffers:
             )
         return found
 
-    def kept(self, session_id: int) -> list[dict[str, str]]:
+    def kept(self, session_id: int) -> list[dict[str, Any]]:
         raw = self.db.scalar("SELECT playlists FROM body_double_sessions WHERE id = ?",
                              (session_id,))  # fmt: skip
         return list(json.loads(raw)) if raw else []
@@ -252,7 +252,7 @@ class MusicOffers:
         offered.append(Button("Not now", "music_offer", {**tap, "action": "skip"}))
         return f"{text}\n{line}", [*buttons, *offered]
 
-    def _mine_buttons(self, tap: dict[str, Any], mine: list[dict[str, str]], start: int,
+    def _mine_buttons(self, tap: dict[str, Any], mine: list[dict[str, Any]], start: int,
                       count: int) -> list[Any]:  # fmt: skip
         from themi.channels.events import Button
 

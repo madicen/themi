@@ -934,7 +934,7 @@ class BodyDouble:
 
     def state(self, member: Member) -> dict[str, Any]:
         """What the session page shows, as JSON. Never the energy level or any score."""
-        from themi_home.music import choices  # the spotify module's; a cycle at the top
+        from themi_home.music import choices, shuffled  # the spotify module's; a cycle
 
         now = clock.now()
         session = self.current(member)
@@ -971,6 +971,7 @@ class BodyDouble:
             "spotify_playing": music if (music := session.row.get("music") or "").startswith(
                 "spotify:"
             ) else "",  # the one that played, still chosen on the page
+            "spotify_shuffle": shuffled(self.store, member),  # F47a
             "buttons": [
                 {"label": b.label, "action": b.payload.get("action", ""),
                  "mode": b.payload.get("mode", "")}

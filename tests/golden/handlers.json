@@ -123,6 +123,7 @@
     "music.next",
     "music.pause",
     "music.play",
+    "music.shuffle",
     "routines.add_item",
     "safeway.fill",
     "server.request",

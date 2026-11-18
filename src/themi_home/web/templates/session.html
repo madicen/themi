@@ -78,6 +78,7 @@
       <select name="uri" aria-label="Which playlist">
         {% for p in state.spotify %}<option value="{{ p.uri }}" {% if p.uri == state.spotify_playing %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
       </select>
+      <label class="session-spotify-shuffle"><input type="hidden" name="shuffle" value="off"><input type="checkbox" name="shuffle" value="on"{% if state.spotify_shuffle %} checked{% endif %}> Shuffle</label>
       <button name="action" value="play" class="primary">Play</button>
       <button name="action" value="pause">Pause</button>
       <button name="action" value="next">Next</button>

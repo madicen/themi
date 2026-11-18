@@ -358,6 +358,25 @@
     }
   });
 
+  // F47a: Shuffle, the chosen playlist in order or at random: kept, and Spotify told at once
+  document.addEventListener("change", function (event) {
+    var box = event.target;
+    if (!box.closest || !box.matches('.session-spotify input[name="shuffle"][type="checkbox"]')) return;
+    var form = box.closest("form");
+    var said = form.parentNode.querySelector(".session-spotify-said");
+    var data = new URLSearchParams(new FormData(form));
+    data.set("action", "shuffle");
+    data.set("shuffle", box.checked ? "on" : "off");
+    fetch(form.getAttribute("action"), {
+      method: "POST", body: data.toString(), credentials: "same-origin",
+      headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
+    }).then(function (r) {
+      if (!r.ok) report("spotify shuffle answered " + r.status);
+      return r.ok ? r.json() : null;
+    }).then(function (s) { if (said && s && s.said) said.textContent = s.said; },
+            function (e) { report("spotify shuffle failed: " + e); });
+  });
+
   // CK5/CK14: the built-in mixes. Each kind (lofi, soft piano...) has a few tracks: one at
   // random to start, and Next plays another of the same kind. Nothing plays until they tap.
   // CK15a: a track with a mix (data-mix, no file) plays live through mix.js.

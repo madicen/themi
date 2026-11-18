@@ -48,6 +48,7 @@ class FakeSpotify:
         self.refresh_tokens: set[str] = set()
         self.playing: dict | None = None  # {"context_uri"|"uris", "device_id"}
         self.paused = False
+        self.shuffle = False  # Spotify's own shuffle state
         self.calls: list[str] = []
         self.transport = httpx.MockTransport(self._handle)
 
@@ -58,10 +59,10 @@ class FakeSpotify:
 
     # ----- the test's controls ----------------------------------------------------------
 
-    def add_device(self, name: str, *, active: bool = False) -> str:
+    def add_device(self, name: str, *, active: bool = False, kind: str = "Speaker") -> str:
         device_id = f"dev-{len(self.devices) + 1}"
         self.devices.append({"id": device_id, "name": name, "is_active": active,
-                             "is_restricted": False, "type": "Speaker"})  # fmt: skip
+                             "is_restricted": False, "type": kind})  # fmt: skip
         return device_id
 
     def _entry(self, kind: str, name: str) -> dict:
@@ -74,8 +75,8 @@ class FakeSpotify:
         self.catalogue.append(entry)
         return entry
 
-    def add_mine(self, name: str) -> dict:
-        entry = self._entry("playlist", name)
+    def add_mine(self, name: str, tracks: int = 20) -> dict:
+        entry = {**self._entry("playlist", name), "tracks": {"total": tracks}}
         self.mine.append(entry)
         return entry
 
@@ -142,6 +143,11 @@ class FakeSpotify:
                 return httpx.Response(404, json={"error": {"reason": "NO_ACTIVE_DEVICE"}})
             self.playing = {**json.loads(request.content or b"{}"), "device_id": device}
             self.paused = False
+            return httpx.Response(204)
+        if path == "/me/player/shuffle":
+            if self.playing is None:
+                return httpx.Response(404, json={"error": {"reason": "NO_ACTIVE_DEVICE"}})
+            self.shuffle = url.params.get("state") == "true"
             return httpx.Response(204)
         if path == "/me/player/pause":
             if not self.premium:

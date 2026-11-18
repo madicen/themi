@@ -165,9 +165,9 @@ async def test_their_spotify_on_the_cook_screen(
     page = (await site.get("/session")).text
     assert "My Spotify" in page
     spotify = (await site.get("/session/state")).json()["music"]["spotify"]
-    # liked songs first (the default), a random playlist, then one that fits cooking
-    assert [p["name"] for p in spotify[:3]] == ["Liked songs", "A random playlist",
-                                                "Kitchen Dance"]  # fmt: skip
+    # liked songs first (the default), then one that fits cooking
+    assert [p["name"] for p in spotify[:2]] == ["Liked songs", "Kitchen Dance"]
+    assert 'class="session-spotify-shuffle"' in page  # F47a: Shuffle beside it
     assert 'role="tab"' in page and "Spotify playlists" in page  # CK14: a tab of its own
     # CK14: a link to open Spotify itself, at the first choice: their liked songs
     first = spotify[0]["link"]
@@ -177,10 +177,10 @@ async def test_their_spotify_on_the_cook_screen(
     played = await site.post(
         "/session/spotify",
         headers={"X-Requested-With": "fetch"},
-        data={"csrf": csrf, "action": "play", "uri": spotify[2]["uri"]},
+        data={"csrf": csrf, "action": "play", "uri": spotify[1]["uri"]},
     )
     assert played.json()["said"].startswith("Playing")
-    assert fake_spotify.playing["context_uri"] == spotify[2]["uri"]  # type: ignore[index]
+    assert fake_spotify.playing["context_uri"] == spotify[1]["uri"]  # type: ignore[index]
 
 
 async def test_set_the_mood_offers_every_track_of_each_kind(

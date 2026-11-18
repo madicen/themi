@@ -94,6 +94,7 @@ class Item:
     name: str
     kind: str  # playlist, album or track
     link: str  # open.spotify.com, for a free account
+    count: int = 0  # a playlist's tracks, when Spotify said (for a shuffled start)
 
 
 @dataclass(frozen=True)
@@ -101,6 +102,7 @@ class Device:
     id: str
     name: str
     active: bool
+    kind: str = ""  # Spotify's type: Computer, Smartphone, Speaker, TV...
 
 
 def pkce_pair() -> tuple[str, str]:
@@ -183,12 +185,12 @@ class SpotifyClient:
         body = await self._call("GET", "/me/playlists?limit=50", access)
         return [_item(p, "playlist") for p in body.get("items") or [] if p]
 
-    async def liked(self, access: Secret, rng: random.Random) -> list[str]:
-        """A page of their liked songs, from a random place in them, shuffled: the most
-        recent page when they have only one."""
+    async def liked(self, access: Secret, rng: random.Random, *, shuffle: bool) -> list[str]:
+        """A page of their liked songs. In order: the most recent, newest first. Shuffled:
+        from a random place in them (the most recent page when there's only one), mixed."""
         body = await self._call("GET", f"/me/tracks?limit={LIKED_PAGE}", access)
         total = int(body.get("total") or 0)
-        if total > LIKED_PAGE:
+        if shuffle and total > LIKED_PAGE:
             offset = rng.randrange(total - LIKED_PAGE + 1)
             if offset:
                 body = await self._call(
@@ -199,7 +201,8 @@ class SpotifyClient:
             if (uri := ((saved or {}).get("track") or {}).get("uri"))
             and not str(uri).startswith("spotify:local:")
         ]  # fmt: skip
-        rng.shuffle(uris)
+        if shuffle:
+            rng.shuffle(uris)
         return uris
 
     async def play_tracks(self, access: Secret, uris: list[str], device_id: str) -> None:
@@ -208,14 +211,30 @@ class SpotifyClient:
     async def devices(self, access: Secret) -> list[Device]:
         body = await self._call("GET", "/me/player/devices", access)
         return [
-            Device(str(d["id"]), str(d.get("name", "")), bool(d.get("is_active")))
+            Device(
+                str(d["id"]),
+                str(d.get("name", "")),
+                bool(d.get("is_active")),
+                str(d.get("type", "")),
+            )
             for d in body.get("devices") or []
             if d.get("id") and not d.get("is_restricted")
         ]
 
-    async def play(self, access: Secret, item: Item, device_id: str) -> None:
-        body = {"uris": [item.uri]} if item.kind == "track" else {"context_uri": item.uri}
+    async def play(
+        self, access: Secret, item: Item, device_id: str, *, start: int | None = None
+    ) -> None:
+        """`start`: the track to begin at (a shuffled playlist's first, at random)."""
+        body: dict[str, Any] = (
+            {"uris": [item.uri]} if item.kind == "track" else {"context_uri": item.uri}
+        )
+        if start is not None and item.kind != "track":
+            body["offset"] = {"position": start}
         await self._call("PUT", f"/me/player/play?device_id={device_id}", access, body)
+
+    async def shuffle(self, access: Secret, on: bool, device_id: str | None = None) -> None:
+        where = f"&device_id={device_id}" if device_id else ""
+        await self._call("PUT", f"/me/player/shuffle?state={str(on).lower()}{where}", access)
 
     async def pause(self, access: Secret) -> None:
         await self._call("PUT", "/me/player/pause", access)
@@ -277,7 +296,9 @@ class SpotifyClient:
 
 def _item(raw: dict[str, Any], kind: str) -> Item:
     link = str((raw.get("external_urls") or {}).get("spotify") or "")
-    return Item(str(raw["uri"]), str(raw.get("name", "")), kind, link)
+    tracks = raw.get("tracks") or raw.get("items") or {}  # a playlist's: {"total": n}
+    count = int(tracks.get("total") or 0) if isinstance(tracks, dict) else 0
+    return Item(str(raw["uri"]), str(raw.get("name", "")), kind, link, count)
 
 
 def _json(response: httpx.Response) -> dict[str, Any]:

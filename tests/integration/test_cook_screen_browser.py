@@ -15,6 +15,7 @@ from tests.scenarios.test_body_double import own_playlists
 from tests.unit.test_cook_screen import ALFREDO, lines
 from themi import clock
 from themi.core import keys
+from themi_home.music import SpotifyPlayback
 
 pytestmark = pytest.mark.skipif(CHROME is None, reason="needs Chrome or Chromium")
 
@@ -350,9 +351,17 @@ async def test_spotify_on_the_cook_screen_plays_and_pauses_once_a_tap(
         said = "document.querySelector('.cook-spotify .session-spotify-said').textContent"
         await tab.value("document.querySelector('.cook-spotify button[value=play]').click()")
         assert await until(lambda: tab.value(f"({said}).startsWith('Playing your liked songs')"))
+        # F47a: Shuffle, ticked while it plays, reaches Spotify at once
+        box = "document.querySelector('.cook-spotify input[type=checkbox][name=shuffle]')"
+        await tab.value(f"{box}.click()")
+        assert await until(lambda: tab.value(f"({said}).startsWith('Shuffle on')"))
+        assert fake_spotify.shuffle is True
         await tab.value("document.querySelector('.cook-spotify button[value=pause]').click()")
         assert await until(lambda: tab.value(f"({said}) === 'Paused.'"))
         await until(lambda: tab.value("false"), 1)  # a second post, had there been one
     assert fake_spotify.calls.count("PUT /v1/me/player/play") == 1
+    assert scenario.app.store.preferences(
+        scenario.member("Erin").id, SpotifyPlayback
+    ).spotify_shuffle  # kept for next time
     assert fake_spotify.calls.count("PUT /v1/me/player/pause") == 1
     assert fake_spotify.paused
