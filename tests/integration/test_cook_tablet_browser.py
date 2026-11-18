@@ -108,13 +108,17 @@ QUIET_AUDIO = (  # no sound in a test: play() resolves, as after a tap
 
 
 async def test_next_plays_another_track_of_the_same_kind(scenario: Scenario) -> None:
+    """Rain: a kind without chords, so Next never asks for a made mix (CK15b)."""
+    from themi_home.body_double_music import set_sound
+
     clock.unfreeze()
+    set_sound(scenario.app.store, scenario.member("Erin"), "rain")
     await to_step_three(scenario)
     async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves",
                               width=1180, height=820) as tab:  # fmt: skip
         await tab.value(QUIET_AUDIO)
         lofi = json.loads(await tab.value(
-            "JSON.stringify([...document.querySelectorAll('.cook-tracks[data-sound=lofi] li')]"
+            "JSON.stringify([...document.querySelectorAll('.cook-tracks[data-sound=rain] li')]"
             ".map(li => li.textContent))"
         ))  # fmt: skip
         assert len(lofi) >= 2
@@ -181,3 +185,27 @@ async def test_a_mix_plays_live_from_its_settings(scenario: Scenario) -> None:
         assert await tab.value("document.querySelector('[data-live=playing]').textContent") == (
             "Paused"
         )
+
+
+async def test_play_makes_a_mix_for_the_recipe_and_it_takes_over(scenario: Scenario) -> None:
+    """CK15b: the first Play of lofi starts a built-in track at once and asks for a mix made
+    from the recipe's name; when it comes, it plays live in the built-in track's place."""
+    from tests.unit.test_cook_mixes import SIMMER
+
+    clock.unfreeze()
+    await to_step_three(scenario)
+    scenario.primary.queue_structured(SIMMER)
+    async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves",
+                              width=1180, height=820) as tab:  # fmt: skip
+        await tab.value(QUIET_AUDIO)
+        name = "document.querySelector('[data-live=track-name]').textContent"
+        assert await tab.value(name) != "Alfredo simmer"  # a built-in to start
+        await tab.value("document.querySelector('.session-play').click()")
+        assert await until(lambda: tab.value(f"({name}) === 'Alfredo simmer'"))
+        assert await until(lambda: tab.value(
+            "!!(window.themiCook.music.player() && window.themiCook.music.player().playing)"
+        ))  # fmt: skip
+        assert await tab.value("window.themiCook.music.player().mix.bpm") == SIMMER["bpm"]
+        made = "document.querySelectorAll('.cook-tracks[data-sound=lofi] li[data-made]').length"
+        assert await tab.value(made) == 1
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM music_mixes") == 1

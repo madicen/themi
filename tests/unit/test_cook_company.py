@@ -193,7 +193,8 @@ async def test_set_the_mood_offers_every_track_of_each_kind(
     assert "Set the mood" in page and "Some lofi while you cook?" in page
     assert 'class="cook-track-next"' in page and "autoplay" not in page
     for loop in LOOPS.values():
-        assert f'<ul class="cook-tracks" data-sound="{loop.key}" hidden>' in page
+        musical = ' data-musical="1"' if loop.key in ("lofi", "soft_piano") else ""  # CK15b
+        assert f'<ul class="cook-tracks" data-sound="{loop.key}"{musical} hidden>' in page
         for track in loop.tracks:
             assert f">{track.name}</li>" in page and track.file.removesuffix(".m4a") in page
     assert 'role="tab"' not in page and "cook-spotify-open" not in page
