@@ -31,6 +31,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Oven (the Café range through SmartHQ, and the cook screen's preheat, proof, timers and
   off): Themi Oven Module Plan, https://claude.ai/artifact/LPAkQkcza7v4iFCG25AjiK. Read it
   the same way. It is the design source for the OV prompts.
+- Usage (AI and API use against free-tier limits, the usage card): Themi Usage Plan,
+  https://claude.ai/artifact/KfM9decJEit2wjhUeDoymq. Read it the same way. It is the design
+  source for the UC prompts.
 
 ## "Implement the next prompt"
 

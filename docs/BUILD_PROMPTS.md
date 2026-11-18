@@ -30,6 +30,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 - Slack (SL prompts, at the end) has its own design doc, the
   [Themi Slack Module Plan](https://claude.ai/artifact/JrGh1duN5kCKLmZjx4eHjB): the work
   Themi in Slack direct messages instead of Telegram.
+- Usage (UC prompts, at the end) has its own design doc, the
+  [Themi Usage Plan](https://claude.ai/artifact/KfM9decJEit2wjhUeDoymq): a picture for
+  admins of AI and API use against the free-tier limits, with meters from each module.
 
 ## Progress
 
@@ -456,6 +459,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV6 | Oven: Stop turns the oven off | Oven | [x] 2026-11-15 |
 | OV7 | Oven: proofing dough | Oven | [x] 2026-11-15 |
 | OV8 | Oven: preheat ahead of a planned dinner | Oven | [~] |
+| UC1 | Usage: meters and the daily table | Usage | [ ] |
+| UC2 | Usage: AI requests and tokens | Usage | [ ] |
+| UC3 | Usage: device and API meters | Usage | [ ] |
+| UC4 | Usage: the usage card and /usage | Usage | [ ] |
+| UC5 | Usage: the Usage page and limit overrides | Usage | [ ] |
 
 ## Fixed technical choices
 
@@ -20975,3 +20983,109 @@ Notes:
   first. Once it exists, the card is OV4's `OvenControl.heat()` from a [Preheat] button
   (`offered_at` the card's time), sent at the dinner's time less the preheat (about 15
   minutes at 25°F a minute).
+
+## Usage
+
+Design source: the [Themi Usage Plan](https://claude.ai/artifact/KfM9decJEit2wjhUeDoymq).
+Read it with the Claude Docs tools, like the other plans. Michael asked for it on 2026-11-18.
+
+A picture for admins of today's and this month's use of each AI backend and each device or
+web API, against its free-tier limit. Modules add their own meters, the way they add
+settings sections. Rules every UC prompt keeps:
+
+- Counting never fails or slows the call it counts: a database error is logged and dropped,
+  as the router's `_record` does for `ai_calls`.
+- A meter's day is worked out from `themi.clock` in its limit's reset zone (Gemini: midnight
+  Pacific). Tests freeze the clock and cross midnights.
+- No test reaches a provider; counting is tested through the fakes in `tests/fakes`.
+- No secrets, key fragments, names or message text in `usage_daily` or on the card. A
+  backend is shown by its label from the AI page.
+- Admins only: `/usage`, `show_usage` and the Usage page.
+
+### UC1 · Usage: meters and the daily table
+Status: [ ]
+Depends on: none
+Read first: the plan's "Meters", "Storage" and "Limits"; `themi/modules/context.py`
+(`settings_section`, `dashboard_panel`) as the pattern.
+- `themi/usage.py`: `Meter` (key, label, unit, group, order, limits, read), `Limits`
+  (per_day, per_month, resets, source, checked), `Price` (input_per_mtok, output_per_mtok,
+  per_request, per_picture), and `UsageBook` on `keys.usage`: `count(meter, n=1, scope="",
+  model="", input_tokens=0, output_tokens=0, amount=0.0)`, `today(meter)`, `month(meter)`,
+  `days(meter, 30)`, `limit_for(meter, scope)`.
+- `ctx.usage_meter(meter)` in `ModuleContext`; a key registered twice is a `ModuleError`;
+  the `_Snapshot` takes a failed module's meters back.
+- Migration: `usage_daily` (as in the plan) and `usage_limits(meter, scope, per_day,
+  per_month, set_by, set_at)`. `limit_for`: an override for the scope, then for every scope,
+  then the meter's default.
+- A daily core job `usage.prune` deletes rows older than 400 days.
+Tests: counting upserts; the day turns at the reset zone's midnight (Pacific and UTC, with
+the family elsewhere); a database error in `count` is logged and doesn't raise; override
+order; duplicate key refused; a failed install leaves no meter; prune.
+
+Notes:
+
+### UC2 · Usage: AI requests and tokens
+Status: [ ]
+Depends on: UC1
+Read first: the plan's "AI metering"; `themi/ai/router.py` (`run`, `_attempt`, `_hedged`,
+`_record`); `themi/standard/ai_providers.py`.
+- The router counts each attempt that reaches a provider against `<kind>.requests`, scoped
+  to the backend id, with the response's model and `Usage` tokens. Retries and both halves
+  of a hedge count; a backend skipped by an open breaker doesn't.
+- The gemini, cloudflare, anthropic and openai provider modules register their meters.
+  Look up Gemini's free-tier requests a day for the default models (chat, transcription,
+  embedding) on Google's rate-limit page and record the date in `checked`. Cloudflare:
+  `cloudflare.neurons`, 10,000 a day, UTC, with `amount` per picture (about 104 for klein,
+  58 for schnell, from `defaults.py`).
+- Prices for the Anthropic default model and the OpenAI image model from their pricing
+  pages. Free-tier backends get none.
+Tests: one chat counts one request with its tokens; a retry counts two; a hedge counts two;
+an open breaker counts none; a Cloudflare picture adds its neurons; two members on their own
+keys get a row each; a fake priced backend gives an estimate.
+
+Notes:
+
+### UC3 · Usage: device and API meters
+Status: [ ]
+Depends on: UC1
+Read first: the plan's "Device and API meters"; each connector's client.
+- Count at each client's one request site: Home Connect, ThinQ, CatGenie, Tuya, SmartHQ,
+  TomTom, Tavily, Open-Meteo and NWS, Google (Gmail, Calendar, Tasks), Keep, OurGroceries,
+  Roborock. Each module registers its meter, with the limit from the code's comments where
+  there is one and the provider's page otherwise; none known is no limit.
+- A 429 from a counted client also counts `<meter>.refused`.
+Tests: per connector, a fake call counts one; a fake 429 counts a refusal; a connector
+whose module isn't installed registers nothing.
+
+Notes:
+
+### UC4 · Usage: the usage card and /usage
+Status: [ ]
+Depends on: UC2, UC3
+Read first: the plan's "The usage card" and "Where it shows"; `themi/standard/drawings.py`
+and `week_card.py` as the pattern.
+- `UsageView` from the book (groups, rows, today, limit, month, pace, projection, refused,
+  estimate), and `drawing/templates/usage_card.svg` in both themes. Colours: good under
+  75%, warning 75% to 99%, critical at 100% or after a refusal today. A row with no use this
+  month is left out; no rows says "Nothing used yet this month."
+- `/usage` and `show_usage` (admins only; anyone else: "That's for the household's
+  admins."), sent through the outbox as a picture, as text when drawing fails.
+Tests: golden SVGs (light, dark, empty, near, over, monthly, with an estimate); the view's
+pace and projection; the admin check. A scenario: an admin's `/usage` gets the card, a
+member's gets the refusal.
+
+Notes:
+
+### UC5 · Usage: the Usage page and limit overrides
+Status: [ ]
+Depends on: UC4
+Read first: the plan's "Limits" and "Where it shows"; the Modules page (SP prompts).
+- `/admin/usage` in the menu's Admin group: the card as SVG in the page, a table of each
+  meter's last 30 days, and its limit with where it came from. An override form per meter
+  (and per scope) writes `usage_limits`; a limit checked over 6 months ago is marked "check
+  this".
+- The Modules page links each module with meters to its rows here.
+Tests: admins only; an override changes the card; clearing it goes back to the default; the
+"check this" mark. A scenario: an admin lowers the Gemini limit and sees the bar move.
+
+Notes:
