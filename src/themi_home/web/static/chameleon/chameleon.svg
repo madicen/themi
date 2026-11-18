@@ -1,28 +1,50 @@
-<svg class="cham" viewBox="0 0 140 110" role="img" aria-label="Themi the chameleon" xmlns="http://www.w3.org/2000/svg">
-  <!-- Themi the chameleon (BD3b): original art, drawn as named parts so CSS can move them.
-       Colours come from the site's tokens in themi.css; nothing here sets a style. -->
-  <g class="prop prop-blanket"><path d="M22 70 C 34 56, 92 52, 112 66 C 116 84, 104 96, 70 96 C 40 96, 20 88, 22 70 Z"/><path class="prop-line" d="M34 76 L 100 72 M38 86 L 98 82"/></g>
-  <g class="cham-tail"><path d="M36 74 C 18 76, 10 92, 22 100 C 32 106, 44 96, 37 88 C 32 82, 25 87, 29 92"/></g>
-  <g class="cham-foot"><path d="M48 82 C 46 90, 44 96, 40 98 M48 82 C 52 90, 54 96, 58 98"/></g>
+<svg class="cham" viewBox="0 0 120 150" role="img" aria-label="Themi the chameleon" xmlns="http://www.w3.org/2000/svg">
+  <!-- Themi the chameleon (BD3b, redrawn in BD3c as the chosen Themi of BD4d: standing, front
+       three-quarter, teal with big round eyes, a mint belly with bands, a banded tail).
+       Original art, drawn as named parts so CSS can move them. Colours come from the
+       --cham tokens in themi.css; nothing here sets a style. -->
+  <g class="cham-tail">
+    <path class="cham-outline" d="M42 120 C 26 127, 8 123, 8 106 C 8 95, 19 91, 23 99"/>
+    <path class="cham-limb" d="M42 120 C 26 127, 8 123, 8 106 C 8 95, 19 91, 23 99"/>
+    <path class="cham-stripe" d="M42 120 C 26 127, 8 123, 8 106 C 8 95, 19 91, 23 99"/>
+  </g>
+  <g class="cham-foot">
+    <path class="cham-skin" d="M42 116 C 41 124, 40 130, 40 136 C 34 136, 30 140, 33 143 L 50 143 C 52 140, 50 136, 48 136 C 48 130, 49 124, 50 116 Z"/>
+    <path class="cham-skin" d="M64 116 C 65 124, 66 130, 66 136 C 64 136, 62 140, 64 143 L 81 143 C 84 140, 80 136, 74 136 C 74 130, 73 124, 72 116 Z"/>
+    <path class="cham-crease" d="M39 143 L 39 140 M44 143 L 44 140 M70 143 L 70 140 M75 143 L 75 140"/>
+  </g>
   <g class="cham-body">
-    <path class="cham-skin" d="M34 72 C 36 50, 66 42, 88 50 C 102 56, 106 72, 94 80 C 80 88, 46 88, 34 72 Z"/>
-    <path class="cham-belly" d="M44 80 C 58 86, 80 86, 94 79"/>
-    <path class="cham-spots" d="M52 60 a3 3 0 1 0 0.1 0 M66 56 a3 3 0 1 0 0.1 0 M78 60 a2.5 2.5 0 1 0 0.1 0 M60 70 a2 2 0 1 0 0.1 0"/>
-    <path class="cham-crest" d="M44 56 L 48 50 L 52 54 L 57 48 L 61 52 L 66 46 L 70 51 L 75 46 L 79 52"/>
+    <path class="cham-skin" d="M40 62 C 30 76, 28 100, 32 114 C 36 127, 78 127, 82 114 C 86 100, 84 76, 74 62 Z"/>
+    <path class="cham-belly" d="M45 72 C 39 86, 39 106, 45 116 C 51 122, 65 122, 71 116 C 77 106, 76 86, 70 72 C 63 68, 52 68, 45 72 Z"/>
+    <path class="cham-stripe" d="M43 80 C 52 85, 65 85, 72 80 M41 93 C 51 98, 66 98, 75 93"/>
   </g>
+  <g class="prop prop-apron"><path d="M47 72 L 69 72 L 71 86 C 78 90, 80 108, 77 118 C 66 124, 48 124, 38 118 C 35 108, 37 90, 45 86 Z"/><path class="prop-line" d="M47 72 C 46 66, 50 62, 54 61 M69 72 C 70 66, 66 62, 62 61 M46 101 L 70 101"/></g>
+  <g class="cham-hand cham-hand-back">
+    <path class="cham-outline" d="M39 72 C 31 81, 27 91, 27 101"/>
+    <path class="cham-limb" d="M39 72 C 31 81, 27 91, 27 101"/>
+  </g>
+  <g class="cham-hand cham-hand-front">
+    <path class="cham-outline" d="M76 72 C 85 80, 89 88, 90 98"/>
+    <path class="cham-limb" d="M76 72 C 85 80, 89 88, 90 98"/>
+  </g>
+  <g class="prop prop-blanket"><path d="M26 88 C 40 80, 78 80, 90 86 C 93 102, 90 118, 84 126 C 68 133, 46 133, 30 126 C 24 114, 23 100, 26 88 Z"/><path class="prop-line" d="M30 100 L 88 98 M30 114 L 87 112"/></g>
   <g class="cham-head">
-    <path class="cham-skin" d="M84 50 C 92 34, 118 34, 124 50 C 128 62, 114 70, 98 68 Z"/>
-    <path class="cham-mouth" d="M104 62 C 110 65, 117 64, 121 59"/>
-    <g class="cham-eye"><circle class="cham-eyeball" cx="108" cy="49" r="9"/><circle class="cham-pupil" cx="110" cy="49" r="3.4"/><path class="cham-lid" d="M99 49 C 103 41, 113 41, 117 49 C 113 45, 103 45, 99 49 Z"/></g>
+    <path class="cham-skin" d="M22 42 C 20 22, 38 10, 58 10 C 80 10, 96 22, 94 42 C 93 58, 78 68, 58 68 C 38 68, 23 58, 22 42 Z"/>
+    <path class="cham-crease" d="M46 15 C 52 19, 62 19, 68 15"/>
+    <path class="cham-mouth" d="M49 49 C 55 56, 65 56, 71 48"/>
+    <g class="cham-eye">
+      <circle class="cham-eyeball" cx="35" cy="29" r="11"/>
+      <circle class="cham-eyeball" cx="81" cy="28" r="10.5"/>
+      <g class="cham-pupil"><circle cx="37" cy="30.5" r="6.4"/><circle class="cham-glint" cx="35" cy="28" r="2"/></g>
+      <g class="cham-pupil"><circle cx="83" cy="29.5" r="6.1"/><circle class="cham-glint" cx="81" cy="27" r="1.9"/></g>
+      <g class="cham-lid"><circle cx="35" cy="29" r="11.6"/><circle cx="81" cy="28" r="11.1"/><path class="cham-lash" d="M26 30 C 31 35, 39 35, 44 30 M73 29 C 77 34, 85 34, 89 29"/></g>
+    </g>
   </g>
-  <g class="cham-hand cham-hand-back"><path d="M66 82 C 64 90, 62 94, 58 96"/></g>
-  <g class="cham-hand cham-hand-front"><path d="M90 76 C 96 82, 100 84, 104 82"/></g>
-  <g class="prop prop-book"><path d="M94 74 L 112 70 L 114 84 L 96 88 Z"/><path class="prop-line" d="M104 72 L 105 86"/></g>
-  <g class="prop prop-mug"><rect x="120" y="86" width="10" height="12" rx="2"/><path class="prop-line" d="M130 89 C 135 90, 135 95, 130 96 M123 82 C 122 79, 125 78, 124 75"/></g>
-  <g class="prop prop-broom"><path class="prop-line" d="M104 60 L 84 102"/><path d="M78 98 L 92 104 L 86 110 L 72 106 Z"/></g>
-  <g class="prop prop-easel"><path class="prop-line" d="M118 60 L 112 104 M128 60 L 134 104 M123 56 L 123 104"/><rect x="110" y="58" width="26" height="22" rx="1"/><path class="prop-paint" d="M114 74 C 118 66, 124 72, 130 64"/><path class="prop-line" d="M104 78 L 112 70"/></g>
-  <g class="prop prop-pencil"><path class="prop-line" d="M100 84 L 114 72"/><path class="prop-paper" d="M98 90 L 126 86 L 128 98 L 100 102 Z"/><path class="prop-line" d="M104 94 C 108 90, 112 96, 118 92"/></g>
-  <g class="prop prop-apron"><path d="M58 60 C 66 56, 80 56, 88 60 L 90 84 C 78 88, 64 88, 54 84 Z"/><path class="prop-line" d="M58 60 C 70 50, 82 48, 92 52 M64 72 L 82 72"/></g>
-  <g class="prop prop-spoon"><path class="prop-line" d="M104 82 L 128 58"/><path d="M126 52 C 132 48, 138 54, 134 60 C 130 64, 124 60, 126 52 Z"/></g>
-  <g class="cham-zz"><path class="prop-line" d="M118 28 L 126 28 L 118 36 L 126 36 M128 16 L 134 16 L 128 22 L 134 22"/></g>
+  <g class="prop prop-book"><path d="M84 88 L 96 92 L 96 106 L 84 102 Z M96 92 L 110 86 L 110 100 L 96 106 Z"/><path class="prop-line" d="M96 92 L 96 106 M87 93 L 93 95 M99 95 L 107 92"/></g>
+  <g class="prop prop-mug"><rect x="104" y="128" width="12" height="14" rx="2"/><path class="prop-line" d="M116 131 C 121 132, 121 138, 116 139 M109 124 C 107 120, 111 119, 109 115"/></g>
+  <g class="prop prop-broom"><path class="prop-line" d="M102 62 L 82 140"/><path d="M75 136 L 90 141 L 86 151 L 69 146 Z"/></g>
+  <g class="prop prop-easel"><path class="prop-line" d="M114 82 L 108 146 M134 82 L 140 146 M124 78 L 124 146"/><rect x="106" y="72" width="36" height="28" rx="1"/><path class="prop-paint" d="M111 93 C 116 83, 124 91, 136 81"/><path class="prop-line" d="M90 98 L 105 88"/></g>
+  <g class="prop prop-pencil"><path class="prop-paper" d="M80 100 L 104 94 L 108 112 L 84 118 Z"/><path class="prop-line" d="M87 109 C 91 104, 96 110, 102 105 M90 98 L 104 86"/></g>
+  <g class="prop prop-spoon"><path class="prop-line" d="M90 98 L 108 72"/><path d="M106 66 C 110 60, 118 64, 114 70 C 111 74, 104 72, 106 66 Z"/></g>
+  <g class="cham-zz"><path class="prop-line" d="M98 6 L 106 6 L 98 14 L 106 14 M108 -6 L 114 -6 L 108 0 L 114 0"/></g>
 </svg>

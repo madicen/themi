@@ -313,7 +313,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
 | BD4c | Body double: better step pictures, the same Themi in each | Body double | [x] 2026-11-17 |
 | BD4d | Body double: a Themi character sheet for the step pictures | Body double | [x] 2026-11-17 |
-| BD3c | Body double: the session page's chameleon redrawn as the chosen Themi | Body double | [ ] |
+| BD3c | Body double: the session page's chameleon redrawn as the chosen Themi | Body double | [x] 2026-11-17 |
 | BD4e | Body double: ready-made pictures when live ones can't be made | Body double | proposed |
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
 | BD5b | Spotify: playing their own music | Body double | [x] 2026-11-06 |
@@ -15848,7 +15848,7 @@ Notes (2026-11-17):
 - Setup: update the Pi (the PNG ships in the package; `web/static/*/*` covers it).
 
 ### BD3c · Body double: the session page's chameleon redrawn as the chosen Themi
-Status: [ ]
+Status: [x] 2026-11-17
 Depends on: BD4d
 Read first: BD3b's notes (named parts, colours from tokens, no style in the SVG).
 - `chameleon.svg` redrawn by hand to look like BD4d's chosen character (standing,
@@ -15856,6 +15856,28 @@ Read first: BD3b's notes (named parts, colours from tokens, no style in the SVG)
   part and prop, so every state and scene still works. Original art, drawn as SVG paths.
 Tests: BD3b's page tests (every flag has a CSS state, no style or script in the SVG);
 checked by eye at 360px, light and dark, every state.
+
+Notes (2026-11-17):
+- `chameleon.svg` redrawn: standing, front three-quarter, a round head with two big white
+  eyes, a smile, a mint belly with two darker bands, arms at its sides, stubby feet, and a
+  tail curled up behind on the left with bands (a dashed stroke along it). viewBox is now
+  `0 0 120 150` (portrait); props are redrawn around the new hand (book, mug, broom, easel,
+  pencil, blanket, apron, spoon, zz) and may hang outside the box (`overflow: visible`).
+- Same named parts as BD3b (`cham-body`, `-head`, `-eye`, `-pupil`, `-lid`, `-tail`,
+  `-hand-front`/`-back`, `-foot`); `cham-spots` and `cham-crest` are gone, and the new
+  ones are `cham-belly`, `-stripe`, `-outline`/`-limb` (a limb is a dark wide stroke under a
+  teal narrow one), `-glint`, `-lash`, `-crease`. Arms swing from the shoulder.
+- Colours: new tokens `--cham`, `--cham-belly`, `--cham-stripe`, `--cham-line`,
+  `--cham-eye` in themi.css, light and dark, and in the cook page's explicit dark theme. The
+  chameleon no longer takes `--accent`, so it stays teal on the cook screen (it was olive
+  in CK12's light theme and yellow in the kitchen theme).
+- Sized by height now, not width: 78% of the scene up to 15rem; sprint 8.5rem on the
+  timer; guided 80%; cooking 74% on the stool.
+- Tests: every `cham-*` class the CSS styles is drawn in the SVG; the `--cham` tokens in
+  both themes and the cook page's dark theme; the chameleon's rules don't use `--accent`.
+- Checked by eye with headless Chrome: every state at 240px and 344px wide, light and
+  dark; the cook bar at 1024px in light, dark and kitchen. Not looked at on a phone yet.
+- Setup: update the Pi and restart `themi run` (static files only, no migration).
 
 ### BD4e · Body double: ready-made pictures when live ones can't be made
 Status: proposed (2026-11-17), Michael's call after BD4d is live

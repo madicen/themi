@@ -184,6 +184,8 @@ body.cook-page[data-theme="dark"] {
   --bg: #1a1c19; --fg: #ecebe3; --muted: #a8ad9f; --card: #232822; --card-2: #2c322a; --line: #363d33;
   --accent: #b9d59c; --accent-fg: #1c2814; --soft: #2f3a29; --info-bg: #2c322a; --warn: #f0c878; --warn-bg: #3a3022;
   --step: #eba47e; --step-bg: #48322a; --step-fg: #2a1a12; color-scheme: dark;
+  /* BD3c: the chameleon's dark colours when the page is dark but the phone isn't */
+  --cham: #46b2a6; --cham-belly: #a3dcc7; --cham-stripe: #2a8a80; --cham-line: #0d2624; --cham-eye: #f4f4f0;
 }
 @media (prefers-color-scheme: dark) {
   body.cook-page[data-theme="auto"] {

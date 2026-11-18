@@ -13,7 +13,18 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.unit.test_day_card import golden
 from themi.core import keys
-from themi_home.recipe_card import MORE_TEXT, card_svg, view
+from themi_home.recipe_card import (
+    COLORS,
+    CONTENT,
+    LABEL,
+    MORE_TEXT,
+    STEPS_HEADING,
+    card_svg,
+    label,
+    spaced,
+    split_amount,
+    view,
+)
 from themi_home.recipes import Line, Recipe
 
 
@@ -27,9 +38,39 @@ async def test_the_card_matches_its_golden_file(scenario: Scenario) -> None:
     recipe = pancakes(scenario)
     svg = card_svg(recipe)
     golden("recipe", svg)
-    assert recipe.name in svg and "Ingredients" in svg and "Steps" in svg
+    assert recipe.name in svg and "Ingredients" in svg and STEPS_HEADING in svg
     for line in recipe.ingredients:
         assert line.text.split()[-1] in svg
+
+
+async def test_dark_mode_has_its_own_golden_file(scenario: Scenario) -> None:
+    recipe = pancakes(scenario)
+    svg = card_svg(recipe, "dark")
+    golden("recipe_dark", svg)
+    assert COLORS["dark"]["bg"] in svg and COLORS["light"]["bg"] not in svg
+
+
+def test_an_amount_is_split_from_its_ingredient() -> None:
+    assert split_amount("2 Tbsp (28 g) Olive oil") == ("2 Tbsp (28 g)", "Olive oil")
+    assert split_amount("5 Spring onions") == ("5", "Spring onions")
+    assert split_amount("Salt & pepper") == ("", "Salt & pepper")
+    assert split_amount("3-ingredient dough") == ("", "3-ingredient dough")
+
+
+async def test_unmeasured_lines_are_also_needed_and_steps_have_titles(
+    scenario: Scenario,
+) -> None:
+    recipe = replace(
+        pancakes(scenario),
+        ingredients=(Line("200 g Orzo"), Line("Salt & pepper")),
+        steps=(Line("Add the orzo to the pan, then stir."), Line("Serve.")),
+    )
+    svg = card_svg(recipe)
+    assert '<tspan font-weight="700"' in svg and ">200 g</tspan> Orzo" in svg
+    assert "Also needed: Salt &amp; pepper" in svg
+    assert ">01<" in svg and ">Add the orzo<" in svg  # first words without kept titles
+    assert ">Fry it up<" in card_svg(recipe, titles=["Fry it up", "Serve"])
+    assert "2 STEPS" in svg
 
 
 async def test_recipe_words_stay_words(scenario: Scenario) -> None:
@@ -73,3 +114,11 @@ async def test_the_recipe_page_links_its_picture(
     assert picture.status_code == 200
     assert picture.headers["content-type"] == "image/png"
     assert picture.content[:4] == b"\x89PNG"
+
+
+def test_the_label_names_the_family_and_stays_whole() -> None:
+    assert label("") == LABEL == "MADICEN FAMILY RECIPE"
+    assert label("Entrees") == "ENTREES / MADICEN FAMILY RECIPE"
+    long = label("Holiday baking for the whole extended family · Cookies and bars")
+    assert long.endswith(" / MADICEN FAMILY RECIPE") and "…" in long
+    assert spaced(long, 11) <= CONTENT
