@@ -65,6 +65,7 @@ from themi.ai.types import (
     Transcription,
 )
 from themi.localtime import start_of_local_day, to_utc_iso
+from themi.usage import UsageBook
 
 T = TypeVar("T")
 ProviderFactory = Callable[[AdapterConfig], Provider]
@@ -158,8 +159,10 @@ class AIRouter:
         breakers: BreakerBoard | None = None,
         factory: ProviderFactory | None = None,
         hedge_after: float | None = HEDGE_AFTER,
+        usage: UsageBook | None = None,
     ) -> None:
         self.settings = settings
+        self.usage = usage or UsageBook(settings.db)  # UC1: what each call spends
         self.hedge_after = hedge_after
         self.policy = policy
         self.breakers = breakers or BreakerBoard()

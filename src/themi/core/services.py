@@ -30,6 +30,7 @@ from themi.modules.prompt import PromptFragment, compose_system
 from themi.modules.registry import Registry
 from themi.modules.report import StartReport
 from themi.modules.web import AccountsSection, Panel, Waiting, WebPages
+from themi.usage import UsageBook
 
 if TYPE_CHECKING:
     from themi.core.routing import EmbeddingRouter
@@ -170,6 +171,11 @@ class Services(Registry):
     closers: list[tuple[str, Callable[[], Awaitable[object]]]] = field(default_factory=list)
     environment: dict[str, str] = field(default_factory=dict, repr=False)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
+
+    @property
+    def usage(self) -> UsageBook:
+        """UC1: the meters and what each has used (the router keeps it, as it counts)."""
+        return self.router.usage
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

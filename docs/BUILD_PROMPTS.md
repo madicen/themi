@@ -461,7 +461,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | OV6 | Oven: Stop turns the oven off | Oven | [x] 2026-11-15 |
 | OV7 | Oven: proofing dough | Oven | [x] 2026-11-15 |
 | OV8 | Oven: preheat ahead of a planned dinner | Oven | [~] |
-| UC1 | Usage: meters and the daily table | Usage | [ ] |
+| UC1 | Usage: meters and the daily table | Usage | [x] 2026-11-18 |
 | UC2 | Usage: AI requests and tokens | Usage | [ ] |
 | UC3 | Usage: device and API meters | Usage | [ ] |
 | UC4 | Usage: the usage card and /usage | Usage | [ ] |
@@ -21117,7 +21117,7 @@ settings sections. Rules every UC prompt keeps:
 - Admins only: `/usage`, `show_usage` and the Usage page.
 
 ### UC1 · Usage: meters and the daily table
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: none
 Read first: the plan's "Meters", "Storage" and "Limits"; `themi/modules/context.py`
 (`settings_section`, `dashboard_panel`) as the pattern.
@@ -21137,6 +21137,18 @@ the family elsewhere); a database error in `count` is logged and doesn't raise; 
 order; duplicate key refused; a failed install leaves no meter; prune.
 
 Notes:
+- `themi/usage.py`. The book is the router's (`AIRouter(usage=...)`, made from the AI
+  settings' database when not given), so the router can count without a lookup;
+  `services.usage` is a property over it. The module context's `_Snapshot` takes a failed
+  module's meters back.
+- `Meter.measure` ("count" or "amount") says which figure its limit counts: Cloudflare's
+  neurons are `amount`, requests are `count`. `Meter.pictures` prices a request per picture.
+- `Limit` is the limit in use (`limit_for`): the module's numbers with `source`/`checked`,
+  or an override with `set_by`/`set_at` (`overridden`). `set_limit`/`clear_limit` are here
+  already for UC5.
+- `usage.prune` runs every 6 hours (idempotent), so `tests/golden/jobs.json` gained it.
+- Migration 0171 made `make test-changed` run the whole suite, which counted as this
+  prompt's full run.
 
 ### UC2 · Usage: AI requests and tokens
 Status: [ ]

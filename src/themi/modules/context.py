@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
     from themi.modules.mirrors import Mirror
     from themi.modules.prompt import PromptFragment
     from themi.scheduler import Scheduler
+    from themi.usage import Meter
     from themi.web.kit import Kit
 
 T = TypeVar("T")
@@ -274,6 +276,15 @@ class ModuleContext:
         a member's backends of that kind with it."""
         self.services.ai_adapters[kind] = builder
 
+    def usage_meter(self, meter: Meter) -> None:
+        """UC1: something this module uses up (an API's calls, a backend's requests), for
+        the usage card, with its free-tier limit. The module counts with
+        `services.usage.count(meter.key)`."""
+        try:
+            self.services.usage.add(replace(meter, module=self._current))
+        except ValueError as exc:
+            raise ModuleError(f"{exc} (asked by {self._who()})") from exc
+
     def channel(self, name: str, channel: Channel) -> None:
         """CR20b: a channel people talk to Themi on ("telegram", "web_chat")."""
         self.services.channels.add(name, channel)
@@ -311,6 +322,7 @@ class _Snapshot:
             services.channels,
             services.mirrors,
             getattr(services.autonomy, "executors", None),
+            services.usage,  # UC1: its meters
         ]
         for target in targets:
             if target is None:
