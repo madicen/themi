@@ -162,3 +162,67 @@ def test_the_family_modules_own_what_they_added(scenario: Scenario) -> None:
     assert [a.template for a in services.owned_by("safeway").accounts] == ["accounts/safeway.html"]
     assert any(m.href == "/recipes" for m in services.owned_by("recipes").menu)
     assert services.owned_by("tasks").accounts == ()
+
+
+# ----- MP6: the list, quicker to use --------------------------------------------------------
+
+
+def broken_report(scenario: Scenario) -> None:
+    report = StartReport(template="family")
+    for module in scenario.app.modules:
+        report.note(module.name, "on", type(module).kind)
+    report.note("travel", "failed", "connector", "TomTom turned the key down")
+    report.note("ourgroceries", "not_set_up", "connector", "its settings aren't there")
+    scenario.app.services.start_report = report
+
+
+async def test_needs_attention_links_to_what_fixes_it(scenario: Scenario) -> None:
+    broken_report(scenario)
+    async with admin_site(scenario) as site:
+        page = (await site.get("/modules")).text
+    strip = page.split('id="attention"', 1)[1].split("</section>", 1)[0]
+    assert 'href="/modules/ourgroceries#server"' in strip
+    assert 'href="/modules/travel"' in strip and "TomTom turned the key down" in strip
+    assert "1 needs attention" in page.split('id="group-groceries"', 1)[1].split("</summary>")[0]
+
+
+async def test_each_filter(scenario: Scenario) -> None:
+    broken_report(scenario)
+    async with admin_site(scenario) as site:
+        on = (await site.get("/modules", params={"show": "on"})).text
+        off = (await site.get("/modules", params={"show": "off"})).text
+        attention = (await site.get("/modules", params={"show": "attention"})).text
+        everything = (await site.get("/modules", params={"show": "bogus"})).text
+    assert 'id="module-tasks"' in on and 'id="module-spotify"' not in on
+    assert 'id="module-spotify"' in off and 'id="module-tasks"' not in off
+    assert 'id="module-travel"' in attention and 'id="module-tasks"' not in attention
+    assert 'id="module-tasks"' in everything and 'id="module-spotify"' in everything
+    assert 'class="chip selected" href="/modules?show=attention"' in attention
+
+
+async def test_searching_a_groups_name_shows_the_group(scenario: Scenario) -> None:
+    async with admin_site(scenario) as site:
+        page = (await site.get("/modules", params={"q": "body doubling"})).text
+    assert 'id="module-music_offers"' in page and 'id="module-tasks"' not in page
+
+
+async def test_a_cards_switch_comes_back_to_the_card(scenario: Scenario) -> None:
+    async with web_client(scenario) as site:
+        csrf = await sign_in(scenario, site, "Erin")
+        page = (await site.get("/modules")).text
+        assert 'aria-label="Turn off Safeway cart"' in card_of(page, "safeway")
+        done = await site.post(
+            "/modules/safeway/switch", data={"csrf": csrf, "to": "off", "back": "list"}
+        )
+        assert done.status_code == 303 and done.headers["location"] == "/modules#module-safeway"
+        other = (await site.get("/family")).text
+    assert '<a href="/modules/restart">Restart</a>' in other  # the bar, on another admin page
+
+
+async def test_an_off_card_says_what_it_needs(scenario: Scenario) -> None:
+    from themi.config import parse_config
+
+    scenario.app.services.instance_config = parse_config({"template": "empty"})
+    async with admin_site(scenario) as site:
+        page = (await site.get("/modules")).text
+    assert "Needs Family cookbook, Recipe groceries" in card_of(page, "cooking")

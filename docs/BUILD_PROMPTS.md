@@ -486,8 +486,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MP3 | Modules page: one module's sheet | Modules page | [x] 2026-11-19 |
 | MP4 | Modules page: what each module owns | Modules page | [x] 2026-11-19 |
 | MP5 | Modules page: every setting on the module's page | Modules page | [x] 2026-11-19 |
-| MP6 | Modules page: the list, quicker to use | Modules page | [~] |
-| MP7 | Modules page: a module's page, quicker to use | Modules page | [ ] |
+| MP6 | Modules page: the list, quicker to use | Modules page | [x] 2026-11-19 |
+| MP7 | Modules page: a module's page, quicker to use | Modules page | [~] |
 
 ## Fixed technical choices
 
@@ -22077,7 +22077,7 @@ Notes:
   module, since what pages it would have isn't known until it installs.
 
 ### MP6 · Modules page: the list, quicker to use
-Status: [~]
+Status: [x] 2026-11-19
 Depends on: MP1, MP3
 Read first: the plan's "Other improvements", "The list page".
 - A Needs attention strip (couldn't start, needs settings, needs an account), each linking to
@@ -22093,8 +22093,26 @@ Read first: the plan's "Other improvements", "The list page".
 Tests: each filter; the strip's links; the switch with and without htmx headers; the bar on
 another admin page.
 
+Notes:
+- Filters are `?show=all|on|off|attention` (chips as links); `?only_on=1` still works as
+  `show=on`. On and Off go by the card's badge, as the old checkbox did.
+- Search: the server matches a group's title too (all of that group shows). As you type,
+  `static/modules.js` hides cards and groups in the page without a request; Enter does the
+  same, and without the script the form still submits. `/` focuses the search.
+- Folded groups are remembered in localStorage (in try/catch), except while searching or
+  filtering, when every group with a match opens.
+- Card switches are plain form posts with `back=list`, which redirect to
+  `/modules#module-<name>`. Not htmx: the switch often needs the review sheet, which is
+  a full page, and a full-page redirect to the card's anchor was simpler and as quick.
+  So there's no htmx-header test.
+- "Needs …" on an off card lists its requirements that are off (by title); the cost line
+  shows when the module has one.
+- The changes bar on every admin page is sticky and has Review (`/modules#changes`) and
+  Restart. The draft card stays on the Modules page as the place Review leads to.
+- The script isn't tested (no browser tests here); the page is tested without it.
+
 ### MP7 · Modules page: a module's page, quicker to use
-Status: [ ]
+Status: [~]
 Depends on: MP5
 Read first: the plan's "A module's page" and "Elsewhere".
 - Breadcrumb ("Modules › Cooking › Cooking timers") and the group's other modules in a side

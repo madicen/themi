@@ -95,6 +95,9 @@ class Row:
     card: Card
     depth: int = 0
     home: str = ""  # a guest's own group's title
+    on: bool = False  # MP6: on, or coming on at the restart (its card's switch)
+    needs: tuple[str, ...] = ()  # MP6: what it requires that's off, by title
+    cost: str = ""
 
 
 @dataclass(frozen=True)
@@ -130,6 +133,7 @@ class GroupSection:
     rows: list[Row]
     on: int = 0  # MP2: its own modules on (or waiting to come on)
     total: int = 0
+    attention: int = 0  # MP6: its own modules that need something done
 
 
 def group_sections(
@@ -141,22 +145,45 @@ def group_sections(
     """MP1: the page's groups in order, each with its modules as a tree and its guests
     after them; a group with nothing shown is left out."""
     titles = {n: c.title for n, c in cards.items()}
+
+    def row(n: str, depth: int, home: str = "") -> Row:
+        cls = known[n]
+        needs = tuple(titles.get(r, r) for r in cls.requires if r not in desired)
+        on = n in desired
+        return Row(cards[n], depth, home, on, () if on else needs, cls.cost)
+
     out = []
     for group in known_groups(known.values()):
         rows = [
-            Row(cards[n], depth)
-            for n, depth in tree(members(group, known), known, titles)
-            if n in shown
+            row(n, depth) for n, depth in tree(members(group, known), known, titles) if n in shown
         ]
         rows += [
-            Row(cards[n], 0, group_of(known[n]).title)
+            row(n, 0, group_of(known[n]).title)
             for n in sorted(guests(group, known), key=lambda n: titles[n].lower())
             if n in shown
         ]
         if rows:
             own = members(group, known)
-            out.append(GroupSection(group, rows, sum(n in desired for n in own), len(own)))
+            out.append(
+                GroupSection(
+                    group,
+                    rows,
+                    sum(n in desired for n in own),
+                    len(own),
+                    sum(cards[n].badge in ATTENTION for n in own),
+                )
+            )
     return out
+
+
+# MP6: the badges that need someone to do something, and where on its page that's done
+ATTENTION = {
+    "failed": "",
+    "needs_settings": "#server",
+    "needs_library": "",
+    "needs_account": "#accounts",
+}
+SHOWS = {"all": "All", "on": "On", "off": "Off", "attention": "Needs attention"}
 
 
 @dataclass(frozen=True)
@@ -284,31 +311,48 @@ def routes(kit: Kit) -> APIRouter:
         return app.services.get(Portal)
 
     @router.get("/modules", response_class=HTMLResponse)
-    def modules_page(request: Request, q: str = "", only_on: str = "") -> HTMLResponse:
+    def modules_page(
+        request: Request, q: str = "", only_on: str = "", show: str = "all"
+    ) -> HTMLResponse:
         session = kit.admin(request)
         view = overview(kit)
+        if only_on:  # the SP4 checkbox's address, kept
+            show = "on"
+        if show not in SHOWS:
+            show = "all"
         words = q.strip().lower()
         cards = {name: view.card(name, app.services) for name in view.known}
+        planner = portal().planner(view.draft)
+        desired = set(planner.desired())
         shown = set(cards)
-        if words:
+        if words:  # MP6: a group's name matches all of it
+            matched = {g.id for g in known_groups(view.known.values()) if words in g.title.lower()}
             shown = {
                 n
                 for n, c in cards.items()
                 if words in f"{c.name} {c.title} {c.summary}".lower().replace("_", " ")
+                or group_of(view.known[n]).id in matched
             }
-        if only_on:
+        if show == "on":  # running, or about to be, or trying to
             shown = {n for n in shown if cards[n].badge != "off"}
-        desired = set(portal().planner(view.draft).desired())
-        groups = group_sections(view.known, cards, shown, desired)
+        elif show == "off":
+            shown = {n for n in shown if cards[n].badge == "off"}
+        elif show == "attention":
+            shown = {n for n in shown if cards[n].badge in ATTENTION}
+        attention = sorted(
+            (c for c in cards.values() if c.badge in ATTENTION), key=lambda c: c.title.lower()
+        )
         return kit.with_flash(
             request,
             "modules.html",
             session,
-            groups=groups,
+            groups=group_sections(view.known, cards, shown, desired),
             q=q,
-            only_on=bool(only_on),
+            show=show,
+            shows=SHOWS,
+            attention=[(c, f"/modules/{c.name}{ATTENTION[c.badge]}") for c in attention],
             warnings=view.report.warnings(),
-            template=portal().planner(view.draft).template,
+            template=planner.template,
             templates=sorted(template_packages()),
             draft=view.draft,
             audit=portal().audit.recent(),
@@ -511,7 +555,10 @@ def routes(kit: Kit) -> APIRouter:
         titles = [known[n].title or n for n in (*names, *spare)]
         what = f"turned {'on' if on else 'off'} {', '.join(titles)}"
         portal().save(planner, session.member, what, before)
-        return kit.redirect(f"/modules/{name}", f"Saved: {what}. It changes when Themi restarts.")
+        back = f"/modules/{name}"
+        if form.get("back") == "list":  # MP6: a card's switch goes back to its card
+            back = f"/modules#module-{name}"
+        return kit.redirect(back, f"Saved: {what}. It changes when Themi restarts.")
 
     def offers(name: str, planner: Planner, change: Change) -> list[tuple[str, str]]:
         """MP3: what to offer with `name` turned on, unticked: its add-ons (the modules shown
