@@ -165,6 +165,9 @@ Refresher = Callable[["Member", dict[str, Any]], str | tuple[str, Sequence[Butto
 # DC4: a picture a message carries, drawn as it goes (after its refresher): the PNG, or None
 # to send the words alone.
 PictureMaker = Callable[["Member", dict[str, Any]], Awaitable[bytes | None]]
+# F49g: the words to send with a picture once it's drawn, instead of the row's (None: the
+# row's). A picture that couldn't be drawn always goes as the row's full words.
+Caption = Callable[["Member", dict[str, Any]], "str | None"]
 
 
 class ReceptivityProvider(Protocol):
@@ -231,6 +234,7 @@ class Outbox:
         self.bundlers: dict[str, Bundler] = {}
         self.refreshers: dict[str, Refresher] = {}
         self.pictures: dict[str, PictureMaker] = {}  # DC4: by name ("day_card")
+        self.captions: dict[str, Caption] = {}  # F49g: by the picture's name
         self.family_group = FamilyGroup(store.db)
         # MM2: holds the morning's proactive messages behind the morning message's buttons.
         self.tray: TrayHold | None = None
@@ -583,8 +587,11 @@ class Outbox:
         reader = self._group_reader(member) if chat_id is not None else member
         maybe = False
         try:
-            shielded = await self.shield.apply(row["text"], reader, buttons=buttons, kind=kind)
             photo = await self._picture(member, row) if chat_id is None else None
+            words = row["text"]
+            if photo is not None and (caption := self.captions.get(row.get("picture") or "")):
+                words = caption(member, row) or words  # F49g: what the picture doesn't show
+            shielded = await self.shield.apply(words, reader, buttons=buttons, kind=kind)
             message_id = None
             try:
                 if photo is not None:

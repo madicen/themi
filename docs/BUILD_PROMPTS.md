@@ -313,7 +313,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49d | Feedback: a step that bakes at a temperature offers the oven, any degree sign | Feedback | [x] 2026-11-19 |
 | F49e | Feedback: Themi stays on the stool at any size; the phone's scene isn't cropped | Feedback | [x] 2026-11-19 |
 | F49f | Idea: scenes for gathering and prep; Themi's current look on iOS's Now Playing and icons | Feedback | [x] 2026-11-19 |
-| F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [ ] |
+| F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [x] 2026-11-19 |
 | F49h | Idea: recipes to try, in their own Google Doc | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -15471,7 +15471,7 @@ Notes:
 - **Setup:** none. On iOS the home-screen icon changes only when the shortcut is added again.
 
 ### F49g · Idea (2026-11-18): the morning message's text can be just the greeting when the picture shows the day
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: DC5, MM2, MM5
 Read first: the Day Card Plan's DC5 section; `themi/standard/morning*.py` (the morning
 message's text and caption); `themi/standard/day_card.py` (what the card draws: events, the
@@ -15505,6 +15505,19 @@ message is the card and "Good morning, Michael.".
 
 Data/Setup: none (a preference, no migration if preferences are key/value). Michael sets his
 once live. Mark #221 reviewed once live.
+
+Notes: `DrawingsPreferences.morning_text`: "all" (the default) or "greeting". On the settings
+form it's "With the picture, the words are: Everything / Just the greeting (the picture shows
+the day)", in the good-morning row. The outbox gained `captions` (by picture name). When the
+picture is drawn, the words beside it are the caption's (None: the row's). A picture that
+can't be drawn sends the row's full words, as before. `MorningMessage._caption`/`short_text`:
+the greeting, and "Also all day: …" for all-day events past the card's 2 rows (`all_day_rows`).
+The card draws every timed event, the weather panel and its alert, so nothing else is added.
+The edit after a tap uses the same caption. Chat: the new `set_morning_text` tool (text:
+greeting/all) in the calendar group. Its answer says when the picture is off for them. Golden
+`tools.json` gains it, and `test_settings_form`'s ADDED list gains `morning_text`. The noon
+recap is unchanged (words, no picture). **Setup:** Michael picks "Just the greeting" in
+Settings, or says so in chat.
 
 ### F49h · Idea (2026-11-18): recipes to try, in their own Google Doc
 Status: [ ]

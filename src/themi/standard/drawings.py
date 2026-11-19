@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from themi.modules.context import ModuleContext
 
 NAME = "drawings"
+MORNING_TEXTS = ("all", "greeting")  # F49g
 DAY_CARD = "day_card"  # the morning message's picture (DC5), as the outbox knows it
 COUNTS = ("dots", "numbers", "hide")
 THEMES = ("light", "dark")
@@ -39,6 +40,9 @@ class DrawingsPreferences(Preferences):
 
     module: ClassVar[str] = NAME
     picture_morning: bool = True  # the day card with the morning message
+    # F49g (idea #221): the morning message's words beside the card: "all", or "greeting"
+    # (only what the card doesn't show). Without the card, all of them.
+    morning_text: str = "all"
     picture_counts: str = "dots"  # what's waiting: dots, numbers, or hidden
     picture_theme: str = "light"
 
@@ -52,6 +56,13 @@ class DrawingsPreferences(Preferences):
     def _counts(cls, value: str) -> str:
         if value not in COUNTS:
             raise ValueError("what's waiting shows as dots, numbers, or not at all")
+        return value
+
+    @field_validator("morning_text")
+    @classmethod
+    def _morning_text(cls, value: str) -> str:
+        if value not in MORNING_TEXTS:
+            raise ValueError("the morning message's words are all of them, or the greeting")
         return value
 
     @field_validator("picture_theme")
@@ -168,6 +179,33 @@ async def show_usage(ctx: ToolContext, args: dict[str, Any]) -> str:
     return "Sent the usage as a picture." if pictured else "Sent the usage, in words."
 
 
+MORNING_TEXT_SAID = {
+    "greeting": "From tomorrow, the morning message is the picture and a greeting; the day is "
+    "in the picture.",
+    "all": "From tomorrow, the morning message has the day in words as well as the picture.",
+}
+PICTURE_OFF_SAID = " The picture is off for you, so the words all go; turn it on in Settings."
+
+
+@tool(
+    "set_morning_text",
+    "How the morning message's words go with its picture of the day, when they say ('I "
+    "don't need the text with the morning picture', 'just the picture in the morning', 'put "
+    "the schedule back in the words'): greeting = the greeting and only what the picture "
+    "doesn't show; all = the day in words too. It's theirs only.",
+    {"text": {"type": "string", "enum": list(MORNING_TEXTS)}},
+)
+async def set_morning_text(ctx: ToolContext, args: dict[str, Any]) -> str:
+    """F49g (idea #221)."""
+    text = args["text"]
+    if text not in MORNING_TEXTS:
+        raise ToolFailed("text is greeting or all")
+    store = ctx.services.store
+    store.save_preferences(ctx.member, ctx.member.id, DrawingsPreferences, morning_text=text)
+    prefs = store.preferences(ctx.member.id, DrawingsPreferences)
+    return MORNING_TEXT_SAID[text] + ("" if prefs.picture_morning else PICTURE_OFF_SAID)
+
+
 class DrawingsModule(Module):
     """DC1: pictures drawn from Themi's own data, as SVG and PNG."""
 
@@ -207,6 +245,7 @@ class DrawingsModule(Module):
         ctx.tool(show_tasks_picture)  # F42g
         ctx.tool(show_routines_picture)
         ctx.tool(show_day)
+        ctx.tool(set_morning_text)  # F49g
         ctx.command("/weather", drawings.weather_command, "The weather today and tomorrow")
         ctx.command("/week", drawings.week_command, "Your week ahead, as a picture")
         ctx.tool(show_usage, admin_only=True)  # UC4

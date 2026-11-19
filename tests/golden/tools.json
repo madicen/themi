@@ -423,6 +423,10 @@
     "group": "maintenance",
     "spec": "fc94054ece2a"
   },
+  "set_morning_text": {
+    "group": "calendar",
+    "spec": "6521a00eb9f8"
+  },
   "set_phrasing": {
     "group": "settings",
     "spec": "e18fbc46d7dc"

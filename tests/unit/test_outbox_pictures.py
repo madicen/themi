@@ -246,3 +246,27 @@ async def test_the_family_group_gets_words(family: SeededFamily) -> None:
     )
     await outbox.flush()
     assert sender.photos == []
+
+
+async def test_a_caption_replaces_the_words_when_the_picture_is_drawn(
+    family: SeededFamily,
+) -> None:
+    """F49g (idea #221): the words beside a picture can be shorter than the row's."""
+    clock.freeze(at(21, 9))
+    sender = PictureSender()
+    outbox = outbox_with(family, sender)
+    outbox.captions["day_card"] = lambda member, row: f"Good morning, {member.name}."
+    await send(outbox, family.erin, "Good morning, Erin.\nWed 21 Oct:\n- 10-11 am: Dentist")
+    assert [p[1] for p in sender.photos] == ["Good morning, Erin."]
+    row = family.db.one("SELECT sent_text FROM outbox ORDER BY id DESC LIMIT 1")
+    assert row is not None and row["sent_text"] == "Good morning, Erin."
+
+
+async def test_without_the_picture_the_words_all_go(family: SeededFamily) -> None:
+    clock.freeze(at(21, 9))
+    sender = PictureSender()
+    outbox = outbox_with(family, sender, picture=None)  # it couldn't be drawn
+    outbox.captions["day_card"] = lambda member, row: "Good morning, Erin."
+    full = "Good morning, Erin.\nWed 21 Oct:\n- 10-11 am: Dentist"
+    await send(outbox, family.erin, full)
+    assert sender.photos == [] and sender.texts() == [full]

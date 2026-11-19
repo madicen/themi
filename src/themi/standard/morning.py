@@ -118,6 +118,7 @@ class MorningMessage:
     def install(self) -> None:
         self.outbox.tray = self
         self.outbox.refreshers[KIND] = self._refresh
+        self.outbox.captions[DAY_CARD] = self._caption  # F49g
         self.services.button_handlers[KIND] = self.on_button
 
     # ----- whose mornings ------------------------------------------------------------------
@@ -245,6 +246,30 @@ class MorningMessage:
             return None
         prefs = self.services.store.preferences(member.id, DrawingsPreferences)
         return DAY_CARD if prefs.picture_morning else None
+
+    def _caption(self, member: Member, row: dict[str, Any]) -> str | None:
+        """F49g (idea #221): the words beside the drawn day card when they chose "Just the
+        greeting": the card shows the events, the weather and its alert. None: all of them."""
+        prefs = self.services.store.preferences(member.id, DrawingsPreferences)
+        if prefs.morning_text != "greeting" or row.get("kind") != KIND:
+            return None
+        return self.short_text(member, date.fromisoformat(_day(row)))
+
+    def short_text(self, member: Member, day: date) -> str:
+        """The greeting, and what the day card had no room for: all-day events past its rows
+        (the card draws every timed event, the weather panel and an alert)."""
+        from themi.drawing.layout import all_day_rows
+
+        greeting = GREETINGS[day.toordinal() % len(GREETINGS)].format(name=member.name)
+        drawings = self.services.maybe(keys.drawings)
+        if drawings is None:
+            return greeting
+        card = drawings.day_card
+        events = card.events(member, day, card.start(member, day), scope="mine")
+        all_day = [e for e in events if e.all_day]
+        shown, _ = all_day_rows([e.key for e in all_day])
+        hidden = [e.title for e in all_day if e.key not in shown]
+        return f"{greeting}\nAlso all day: {', '.join(hidden)}." if hidden else greeting
 
     def has_events(self, member: Member, day: date) -> bool:
         return bool(self.summary.items(member, day, partner=True, tasks=False))
@@ -460,13 +485,16 @@ class MorningMessage:
         if message_id is None:
             return
         row = self.db.one(
-            "SELECT text FROM outbox WHERE member_id = ? AND telegram_message_id = ? "
-            "ORDER BY id DESC LIMIT 1",
+            "SELECT text, kind, dedupe_key, picture_sent FROM outbox WHERE member_id = ? "
+            "AND telegram_message_id = ? ORDER BY id DESC LIMIT 1",
             (member.id, message_id),
         )
         if row is None:
             return
-        await self.outbox.edit(member, message_id, row["text"], self.buttons(offers, day))
+        words = row["text"]
+        if row["picture_sent"]:  # F49g: under the card, the words it went with
+            words = self._caption(member, row) or words
+        await self.outbox.edit(member, message_id, words, self.buttons(offers, day))
 
     async def _tasks(self, member: Member, today: date) -> None:
         """Today's tasks, and any task nudge held this morning, as the morning list."""
