@@ -146,10 +146,13 @@ async def test_a_mix_plays_live_from_its_settings(scenario: Scenario) -> None:
     """CK15a: a track with a mix and no file plays through mix.js: its chords in order at its
     tempo, and Pause stops it. (The audio context may stay suspended without a real tap;
     what's scheduled is still the mix's.)"""
-    from themi_home.music_mix import BUILT_IN
+    from themi_home.music_mix import Mix, Noise
 
     clock.unfreeze()
-    mix = dict(BUILT_IN)["lofi-simmer.m4a"]
+    # The first "Slow simmer"'s settings (F48a composed the built-in lofi on real instruments)
+    mix = Mix("Slow simmer", "lofi", bpm=72, chords=("Dm9", "G13", "Cmaj9", "Am9"), strikes=2,
+              decay=1.4, level=0.045, tone=2600, beat=True,
+              noise=Noise("white", 0.012, highpass=3000))  # fmt: skip
     page = json.dumps(mix.for_page())
     await to_step_three(scenario)
     async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves",

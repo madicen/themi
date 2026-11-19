@@ -7,6 +7,9 @@ Each is mono AAC (plays on every phone browser), about a minute, slow (60-90 BPM
 made to loop: chord loops are whole bars, noise loops have nothing to line up. CK15a: what
 each track is (its chords, tempo, noise) lives in `themi_home/music_mix.py`, which the cook
 screen's player reads too.
+
+F48a: the built-ins made here are rain and brown noise. Lofi and soft piano are composed on
+real instruments by `compose_loops.py`; a musical mix still renders here as mix.js plays it.
 """
 
 from __future__ import annotations

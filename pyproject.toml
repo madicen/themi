@@ -50,6 +50,8 @@ dev = [
     "types-python-dateutil>=2.9",
     "shellcheck-py>=0.10,<0.12",  # SP8b: deploy/install.sh is checked in the tests
     "fonttools>=4.50",  # DC1: tools/dev/font_widths.py, the drawings' width table
+    "numpy>=2.1",  # F48a: tools/compose_loops.py writes the built-in lofi and soft piano
+    "scipy>=1.14",
 ]
 
 [project.scripts]
