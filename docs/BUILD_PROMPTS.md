@@ -33,6 +33,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 - Usage (UC prompts, at the end) has its own design doc, the
   [Themi Usage Plan](https://claude.ai/artifact/KfM9decJEit2wjhUeDoymq): a picture for
   admins of AI and API use against the free-tier limits, with meters from each module.
+- The Modules page rework (MP prompts, at the end) has its own design doc, the
+  [Themi Modules Page Rework Plan](https://claude.ai/artifact/Ja9RuEn7ce5CUnM6WQqE7W): the
+  Modules page by group, groups turned on in one go, and every setting on a module's page.
 
 ## Progress
 
@@ -478,6 +481,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | UC3 | Usage: device and API meters | Usage | [x] 2026-11-18 |
 | UC4 | Usage: the usage card and /usage | Usage | [x] 2026-11-18 |
 | UC5 | Usage: the Usage page and limit overrides | Usage | [x] 2026-11-18 |
+| MP1 | Modules page: groups in the manifest | Modules page | [ ] |
+| MP2 | Modules page: turning many on and off | Modules page | [ ] |
+| MP3 | Modules page: one module's sheet | Modules page | [ ] |
+| MP4 | Modules page: what each module owns | Modules page | [ ] |
+| MP5 | Modules page: every setting on the module's page | Modules page | [ ] |
+| MP6 | Modules page: the list, quicker to use | Modules page | [ ] |
+| MP7 | Modules page: a module's page, quicker to use | Modules page | [ ] |
 
 ## Fixed technical choices
 
@@ -21862,3 +21872,149 @@ Notes:
 - `test_menu`'s expected Admin group gains the Usage entry; `routes.json` golden gains the
   two routes.
 - Not looked at in a browser, only through the page tests and the card's PNG.
+
+## Modules page
+
+Design source: the [Themi Modules Page Rework Plan](https://claude.ai/artifact/Ja9RuEn7ce5CUnM6WQqE7W).
+Read it with the Claude Docs tools, like the other plans. Michael asked for it on 2026-11-19
+and answered its open questions the same day: admins set only their own preferences from a
+module's page; "Who can use it" is editable and lands in themi.toml after the restart; the
+groups are a starting set, to be renamed after MP1 if they read wrong; Meal ideas stays
+under Groceries and pantry, a guest in Cooking.
+
+The Modules page (SP4, SP5) shown by group instead of by kind, groups turned on in one go,
+and every setting a module has reachable from its own page. Rules every MP prompt keeps:
+
+- Admins only, as the Modules page is now. Nothing the family sees in chat changes.
+- `Module.kind` stays: it still drives loading and the AI-provider rule. Groups only place
+  modules on the page.
+- Core never names a pack's module or group: packs declare their own groups, found the way
+  `available_modules()` finds modules.
+- Server settings, module switches and roles wait in the draft for a restart; household and
+  personal settings save at once, through the same code Family and Settings use. Each Save
+  button says which.
+- Test and restart keep going through the trust tiers as `server_control`. Secrets are still
+  never shown.
+- Every form works without JavaScript; htmx only makes it quicker.
+
+### MP1 · Modules page: groups in the manifest
+Status: [ ]
+Depends on: none
+Read first: the plan's "Groups"; `themi/modules/base.py` (`Module`, `KINDS`);
+`themi/config.py` (`available_modules`); `themi/web/modules_page.py`; `modules.html`.
+- `ModuleGroup(id, title, summary, order, starter=None)` in `themi.modules`. The core declares
+  Talking to Themi, AI, Voice and pictures, Tasks, Your day, Services, Behind the scenes and
+  Other; `themi_home` and `themi_google` declare theirs (Body doubling, Cooking, Groceries and
+  pantry, Money, Home and devices; Email, Calendar).
+- `Module.group: ClassVar[str]` and `also_in: ClassVar[tuple[str, ...]]` (guest listings).
+  Every shipped module gets the group in the plan's table (Lists under Tasks; Meal ideas
+  under Groceries and pantry, a guest in Cooking; the Oven under Home and devices, a guest
+  in Cooking).
+- A group's starter set: its `starter` names, or, when None, every module in it with no
+  `needs_accounts` and not a device connector.
+- The list page shows groups in order, leads first and add-ons indented beneath what they
+  require (within the group), guests greyed with "Listed under …". Behind the scenes starts
+  folded (`<details>`).
+Tests: every shipped module names a declared group; an undeclared group lands in Other;
+group order; indentation follows `requires`; a guest shows in both places; page golden by
+group.
+
+### MP2 · Modules page: turning many on and off
+Status: [ ]
+Depends on: MP1
+Read first: the plan's "Turning things on and off"; `themi/modules/planning.py` (`turn_on`,
+`turn_off`, `apply`); `themi/modules/store.py` (`Draft`); `module_confirm.html`.
+- `Planner.turn_on_many(names)` and `turn_off_many(names)`, one `Change` each. The draft
+  records why each module came on (`asked`, or `needed by <name>`); template modules count
+  as asked.
+- The review sheet (`/modules/group/<id>/switch`): the group's modules as checkboxes (starter
+  set ticked, devices and paid services unticked, ones already on fixed), "Also needed" from
+  other groups (not untickable while something ticked needs them), each row's badge-to-be,
+  and a button with the count ("Turn on 7").
+- Turning off: "No longer needed", the modules on only because the one turned off required
+  them and that nothing else on needs, offered ticked. A group's "Turn off the group…". The
+  last AI provider is shown as kept, with the reason.
+- One draft log entry and one Undo per sheet ("Turned on Cooking: 7 modules").
+Tests: planner closure; unticking a module drops the requirements only it needed; the last
+AI provider kept; "no longer needed" leaves what something else needs; one Undo reverts the
+sheet. A scenario: an admin turns on Cooking, restarts, and the modules are on.
+
+### MP3 · Modules page: one module's sheet
+Status: [ ]
+Depends on: MP2
+Read first: the plan's "Turning on one module".
+- The single-module confirm page gains "It does more with" (`optional`) and "Add-ons"
+  (modules in the same group that require it), unticked, through the MP2 sheet.
+- When nothing is pulled in and nothing is offered, the switch goes straight into the draft
+  with no sheet, as today.
+Tests: Body double offers Guided steps, Session modes and Music for tasks; ticking one adds
+it; a module with nothing to offer skips the sheet.
+
+### MP4 · Modules page: what each module owns
+Status: [ ]
+Depends on: none
+Read first: the plan's "How the page finds them"; `themi/modules/context.py`
+(`settings_section`, the Accounts sections, web pages); `themi/modules/web.py`.
+- The module context records the owning module on each settings section (CR7d), Accounts
+  section and menu entry it registers. `services.owned_by(name)` returns them.
+- Household and preference models are already class attributes; `owned_by` doesn't need
+  them, but the page reads them from the class so they show while the module is off.
+Tests: each registration carries its module; a module that's off owns nothing yet; a failed
+install leaves nothing behind (the `_Snapshot`).
+
+### MP5 · Modules page: every setting on the module's page
+Status: [ ]
+Depends on: MP4
+Read first: the plan's "Every setting on the module's own page"; `module.html`;
+`themi/web/admin_pages.py` (Family) and `themi/web/site.py` (Settings, `from_form`);
+`themi/web/accounts_page.py`.
+- The module page, in setup order: Server settings (as today), For the household
+  (`Module.household`, saved through the Family page's code), Your settings
+  (`Module.preferences`, the admin's own, saved through the Settings page's code, with "Each
+  person sets theirs on Settings, under <title>" linking to a per-module anchor added to the
+  Settings page), Accounts (who has linked what, a Link button returning here), Its pages
+  (the module's menu entries with their hints, or "Shown once it's on"), Who can use it.
+- Who can use it: a checkbox per role from themi.toml; `Draft` gains `roles` (role ->
+  module -> on), counted and undone like the rest, and written to themi.toml on restart
+  (SP6). A role with `"*"` shows ticked and unchangeable, with the reason.
+- Household and personal forms show while the module is off, with "Saved now; used once it's
+  on." Modules set up in chat say so in one line, from their guide.
+Tests: the takeout budget saved on Spending's page shows on Family; a preference saved there
+shows on Settings and only for the admin who saved it; a role ticked joins the draft and
+lands in themi.toml after restart; secrets still never shown; a member who isn't an admin
+gets nothing.
+
+### MP6 · Modules page: the list, quicker to use
+Status: [ ]
+Depends on: MP1, MP3
+Read first: the plan's "Other improvements", "The list page".
+- A Needs attention strip (couldn't start, needs settings, needs an account), each linking to
+  the part of the module's page that fixes it.
+- Group headers with counts ("5 of 8 on · 1 needs settings"); groups fold, open state kept
+  per browser (storage access in try/catch, open by default).
+- Filter chips (All, On, Off, Needs attention) replacing the checkbox; search as you type,
+  matching group names too and opening folded groups with a match; `/` focuses it.
+- A switch on each card (htmx; a plain form post without it) that opens the sheet when
+  requirements or add-ons are involved. Cards show "Needs <title>" and the cost line.
+- A sticky bar for waiting changes ("3 changes waiting · Review · Restart") on every admin
+  page, replacing the draft card at the top.
+Tests: each filter; the strip's links; the switch with and without htmx headers; the bar on
+another admin page.
+
+### MP7 · Modules page: a module's page, quicker to use
+Status: [ ]
+Depends on: MP5
+Read first: the plan's "A module's page" and "Elsewhere".
+- Breadcrumb ("Modules › Cooking › Cooking timers") and the group's other modules in a side
+  list.
+- A setup checklist while it isn't fully working (turned on, settings filled, tested,
+  restarted, account linked), ticked from state the page already has.
+- Test shown only when the module overrides `check()`, with the last result and when it ran.
+- Works with as a small tree (needs above, builds on it below), each with its badge and
+  switch. An unsaved-changes warning. The guide folds under the settings on a phone.
+- Messages that say a module isn't set up link admins to its page. Changing template shows a
+  group-by-group comparison in the review sheet.
+- The module guides and the Setup Portal Plan's Modules page section point at the new
+  layout.
+Tests: checklist steps tick from state; no Test button without `check()`; the last test
+result shown; a "not set up" message links to the module for an admin and not for a member.

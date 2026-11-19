@@ -34,6 +34,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Usage (AI and API use against free-tier limits, the usage card): Themi Usage Plan,
   https://claude.ai/artifact/KfM9decJEit2wjhUeDoymq. Read it the same way. It is the design
   source for the UC prompts.
+- Modules page (groups, turning groups on, every setting on a module's page): Themi Modules
+  Page Rework Plan, https://claude.ai/artifact/Ja9RuEn7ce5CUnM6WQqE7W. Read it the same way.
+  It is the design source for the MP prompts.
 
 ## "Implement the next prompt"
 
