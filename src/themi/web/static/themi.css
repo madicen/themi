@@ -353,6 +353,20 @@ body.session-page { min-height: 100vh; min-height: 100dvh; }
 .scene-counter { fill: var(--line); }
 .scene-hob { fill: var(--muted); }
 .scene-pot { fill: var(--muted); stroke: var(--fg); stroke-width: 2; }
+/* F49f: the counter by phase (the cook screen sets data-phase): gather, prep, else the pot */
+.scene-at-gather, .scene-at-prep { display: none; }
+.session-scene[data-phase="gather"] .scene-at-gather,
+.session-scene[data-phase="prep"] .scene-at-prep { display: inline; }
+.session-scene[data-phase="gather"] .scene-at-cook,
+.session-scene[data-phase="prep"] .scene-at-cook { display: none; }
+.scene-cupboard { fill: var(--card); stroke: var(--line); stroke-width: 4; }
+.scene-door { fill: var(--soft); stroke: var(--line); stroke-width: 3; }
+.scene-shelf, .scene-lid, .scene-handle { fill: none; stroke: var(--fg); stroke-width: 3; stroke-linecap: round; }
+.scene-jar { fill: var(--warn-bg); stroke: var(--fg); stroke-width: 2; }
+.scene-bowl { fill: var(--info-bg); stroke: var(--fg); stroke-width: 2; }
+.scene-board { fill: var(--warn-bg); stroke: var(--warn); stroke-width: 2; }
+.scene-blade { fill: var(--card); stroke: var(--fg); stroke-width: 2; }
+.scene-bits circle { fill: var(--good); }
 .scene-steam path, .scene-stool { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
 .scene-stool { stroke: var(--warn); stroke-width: 6; }
 .scene-steam { opacity: 0; }

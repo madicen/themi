@@ -25,10 +25,33 @@
     <rect class="scene-tiles" x="150" y="40" width="210" height="80"/>
     <path class="scene-frame" d="M150 66 L 360 66 M150 93 L 360 93 M185 40 L 185 120 M220 40 L 220 120 M255 40 L 255 120 M290 40 L 290 120 M325 40 L 325 120"/>
     <rect class="scene-counter" x="150" y="120" width="210" height="80"/>
-    <rect class="scene-hob" x="214" y="112" width="96" height="8" rx="2"/>
-    <path class="scene-pot" d="M232 78 L 292 78 L 288 112 L 236 112 Z"/>
-    <path class="scene-frame" d="M226 80 L 232 80 M292 80 L 298 80"/>
-    <g class="scene-steam"><path d="M248 70 C 242 62, 254 56, 248 46 M262 70 C 256 60, 268 54, 262 42 M276 70 C 270 62, 282 56, 276 46"/></g>
+    <!-- F49f: what's on the counter follows the phase: a cupboard open while they gather, a
+         board while they prep, the pot on the hob for the steps (data-phase on the scene) -->
+    <g class="scene-at scene-at-cook">
+      <rect class="scene-hob" x="214" y="112" width="96" height="8" rx="2"/>
+      <path class="scene-pot" d="M232 78 L 292 78 L 288 112 L 236 112 Z"/>
+      <path class="scene-frame" d="M226 80 L 232 80 M292 80 L 298 80"/>
+      <g class="scene-steam"><path d="M248 70 C 242 62, 254 56, 248 46 M262 70 C 256 60, 268 54, 262 42 M276 70 C 270 62, 282 56, 276 46"/></g>
+    </g>
+    <g class="scene-at scene-at-gather">
+      <rect class="scene-cupboard" x="238" y="8" width="84" height="76" rx="3"/>
+      <path class="scene-shelf" d="M242 46 L 318 46"/>
+      <path class="scene-door" d="M322 8 L 352 18 L 352 94 L 322 84 Z"/>
+      <rect class="scene-jar" x="252" y="24" width="16" height="22" rx="3"/>
+      <rect class="scene-jar" x="276" y="30" width="14" height="16" rx="3"/>
+      <rect class="scene-jar" x="262" y="62" width="18" height="22" rx="3"/>
+      <rect class="scene-jar" x="190" y="96" width="18" height="24" rx="3"/>
+      <path class="scene-lid" d="M188 96 L 210 96"/>
+      <path class="scene-bowl" d="M226 104 L 274 104 C 272 116, 262 120, 250 120 C 238 120, 228 116, 226 104 Z"/>
+    </g>
+    <g class="scene-at scene-at-prep">
+      <rect class="scene-board" x="196" y="110" width="112" height="10" rx="3"/>
+      <path class="scene-blade" d="M210 108 L 252 104 C 256 104, 258 108, 254 110 L 210 110 Z"/>
+      <path class="scene-handle" d="M252 107 L 276 105"/>
+      <g class="scene-bits"><circle cx="270" cy="108" r="2.5"/><circle cx="278" cy="107" r="2.5"/><circle cx="286" cy="108" r="2.5"/><circle cx="282" cy="104" r="2.5"/></g>
+      <path class="scene-bowl" d="M316 106 L 340 106 C 339 115, 334 120, 328 120 C 322 120, 317 115, 316 106 Z"/>
+      <path class="scene-bowl" d="M162 108 L 182 108 C 181 115, 177 120, 172 120 C 167 120, 163 115, 162 108 Z"/>
+    </g>
     <path class="scene-stool" d="M30 160 L 120 160 M42 160 L 34 200 M108 160 L 116 200 M38 184 L 112 184"/>
     <rect class="scene-desk" x="0" y="196" width="360" height="4"/>
   </g>

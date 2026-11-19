@@ -312,7 +312,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49c | Feedback: prep keeps the unit when the grams come between number and unit | Feedback | [x] 2026-11-19 |
 | F49d | Feedback: a step that bakes at a temperature offers the oven, any degree sign | Feedback | [x] 2026-11-19 |
 | F49e | Feedback: Themi stays on the stool at any size; the phone's scene isn't cropped | Feedback | [x] 2026-11-19 |
-| F49f | Idea: scenes for gathering and prep; Themi's current look on iOS's Now Playing and icons | Feedback | [ ] |
+| F49f | Idea: scenes for gathering and prep; Themi's current look on iOS's Now Playing and icons | Feedback | [x] 2026-11-19 |
 | F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [ ] |
 | F49h | Idea: recipes to try, in their own Google Doc | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -15414,7 +15414,7 @@ touched, so `/session`'s body-double scenes are as they were. Test: `test_themi_
 to look at.
 
 ### F49f · Idea (2026-11-18): the cook screen's scene for gathering and prep, Themi's current look on iOS's Now Playing and the home screen
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: F49e
 Read first: `scenes.svg`; `themi_home/body_double_scene.py` (`pick_cooking_state`);
 `themi_home/web/static/icons/` (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,
@@ -15449,6 +15449,26 @@ Scenario: none.
 
 Data/Setup: none. Mark #223 and #226 reviewed once live; on iOS the home-screen icon only
 changes when the shortcut is added again.
+
+Notes:
+- Scenes: the cooking scene's counter follows `data-phase` (the template, and cook.js keeps it
+  live like `data-state`). `scene-at-gather` is an open wall cupboard with jars, a jar and a
+  bowl on the counter. `scene-at-prep` is a board with a knife, chopped bits and two small
+  bowls. `scene-at-cook` (the pot, hob and steam) shows for ready, cook and done. Colours are
+  the scene's tokens (themi.css). Browser test `test_the_counter_follows_the_phase`
+  (`THEMI_SHOTS` saves screenshots).
+- Icons: `tools/draw_icons.py` builds `icons/icon.svg` from `chameleon.svg`'s parts (props,
+  lids and "zz" removed; the light --cham colours inline), head and shoulders on #16302d with
+  a soft disc. It renders `icon-512.png`, `icon-192.png` and `apple-touch-icon.png` (180) with
+  resvg. test_icons checks the committed SVG is the script's and the PNGs are new and the right
+  size. No favicon was found to change.
+- Lock screen: `now_playing.js` (`window.themiNowPlaying`) sets `navigator.mediaSession`
+  metadata when the cook screen's or the body-double page's music starts. Title is "Lofi ·
+  <track>" on the cook screen (the kind on /session), artist "Themi", album "Cooking" or "Body
+  double", artwork the 192 and 512 icons (`data-artwork*` on the music box). The lock screen's
+  play and pause drive the page's player. Spotify shows its own. Browser test
+  `test_the_lock_screen_shows_themi_and_the_track`.
+- **Setup:** none. On iOS the home-screen icon changes only when the shortcut is added again.
 
 ### F49g · Idea (2026-11-18): the morning message's text can be just the greeting when the picture shows the day
 Status: [ ]

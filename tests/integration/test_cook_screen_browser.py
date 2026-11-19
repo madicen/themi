@@ -408,3 +408,40 @@ async def test_themi_stays_on_the_stool(scenario: Scenario, width: int, height: 
     assert scene["height"] <= 145
     if width < 600:  # a phone: above the line and music, not a column beside them
         assert scene["bottom"] <= found["mood"]["top"] + 1
+
+
+SHOWN = (
+    "JSON.stringify(['gather', 'prep', 'cook'].filter(p => getComputedStyle("
+    "document.querySelector('.cook-scene .scene-at-' + p)).display !== 'none'))"
+)
+
+
+async def test_the_counter_follows_the_phase(scenario: Scenario) -> None:
+    """F49f (#226): an open cupboard while they gather, a board for prep, the pot after."""
+    import base64
+    import json
+    import os
+
+    clock.unfreeze()
+    load(scenario.app.services)
+    cooking = scenario.app.services.maybe(keys.cooking)
+    assert cooking is not None
+    alfredo = next(r for r in cooking.recipes.all() if r.name == "Alfredo Sauce")
+    scenario.primary.queue_structured(lines(ALFREDO))
+    session = await cooking.start(scenario.member("Erin"), alfredo)
+    scenario.primary.queue_structured(
+        {"jobs": [{"text": "cashews: drain", "line": 1, "tool": "knife"}]}
+    )
+    seen = {}
+    for phase in ("gather", "prep", "cook"):
+        while session.phase != phase:
+            await cooking.advance(session, "next")
+        async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-scene",
+                                  width=1024, height=768) as tab:  # fmt: skip
+            await tab.value("document.querySelector('.cook-company').scrollIntoView()")
+            seen[phase] = json.loads(await tab.value(SHOWN))
+            if folder := os.environ.get("THEMI_SHOTS"):
+                shot = await tab.call("Page.captureScreenshot", format="png")
+                with open(os.path.join(folder, f"cook-{phase}.png"), "wb") as f:
+                    f.write(base64.b64decode(shot["result"]["data"]))
+    assert seen == {"gather": ["gather"], "prep": ["prep"], "cook": ["cook"]}

@@ -12,6 +12,7 @@
   <link rel="apple-touch-icon" href="{{ asset('home/icons/apple-touch-icon.png') }}">
   <link rel="stylesheet" href="{{ asset('themi.css') }}">
   <script src="{{ asset('home/miniapp.js') }}" defer></script>
+  <script src="{{ asset('home/now_playing.js') }}" defer></script>
   <script src="{{ asset('home/session.js') }}" defer></script>
 </head>
 <body class="session-page" data-signed-in="{{ '1' if member else '0' }}" data-csrf="{{ csrf }}" data-session="{{ session_token }}">
@@ -62,7 +63,7 @@
     </form>
   {% endfor %}
   </div>
-  <section class="session-music" aria-label="Music">
+  <section class="session-music" aria-label="Music" data-room="Body double" data-artwork="{{ asset('home/icons/icon-512.png') }}" data-artwork-small="{{ asset('home/icons/icon-192.png') }}">
     <button class="session-play" type="button" aria-pressed="false">Play</button>
     <select name="sound" aria-label="Which sound">
       {% for track in state.music.loops %}<option value="{{ track.key }}" data-src="{{ asset('home/audio/' ~ track.file) }}" {% if track.key == state.music.sound %}selected{% endif %}>{{ track.name }}</option>{% endfor %}

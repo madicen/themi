@@ -303,6 +303,7 @@
   function company(state) {
     var scene = document.querySelector(".cook-scene");
     if (scene && state.scene) scene.dataset.state = state.scene;
+    if (scene && state.phase) scene.dataset.phase = state.phase;  // F49f: the counter by phase
     var line = document.querySelector('[data-live="line"]');
     if (line && line.textContent !== state.line) line.textContent = state.line || "";
     var list = document.querySelector(".cook-chat ol");
@@ -407,6 +408,13 @@
     }
     function isPlaying() { return live ? live.playing : !audio.paused; }
     function shown(on) {
+      if (on && window.themiNowPlaying) {  // F49f: the lock screen's player
+        var kind = sound.options[sound.selectedIndex].textContent;
+        window.themiNowPlaying(box, current ? kind + " · " + current.textContent : kind, {
+          play: function () { if (!isPlaying()) start(); },
+          pause: function () { if (isPlaying()) { stop(); shown(false); } }
+        });
+      }
       label.textContent = on ? "Pause" : "Play";
       play.setAttribute("aria-pressed", on ? "true" : "false");
       box.classList.toggle("is-playing", on);
