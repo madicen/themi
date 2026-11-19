@@ -42,6 +42,7 @@ from themi_google.connectors.google import (
 from themi_home import cookbook as book
 from themi_home import home_groups
 from themi_home.cookbook import Line, ParsedRecipe
+from themi_home.quantities import weight_after_unit
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -98,6 +99,11 @@ def _lines(raw: str) -> tuple[Line, ...]:
     return tuple(Line(str(d.get("text", "")), str(d.get("group", ""))) for d in json.loads(raw))
 
 
+def _ingredient_lines(raw: str) -> tuple[Line, ...]:
+    """F49c: with a weight written before its unit moved after it ("¾ (150g) Cup sugar")."""
+    return tuple(Line(weight_after_unit(line.text), line.group) for line in _lines(raw))
+
+
 def recipe_from_row(row: dict[str, Any]) -> Recipe:
     return Recipe(
         id=row["id"],
@@ -107,7 +113,7 @@ def recipe_from_row(row: dict[str, Any]) -> Recipe:
         section=row["section"],
         subsection=row["subsection"],
         name=row["name"],
-        ingredients=_lines(row["ingredients"]),
+        ingredients=_ingredient_lines(row["ingredients"]),
         steps=_lines(row["steps"]),
         notes=tuple(json.loads(row["notes"])),
         source_text=row["source_text"],

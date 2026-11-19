@@ -316,6 +316,8 @@ def name_and_amount(line: str) -> tuple[str, str]:
         end = bracket.end()
     while more := MORE.match(line, end):  # "1 Tbsp + 1 tsp": one amount
         end = more.end()
+        if bracket := BRACKET.match(line, end):  # "1 ¼ Cups + 2 Tbsp (170g)" (F49c)
+            end = bracket.end()
     name = (line[:start] + line[end:]).strip(" ,;:-")
     name = re.sub(r"^of\s+", "", name, flags=re.IGNORECASE)
     if not name:

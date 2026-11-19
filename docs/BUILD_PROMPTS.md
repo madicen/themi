@@ -309,7 +309,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F48a | Idea: the built-in lofi and soft piano, composed on real instruments | Feedback | [x] 2026-11-18 |
 | F49a | Feedback: a send that timed out reading Telegram's answer isn't sent again | Feedback | [x] 2026-11-18 |
 | F49b | Feedback: when Telegram's back, what's waiting goes at once; a late heads-up says leave now | Feedback | [x] 2026-11-18 |
-| F49c | Feedback: prep keeps the unit when the grams come between number and unit | Feedback | [ ] |
+| F49c | Feedback: prep keeps the unit when the grams come between number and unit | Feedback | [x] 2026-11-19 |
 | F49d | Feedback: a step that bakes at a temperature offers the oven, any degree sign | Feedback | [ ] |
 | F49e | Feedback: Themi stays on the stool at any size; the phone's scene isn't cropped | Feedback | [ ] |
 | F49f | Idea: scenes for gathering and prep; Themi's current look on iOS's Now Playing and icons | Feedback | [ ] |
@@ -15272,7 +15272,7 @@ minutes late" line was left out: the row doesn't keep the drive's minutes. Chang
 tests now expect `Unreachable`. New scenario: the end of `test_travel_plans.py`.
 
 ### F49c · Feedback (2026-11-18): prep's amounts keep their unit when the grams come between the number and the unit
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: F45b
 Read first: `themi_home/cooking.py` (`with_amount`, `AMOUNT`); `themi_home/cooking_screen.py`
 (`name_and_amount`); `themi_home/gram_weights.py` (the "(150 g)" the prep line adds); RC3a's and
@@ -15303,6 +15303,18 @@ cocoa powder" measures "2 Tbsp (14 g)".
 Scenario: cooking Snowy Earthquake Cookie from the kitchen view: every prep line has its unit.
 
 Data/Setup: none (prep is worked out when shown). Mark #220 reviewed once live.
+
+Notes: `quantities.weight_after_unit`: "¾ (150g) Cup sugar" as "¾ Cup (150g) sugar", and
+"1 ¼ (170g) Cups plus 2 Tbsp flour" as "1 ¼ Cups + 2 Tbsp (170g) flour" (the form every
+amount reader already takes, with "+" since each module has its own "+" handling). It's applied
+when a recipe is read (`recipes.recipe_from_row`), so prep, the gather list, the card, scaling
+and groceries all see the tidied line. Nothing stored changes, and the chat's recipe shows the
+tidied line too. `name_and_amount` now takes a weight after a "+" part. Prep shows the recipe's
+own grams ("¾ Cup (150g)"); "With grams" reads a stated weight before the guide (`STATED`), as
+before. Lines this changes on the Pi (2026-11-19, 15 lines in 8 recipes): Snowy Earthquake
+Cookie (7), Fruit Scones (2), Hot Dogs, Pasta Aglio e Olio ("1/2 head (32g) garlic"),
+Chocolate Peanut Butter Bars, Ube Gelato, Katy's Hummus and Katy's Chocolate Hummus ("1 can
+(15 oz) chickpeas"). Tests: test_prep_amounts (15 more cases), test_cooking's scenario.
 
 ### F49d · Feedback (2026-11-18): a step that bakes at a temperature offers the oven, with or without "preheat"
 Status: [ ]

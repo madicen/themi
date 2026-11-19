@@ -392,3 +392,48 @@ async def test_prep_amounts_follow_the_scale_and_grams(cookbook: Scenario) -> No
     lines = card(cookbook).splitlines()
     assert lines[1].startswith("> Cashews: measure 2 Cups (260")
     assert lines[2] == "> Water: measure 3 Cups"  # no weight for water in this guide
+
+
+SNOWY = [
+    "¾ (150g) Cup sugar", "⅓ (70g) Cup canola oil", "2 (40g) Tbsp dark corn syrup",
+    "1 tsp pure vanilla extract", "1 (7g) Tbsp ground flax seeds",
+    "½ Cup vegan chocolate chips, melted", "1 ¼ (170g) Cups plus 2 Tbsp all-purpose flour",
+]  # fmt: skip
+
+
+async def test_prep_keeps_the_unit_when_the_grams_come_first(cookbook: Scenario) -> None:
+    """F49c (bug #220): Snowy Earthquake Cookie's "¾ (150g) Cup sugar" showed as "Sugar:
+    measure ¾ (150 g)", the unit lost."""
+    import json
+
+    cooking = cookbook.app.services.maybe(keys.cooking)
+    recipes = cookbook.app.services.maybe(keys.recipes)
+    assert cooking is not None and recipes is not None
+    lines = json.dumps([{"text": line, "group": ""} for line in SNOWY])
+    cookbook.app.db.execute(
+        "INSERT INTO recipes (key, source, section, subsection, name, ingredients, steps, notes, "
+        "source_text, kind, chart, words, hash, position, created_at, updated_at) "
+        "SELECT 'snowy', source, section, subsection, 'Snowy Earthquake Cookie', ?, steps, "
+        "notes, source_text, kind, chart, words, 'snowy', 99, created_at, updated_at "
+        "FROM recipes WHERE name = 'Alfredo Sauce'",
+        (lines,),
+    )
+    snowy = next(r for r in recipes.all() if r.name == "Snowy Earthquake Cookie")
+    names = ["sugar", "canola oil", "dark corn syrup", "vanilla extract", "flax seeds",
+             "chocolate chips", "flour"]  # fmt: skip
+    cookbook.primary.queue_structured(items(names, staples=()))
+    session = await cooking.start(cookbook.member("Erin"), snowy)
+    jobs = [{"text": f"{n}: measure", "line": i, "tool": "measure"}
+            for i, n in enumerate(names, start=1)]  # fmt: skip
+    cookbook.primary.queue_structured({"jobs": jobs})
+    while session.phase != "prep":
+        await cooking.advance(session, "next")
+    assert card(cookbook).splitlines()[1:] == [
+        "> Sugar: measure ¾ Cup (150g)",
+        "> Canola oil: measure ⅓ Cup (70g)",
+        "> Dark corn syrup: measure 2 Tbsp (40g)",
+        "> Vanilla extract: measure 1 tsp",
+        "> Flax seeds: measure 1 Tbsp (7g)",
+        "> Chocolate chips: measure ½ Cup",
+        "> Flour: measure 1 ¼ Cups + 2 Tbsp (170g)",
+    ]
