@@ -134,3 +134,42 @@ async def test_an_admin_turns_on_cooking_and_restarts(scenario: Scenario, tmp_pa
     rows = scenario.app.db.query("SELECT module, reason FROM module_reasons")
     kept = {row["module"]: row["reason"] for row in rows}
     assert kept == {n: "asked" for n in starter}
+
+
+# ----- MP3: one module's sheet -------------------------------------------------------------
+
+
+async def test_turning_on_body_double_offers_its_add_ons(scenario: Scenario) -> None:
+    empty(scenario)
+    async with admin(scenario) as (site, csrf):
+        sheet = await site.post("/modules/body_double/switch", data={"csrf": csrf, "to": "on"})
+        page = sheet.text
+        assert "Turn on Body double?" in page
+        for add_on in ("guided_steps", "mode_chooser", "music_offers"):
+            tag = page.split(f'name="add_{add_on}"', 1)[1].split(">", 1)[0]
+            assert " checked" not in tag  # offered, not ticked
+        assert 'name="add_step_pictures"' not in page  # it builds on Guided steps instead
+        await site.post(
+            "/modules/body_double/switch",
+            data={"csrf": csrf, "to": "on", "confirmed": "1", "add_guided_steps": "1"},
+        )
+    draft = DraftStore(scenario.app.db).get()
+    assert draft is not None
+    assert draft.modules == {"body_double": True, "guided_steps": True}
+    assert draft.reasons == {"body_double": "asked", "guided_steps": "asked"}
+
+
+async def test_what_a_module_does_more_with_is_offered(scenario: Scenario) -> None:
+    empty(scenario)
+    async with admin(scenario) as (site, csrf):
+        page = (await site.post("/modules/tasks/switch", data={"csrf": csrf, "to": "on"})).text
+    assert 'name="add_pictures"' in page and "It does more with it" in page
+
+
+async def test_a_module_with_nothing_to_offer_skips_the_sheet(scenario: Scenario) -> None:
+    empty(scenario)
+    async with admin(scenario) as (site, csrf):
+        done = await site.post("/modules/travel/switch", data={"csrf": csrf, "to": "on"})
+    assert done.status_code == 303
+    draft = DraftStore(scenario.app.db).get()
+    assert draft is not None and draft.modules == {"travel": True}

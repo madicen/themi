@@ -483,8 +483,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | UC5 | Usage: the Usage page and limit overrides | Usage | [x] 2026-11-18 |
 | MP1 | Modules page: groups in the manifest | Modules page | [x] 2026-11-19 |
 | MP2 | Modules page: turning many on and off | Modules page | [x] 2026-11-19 |
-| MP3 | Modules page: one module's sheet | Modules page | [~] |
-| MP4 | Modules page: what each module owns | Modules page | [ ] |
+| MP3 | Modules page: one module's sheet | Modules page | [x] 2026-11-19 |
+| MP4 | Modules page: what each module owns | Modules page | [~] |
 | MP5 | Modules page: every setting on the module's page | Modules page | [ ] |
 | MP6 | Modules page: the list, quicker to use | Modules page | [ ] |
 | MP7 | Modules page: a module's page, quicker to use | Modules page | [ ] |
@@ -21985,7 +21985,7 @@ Notes:
 - Golden: `routes.json` gained the three routes.
 
 ### MP3 · Modules page: one module's sheet
-Status: [~]
+Status: [x] 2026-11-19
 Depends on: MP2
 Read first: the plan's "Turning on one module".
 - The single-module confirm page gains "It does more with" (`optional`) and "Add-ons"
@@ -21995,8 +21995,19 @@ Read first: the plan's "Turning on one module".
 Tests: Body double offers Guided steps, Session modes and Music for tasks; ticking one adds
 it; a module with nothing to offer skips the sheet.
 
+Notes:
+- Add-ons are the modules shown directly under it on the list (`parent_in_group`), not
+  every module in the group that requires it: Step pictures requires Body double too, but
+  sits under Guided steps, so it isn't offered with Body double (as the plan's example
+  has it).
+- Offers are `add_<name>` on the sheet ("Builds on it", "It does more with it"); ticked
+  ones go into one `turn_on_many` with the module, so each counts as asked. Nothing that's
+  on already or coming on with it is offered.
+- Turning a module on now shows the sheet whenever there's something to offer, even with
+  nothing pulled in (Tasks offers Pictures in chat).
+
 ### MP4 · Modules page: what each module owns
-Status: [ ]
+Status: [~]
 Depends on: none
 Read first: the plan's "How the page finds them"; `themi/modules/context.py`
 (`settings_section`, the Accounts sections, web pages); `themi/modules/web.py`.

@@ -27,10 +27,12 @@ from themi.modules.groups import (
     guests,
     known_groups,
     members,
+    parent_in_group,
     starter,
     tree,
 )
 from themi.modules.guides import guide
+from themi.modules.planning import Change, Planner
 from themi.modules.portal import Portal, PortalError
 from themi.modules.settings import FieldSpec, fields, value_sources
 from themi.modules.store import Draft, DraftStore, ModuleSecrets
@@ -375,7 +377,10 @@ def routes(kit: Kit) -> APIRouter:
             if change.kept:
                 return kit.redirect(f"/modules/{name}", change.kept[0][1])
             return kit.redirect(f"/modules/{name}", "Nothing to change.")
-        if (len(names) > 1 or change.spare or change.kept) and form.get("confirmed") != "1":
+        extras = offers(name, planner, change) if on else []
+        if (len(names) > 1 or change.spare or change.kept or extras) and form.get(
+            "confirmed"
+        ) != "1":
             view = overview(kit)
             card = view.card(name, app.services)
             return sheet(
@@ -387,12 +392,22 @@ def routes(kit: Kit) -> APIRouter:
                 on=on,
                 needed=[n for n in names if n != name],
                 subject=card.title,
-                offered=[Offer(view.card(n, app.services), "spare", True) for n in change.spare],
+                offered=[Offer(view.card(n, app.services), "spare", True) for n in change.spare]
+                + [Offer(view.card(n, app.services), "add", False, why) for n, why in extras],
+                offered_words=(
+                    "These build on it or make it better: tick any to turn on as well"
+                    if on
+                    else "No longer needed: on only for what's going"
+                ),
                 kept=change.kept,
                 button=f"Yes, turn {'them' if len(names) > 1 else 'it'} {'on' if on else 'off'}",
                 back=f"/modules/{name}",
             )
         before = planner.draft.switches()
+        added = [n for n, _ in extras if form.get(f"add_{n}") == "1"]
+        if added:
+            change = planner.turn_on_many([name, *added])
+            names = change.on
         planner.apply(change)
         spare = [n for n in change.spare if form.get(f"spare_{n}") == "1"]
         if spare:
@@ -401,6 +416,23 @@ def routes(kit: Kit) -> APIRouter:
         what = f"turned {'on' if on else 'off'} {', '.join(titles)}"
         portal().save(planner, session.member, what, before)
         return kit.redirect(f"/modules/{name}", f"Saved: {what}. It changes when Themi restarts.")
+
+    def offers(name: str, planner: Planner, change: Change) -> list[tuple[str, str]]:
+        """MP3: what to offer with `name` turned on, unticked: its add-ons (the modules shown
+        under it on the list), then what it does more with (`optional`); none that
+        are on, or coming on with it."""
+        known = planner.known
+        cls = known[name]
+        coming = set(planner.desired()) | set(change.on)
+        own = members(group_of(cls), known)
+        add_ons = [  # shown under it on the list
+            n for n in own if parent_in_group(n, own, known) == name and n not in coming
+        ]
+        better = [n for n in cls.optional if n in known and n not in coming and n not in add_ons]
+        by_title = sorted(add_ons, key=lambda n: (known[n].title or n).lower())
+        return [(n, "Builds on it") for n in by_title] + [
+            (n, "It does more with it") for n in better
+        ]
 
     # ----- MP2: a group at once -------------------------------------------------------------
 
