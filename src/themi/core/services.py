@@ -29,7 +29,16 @@ from themi.modules.mirrors import Mirrors
 from themi.modules.prompt import PromptFragment, compose_system
 from themi.modules.registry import Registry
 from themi.modules.report import StartReport
-from themi.modules.web import AccountsSection, Panel, Waiting, WebPages
+from themi.modules.web import (
+    AccountsSection,
+    MenuEntry,
+    Owned,
+    OwnedBy,
+    Panel,
+    SettingsSection,
+    Waiting,
+    WebPages,
+)
 from themi.usage import UsageBook
 
 if TYPE_CHECKING:
@@ -149,6 +158,8 @@ class Services(Registry):
     # CR21b: displays and apps keeping lists, tasks or routines in step (the wall).
     mirrors: Mirrors = field(default_factory=Mirrors)
     accounts_sections: list[AccountsSection] = field(default_factory=list)
+    # MP4: (module, what it added): its Settings and Accounts sections and menu entries
+    owned: list[tuple[str, Owned]] = field(default_factory=list)
     waiting_links: list[Waiting] = field(default_factory=list)
     # CR8a: the system prompt's parts: the template's persona and rewordings, the rules.
     persona: str = ""
@@ -185,6 +196,15 @@ class Services(Registry):
         """A command whose handler gets the whole message (for its Reply target, say)."""
         self.event_commands[name] = handler
         self.command_help[name] = description
+
+    def owned_by(self, name: str) -> OwnedBy:
+        """MP4: what module `name` added to the website (nothing, while it's off)."""
+        mine = [item for module, item in self.owned if module == name]
+        return OwnedBy(
+            tuple(i for i in mine if isinstance(i, SettingsSection)),
+            tuple(i for i in mine if isinstance(i, AccountsSection)),
+            tuple(i for i in mine if isinstance(i, MenuEntry)),
+        )
 
     def command_menu(self) -> list[tuple[str, str]]:
         """For Telegram's command menu: (name without the slash, description)."""

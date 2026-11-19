@@ -151,3 +151,14 @@ async def test_add_ons_are_indented_and_guests_listed_in_both_groups(scenario: S
     # Behind the scenes starts folded
     assert '<details class="module-group" id="group-behind_the_scenes">' in page
     assert '<details class="module-group" id="group-cooking" open>' in page
+
+
+def test_the_family_modules_own_what_they_added(scenario: Scenario) -> None:
+    """MP4: each module's Settings and Accounts sections and menu entries are found by name."""
+    services = scenario.app.services
+    assert [s.template for s in services.owned_by("spending").settings] == [
+        "settings/expenses.html"
+    ]
+    assert [a.template for a in services.owned_by("safeway").accounts] == ["accounts/safeway.html"]
+    assert any(m.href == "/recipes" for m in services.owned_by("recipes").menu)
+    assert services.owned_by("tasks").accounts == ()

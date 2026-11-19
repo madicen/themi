@@ -484,8 +484,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MP1 | Modules page: groups in the manifest | Modules page | [x] 2026-11-19 |
 | MP2 | Modules page: turning many on and off | Modules page | [x] 2026-11-19 |
 | MP3 | Modules page: one module's sheet | Modules page | [x] 2026-11-19 |
-| MP4 | Modules page: what each module owns | Modules page | [~] |
-| MP5 | Modules page: every setting on the module's page | Modules page | [ ] |
+| MP4 | Modules page: what each module owns | Modules page | [x] 2026-11-19 |
+| MP5 | Modules page: every setting on the module's page | Modules page | [~] |
 | MP6 | Modules page: the list, quicker to use | Modules page | [ ] |
 | MP7 | Modules page: a module's page, quicker to use | Modules page | [ ] |
 
@@ -22007,7 +22007,7 @@ Notes:
   nothing pulled in (Tasks offers Pictures in chat).
 
 ### MP4 · Modules page: what each module owns
-Status: [~]
+Status: [x] 2026-11-19
 Depends on: none
 Read first: the plan's "How the page finds them"; `themi/modules/context.py`
 (`settings_section`, the Accounts sections, web pages); `themi/modules/web.py`.
@@ -22018,8 +22018,18 @@ Read first: the plan's "How the page finds them"; `themi/modules/context.py`
 Tests: each registration carries its module; a module that's off owns nothing yet; a failed
 install leaves nothing behind (the `_Snapshot`).
 
+Notes:
+- `services.owned`: a flat list of `(module, item)` (a list, so `_Snapshot` takes a failed
+  install's back like the rest), filled by `ModuleContext._own` from `settings_section`,
+  `accounts_section` and `web`'s menu entries. Core's own registrations (no module
+  installing) aren't recorded.
+- `services.owned_by(name)` gives an `OwnedBy(settings, accounts, menu)`. A Settings
+  section is now a `SettingsSection(order, template, values, save)` there, so MP5 can show
+  and save it on the module's page; `services.settings_sections` and its savers are
+  unchanged for the Settings page.
+
 ### MP5 · Modules page: every setting on the module's page
-Status: [ ]
+Status: [~]
 Depends on: MP4
 Read first: the plan's "Every setting on the module's own page"; `module.html`;
 `themi/web/admin_pages.py` (Family) and `themi/web/site.py` (Settings, `from_form`);

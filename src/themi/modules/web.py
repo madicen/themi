@@ -75,3 +75,29 @@ class WaitingLink:
 
 
 Waiting = Callable[["Member"], "WaitingLink | None"]
+
+
+# ----- MP4: what each module registered, for its own page on the Modules page -----------
+
+
+@dataclass(frozen=True)
+class SettingsSection:
+    """A module's section of the Settings form (CR7d), with what it shows and saves."""
+
+    order: int
+    template: str
+    values: Callable[[Member], dict[str, object]] | None = None
+    save: Callable[[Member, object], None] | None = None
+
+
+Owned = SettingsSection | AccountsSection | MenuEntry
+
+
+@dataclass(frozen=True)
+class OwnedBy:
+    """What one module added to the website: its Settings sections, Accounts sections and
+    menu entries, in the order it added them."""
+
+    settings: tuple[SettingsSection, ...] = ()
+    accounts: tuple[AccountsSection, ...] = ()
+    menu: tuple[MenuEntry, ...] = ()
