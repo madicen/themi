@@ -4,7 +4,7 @@
    once with the page and kept live by cook.js (not redrawn with the regions), so the music
    keeps playing. #}
 <section class="cook-company" aria-label="Themi">
-  <div class="session-scene cook-scene" data-mode="cooking" data-state="{{ state.scene }}">
+  <div class="session-scene cook-scene" data-mode="cooking" data-state="{{ state.scene }}" data-phase="{{ state.phase }}">
     {{ inline_svg("home/chameleon/scenes.svg") }}
     {{ inline_svg("home/chameleon/chameleon.svg") }}
   </div>
@@ -24,7 +24,7 @@
         </div>
         {% endif %}
       </div>
-      <section class="cook-music session-music" id="cook-mixes" aria-label="Music"{% if spotify %} role="tabpanel" aria-labelledby="cook-tab-mixes"{% endif %}>
+      <section class="cook-music session-music" id="cook-mixes" aria-label="Music" data-room="Cooking" data-artwork="{{ asset('home/icons/icon-512.png') }}" data-artwork-small="{{ asset('home/icons/icon-192.png') }}"{% if spotify %} role="tabpanel" aria-labelledby="cook-tab-mixes"{% endif %}>
         <div class="cook-now">
           <svg class="cook-now-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4M9 7v10M13 4v16M17 8v8M21 11v2"/></svg>
           <p><span class="cook-now-name" data-live="track">{{ chosen.name }}</span>

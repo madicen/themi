@@ -108,6 +108,15 @@ body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-
 .cook-company { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: stretch; border-top: 2px solid var(--line); padding-top: var(--space-3); }
 /* the art keeps its size in px: A+ grows the words, not the chameleon */
 .cook-scene { flex: 0 0 auto; width: clamp(144px, 30%, 256px); min-height: 120px; }
+/* F49e (bugs #222, #226): the scene keeps the art's own shape (360 x 200), so the backdrop is
+   never cropped, and Themi is placed in the art's terms: 130 of its 200 high, feet (y 143 of
+   the chameleon's 150) on the stool's seat (y 160, x 30-120). So the two scale together. */
+.cook-scene { aspect-ratio: 9 / 5; min-height: 0; align-self: flex-start; }
+.cook-scene .cham { height: 65%; width: 28.9%; max-height: none; left: 7.1%; bottom: 16.95%; }
+/* a phone: the scene on its own row above Themi's line and the music, whole and short */
+@media (max-width: 599px) {  /* centred, its margins filling the row so the music wraps under */
+  .cook-scene { width: min(100%, 252px); margin-inline: max(0px, calc((100% - 252px) / 2)); }
+}
 .cook-company-side { flex: 1 1 12rem; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .cook-company-side .cook-line { flex: 1 1 100%; }
 .cook-chat.session-chat { inset: var(--cook-top) var(--space-3) var(--space-3); }

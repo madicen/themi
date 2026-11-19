@@ -24,6 +24,19 @@
 {% endfor %}
 </div>
 
+{% if to_try %}
+<h2>To try</h2>
+<p class="muted">From the Recipes to try doc: not in the cookbook (yet).</p>
+<div class="rows">
+{% for recipe in to_try %}
+  <a class="row-link" href="/recipes/{{ recipe.id }}">
+    <span class="row-title">{{ recipe.name }}</span>
+    <span class="row-meta">To try{% if recipe.section %} · {{ recipe.section }}{% endif %}</span>
+  </a>
+{% endfor %}
+</div>
+{% endif %}
+
 {% if looks %}
 <h2>Need a look</h2>
 <p class="muted">Themi read these, but had to guess about their layout. Fixing them in the doc is enough: Themi reads it again.</p>

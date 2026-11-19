@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from themi_home.cooking import PREHEAT, PREP_WORDS, and_words, step_parts
+from themi_home.cooking import PREP_WORDS, and_words, oven_parts, step_parts
 
 if TYPE_CHECKING:
     from themi_home.cooking import Cooking, Session
@@ -63,16 +63,16 @@ def _for(match: re.Match[str]) -> str:
 def look_ahead(recipe: Recipe) -> list[LookAhead]:
     """Every early start the steps ask for, in order."""
     found: list[LookAhead] = []
+    heats = oven_parts(recipe)
     for i, part in enumerate(step_parts(recipe)):
         step, text = part.label, part.text
 
         def add(kind: str, words: str, *, i: int = i) -> None:
             found.append(LookAhead(f"{kind}:{i}", kind, i, words))
 
-        if heat := PREHEAT.search(text):
-            unit = (heat.group("scale") or "F").upper()
-            add("preheat", f"Step {step} wants the oven at {heat.group('temp')}°{unit}. "
-                           "Start it now?")  # fmt: skip
+        if i in heats:
+            temp, unit = heats[i]
+            add("preheat", f"Step {step} wants the oven at {temp}°{unit}. Start it now?")
         if BOIL.search(text):
             add("boil", f"Step {step} wants a pot of boiling water. Put it on now?")
         if soak := SOAK.search(text):

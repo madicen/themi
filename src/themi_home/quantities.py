@@ -49,6 +49,15 @@ TRAILING = re.compile(
     re.IGNORECASE,
 )
 PLUS = re.compile(r"\s*\+\s*")
+# F49c (bug #220): "¾ (150g) Cup sugar", the weight between the number and its unit (and a
+# "plus 2 Tbsp" after the unit is part of the amount).
+WEIGHT_FIRST = re.compile(
+    rf"(?P<number>{NUMBER}(?:\s*(?:[{DASHES}]|to)\s*{NUMBER})?)\s*"
+    rf"(?P<weight>\(\s*{NUMBER}\s*(?:{METRIC}|{WEIGHTS})(?![a-z])\.?\s*\))\s*"
+    rf"(?P<unit>(?:{SPOONS}|{WHOLE}|{OTHER})(?![a-z]))"
+    rf"(?:\s*(?:\+|\bplus\b)\s*(?P<more>{NUMBER}\s*(?:{SPOONS})(?![a-z])))?",
+    re.IGNORECASE,
+)
 LEADING_WORDS = re.compile(r"^\s*(?:optional\s*:\s*|about\s+|approx\.?\s+|~\s*)", re.IGNORECASE)
 
 
@@ -196,6 +205,22 @@ def scale_line(line: str, factor: float) -> Scaled:
         rest = rest[: trailing.start()] + weight + rest[trailing.end() :]
         amount += weight
     return Scaled(out + rest, amount, True)
+
+
+def weight_after_unit(line: str) -> str:
+    """F49c (bug #220): "¾ (150g) Cup sugar" as "¾ Cup (150g) sugar", and "1 ¼ (170g) Cups
+    plus 2 Tbsp flour" as "1 ¼ Cups + 2 Tbsp (170g) flour": the weight after the whole amount,
+    where everything that reads amounts looks for it. Any other line is as it was."""
+    prefix = LEADING_WORDS.match(line)
+    start = prefix.end() if prefix else 0
+    found = WEIGHT_FIRST.match(line, start)
+    if found is None:
+        return line
+    amount = f"{found['number']} {found['unit']}"
+    if found["more"]:
+        amount += f" + {found['more']}"
+    rest = line[found.end() :]
+    return f"{line[:start]}{amount} {found['weight']}{' ' if rest[:1].isalnum() else ''}{rest}"
 
 
 def leading_amount(line: str) -> str:

@@ -70,6 +70,9 @@ async def _no_sleep(seconds: float) -> None:
     return None
 
 
+UNKNOWN_TO_THEMI = 99_999  # a message id Themi never heard back (F49a)
+
+
 class ModelBank:
     """Hands the router one ScriptedProvider per model name."""
 
@@ -314,7 +317,8 @@ class Scenario:
             (text,),
         )
         assert row is not None
-        return row["telegram_message_id"]
+        # F49a: a send whose answer was lost is logged with no id; the tap carries its own.
+        return row["telegram_message_id"] or UNKNOWN_TO_THEMI
 
     async def react(self, name: str, emoji: str, to_text: str | None = None) -> list[str]:
         """React to Themi's latest message to `name` (or the latest with exactly `to_text`)."""

@@ -213,3 +213,36 @@ async def test_a_leave_reminder_for_a_timed_event_isnt_set(
 async def test_other_reminders_are_set_as_before(scenario: Scenario, in_laws: FakeGcal) -> None:
     await scenario.run_periodic("calendar.busy")
     assert "Reminder set" in await remind(scenario, "Leave the porch light on")
+
+
+# ----- F49b (bugs #227, #228): a heads-up through an outage -------------------------------
+
+
+async def test_a_heads_up_held_up_by_an_outage_goes_when_telegram_is_back(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    """Michael's 18 Nov: Telegram was unreachable from 4:58 pm; the heads-up queued at 5:35,
+    its retries backed off to an hour, and it was dropped at the start as too late, while
+    Telegram was back at 6:06."""
+    stanford(ready, fake_travel)
+    remember(scenario, f"{PARKING} address is {STANFORD}")
+    await scenario.run_periodic("calendar.busy")
+    await ask(scenario, "Erin", "visit", "")
+    erin = scenario.member("Erin").id
+    before = scenario.app.db.scalar("SELECT MAX(id) FROM message_log")
+
+    def went() -> list[str]:  # what reached Telegram (its fake keeps failed calls too)
+        rows = scenario.app.db.query(
+            "SELECT text FROM message_log WHERE member_id = ? AND direction = 'out' AND id > ?",
+            (erin, before),
+        )
+        return [r["text"] for r in rows]
+
+    scenario.telegram.fail("sendMessage", 502, "Bad Gateway", times=1000)
+    await at(scenario, 17, 40)
+    for minute in range(42, 66, 2):  # 5:42 to 6:04, still down
+        await at(scenario, 17 + minute // 60, minute % 60)
+    assert went() == []
+    scenario.telegram.state.failures.clear()  # back at 6:05
+    await at(scenario, 18, 6)
+    assert went() == ["Visit at Stanford at 6:30 pm, about 35 min with traffic: time to head out."]

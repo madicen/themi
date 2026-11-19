@@ -6,6 +6,12 @@
     <label class="check"><input type="checkbox" name="morning_summary_empty" {% if summary.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on and nothing waiting, too</label>
     {% if prefs.drawings %}{% set pictures = prefs.drawings %}
     <label class="check"><input type="checkbox" name="picture_morning" {% if pictures.picture_morning %}checked{% endif %}> With a picture of the day: events at their times, and the weather beside them</label>
+    <label>With the picture, the words are
+      <select name="morning_text">
+        <option value="all" {% if pictures.morning_text == "all" %}selected{% endif %}>Everything</option>
+        <option value="greeting" {% if pictures.morning_text == "greeting" %}selected{% endif %}>Just the greeting (the picture shows the day)</option>
+      </select>
+    </label>
     <label>On the picture, what's waiting shows as
       <select name="picture_counts">
         <option value="dots" {% if pictures.picture_counts == "dots" %}selected{% endif %}>A few dots</option>

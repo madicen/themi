@@ -11,6 +11,7 @@ from tests.fakes.gcal_api import FakeGcal
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_day_summary import linked
 from tests.scenarios.test_morning_message import ALL_FOUR, MORNING, counted, overnight
+from tests.scenarios.test_triage import ERIN
 from themi.channels.channel_set import ChannelSet
 from themi.core import keys
 from themi.standard.drawings import DrawingsPreferences
@@ -115,3 +116,65 @@ def test_each_channel_says_how_it_shows_a_picture(scenario: Scenario) -> None:
         channels = ChannelSet()
         channels.add("telegram", channel)  # type: ignore[arg-type]
         assert channels.caption_limit(erin) == limit
+
+
+# ----- F49g (idea #221): just the greeting beside the picture --------------------------------
+
+
+def greeting_only(scenario: Scenario, name: str = "Erin") -> None:
+    member = scenario.member(name)
+    scenario.app.store.save_preferences(
+        member, member.id, DrawingsPreferences, morning_text="greeting"
+    )
+
+
+async def test_just_the_greeting_beside_the_picture(scenario: Scenario, linked: FakeGcal) -> None:
+    """Michael: "the morning message image is so good now, I no longer want the text that
+    accompanies it"."""
+    greeting_only(scenario)
+    await overnight(scenario, linked)
+    assert await scenario.advance(minutes=45) == ["Morning, Erin."]
+    (picture,) = scenario.pictures("Erin")
+    assert picture["caption"] == "Morning, Erin."
+    assert scenario.last_buttons("Erin") == ALL_FOUR
+    await scenario.tap("Erin", "Email")
+    (edit,) = caption_edits(scenario)
+    assert edit["caption"] == "Morning, Erin."  # a tap keeps to it
+
+
+async def test_all_day_events_the_card_has_no_room_for_stay_in_words(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    greeting_only(scenario)
+    for title in ("School holiday", "Grandma visiting", "Bin day"):
+        linked.add_event(ERIN, "2026-10-22", "2026-10-23", summary=title, all_day=True)
+    await overnight(scenario, linked)
+    (caption,) = await scenario.advance(minutes=45)
+    assert caption == "Morning, Erin.\nAlso all day: Grandma visiting, Bin day."
+
+
+async def test_with_just_the_greeting_a_card_that_cant_be_drawn_sends_all_the_words(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    def broken(svg: str, width: int | None) -> bytes:
+        raise ValueError("no fonts here")
+
+    greeting_only(scenario)
+    scenario.app.services.get(keys.drawings).renderer.convert = broken
+    await overnight(scenario, linked)
+    assert await scenario.advance(minutes=45) == [MORNING]
+
+
+async def test_just_the_greeting_said_in_chat(scenario: Scenario, linked: FakeGcal) -> None:
+    from themi.ai.types import ToolResult
+
+    scenario.primary.queue_tool_call("set_morning_text", {"text": "greeting"})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Erin", "I don't need the text with the morning picture")
+    result = scenario.primary.requests[-1].messages[-1]
+    assert isinstance(result.content[0], ToolResult)
+    assert result.content[0].content.startswith("From tomorrow, the morning message is the picture")
+    erin = scenario.member("Erin")
+    assert scenario.app.store.preferences(erin.id, DrawingsPreferences).morning_text == "greeting"
+    await overnight(scenario, linked)
+    assert await scenario.advance(minutes=45) == ["Morning, Erin."]

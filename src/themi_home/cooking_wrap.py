@@ -6,12 +6,13 @@ receipts) is marked "might be out". A tap on it offers [Add to groceries], stage
 Themi drawer with the pantry in the context as data.
 
 After [All done], one offer at a time, each once: the warm line (CK5), RC5's save offer for
-a recipe from the web, then "Anything used up?" with the session's ingredient items as
-chips (each tap does what "used the last olive oil" does: the pantry item is out, and a
-staple is staged for the grocery list), then "Want company for cleanup?" [Yes] [Not now].
-Yes starts a body double Sprint Partner session, "Clean up after Pancakes" (with the
-dishwasher's status line when that module is on), and /session turns to it. Nothing is said
-in chat about any of it, and nothing more if they leave the screen.
+a recipe from the web (or F49i's "A keeper?" for one from Recipes to try), then "Anything
+used up?" with the session's ingredient items as chips (each tap does what "used the last
+olive oil" does: the pantry item is out, and a staple is staged for the grocery list), then
+"Want company for cleanup?" [Yes] [Not now]. Yes starts a body double Sprint Partner
+session, "Clean up after Pancakes" (with the dishwasher's status line when that module is
+on), and /session turns to it. Nothing is said in chat about any of it, and nothing more if
+they leave the screen.
 """
 
 from __future__ import annotations
@@ -33,10 +34,11 @@ log = logging.getLogger(__name__)
 LOW = ("out", "low")
 USED_TEXT = "Anything used up?"
 SAVE_TEXT = "Keep this one in the cookbook?"
+KEEP_TEXT = "A keeper? It can go into the cookbook."
 CLEANUP_TEXT = "Want company for cleanup?"
 SKIP_ITEMS = {"water"}
-WRAP_TAPS = ("wrap_save", "wrap_save_no", "wrap_used", "wrap_used_done", "wrap_cleanup",
-             "wrap_cleanup_no")  # fmt: skip
+WRAP_TAPS = ("wrap_save", "wrap_save_no", "wrap_keep", "wrap_keep_no", "wrap_used",
+             "wrap_used_done", "wrap_cleanup", "wrap_cleanup_no")  # fmt: skip
 
 
 def might_be_out(cooking: Cooking, recipe: Recipe) -> set[int]:
@@ -72,6 +74,13 @@ def offer(cooking: Cooking, session: Session, recipe: Recipe) -> dict[str, Any] 
         and cooking.services.maybe(keys.cookbook_save) is not None
     ):
         return {"kind": "save", "text": SAVE_TEXT}
+    if (
+        "keep" not in wrap
+        and recipe.to_try
+        and cooking.services.maybe(keys.cookbook_save) is not None
+        and cooking.recipes.doc_id is not None
+    ):
+        return {"kind": "keep", "text": KEEP_TEXT}
     pantry = cooking.services.maybe(keys.pantry)
     if pantry is not None and not wrap.get("used_done"):
         tapped = set(wrap.get("used", []))
@@ -99,6 +108,15 @@ async def tap(
                 await saver.offer(member, recipe)
                 said = "The cookbook entry is in your chat to say yes to."
             except Exception as exc:  # DocsError: no cookbook doc chosen yet
+                said = str(exc)
+    elif action in ("wrap_keep", "wrap_keep_no") and kind == "keep":  # F49i
+        session.wrap["keep"] = "yes" if action == "wrap_keep" else "no"
+        saver = cooking.services.maybe(keys.cookbook_save)
+        if action == "wrap_keep" and saver is not None:
+            try:
+                await saver.offer(member, recipe)
+                said = "Moving it into the cookbook is in your chat to say yes to."
+            except Exception as exc:  # DocsError
                 said = str(exc)
     elif action == "wrap_used" and kind == "used":
         name = str(form.get("name", ""))

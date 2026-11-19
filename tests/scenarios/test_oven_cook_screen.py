@@ -320,3 +320,42 @@ async def test_no_oven_no_buttons_in_the_first_list(
     await scenario.say("Erin", "Let's make the no-time bread")
     state = (await site.get("/session/state")).json()
     assert state["ahead"][0].get("oven", []) == []
+
+
+async def test_bug_225_a_recipe_that_bakes_at_350_offers_the_oven(
+    scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ
+) -> None:
+    """Viennese Crescents' one step bakes "at 350⁰F" and never says preheat: no [Preheat]
+    on the first list, and none on the step (session 28 on the Pi)."""
+    from tests.unit.test_cooking_look_ahead import VIENNESE
+
+    load(scenario.app.services, VIENNESE)
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "viennese crescents", "scale": ""})
+    scenario.primary.queue_structured(
+        {"lines": [{"n": n, "item": i, "quantity": "", "unit": "", "note": "", "optional": False,
+                    "staple": False}
+                   for n, i in enumerate(["walnuts", "butter", "sugar"], 1)]}
+    )  # fmt: skip
+    await scenario.say("Erin", "I want to cook Viennese crescents")
+    screen = Screen(scenario, site, csrf)
+    state = await screen.state()
+    (ahead,) = state["ahead"]
+    assert ahead["text"] == "preheat the oven to 350°F"
+    assert [b["label"] for b in ahead["oven"]] == ["Preheat lower oven", "Preheat upper oven"]
+
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("skip", "all here", "skip prep"):
+        if (await screen.state())["phase"] == "cook":
+            break
+        await scenario.say("Erin", said)
+    state = await screen.state()
+    assert (state["phase"], state["step"]["index"]) == ("cook", 0)
+    assert [b["label"] for b in state["step_oven"]] == ["Preheat lower oven", "Preheat upper oven"]
+    kitchen.remote_enable()
+    button = state["step_oven"][0]
+    await screen.act(
+        "oven_heat", oven=button["oven"], mode=button["mode"], temp=button["temp"],
+        key=button["key"], at=state["oven_at"],
+    )  # fmt: skip
+    assert (await screen.state())["step_oven"] == []  # on now: not offered again

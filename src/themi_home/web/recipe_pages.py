@@ -23,7 +23,7 @@ from themi_home.gram_weights import viewer_lines
 from themi_home.quantities import NeedsYield, describe, scale_for, scale_line
 from themi_home.recipe_card import card_png
 from themi_home.recipe_groceries import BAKING_TEXT, SCALED_TEXT, is_baking
-from themi_home.recipes import Recipe, Recipes, search
+from themi_home.recipes import COOKBOOK, TO_TRY, Recipe, Recipes, search
 
 SCALES = [
     ("½", "half"),
@@ -72,6 +72,7 @@ def routes(kit: Kit) -> APIRouter:
             session,
             account=account,
             cookbook=settings,
+            to_try=book.settings(TO_TRY),  # F49h
             chosen_here=settings["account_id"] == account.id,
             picker=bool(config.picker_api_key and config.project_number),
             client_id=config.client_id,
@@ -93,8 +94,9 @@ def routes(kit: Kit) -> APIRouter:
         doc_id = doc_id_from(str(form.get("doc", "")))
         if doc_id is None:
             return kit.redirect(back, "That doesn't look like a Google Doc's link.")
+        which = TO_TRY if form.get("book") == TO_TRY else COOKBOOK  # F49h
         try:
-            said = await book.choose(session.member, account_id, doc_id)
+            said = await book.choose(session.member, account_id, doc_id, which)
         except DocsError as exc:
             return kit.redirect(back, str(exc))
         return kit.redirect(back, said)
@@ -111,7 +113,14 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect(
                 back, book.settings()["problem"] or "The cookbook couldn't be read."
             )
-        return kit.redirect(back, book.summary(result))
+        said = book.summary(result)
+        if book.try_doc_id is not None:  # F49h: the other doc too
+            trying = await book.sync(force=True, which=TO_TRY)
+            said += " " + (
+                book.summary(trying, TO_TRY) if trying is not None
+                else book.settings(TO_TRY)["problem"] or "Recipes to try couldn't be read."
+            )  # fmt: skip
+        return kit.redirect(back, said)
 
     # ----- RC6: the Recipes page -----------------------------------------------------------
 
@@ -130,12 +139,13 @@ def routes(kit: Kit) -> APIRouter:
             shown = [m.recipe for m in search(everything, q, section=section)]
         else:
             shown = [r for r in everything if not section or r.section == section]
-        sections = list(dict.fromkeys(r.section for r in everything if r.section))
+        sections = list(dict.fromkeys(r.section for r in everything if r.section and not r.to_try))
         return kit.with_flash(
             request,
             "recipes.html",
             session,
-            recipes=shown,
+            recipes=[r for r in shown if not r.to_try],
+            to_try=[r for r in shown if r.to_try],  # F49h: under their own heading
             sections=sections,
             section=section,
             q=q,

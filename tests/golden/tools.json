@@ -369,7 +369,7 @@
   },
   "save_recipe_to_cookbook": {
     "group": "recipes",
-    "spec": "fc6e1f159deb"
+    "spec": "1ec667132737"
   },
   "search_journal": {
     "group": "core",
@@ -422,6 +422,10 @@
   "set_maintenance": {
     "group": "maintenance",
     "spec": "fc94054ece2a"
+  },
+  "set_morning_text": {
+    "group": "calendar",
+    "spec": "6521a00eb9f8"
   },
   "set_phrasing": {
     "group": "settings",

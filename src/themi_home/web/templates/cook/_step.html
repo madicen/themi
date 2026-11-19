@@ -70,6 +70,8 @@
   <p class="cook-line">{{ state.wrap.text }}</p>
   {% if state.wrap.kind == "save" %}
   <div class="cook-moves">{{ act(state, csrf, "wrap_save", "Save to cookbook", cls="primary big") }}{{ act(state, csrf, "wrap_save_no", "Not now", cls="big") }}</div>
+  {% elif state.wrap.kind == "keep" %}
+  <div class="cook-moves">{{ act(state, csrf, "wrap_keep", "Add to the cookbook", cls="primary big") }}{{ act(state, csrf, "wrap_keep_no", "Not yet", cls="big") }}</div>
   {% elif state.wrap.kind == "used" %}
   <div class="cook-offers">{% for c in state.wrap.chips %}{{ act(state, csrf, "wrap_used", ("✓ " if c.on else "") ~ c.name, {"name": c.name}, cls="cook-chip", pressed=c.on) }}{% endfor %}</div>
   <div class="cook-moves">{{ act(state, csrf, "wrap_used_done", "That's all", cls="primary big") }}</div>

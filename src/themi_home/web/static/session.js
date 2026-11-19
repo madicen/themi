@@ -293,7 +293,16 @@
         body: new URLSearchParams(fields).toString()
       }).then(function () {}, function () {});
     }
-    function shown(on) { play.textContent = on ? "Pause" : "Play"; play.setAttribute("aria-pressed", on ? "true" : "false"); }
+    function shown(on) {
+      play.textContent = on ? "Pause" : "Play";
+      play.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on && window.themiNowPlaying) {  // F49f: the lock screen's player
+        window.themiNowPlaying(box, sound.options[sound.selectedIndex].textContent, {
+          play: function () { if (audio.paused) audio.play().then(function () { shown(true); }, function () {}); },
+          pause: function () { audio.pause(); shown(false); }
+        });
+      }
+    }
     play.addEventListener("click", function () {
       if (audio.paused) {
         audio.play().then(function () { shown(true); save({ played: "1" }); }, function () { shown(false); });

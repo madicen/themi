@@ -37,6 +37,7 @@ from typing import Any
 # future major version); `_seconds` handles both forms either way.
 os.environ.setdefault("PTB_TIMEDELTA", "1")
 
+import httpx
 import telegram
 from telegram import (
     BotCommand,
@@ -51,7 +52,14 @@ from telegram import (
     WebAppInfo,
 )
 from telegram.constants import ChatAction, ChatType
-from telegram.error import Conflict, NetworkError, RetryAfter, TelegramError
+from telegram.error import (
+    BadRequest,
+    Conflict,
+    NetworkError,
+    RetryAfter,
+    TelegramError,
+    TimedOut,
+)
 from telegram.request import HTTPXRequest
 
 from themi import clock
@@ -71,8 +79,10 @@ from themi.channels.events import (
     ButtonPress,
     InboundEvent,
     InboundHandler,
+    MaybeSent,
     Picture,
     Reaction,
+    Unreachable,
     VoiceNote,
 )
 from themi.channels.family_group import FamilyGroup, replies_to_group
@@ -658,11 +668,16 @@ class TelegramChannel:
         """A picture with a caption (and buttons, DC4), to the member's own chat (BD4b).
         Returns its id."""
         group_id, markup = self._keyboard(member, buttons)
-        sent = await self._with_flood_retry(
-            lambda: self.bot.send_photo(
-                _chat_id(member), photo, caption=caption or None, reply_markup=markup
+        try:
+            sent = await self._with_flood_retry(
+                lambda: self.bot.send_photo(
+                    _chat_id(member), photo, caption=caption or None, reply_markup=markup
+                ),
+                sends=True,
             )
-        )
+        except MaybeSent:  # F49a: in the chat's history all the same, with no id
+            self.store.log_message(member.id, "out", f"[picture] {caption}".strip(), kind)
+            raise
         note_message(self.store.db, group_id, sent.message_id)
         self.store.log_message(member.id, "out", f"[picture] {caption}".strip(), kind,
                                sent.message_id)  # fmt: skip
@@ -697,11 +712,16 @@ class TelegramChannel:
         kind: str = "document",
     ) -> int:  # fmt: skip
         """A file they asked for (EX3: an expense sheet's CSV), to their own chat."""
-        sent = await self._with_flood_retry(
-            lambda: self.bot.send_document(
-                _chat_id(member), data, filename=filename, caption=caption or None
+        try:
+            sent = await self._with_flood_retry(
+                lambda: self.bot.send_document(
+                    _chat_id(member), data, filename=filename, caption=caption or None
+                ),
+                sends=True,
             )
-        )
+        except MaybeSent:  # F49a
+            self.store.log_message(member.id, "out", f"[file {filename}] {caption}".strip(), kind)
+            raise
         self.store.log_message(member.id, "out", f"[file {filename}] {caption}".strip(), kind,
                                sent.message_id)  # fmt: skip
         return sent.message_id
@@ -723,11 +743,16 @@ class TelegramChannel:
     ) -> int:
         group_id, markup = self._keyboard(member, buttons, anyone=anyone)
         preview = None if link_preview else LinkPreviewOptions(is_disabled=True)
-        sent = await self._with_flood_retry(
-            lambda: self.bot.send_message(
-                chat_id, text, reply_markup=markup, link_preview_options=preview
+        try:
+            sent = await self._with_flood_retry(
+                lambda: self.bot.send_message(
+                    chat_id, text, reply_markup=markup, link_preview_options=preview
+                ),
+                sends=True,
             )
-        )
+        except MaybeSent:  # F49a: in the chat's history all the same, with no id
+            self.store.log_message(member.id, "out", text, kind)
+            raise
         note_message(self.store.db, group_id, sent.message_id)
         self.store.log_message(member.id, "out", text, kind, sent.message_id)
         return sent.message_id
@@ -802,7 +827,10 @@ class TelegramChannel:
         rows = [[made[i] for i in row] for row in button_rows([b.label for b in buttons])]
         return group_id, InlineKeyboardMarkup(rows)
 
-    async def _with_flood_retry(self, call: Any, attempts: int = 3) -> Any:
+    async def _with_flood_retry(self, call: Any, attempts: int = 3, *, sends: bool = False) -> Any:
+        """`call`, tried again after flood control or a network error. `sends`: it sends a
+        new message, so a read timeout (it went out; no answer came back) isn't tried again
+        but raised as `MaybeSent` (F49a): Telegram has no way to ask whether it arrived."""
         for attempt in range(attempts):
             try:
                 return await call()
@@ -810,11 +838,21 @@ class TelegramChannel:
                 if attempt == attempts - 1:
                     raise
                 await self._sleep(_seconds(exc))
-            except NetworkError:
+            except NetworkError as exc:
+                if sends and maybe_sent(exc):
+                    raise MaybeSent(str(exc) or type(exc).__name__) from exc
                 if attempt == attempts - 1:
-                    raise
+                    if isinstance(exc, BadRequest):
+                        raise  # Telegram said no: a refusal, not the network
+                    raise Unreachable(str(exc) or type(exc).__name__) from exc
                 await self._sleep(self._rng.uniform(0, 2.0**attempt))
         raise AssertionError("unreachable")  # pragma: no cover
+
+
+def maybe_sent(exc: BaseException) -> bool:
+    """A timeout reading Telegram's answer: the request went out whole, so the message most
+    likely arrived (F49a). A connect, pool or write timeout never got there."""
+    return isinstance(exc, TimedOut) and isinstance(exc.__cause__, httpx.ReadTimeout)
 
 
 def _chat_id(member: Member) -> int:

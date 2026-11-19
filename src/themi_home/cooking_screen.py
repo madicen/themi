@@ -212,6 +212,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         strip(cooking, session, recipe, must_only=lighter) if session.ended_at is None else None
     )
     from themi_home import cooking_oven  # OV4: the oven, when it's linked
+    from themi_home.cooking import oven_parts
 
     if out["strip"] is not None and out["strip"]["kind"] == "offer":
         heat = cooking_oven.preheat_buttons(cooking, recipe, out["strip"]["key"])
@@ -224,7 +225,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
                 item["oven"] = cooking_oven.preheat_buttons(cooking, recipe, heat_key)
     elif session.phase == "cook" and parts and not cooking_oven.started_here(cooking, session):
         n = min(session.step, len(parts) - 1)
-        if cooking_oven.heat_for(parts[n].text) is not None:
+        if n in oven_parts(recipe):  # F49d: a preheat, or with none, the step that bakes
             out["step_oven"] = cooking_oven.preheat_buttons(cooking, recipe, f"preheat:{n}")
     out["oven_at"] = cooking_oven.drawn_at()
     out["oven_line"] = cooking_oven.oven_line(cooking, session)
@@ -316,6 +317,8 @@ def name_and_amount(line: str) -> tuple[str, str]:
         end = bracket.end()
     while more := MORE.match(line, end):  # "1 Tbsp + 1 tsp": one amount
         end = more.end()
+        if bracket := BRACKET.match(line, end):  # "1 ¼ Cups + 2 Tbsp (170g)" (F49c)
+            end = bracket.end()
     name = (line[:start] + line[end:]).strip(" ,;:-")
     name = re.sub(r"^of\s+", "", name, flags=re.IGNORECASE)
     if not name:

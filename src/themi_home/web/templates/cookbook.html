@@ -17,6 +17,16 @@ can open only the doc you pick here.</p>
 </div>
 {% endif %}
 
+{% if to_try.doc_id %}
+<div class="stack">
+  <p>Recipes to try: <strong>{{ to_try.title or "Recipes to try" }}</strong></p>
+  {% if to_try.problem %}<p class="alert">{{ to_try.problem }}</p>{% endif %}
+  {% if to_try.read_at %}<p class="muted">Last read {{ to_try.read_at | local_time }}.</p>{% endif %}
+</div>
+{% endif %}
+<p class="muted">A second doc, <em>Recipes to try</em>, can hold recipes you want to try that
+aren't cookbook-worthy yet. Themi reads it too, finds and cooks them, and labels them "to try".</p>
+
 {% if picker %}
 <div id="picker" data-client="{{ client_id }}" data-key="{{ picker_key }}" data-app="{{ project_number }}" data-address="{{ account.address }}">
   <button id="pick" class="primary" type="button">{% if cookbook.doc_id %}Choose a different doc{% else %}Choose the cookbook doc{% endif %}</button>
@@ -28,6 +38,12 @@ can open only the doc you pick here.</p>
 {% endif %}
 <form id="picked" method="post" action="/accounts/{{ account.id }}/cookbook" class="stack">
   <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>The doc I pick is
+    <select name="book">
+      <option value="cookbook">The family cookbook</option>
+      <option value="to_try"{% if cookbook.doc_id and not to_try.doc_id %} selected{% endif %}>Recipes to try</option>
+    </select>
+  </label>
   <label>{% if picker %}Or the doc's link{% else %}The doc's link{% endif %}
     <input name="doc" required placeholder="https://docs.google.com/document/d/...">
   </label>

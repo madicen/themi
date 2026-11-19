@@ -127,6 +127,7 @@ CALENDAR = ToolGroup(
         "show_week",  # DC6
         "show_weather",  # DC8
         "show_day",  # F42g
+        "set_morning_text",  # F49g
     ),
     order=20,
 )

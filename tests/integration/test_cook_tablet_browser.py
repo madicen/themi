@@ -212,3 +212,32 @@ async def test_play_makes_a_mix_for_the_recipe_and_it_takes_over(scenario: Scena
         made = "document.querySelectorAll('.cook-tracks[data-sound=lofi] li[data-made]').length"
         assert await tab.value(made) == 1
     assert scenario.app.db.scalar("SELECT COUNT(*) FROM music_mixes") == 1
+
+
+async def test_the_lock_screen_shows_themi_and_the_track(scenario: Scenario) -> None:
+    """F49f (bug #223): iOS showed "Cooking · Themi" with the old icon: no page set
+    navigator.mediaSession, so it took the page's home-screen icon."""
+    from themi_home.music_mix import Mix
+
+    clock.unfreeze()
+    page = json.dumps(Mix("Slow simmer", "lofi", bpm=72, chords=("Dm9", "G13")).for_page())
+    await to_step_three(scenario)
+    async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves",
+                              width=1180, height=820) as tab:  # fmt: skip
+        await tab.value(
+            "(() => { const li = document.createElement('li');"
+            f" li.dataset.mix = JSON.stringify({page}); li.textContent = 'Mushroom simmer';"
+            " document.querySelector('.cook-tracks[data-sound=lofi]').appendChild(li);"
+            " window.themiCook.music.load(li, true); })()"
+        )
+        shown = json.loads(await tab.value(
+            "(() => { const m = navigator.mediaSession.metadata; return JSON.stringify(m &&"
+            " {title: m.title, artist: m.artist, album: m.album,"
+            "  artwork: [...m.artwork].map(a => a.src.split('?')[0].split('/').pop())}); })()"
+        ))  # fmt: skip
+    assert shown == {
+        "title": "Lofi · Mushroom simmer",
+        "artist": "Themi",
+        "album": "Cooking",
+        "artwork": ["icon-192.png", "icon-512.png"],
+    }

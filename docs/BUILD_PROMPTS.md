@@ -307,6 +307,15 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F47a | Idea: liked songs as the default, and a Shuffle toggle | Feedback | [x] 2026-11-18 |
 | F47b | Feedback: Play from a phone plays on that phone, not the laptop | Feedback | [x] 2026-11-18 |
 | F48a | Idea: the built-in lofi and soft piano, composed on real instruments | Feedback | [x] 2026-11-18 |
+| F49a | Feedback: a send that timed out reading Telegram's answer isn't sent again | Feedback | [x] 2026-11-18 |
+| F49b | Feedback: when Telegram's back, what's waiting goes at once; a late heads-up says leave now | Feedback | [x] 2026-11-18 |
+| F49c | Feedback: prep keeps the unit when the grams come between number and unit | Feedback | [x] 2026-11-19 |
+| F49d | Feedback: a step that bakes at a temperature offers the oven, any degree sign | Feedback | [x] 2026-11-19 |
+| F49e | Feedback: Themi stays on the stool at any size; the phone's scene isn't cropped | Feedback | [x] 2026-11-19 |
+| F49f | Idea: scenes for gathering and prep; Themi's current look on iOS's Now Playing and icons | Feedback | [x] 2026-11-19 |
+| F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [x] 2026-11-19 |
+| F49h | Idea: recipes to try, in their own Google Doc (reading and saving) | Feedback | [x] 2026-11-19 |
+| F49i | Idea: a recipe to try that's a keeper goes into the cookbook | Feedback | [x] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15140,6 +15149,486 @@ Notes (2026-11-18):
   first "Slow simmer" settings written out. numpy and scipy join the dev extra.
 - **Setup:** none on the Pi (the files ship). To remake a track:
   `.venv/bin/python tools/compose_loops.py lofi-simmer` (the first run fetches ~190 MB).
+
+### F49a · Feedback (2026-11-18): a send that reached Telegram but timed out waiting for its answer isn't sent again
+Status: [x] 2026-11-18
+Depends on: none
+Read first: `themi/channels/outbox.py` (`_deliver_now`, `_record_failure`, `RETRY_BACKOFF`);
+`themi/channels/telegram.py` (`send_text`, the `HTTPXRequest` timeouts); python-telegram-bot's
+`HTTPXRequest.do_request` (it raises `TimedOut` for every httpx timeout, with the httpx error as
+`__cause__`). From Michael's bugs #229 (2026-11-18, 9:09 pm, "the evening routine message got
+sent waaaaay too many times") and #230 (9:10 pm, "actually a bunch of messages got duplicated").
+
+What the Pi shows: the Pi's Wi-Fi was bad from 4:58 pm to about 9 pm on 18 Nov (Telegram
+polling failed ~280 times; Gmail, Google Calendar and Cozyla timed out too; eth0 is down, it runs
+on wlan0). Sends that got through but whose answer didn't come back in 20 s raised `TimedOut`
+and were retried as if never sent. Outbox 2153 (the evening routine, 8:45 pm) failed `TimedOut`
+at 8:46, 8:49 and 8:55, then "sent" at 9:10 as Telegram message 2752. Telegram's message ids
+2733-2745 (6:06-8:56 pm) belong to no outbox row: they are those copies, and copies of 2145
+(the morning recap, 5 tries, "given up", `TimedOut`) and 2106 (Split Merlin's cat box, 5 tries,
+"given up", `TimedOut`). So Michael got the routine 4 times and the others up to 5 times, while
+Themi recorded them as failed.
+
+Decided (Michael, 2026-11-18, bugs #229/#230): a read timeout counts as sent. Telegram has no
+idempotency key, and a message lost now and then is better than five copies.
+
+Build:
+- Bug fix: start with the failing tests below.
+- A send whose `TimedOut` was caused by `httpx.ReadTimeout` (the request went out; the answer
+  didn't come back) is recorded as sent: status 'sent', `sent_at` now, `telegram_message_id`
+  NULL, `last_error` 'TimedOut (maybe sent)', and a warning in the log. No retry.
+  `httpx.ConnectTimeout`, `PoolTimeout` and `WriteTimeout` (never fully sent), `NetworkError`
+  and the rest are retried as now.
+- The same for a picture's send (`_send_picture`, the morning message's card) and a document.
+- The sent-listeners and after-sent hooks run as for any send, with `message_id` None; check
+  each copes (a routine's later "Marked done" edit, the morning tray's buttons, cooking's card
+  id, `react`): with no id they send a new message where they'd have edited, as they do for an
+  unknown id.
+- `themi feedback`'s log section and the outbox's admin view show 'maybe sent' rows as sent.
+
+Tests: start with failing ones: a fake sender raising `TimedOut` from `httpx.ReadTimeout`: the
+row is sent with no message id, and the next flush sends nothing; `TimedOut` from
+`ConnectTimeout` or `PoolTimeout`, and `NetworkError`, are retried as now; a routine sent 'maybe'
+and then ticked sends its "Marked done" as a new message; a morning picture's `ReadTimeout`
+isn't sent again as text.
+Scenario: the evening routine during a flaky network: the first send times out reading the
+answer, and Michael's chat has the routine once.
+
+Data/Setup: none. Mark #229 and #230 reviewed once live. Michael may want to look at the Pi's
+Wi-Fi (or plug in eth0): the outage wasn't Themi's.
+
+Notes: `themi.channels.events.MaybeSent`. Telegram's `_with_flood_retry(sends=True)` (for
+send_message, send_photo, send_document) raises it for `TimedOut` caused by
+`httpx.ReadTimeout`. That was worse than the report showed: the channel's own retry loop tried
+every `NetworkError` 3 times inside each outbox attempt, so one attempt could post 3 copies.
+Edits and reactions are still retried (the same each time). The message is still written to
+`message_log` (no id), so the model's history has it. The outbox records the row as sent:
+`telegram_message_id` NULL, `last_error` `MAYBE_SENT_ERROR` ("TimedOut (maybe sent)"),
+listeners called with None. A captioned picture that maybe went isn't followed by its words.
+`Outbox.send_photo`/`send_document` return `UNKNOWN_MESSAGE_ID` (-1) so callers don't fall back
+to text. Taps carry their message's own id, so its buttons and "Marked done" edits work (the
+spec's "new message" fallback wasn't needed). The scenario harness taps a message logged with
+no id using a stand-in id. Tests: test_outbox (2), test_outbox_pictures (2),
+test_telegram_channel (3), test_routines (scenario).
+
+### F49b · Feedback (2026-11-18): when Telegram is back, what's waiting goes at once, and a late leave heads-up says leave now
+Status: [x] 2026-11-18
+Depends on: F49a
+Read first: `themi/channels/outbox.py` (`flush`, `_record_failure`, `RETRY_BACKOFF`,
+`MAX_ATTEMPTS`, `_refreshed`, `refreshers`); `themi/channels/telegram.py` (the polling loop's
+retry); `themi_google/travel.py` (`heads_up`, `travel_headsups`, its `expires`). From Michael's
+bugs #227 (2026-11-18, 6:06 pm) and #228 (8:56 pm), both "I received no reminders to leave for
+the psych ward appointment".
+
+What the Pi shows: at 4:51 pm Michael asked when to leave for the 6:30 pm visit (there by 6:15):
+"Leave around 5:52 pm; start getting ready around 5:37 pm." The heads-up was queued as outbox
+2147 at 5:35 pm, during the Wi-Fi outage F49a describes. It failed with `NetworkError` at 5:35,
+5:38, 5:43 and 5:59, each retry further off (1, 5, 15, 60 min), so its next try was 6:59 pm.
+Telegram worked again by 6:06 pm (the reply to #227 went at once), but 2147 sat waiting, and at
+7:00 pm it was "Dropped: too late to be any use" (it expires at the event's start). The same
+backoff ran four others to "Giving up … after 5 attempts" (2106, 2108, 2145) and the "Stopped
+cooking" reply to 8 (2146), all lost, or sent several times over (F49a).
+
+Build:
+- Bug fix: start with the failing tests below.
+- When a send or a poll succeeds after a failure, every queued row whose last try failed on the
+  network (`NetworkError`, `TimedOut` not counted as sent) and whose retry is later is due now
+  (`send_after` = now), so the next flush sends them in their usual order. The polling loop
+  tells the outbox when it's back (a callback; no new import of the outbox in telegram.py if
+  one already flows the other way).
+- Network failures don't use up attempts: a row failing on the network stays queued until
+  Telegram's back or it expires, and its backoff stops growing at 15 min. Giving up after
+  `MAX_ATTEMPTS` is for errors Telegram itself returns (`BadRequest`, `Forbidden` and the like).
+- A row with an expiry (`expires_at`, so a leave heads-up) retries at most 2 minutes apart.
+- A leave heads-up sent after its leave time is refreshed first (a `travel` refresher): "Visit
+  Erin in Stanford's psych ward at 6:30 pm, there by 6:15 pm: about 23 min with traffic. Time to
+  leave now." Past the arrive-by, "You'd be a few minutes late for 6:15; about 23 min with
+  traffic." A heads-up still waiting at the event's start is dropped as now.
+
+Tests: start with failing ones: a heads-up queued while the fake sender raises `NetworkError`,
+the network back at 6:06 pm (another row sends): the heads-up goes at 6:06, saying leave now;
+a normal row failing on the network 8 times isn't given up, and goes when it's back; a
+`Forbidden` row is given up after 5 as now; a polling success brings due rows forward; a
+heads-up that never gets through by the event's start is dropped.
+Scenario: Michael's 18 Nov evening: drive_time at 4:51 pm, Telegram down 4:58-6:06 pm, the
+heads-up arrives at 6:06 pm saying to leave now.
+
+Data/Setup: none. Mark #227 and #228 reviewed once live.
+
+Notes: Telegram's `_with_flood_retry` raises `themi.channels.events.Unreachable` (a
+`ConnectionError`, the PTB error as its cause) for a `NetworkError` that isn't a `BadRequest`,
+once its own 3 tries are spent. The outbox treats any `ConnectionError`/`TimeoutError` as the
+network: `last_error` is "<name> (unreachable)" (e.g. "NetworkError (unreachable)"), it's never
+given up on, its backoff stops at 15 min (`NETWORK_BACKOFF_CAP`), 2 min with an expiry
+(`EXPIRING_BACKOFF_CAP`). Refusals still give up after 5 (8 for replies).
+`Outbox.back_online()` makes every "(unreachable)" row due now. It runs after any successful
+send, and at the start of a flush when the channel's `last_poll_at` is later than the last
+network failure (`_unreachable_at`, in memory; after a restart, any poll counts). No callback
+from the polling loop was needed: flush runs every 30 s. Travel registers a refresher
+(`_as_it_stands`): a heads-up going after its "leave (there) around H:MM pm" says "time to head
+out" instead, the words `_send` already uses for one first seen late. The spec's "you'd be a few
+minutes late" line was left out: the row doesn't keep the drive's minutes. Changed test:
+`test_sending_gives_up_after_five_attempts` now uses a refusal (`FakeSender.refusals`), since a
+`ConnectionError` no longer gives up; network failures have their own test. F49a's two Telegram
+tests now expect `Unreachable`. New scenario: the end of `test_travel_plans.py`.
+
+### F49c · Feedback (2026-11-18): prep's amounts keep their unit when the grams come between the number and the unit
+Status: [x] 2026-11-19
+Depends on: F45b
+Read first: `themi_home/cooking.py` (`with_amount`, `AMOUNT`); `themi_home/cooking_screen.py`
+(`name_and_amount`); `themi_home/gram_weights.py` (the "(150 g)" the prep line adds); RC3a's and
+F45b's notes. From Michael's bug #220 (2026-11-18, 10:05 am, "the prep amounts are present in
+the kitchen view, but are often missing the full unit. So 2, but not Cups or Tbsp").
+
+What the Pi shows: the screenshot is Snowy Earthquake Cookie (recipe 86). Its lines put the
+recipe's own grams between the number and the unit: "¾ (150g) Cup sugar", "⅓ (70g) Cup canola
+oil", "2 (40g) Tbsp dark corn syrup", "1 (7g) Tbsp ground flax seeds", "1 ¼ (170g) Cups plus 2
+Tbsp all-purpose flour". Prep showed "Sugar: measure ¾ (150 g)", "Dark corn syrup: measure 2
+(40 g)". Lines with no grams kept their unit ("1 tsp (3.5 g)", "½ Cup (100 g)").
+
+Build:
+- Bug fix: start with the failing tests below.
+- `name_and_amount` reads "N (Wg) unit name" as the amount "N unit" with the recipe's own weight
+  W g, and the name after. "1 ¼ (170g) Cups plus 2 Tbsp all-purpose flour": "1 ¼ Cups plus 2
+  Tbsp", 170 g. Also "(150 g)", "(150 grams)", "(5 oz)".
+- The recipe's own grams win over the weights guide's for that line (they're what the recipe
+  says), and the line shows them once: "Sugar: measure ¾ Cup (150 g)".
+- The same lines read the same in the gather list, the chat card and a scaled recipe (the
+  grams scale too).
+- Look over the other recipes on the Pi for lines this changes (a read-only query of
+  `recipes.ingredients` for `^\S+ \(\d+ ?g\)`), and note which in Notes.
+
+Tests: start with failing ones: each of recipe 86's lines above, in prep and in the gather
+list; doubled, "1 ½ Cups (300 g)"; a line with no grams is as before; "2 (14g) Tbsp natural
+cocoa powder" measures "2 Tbsp (14 g)".
+Scenario: cooking Snowy Earthquake Cookie from the kitchen view: every prep line has its unit.
+
+Data/Setup: none (prep is worked out when shown). Mark #220 reviewed once live.
+
+Notes: `quantities.weight_after_unit`: "¾ (150g) Cup sugar" as "¾ Cup (150g) sugar", and
+"1 ¼ (170g) Cups plus 2 Tbsp flour" as "1 ¼ Cups + 2 Tbsp (170g) flour" (the form every
+amount reader already takes, with "+" since each module has its own "+" handling). It's applied
+when a recipe is read (`recipes.recipe_from_row`), so prep, the gather list, the card, scaling
+and groceries all see the tidied line. Nothing stored changes, and the chat's recipe shows the
+tidied line too. `name_and_amount` now takes a weight after a "+" part. Prep shows the recipe's
+own grams ("¾ Cup (150g)"); "With grams" reads a stated weight before the guide (`STATED`), as
+before. Lines this changes on the Pi (2026-11-19, 15 lines in 8 recipes): Snowy Earthquake
+Cookie (7), Fruit Scones (2), Hot Dogs, Pasta Aglio e Olio ("1/2 head (32g) garlic"),
+Chocolate Peanut Butter Bars, Ube Gelato, Katy's Hummus and Katy's Chocolate Hummus ("1 can
+(15 oz) chickpeas"). Tests: test_prep_amounts (15 more cases), test_cooking's scenario.
+
+### F49d · Feedback (2026-11-18): a step that bakes at a temperature offers the oven, with or without "preheat"
+Status: [x] 2026-11-19
+Depends on: F45f, OV4
+Read first: `themi_home/cooking.py` (`PREHEAT`, `look_ahead`); `themi_home/cooking_oven.py`
+(`heat_for`, `preheat_buttons`); `themi_home/cooking_screen.py` (`step_oven`, the ready list's
+`oven`); the Oven Module Plan's OV4 section. From Michael's bug #225 (2026-11-18, 2:53 pm, "this
+step didn't give an option to set the temperature on the oven, nor did an option to preheat
+appear at the beginning").
+
+What the Pi shows: Viennese Crescents (recipe 90, session 28) has one step: "Combine all
+ingredients. Knead to a smooth dough and roll into balls or form into crescents. Bake on an
+ungreased cookie sheet at 350⁰F for 10 to 15 minutes. While still warm, roll in powdered
+sugar." The oven only comes from `PREHEAT` ("preheat (the|your) oven to N"), so a recipe that
+never says preheat gets no [Preheat] on the ready list and none on the step. The step also
+writes "⁰" (U+2070, superscript zero), not "°". The step did offer [Timer 10 min] and
+[Oven timer].
+
+Build:
+- Bug fix: start with the failing tests below.
+- A recipe with no preheat sentence whose step bakes or roasts at a temperature ("bake … at
+  350°F", "roast at 220 C", "in a 375 degree oven") gets the preheat: the ready list's "preheat
+  the oven to 350°F" with [Preheat], and the look-ahead before that step, as for a written
+  preheat. Its step gets `step_oven` while the oven isn't on from this session.
+- A temperature's degree sign may be °, ⁰, º, ˚, "deg", "degrees" or none before F/C, in
+  `PREHEAT` and the new pattern. A bare number with no unit and no "degrees" isn't a
+  temperature ("bake for 350" isn't one).
+- A recipe that does say preheat keeps its own; the bake step doesn't add a second.
+- The look-ahead names the step: "Step 1 wants the oven at 350°F. Start it now?"
+
+Tests: start with failing ones: recipe 90's step gives a preheat of 350°F on the ready list and
+the step's [Preheat]; "350⁰F", "350ºF", "350˚ F", "350 degrees F", "180 C" (356 rounds to 355°F);
+a recipe with "Preheat oven to 375°F" and "bake at 375°F" has one preheat; "bake for 35
+minutes" has none.
+Scenario: cooking Viennese Crescents with the fake SmartHQ: the ready list offers [Preheat] to
+350°F, and the step does too until the oven's on.
+
+Data/Setup: none. Mark #225 reviewed once live.
+
+Notes: `themi_home.cooking`: `DEGREE` (°, ⁰, º, ˚, "deg", "degrees") in `PREHEAT`, and new
+`BAKE_AT` ("bake/baked/baking/roast… at 350⁰F", "at 180 C") and `IN_OVEN` ("in a 375 degree
+oven"). A bare number needs a degree word or F/C. `oven_heat(text)` gives (number, "F"/"C").
+`oven_parts(recipe)` gives the parts that want the oven: each written preheat, or with none, the
+first part that bakes or roasts at a temperature. It drives the ready list
+(`ahead_of_time`), the look-ahead (`look_ahead`) and the step's buttons (`step_oven` in
+`cooking_screen.state`). `cooking_oven.heat_for` reads either kind, so [Preheat] works from
+both. A recipe with a written preheat and a later "bake at" has one preheat, as before.
+Tests: test_cooking_oven (9 cases), test_cooking_look_ahead (2), and the scenario
+`test_bug_225_…` in test_oven_cook_screen (`VIENNESE` lives in test_cooking_look_ahead).
+
+### F49e · Feedback (2026-11-18): Themi stays on the stool at any size, and the phone's cook screen isn't cropped
+Status: [x] 2026-11-19
+Depends on: CK5, BD3c
+Read first: `themi_home/web/static/chameleon/scenes.svg` (the `cooking` scene: counter, stool),
+`chameleon.svg`; `themi_home/web/static/cook.css` (`.cook-company`, `.cook-scene`, the narrow
+rules near line 302); `templates/cook/_company.html`; `session.html` and its CSS; the Cooking
+Companion Plan's CK5 section. From Michael's bugs #222 (2026-11-18, 2:23 pm, "the iPhone layout
+ruins the image of Themi on the left") and #226 (2:57 pm, "In the cooking view on my computer,
+Themi is floating away from the stool").
+
+What the Pi shows: #222's screenshot (iPhone, Safari, the cook screen for Viennese Crescents):
+the scene is a tall column on the left (`width: clamp(144px, 30%, 256px)`, stretched to the
+music card's height); the backdrop is `preserveAspectRatio="xMidYMax slice"`, so it's cropped to
+a sliver of window and wall, and the chameleon, placed on its own, is cut off at the right edge.
+#226's screenshot (a computer): the scene is wide and short, the stool at the bottom left, and
+the chameleon standing in mid-air to the right of it. The backdrop and the chameleon scale
+differently, so they only line up at one size.
+
+Build:
+- Bug fix: start with the failing tests below.
+- The chameleon is placed in the scene's own coordinates (inside the SVG, or positioned from its
+  viewBox), seated on the stool in the cooking scene, so the two scale together at every size.
+  The other scenes (desk, floor, branch) keep their pose, also in the scene's coordinates.
+- On a narrow screen (under the breakpoint where the company bar wraps), the scene goes above
+  the line and music as a short strip (about 3:1, at most 140 px tall), the whole chameleon in
+  view, not a tall column beside them.
+- Check the session page (`/session`) too, which shares the scene.
+
+Tests: start with failing ones in the browser test (`test_cook_screen_browser.py`): at 390×844
+(iPhone), 768×1024 and 1440×900, the chameleon's box is inside the scene's box and (cooking) its
+feet are within a few px of the stool's seat; at 390 px the scene is above the music card.
+Scenario: none (the browser test is it).
+
+Data/Setup: none. Mark #222 reviewed once live; Michael checks it on his iPhone.
+
+Notes: CSS only (`cook.css`). The cook screen's scene keeps the art's shape (`aspect-ratio:
+9 / 5`, the scenes' 360 x 200), so the sliced backdrop is never cropped. The chameleon is
+placed in percentages of that box: 65% high (130 of 200), feet (y 143 of its 150) on the stool's
+seat (y 160) at 7.1% from the left and 16.95% from the bottom. So the two scale together. On a
+phone (under 600 px) the scene is 252 x 140 px, centred on its own row. Its side margins fill
+the row so Themi's line and the music wrap under it. Deviation: not a 3:1 strip. A strip of
+another shape would crop the art again, and 9:5 at 140 px tall keeps the whole scene. A column
+layout was tried first, but at 200% text on a 360 px phone the music card's minimum width
+pushed the bar off the screen (`test_the_biggest_text_fits_a_phone`). Only `.cook-scene` is
+touched, so `/session`'s body-double scenes are as they were. Test: `test_themi_stays_on_the_stool`
+(390, 768, 1440 px) in test_cook_screen_browser. `THEMI_SHOTS=<folder>` saves its screenshots
+to look at.
+
+### F49f · Idea (2026-11-18): the cook screen's scene for gathering and prep, Themi's current look on iOS's Now Playing and the home screen
+Status: [x] 2026-11-19
+Depends on: F49e
+Read first: `scenes.svg`; `themi_home/body_double_scene.py` (`pick_cooking_state`);
+`themi_home/web/static/icons/` (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,
+`icon.svg`, last drawn 8 Nov, before BD3c's redraw on 17 Nov); `cook.js` and `session.js`
+(where music plays). From Michael's #226 (2026-11-18, 2:57 pm, "I also think we should create
+different photos for gathering ingredients and prep work") and bug #223 (2:31 pm, "where is iOS
+getting that image from? Can we replace it with the latest version of Themi's look?").
+
+What the Pi shows: the cook screen has one cooking scene (the counter, a pot steaming, the
+stool) for every phase. #223's screenshot is iOS's lock-screen player, "Cooking · Themi", with
+the old pale chameleon on green: no page sets `navigator.mediaSession`, so iOS uses the page's
+`apple-touch-icon`, which is still the pre-BD3c drawing.
+
+Build:
+- Gathering (phase `gather`): Themi by an open cupboard, with a jar and a bowl on the counter.
+  Prep (phase `prep`): Themi at a board with a knife and small bowls. Cooking (`cook`) keeps the
+  pot. Same style, colour tokens and both themes as the cooking scene; chosen by the session's
+  phase.
+- The icons (`apple-touch-icon.png` 180, `icon-192.png`, `icon-512.png`, `icon.svg`, the
+  favicon) redrawn from BD3c's `chameleon.svg`: the teal chameleon's head and shoulders on the
+  dark green. Kept as a script that writes the PNGs from the SVG (like `tools/compose_loops.py`),
+  and LICENCES unchanged (it's Themi's own art).
+- While Themi's music plays (the cook screen, the session page), `navigator.mediaSession`
+  metadata: title the track ("Lofi · Window light", or the Spotify note), artist "Themi", album
+  "Cooking" or "Body double", artwork the new 512 and 192 icons. Play and pause action handlers
+  drive the page's player.
+
+Tests: the scene shown for each phase (a template test); the icons are the new art (a hash
+check that they differ from the old, and the script's output is what's committed); the page
+sets media metadata when Play starts (browser test, reading `navigator.mediaSession.metadata`).
+Scenario: none.
+
+Data/Setup: none. Mark #223 and #226 reviewed once live; on iOS the home-screen icon only
+changes when the shortcut is added again.
+
+Notes:
+- Scenes: the cooking scene's counter follows `data-phase` (the template, and cook.js keeps it
+  live like `data-state`). `scene-at-gather` is an open wall cupboard with jars, a jar and a
+  bowl on the counter. `scene-at-prep` is a board with a knife, chopped bits and two small
+  bowls. `scene-at-cook` (the pot, hob and steam) shows for ready, cook and done. Colours are
+  the scene's tokens (themi.css). Browser test `test_the_counter_follows_the_phase`
+  (`THEMI_SHOTS` saves screenshots).
+- Icons: `tools/draw_icons.py` builds `icons/icon.svg` from `chameleon.svg`'s parts (props,
+  lids and "zz" removed; the light --cham colours inline), head and shoulders on #16302d with
+  a soft disc. It renders `icon-512.png`, `icon-192.png` and `apple-touch-icon.png` (180) with
+  resvg. test_icons checks the committed SVG is the script's and the PNGs are new and the right
+  size. No favicon was found to change.
+- Lock screen: `now_playing.js` (`window.themiNowPlaying`) sets `navigator.mediaSession`
+  metadata when the cook screen's or the body-double page's music starts. Title is "Lofi ·
+  <track>" on the cook screen (the kind on /session), artist "Themi", album "Cooking" or "Body
+  double", artwork the 192 and 512 icons (`data-artwork*` on the music box). The lock screen's
+  play and pause drive the page's player. Spotify shows its own. Browser test
+  `test_the_lock_screen_shows_themi_and_the_track`.
+- **Setup:** none. On iOS the home-screen icon changes only when the shortcut is added again.
+
+### F49g · Idea (2026-11-18): the morning message's text can be just the greeting when the picture shows the day
+Status: [x] 2026-11-19
+Depends on: DC5, MM2, MM5
+Read first: the Day Card Plan's DC5 section; `themi/standard/morning*.py` (the morning
+message's text and caption); `themi/standard/day_card.py` (what the card draws: events, the
+weather panel, the NWS alert, the meters); `DrawingsPreferences`, `DaySummaryPreferences`;
+the settings form for the morning summary. From Michael's idea #221 (2026-11-18, 11:50 am, "the
+morning message image is so good now, I no longer want the text that accompanies it. I can see
+the schedule in the image. There should be a way to turn off text that the image already
+contains").
+
+What the Pi shows: 18 Nov's morning message was the card with the caption "Good morning,
+Michael. Wed 18 Nov:" and three events, then "Coastal Flood Advisory in effect today." Every
+line is on the card (the events, and the alert in the weather panel).
+
+Build:
+- A setting per person, "Morning message text with the picture": "Everything" (as now, the
+  default) or "Just the greeting". With "Just the greeting" and the card drawn, the caption is
+  "Good morning, Michael." and the buttons, nothing the card shows.
+- Anything the card doesn't draw stays in the caption: a line the card left out (more events
+  than fit, an event it cut short), a "Heads-up" that isn't an event, whatever MM rows add that
+  has no place on the card. Spell out in Notes which morning lines the card covers.
+- If the card isn't drawn (an error, pictures off), the full text goes as now.
+- The "Everything else" button's edit keeps to the setting too.
+- The settings page and `set_preference` (or the module's settings tool) can change it, so "just
+  the picture in the morning, please" works in chat.
+
+Tests: with "Just the greeting", 18 Nov's events and alert give the caption "Good morning,
+Michael."; an event the card can't fit is still in the text; the card failing sends the full
+text; Erin's default is unchanged; the chat setting.
+Scenario: Michael says "I don't need the text with the morning picture"; the next morning's
+message is the card and "Good morning, Michael.".
+
+Data/Setup: none (a preference, no migration if preferences are key/value). Michael sets his
+once live. Mark #221 reviewed once live.
+
+Notes: `DrawingsPreferences.morning_text`: "all" (the default) or "greeting". On the settings
+form it's "With the picture, the words are: Everything / Just the greeting (the picture shows
+the day)", in the good-morning row. The outbox gained `captions` (by picture name). When the
+picture is drawn, the words beside it are the caption's (None: the row's). A picture that
+can't be drawn sends the row's full words, as before. `MorningMessage._caption`/`short_text`:
+the greeting, and "Also all day: …" for all-day events past the card's 2 rows (`all_day_rows`).
+The card draws every timed event, the weather panel and its alert, so nothing else is added.
+The edit after a tap uses the same caption. Chat: the new `set_morning_text` tool (text:
+greeting/all) in the calendar group. Its answer says when the picture is off for them. Golden
+`tools.json` gains it, and `test_settings_form`'s ADDED list gains `morning_text`. The noon
+recap is unchanged (words, no picture). **Setup:** Michael picks "Just the greeting" in
+Settings, or says so in chat.
+
+### F49h · Idea (2026-11-18): recipes to try, in their own Google Doc (reading and saving)
+Status: [x] 2026-11-19
+Depends on: RC1a, RC1b, F36b (`cookbook_add`), SP5
+Read first: `themi_home/recipes.py` (the cookbook's settings, `doc_id`, reading and parsing);
+`themi_home/cookbook.py`, `cookbook_save.py` (`cookbook_add`, writing an entry); `web_recipes.py`
+(a recipe from a link); the recipes module's settings on the Modules page; the plan's RC1
+sections. From Michael's idea #224 (2026-11-18, 2:33 pm, "also be able to save recipes that we
+want to try, but might not be good enough to go into the cookbook. Some sort of 'want to try' or
+'experimental' section or separate doc").
+
+Decided (Michael, 2026-11-18, idea #224): a separate Google Doc, "Recipes to try", read the same
+way as the cookbook; a keeper is copied into the cookbook.
+
+Build:
+- The recipes module gets a second doc setting, "Recipes to try" (a Google Doc picked like the
+  cookbook's, same account). Themi reads and parses it as it does the cookbook; its recipes are
+  kept with `section` marking them as to try (or a `book` column: 'cookbook' or 'to_try',
+  migration), and the cookbook's count and sections don't include them.
+- They can be found, shown, cooked (the cook screen, the card) and put on the grocery list like
+  any recipe; each shows "To try" by its name, in chat and on the recipes page (its own heading).
+- Saving: `cookbook_add` gains where it goes ("cookbook" or "to_try"). "Save this to try", "add
+  it to the try list" goes to the to-try doc, same approval card ("Add Pumpkin bread to Recipes
+  to try?"). With no to-try doc set, Themi says to set one on the Modules page.
+- Searching for a recipe looks in both, the cookbook first.
+
+Tests: the to-try doc parsed from a fixture; a to-try recipe found, labelled, cooked; "save this
+to try" writes to the to-try doc's fake, not the cookbook's; the cookbook's count is unchanged;
+no to-try doc set answers with where to choose one.
+Scenario: Michael sends a recipe link and "let's save that to try"; it's in the try doc.
+
+Data/Setup: probably a migration. **Setup:** Michael makes the "Recipes to try" Google Doc and
+picks it on the Modules page. Mark #224 reviewed once F49i is live too.
+
+Notes: split from the first F49h (2026-11-19): promoting a keeper is F49i.
+- Migration `0172_recipes_to_try.sql`: a `try_doc` table (like `cookbook`: doc, account,
+  title, version, revision, problem) and `recipes.book` ('cookbook' or 'to_try'). A to-try
+  recipe's key is `try:` + its heading id, so the docs never clash.
+- `Recipes.settings(which)`, `try_doc_id`, `choose(..., which)`, `sync(which=)`,
+  `store_doc(parsed, which)`. `sync_all` is the 15-minute job (both docs). The same doc can't be
+  both ("That doc is the cookbook already"). `summary` says "from Recipes to try". Guides are
+  offered for the cookbook only. `Recipe.book` / `to_try`. `link()` uses the recipe's own doc.
+- Chosen on the cookbook's page (/accounts/<id>/cookbook, where the picker already is, not the
+  Modules page): a "The doc I pick is: The family cookbook / Recipes to try" select on the
+  picker's form. The page shows the to-try doc's title, problem and last read. "Read it again"
+  reads both.
+- Labelled: the chat card's head "Snowy Earthquake Cookie (to try)", its link "In Recipes to
+  try: …". Buttons "Pancakes (to try)". Several matches with one to try: "From the cookbook and
+  Recipes to try:". The search puts the cookbook first among equals. The Recipes page lists them
+  under "To try" (the section chips are the cookbook's). `open_items` counts the cookbook alone
+  and names Recipes to try apart.
+- Saving: [Save to try] on a web recipe's card when there's a try doc. `save_recipe_to_cookbook`
+  gains `where` (cookbook or to_try; golden `tools.json` changes, and test_cookbook_save's three
+  scripted calls now pass `where: cookbook`). `CookbookSave.offer_to_try` previews "Here's how
+  it would go in Recipes to try:" and stages `cookbook_add` with `book: to_try`, written at the
+  doc's end (no sections). Afterwards the web recipe is the try doc's (`try:` key, `book`
+  to_try). With no try doc: `NO_TRY_DOC_TEXT`.
+- Tests: `tests/scenarios/test_recipes_to_try.py` (10).
+- **Setup:** Michael makes the "Recipes to try" Google Doc, then picks it on the cookbook's
+  page under Accounts, choosing "Recipes to try". Migration: restart Themi.
+
+### F49i · Idea (2026-11-18): a recipe to try that's a keeper goes into the cookbook
+Status: [x] 2026-11-19
+Depends on: F49h
+Read first: F49h's notes; `themi_home/cookbook_save.py` (`_execute`, `entry`, `insert_at`);
+`themi_home/cooking_wrap.py` (the end-of-cooking wrap's offers); `themi_google/connectors/gdocs`
+(batchUpdate; deleting a range). From Michael's idea #224 (2026-11-18, 2:33 pm), the part
+F49h left: a recipe from Recipes to try that turns out good goes into the cookbook.
+
+Build:
+- Promoting: after cooking a to-try recipe, the end-of-cooking wrap asks "A keeper? [Add to the
+  cookbook] [Not yet]"; and "move X to the cookbook" in chat. Both copy it into the cookbook doc
+  (the approval card), then remove it from the to-try doc (also on that card), so it's in one
+  place.
+- Removing an entry from the to-try doc: its heading to its `-----` (or the next entry's
+  heading), one `deleteContentRange` against the revision just read, read again on a conflict
+  as `_execute` does. The stored recipe becomes the cookbook's (`book`, key, section), not a new
+  row, so its cooking history stays with it.
+
+Tests: promoting copies then removes (the fakes: cookbook gains it, try doc loses it); the wrap
+asks only after a to-try recipe; "move X to the cookbook" in chat; a conflict on the delete is
+read again; a recipe already in the cookbook isn't offered.
+Scenario: Michael cooks Snowy Earthquake Cookie from Recipes to try, taps [Add to the cookbook]
+and [Go ahead]; it's in the cookbook's Desserts and gone from the try doc.
+
+Data/Setup: none. Mark #224 reviewed once live (with F49h).
+
+Notes:
+- Three ways in, one card: the cook screen's wrap after [All done] ("A keeper? It can go into
+  the cookbook." [Add to the cookbook] [Not yet], kind `keep`, taps `wrap_keep`/`wrap_keep_no`),
+  the chat's "all done" card for a to-try recipe (same words and buttons, recipe actions
+  `keep`/`keep_in`/`keep_no`), and "move X to the cookbook" in chat. Chat reuses
+  `save_recipe_to_cookbook` with `where: cookbook` rather than a new tool (its description
+  says so; golden `tools.json` changes). When a cookbook recipe and a to-try one share the
+  name, `where: cookbook` takes the to-try one.
+- `CookbookSave.offer` handles a to-try recipe: the section guessed or asked (`keep_in`), the
+  preview ends "Then it comes out of Recipes to try.", the card says 'Move "X" to the cookbook
+  under Desserts, out of Recipes to try', payload `keep: true`.
+- `_keep`: reads the try doc again first, then writes the entry as the preview showed it
+  (Themi's reading, so F49c's "¾ Cup (150g) sugar" order, not the doc's raw "¾ (150g) Cup"),
+  then deletes it from the try doc with `cookbook.entry_range` (heading to its `-----` or a
+  rule, or the next heading, or the doc's end) and `delete_requests`. Both writes go through
+  `_write` (the revision just read, once more on a conflict). The row keeps its id; its key,
+  section and book become the cookbook's. If the try doc keeps changing, the cookbook keeps it
+  and the answer says to delete it from Recipes to try by hand.
+- Fake: `FakeGdocs` deletes whole paragraphs (`deleteContentRange`) and has
+  `edits_before_write_to[doc_id]` for a conflict on one doc.
+- Tests: `tests/scenarios/test_recipes_to_try.py` (9 more), `tests/unit/test_cookbook_entry_range.py`.
+- Not done: no [Add to the cookbook] on a to-try recipe's ordinary chat card (only after
+  cooking, or by asking). **Setup:** none beyond F49h's. Mark #224 reviewed once live.
 
 ## Conversation mode
 

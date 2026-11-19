@@ -6,6 +6,10 @@ from __future__ import annotations
 
 from datetime import date, time, timedelta
 
+import httpx
+import pytest
+from telegram.error import TimedOut
+
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.ai.types import ToolResult
@@ -431,3 +435,30 @@ async def test_nothing_at_all_that_day_is_one_plain_line(scenario: Scenario) -> 
     assert routines(scenario).describe(erin, WED + timedelta(days=1)) == (
         "Erin's routines in Themi have nothing on them for Thursday 22 October."
     )
+
+
+async def test_a_check_whose_answer_was_lost_comes_once(
+    scenario: Scenario, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F49a (bugs #229, #230): on a flaky network the evening routine came four times:
+    each send reached Telegram, but the answer timed out, and the outbox tried again."""
+    add(scenario, "Erin", "Morning", "Vitamins")
+    bot = scenario.app.channel.get("telegram").bot  # type: ignore[union-attr]
+    real = type(bot).send_message
+    lost = [1]
+
+    async def answer_lost(self: object, *args: object, **kwargs: object) -> object:
+        sent = await real(self, *args, **kwargs)  # it reaches Telegram
+        if lost:
+            lost.pop()
+            raise TimedOut() from httpx.ReadTimeout("no answer")
+        return sent
+
+    monkeypatch.setattr(type(bot), "send_message", answer_lost)
+    await at(scenario, WED, 12, 0)
+    for _ in range(4):
+        await scenario.advance(minutes=15)
+    checks_seen = [t for t in scenario.inbox("Erin") if t.startswith("Morning routine")]
+    assert checks_seen == ["Morning routine, still open:\n- Vitamins\nDone already?"]
+    await scenario.tap("Erin", "✓ Vitamins")  # its buttons still work
+    assert scenario.edits("Erin")[-1]["text"].startswith("Marked done: Vitamins.")

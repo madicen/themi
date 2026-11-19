@@ -8,7 +8,8 @@ and adding a recipe to it (RC5).
 
 A document is a list of blocks: ("P", text, style) paragraphs, ("TABLE", rows) and
 ("HR",) horizontal rules. Indices are worked out as Google counts them closely enough for
-inserting at a paragraph's start or the doc's end, which is all Themi does. `shared_with`
+inserting at a paragraph's start or the doc's end, and deleting whole paragraphs (F49i),
+which is all Themi does. `shared_with`
 is drive.file: only those addresses' tokens can open it (anyone else gets a 404).
 """
 
@@ -81,6 +82,7 @@ class FakeGdocs:
         self.failures: dict[str, list[int]] = {}
         self.calls: list[tuple[str, str]] = []  # (endpoint, doc id)
         self.edits_before_write = 0  # someone edits just before each of the next N writes
+        self.edits_before_write_to: dict[str, int] = {}  # F49i: the same, for one doc
         self.app = FastAPI()
         self.app.add_api_route("/v1/documents/{doc_id}", self._get, methods=["GET"])
         self.app.add_api_route(
@@ -106,6 +108,7 @@ class FakeGdocs:
         with self._lock:
             self.docs, self.failures, self.calls = {}, {}, []
             self.edits_before_write = 0
+            self.edits_before_write_to = {}
 
     # ----- scripting ----------------------------------------------------------
 
@@ -256,6 +259,9 @@ class FakeGdocs:
         if self.edits_before_write:
             self.edits_before_write -= 1
             doc.revision += 1  # a person typed in the doc between Themi's read and write
+        elif self.edits_before_write_to.get(doc_id):
+            self.edits_before_write_to[doc_id] -= 1
+            doc.revision += 1
         wanted = body.get("writeControl", {}).get("requiredRevisionId")
         if wanted is not None and wanted != f"rev{doc.revision}":
             return JSONResponse(
@@ -274,6 +280,10 @@ class FakeGdocs:
                         return JSONResponse({"error": {"code": 400}}, status_code=400)
                 elif "updateParagraphStyle" in item:
                     self._style(doc, item["updateParagraphStyle"])
+                elif "deleteContentRange" in item and not self._delete(  # F49i
+                    doc, item["deleteContentRange"]
+                ):
+                    return JSONResponse({"error": {"code": 400}}, status_code=400)
             doc.requests.append(body.get("requests", []))
             doc.revision += 1
         return JSONResponse(
@@ -295,6 +305,16 @@ class FakeGdocs:
         else:
             return False
         doc.blocks[at:at] = [_Para(line, inherited) for line in lines]
+        return True
+
+    def _delete(self, doc: _Doc, request: dict[str, Any]) -> bool:
+        """Whole blocks only, as Themi deletes an entry; the body's last newline stays."""
+        low, high = int(request["range"]["startIndex"]), int(request["range"]["endIndex"])
+        starts = self._starts(doc)
+        if low not in starts[:-1] or (high not in starts[:-1] and high != starts[-1] - 1):
+            return False
+        last = starts.index(high) if high in starts[:-1] else len(doc.blocks)
+        del doc.blocks[starts.index(low) : last]
         return True
 
     def _style(self, doc: _Doc, request: dict[str, Any]) -> None:
