@@ -4,6 +4,8 @@
     fake_spotify.add_device("Kitchen speaker")      # an open Spotify app
     fake_spotify.add("playlist", "Lofi Beats")      # something to find
     fake_spotify.add_mine("Focus")                  # one of their own playlists
+    fake_spotify.add_liked("Song 1")                # one of their liked songs
+    fake_spotify.library_scope = False              # a link made before liked songs
     state, code = fake_spotify.approve(authorize_url)  # they say yes
     fake_spotify.revoke()                           # every token stops working
 
@@ -39,11 +41,14 @@ class FakeSpotify:
         self.devices: list[dict] = []
         self.catalogue: list[dict] = []
         self.mine: list[dict] = []
+        self.liked: list[dict] = []
+        self.library_scope = True  # the link covers user-library-read
         self.codes: dict[str, tuple[str, str]] = {}  # code -> (redirect_uri, challenge)
         self.access: dict[str, datetime] = {}
         self.refresh_tokens: set[str] = set()
         self.playing: dict | None = None  # {"context_uri"|"uris", "device_id"}
         self.paused = False
+        self.shuffle = False  # Spotify's own shuffle state
         self.calls: list[str] = []
         self.transport = httpx.MockTransport(self._handle)
 
@@ -54,10 +59,10 @@ class FakeSpotify:
 
     # ----- the test's controls ----------------------------------------------------------
 
-    def add_device(self, name: str, *, active: bool = False) -> str:
+    def add_device(self, name: str, *, active: bool = False, kind: str = "Speaker") -> str:
         device_id = f"dev-{len(self.devices) + 1}"
         self.devices.append({"id": device_id, "name": name, "is_active": active,
-                             "is_restricted": False, "type": "Speaker"})  # fmt: skip
+                             "is_restricted": False, "type": kind})  # fmt: skip
         return device_id
 
     def _entry(self, kind: str, name: str) -> dict:
@@ -70,9 +75,14 @@ class FakeSpotify:
         self.catalogue.append(entry)
         return entry
 
-    def add_mine(self, name: str) -> dict:
-        entry = self._entry("playlist", name)
+    def add_mine(self, name: str, tracks: int = 20) -> dict:
+        entry = {**self._entry("playlist", name), "tracks": {"total": tracks}}
         self.mine.append(entry)
+        return entry
+
+    def add_liked(self, name: str) -> dict:
+        entry = self._entry("track", name)
+        self.liked.append(entry)
         return entry
 
     def revoke(self) -> None:
@@ -107,6 +117,14 @@ class FakeSpotify:
             return httpx.Response(200, json={"product": product, "display_name": self.display_name})
         if path == "/me/playlists":
             return httpx.Response(200, json={"items": self.mine})
+        if path == "/me/tracks":
+            if not self.library_scope:
+                return httpx.Response(
+                    403, json={"error": {"status": 403, "message": "Insufficient client scope"}}
+                )
+            limit, offset = int(url.params.get("limit", 20)), int(url.params.get("offset", 0))
+            page = [{"track": t} for t in self.liked[offset : offset + limit]]
+            return httpx.Response(200, json={"items": page, "total": len(self.liked)})
         if path == "/search":
             words = url.params.get("q", "").lower().split()
             found: dict[str, dict] = {}
@@ -125,6 +143,11 @@ class FakeSpotify:
                 return httpx.Response(404, json={"error": {"reason": "NO_ACTIVE_DEVICE"}})
             self.playing = {**json.loads(request.content or b"{}"), "device_id": device}
             self.paused = False
+            return httpx.Response(204)
+        if path == "/me/player/shuffle":
+            if self.playing is None:
+                return httpx.Response(404, json={"error": {"reason": "NO_ACTIVE_DEVICE"}})
+            self.shuffle = url.params.get("state") == "true"
             return httpx.Response(204)
         if path == "/me/player/pause":
             if not self.premium:

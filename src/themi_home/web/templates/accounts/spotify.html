@@ -6,10 +6,12 @@
   {% set chips = [("Linked" ~ ("" if link.premium else " · no Premium"), "good" if link.premium else "info")] if link else [("Not linked", "")] %}
   {% call(part) row("Spotify", meta=link.display_name if link else "Your own account", chips=chips, id="spotify", open=opened == "spotify") %}
   {% if part == "body" %}
-    <p class="muted">Themi plays your own playlists on your own Spotify when you ask ("play my
-    focus playlist"), and pauses it. Only yours: nobody else's music goes through it.
+    <p class="muted">Themi plays your own playlists and liked songs on your own Spotify when you
+    ask ("play my focus playlist"), and pauses it. Only yours: nobody else's music goes through it.
     Playing from here needs Spotify Premium; without it, Themi sends a link instead.</p>
     {% if link %}
+    <p class="muted">Linked before 18 November 2026? Unlink and link again so Themi can play
+    your liked songs.</p>
     <div class="danger-zone">
       <form method="post" action="/accounts/spotify/unlink">
         <input type="hidden" name="csrf" value="{{ csrf }}">

@@ -4,14 +4,18 @@ Skipped where Chrome isn't installed."""
 
 from __future__ import annotations
 
+import httpx
 import pytest
 
+from tests.fakes.spotify import FakeSpotify
 from tests.fixtures.cookbook import load
 from tests.integration.test_session_page_browser import CHROME, page_in_chrome, until
 from tests.scenarios.harness import Scenario
+from tests.scenarios.test_body_double import own_playlists
 from tests.unit.test_cook_screen import ALFREDO, lines
 from themi import clock
 from themi.core import keys
+from themi_home.music import SpotifyPlayback
 
 pytestmark = pytest.mark.skipif(CHROME is None, reason="needs Chrome or Chromium")
 
@@ -330,3 +334,34 @@ async def test_a_long_press_talks_and_never_selects(scenario: Scenario) -> None:
         assert await tab.value(heard) == "Didn't catch that. Tap to try again."
         await tab.value("window.rec.onerror({error: 'not-allowed'})")
         assert await tab.value(heard) == "The microphone isn't allowed for this page."
+
+
+async def test_spotify_on_the_cook_screen_plays_and_pauses_once_a_tap(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    """Michael, 2026-11-18: the cook screen's Spotify Play and Pause seemed not to work. In a
+    real browser each tap reaches Spotify once, liked songs first, and says what happened."""
+    clock.unfreeze()
+    await own_playlists(scenario, site, fake_spotify)
+    fake_spotify.add_liked("Song 1")
+    await to_step_three(scenario)
+    async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves") as tab:
+        await tab.value("document.getElementById('cook-tab-spotify').click()")
+        assert not await tab.value("document.getElementById('cook-spotify').hidden")
+        said = "document.querySelector('.cook-spotify .session-spotify-said').textContent"
+        await tab.value("document.querySelector('.cook-spotify button[value=play]').click()")
+        assert await until(lambda: tab.value(f"({said}).startsWith('Playing your liked songs')"))
+        # F47a: Shuffle, ticked while it plays, reaches Spotify at once
+        box = "document.querySelector('.cook-spotify input[type=checkbox][name=shuffle]')"
+        await tab.value(f"{box}.click()")
+        assert await until(lambda: tab.value(f"({said}).startsWith('Shuffle on')"))
+        assert fake_spotify.shuffle is True
+        await tab.value("document.querySelector('.cook-spotify button[value=pause]').click()")
+        assert await until(lambda: tab.value(f"({said}) === 'Paused.'"))
+        await until(lambda: tab.value("false"), 1)  # a second post, had there been one
+    assert fake_spotify.calls.count("PUT /v1/me/player/play") == 1
+    assert scenario.app.store.preferences(
+        scenario.member("Erin").id, SpotifyPlayback
+    ).spotify_shuffle  # kept for next time
+    assert fake_spotify.calls.count("PUT /v1/me/player/pause") == 1
+    assert fake_spotify.paused

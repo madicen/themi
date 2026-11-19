@@ -424,7 +424,7 @@ class Cooking:
         self.links = StepLinks(services)  # CK2: which lines each step uses
         self.titles = StepTitles(services)  # CK12: the step strip's titles
         self.mixes = CookingMixes(services)  # CK15b: music made from the recipe's name
-        self.playlists: dict[int, list[dict[str, str]]] = {}  # CK5: their Spotify, per session
+        self.playlists: dict[int, list[dict[str, Any]]] = {}  # CK5: their Spotify, per session
 
     def preferences(self, member_id: int) -> CookingPreferences:
         return self.services.store.preferences(member_id, CookingPreferences)
@@ -727,7 +727,7 @@ class Cooking:
         music = self.services.maybe(keys.music)
         if music is None:
             return
-        found = [{"uri": p.uri, "name": p.name, "link": p.link}
+        found = [{"uri": p.uri, "name": p.name, "link": p.link, "count": p.count}
                  for p in await music.playlists(self._owner(session))]  # fmt: skip
         self.playlists[session.id] = ranked(found, "cooking", None)
 

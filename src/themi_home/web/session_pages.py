@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -30,6 +31,8 @@ from themi.web.auth import COOKIE_NAME, SESSION_TTL
 from themi.web.kit import Kit, NotSignedIn
 
 log = logging.getLogger(__name__)
+# A tap from a phone (the Mini App, or a phone's browser): Spotify plays on that phone
+PHONE = re.compile(r"iPhone|Android.*Mobile|Windows Phone", re.IGNORECASE)
 
 
 def routes(kit: Kit) -> APIRouter:
@@ -311,7 +314,7 @@ def routes(kit: Kit) -> APIRouter:
     async def session_spotify(request: Request) -> Response:
         """F34i: one of their playlists on their active device, or Pause, or Next."""
         signed, form = await kit.checked(request)
-        from themi_home.music import CATEGORY, NEXT, PAUSE, PLAY
+        from themi_home.music import CATEGORY, NEXT, PAUSE, PLAY, SHUFFLE, set_shuffle
 
         bd = body_double()
         session = bd.current(signed.member) if bd is not None else None
@@ -323,6 +326,8 @@ def routes(kit: Kit) -> APIRouter:
         ):
             return kit.redirect("/session")
         action = str(form.get("action", ""))
+        if "shuffle" in form and action in ("play", "shuffle"):  # F47a: the toggle, kept
+            set_shuffle(app.store, signed.member, form.get("shuffle") == "on")
         if action == "play":
             playlists = (
                 bd.state(signed.member).get("spotify", []) if bd is not None and session is not None
@@ -334,8 +339,16 @@ def routes(kit: Kit) -> APIRouter:
                 return Response(status_code=400)
             summary, payload, executor = (
                 f"Play {chosen['name']} on Spotify",
-                {"uri": chosen["uri"], "name": chosen["name"]},
+                {"uri": chosen["uri"], "name": chosen["name"], "count": chosen.get("count", 0),
+                 "from_phone": PHONE.search(request.headers.get("User-Agent", "")) is not None},
                 PLAY,
+            )  # fmt: skip
+        elif action == "shuffle":
+            on = form.get("shuffle") == "on"
+            summary, payload, executor = (
+                "Shuffle Spotify" if on else "Spotify in order",
+                {"on": on},
+                SHUFFLE,
             )
         elif action in ("pause", "next"):
             summary = "Pause Spotify" if action == "pause" else "Next on Spotify"

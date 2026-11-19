@@ -14,6 +14,7 @@ from themi.ai.errors import PermanentError
 from themi.core import keys
 from themi.standard.tasks import Task, TaskBoard
 from themi_home.body_double import BodyDoublePreferences
+from themi_home.music import PHONE_NOT_LISTED_TEXT
 
 
 def board(scenario: Scenario) -> TaskBoard:
@@ -766,6 +767,174 @@ async def test_the_session_page_has_my_spotify(
                                     "device_id": "dev-1"}  # fmt: skip
     await site.post("/session/spotify", data={"csrf": csrf, "action": "pause"})
     assert fake_spotify.paused
+
+
+async def test_my_spotify_starts_with_liked_songs(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    """Michael, 2026-11-18: liked songs as the default choice."""
+    await own_playlists(scenario, site, fake_spotify)
+    for n in range(1, 61):
+        fake_spotify.add_liked(f"Song {n}")
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    bd = scenario.app.services.get(keys.body_double)
+    names = [p["name"] for p in bd.state(scenario.member("Erin"))["spotify"]]
+    assert names[:2] == ["Liked songs", "Deep Focus"]
+    page = (await site.get("/session")).text
+    assert page.index('value="spotify:liked"') < page.index('value="spotify:playlist:')
+    assert 'name="shuffle" value="on">' in page  # Shuffle, off to start
+    csrf = await sign_in(scenario, site, "Erin")
+    fetch = {"X-Requested-With": "fetch"}
+    played = await site.post("/session/spotify", headers=fetch, data={
+        "csrf": csrf, "action": "play", "uri": "spotify:liked", "shuffle": "off"})  # fmt: skip
+    assert played.json()["said"] == "Playing your liked songs on Desk speaker."
+    in_order = [t["uri"] for t in fake_spotify.liked[:50]]
+    assert fake_spotify.playing["uris"] == in_order  # type: ignore[index]
+    assert played.json()["spotify_playing"] == "spotify:liked"
+    assert (session_row(scenario)["music"], session_row(scenario)["music_name"]) == (
+        "spotify:liked", "Liked songs")  # fmt: skip
+
+
+async def test_shuffle_plays_the_chosen_playlist_at_random_and_is_kept(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    """Michael, 2026-11-18: a toggle for the chosen playlist's songs in order or at random."""
+    await own_playlists(scenario, site, fake_spotify)
+    for n in range(1, 61):
+        fake_spotify.add_liked(f"Song {n}")
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    csrf = await sign_in(scenario, site, "Erin")
+    fetch = {"X-Requested-With": "fetch"}
+    deep = {"csrf": csrf, "action": "play", "uri": "spotify:playlist:deepfocus"}
+    await site.post("/session/spotify", headers=fetch, data={**deep, "shuffle": "off"})
+    assert "offset" not in fake_spotify.playing  # type: ignore[operator]
+    assert fake_spotify.shuffle is False
+
+    # the toggle, while it plays: Spotify shuffles at once, and it's kept
+    toggled = await site.post("/session/spotify", headers=fetch, data={
+        "csrf": csrf, "action": "shuffle", "shuffle": "on"})  # fmt: skip
+    assert toggled.json()["said"] == "Shuffle on: songs play in a random order."
+    assert fake_spotify.shuffle is True
+    assert toggled.json()["spotify_shuffle"] is True
+    assert 'name="shuffle" value="on" checked>' in (await site.get("/session")).text
+
+    # the next Play (the form sends both: the hidden "off", then the ticked box's "on")
+    await site.post("/session/spotify", headers=fetch, data={**deep, "shuffle": ["off", "on"]})
+    start_at = fake_spotify.playing["offset"]["position"]  # type: ignore[index]
+    assert 0 <= start_at < 20 and fake_spotify.shuffle is True  # a random first song
+    await site.post("/session/spotify", headers=fetch, data={
+        "csrf": csrf, "action": "play", "uri": "spotify:liked"})  # fmt: skip
+    uris = fake_spotify.playing["uris"]  # type: ignore[index]
+    assert len(uris) == 50 and set(uris) <= {t["uri"] for t in fake_spotify.liked}
+    assert uris != [t["uri"] for t in fake_spotify.liked[: len(uris)]]  # not in order
+
+    # off again: in order
+    await site.post("/session/spotify", headers=fetch, data={**deep, "shuffle": "off"})
+    assert "offset" not in fake_spotify.playing and fake_spotify.shuffle is False  # type: ignore[operator]
+
+
+IPHONE = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Mobile/15E148"
+)
+
+
+async def test_play_from_a_phone_plays_on_that_phone_not_the_laptop(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    """Bug 2026-11-18 (Michael, on the cook screen from his phone): Spotify's active device
+    was still his laptop, so Play went there, and he had to switch it to his phone in
+    Spotify itself."""
+    await own_playlists(scenario, site, fake_spotify)
+    fake_spotify.devices.clear()
+    fake_spotify.add_device("Work laptop", active=True, kind="Computer")
+    phone = fake_spotify.add_device("Michael's iPhone", kind="Smartphone")
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    csrf = await sign_in(scenario, site, "Erin")
+    tap = {"csrf": csrf, "action": "play", "uri": "spotify:playlist:deepfocus"}
+    fetch = {"X-Requested-With": "fetch"}
+    played = await site.post("/session/spotify", headers={**fetch, "User-Agent": IPHONE},
+                             data=tap)  # fmt: skip
+    assert played.json()["said"] == "Playing Deep Focus on Michael's iPhone."
+    assert fake_spotify.playing["device_id"] == phone  # type: ignore[index]
+    # from a computer, the active device as before
+    await site.post("/session/spotify", headers=fetch, data=tap)
+    assert fake_spotify.playing["device_id"] == "dev-1"  # type: ignore[index]
+
+
+async def test_play_from_a_phone_spotify_has_dropped_says_open_it_there(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    """Bug 2026-11-18 (Michael, the cook screen again): his phone had just been playing, but
+    iOS had dropped it from Spotify's devices, so Play went to the laptop once more."""
+    await own_playlists(scenario, site, fake_spotify)
+    fake_spotify.devices.clear()
+    fake_spotify.add_device("Work laptop", kind="Computer")
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    csrf = await sign_in(scenario, site, "Erin")
+    played = await site.post(
+        "/session/spotify",
+        headers={"X-Requested-With": "fetch", "User-Agent": IPHONE},
+        data={"csrf": csrf, "action": "play", "uri": "spotify:playlist:deepfocus"},
+    )
+    assert played.json()["said"] == PHONE_NOT_LISTED_TEXT
+    assert fake_spotify.playing is None
+
+
+async def test_play_from_a_phone_keeps_a_speaker_already_playing(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await own_playlists(scenario, site, fake_spotify)  # Desk speaker, active
+    fake_spotify.add_device("Michael's iPhone", kind="Smartphone")
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    csrf = await sign_in(scenario, site, "Erin")
+    await site.post(
+        "/session/spotify",
+        headers={"User-Agent": IPHONE},
+        data={"csrf": csrf, "action": "play", "uri": "spotify:playlist:deepfocus"},
+    )
+    assert fake_spotify.playing["device_id"] == "dev-1"  # type: ignore[index]
+
+
+async def test_liked_songs_on_a_link_made_before_them_says_to_link_again(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await own_playlists(scenario, site, fake_spotify)
+    fake_spotify.library_scope = False
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    csrf = await sign_in(scenario, site, "Erin")
+    played = await site.post(
+        "/session/spotify",
+        headers={"X-Requested-With": "fetch"},
+        data={"csrf": csrf, "action": "play", "uri": "spotify:liked"},
+    )
+    assert played.json()["said"].startswith("To play your liked songs, Spotify needs asking")
+    assert fake_spotify.playing is None
+
+
+async def test_liked_songs_on_a_free_account_is_the_link(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    fake_spotify.premium = False
+    await own_playlists(scenario, site, fake_spotify)
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    csrf = await sign_in(scenario, site, "Erin")
+    played = await site.post(
+        "/session/spotify",
+        headers={"X-Requested-With": "fetch"},
+        data={"csrf": csrf, "action": "play", "uri": "spotify:liked"},
+    )
+    assert played.json()["said"] == (
+        "Here it is on Spotify: https://open.spotify.com/collection/tracks"
+    )
+    assert "GET /v1/me/tracks" not in fake_spotify.calls
 
 
 async def test_not_linked_only_the_loop(scenario: Scenario) -> None:

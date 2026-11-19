@@ -3,7 +3,9 @@
 - Sign-in: OAuth 2 authorization code with PKCE (no client secret), from Accounts. The
   refresh token is kept encrypted; access tokens (an hour) live in memory, and a refresh
   may hand back a new refresh token, which replaces the old.
-- Scopes: reading and changing playback, the account (for Premium), and their playlists.
+- Scopes: reading and changing playback, the account (for Premium), their playlists and
+  their liked songs (`user-library-read`, added 2026-11-18: a link made before then lacks
+  it, and Spotify answers 403 "Insufficient client scope" until they link again).
 - Playback control needs Premium. The account's `product` is read at link time; without
   Premium, "play X" sends the item's link instead.
 - With no device open, play answers 404 NO_ACTIVE_DEVICE; Themi says so once.
@@ -16,6 +18,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import random
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -41,7 +44,9 @@ SCOPES = (
     "user-modify-playback-state",
     "user-read-private",
     "playlist-read-private",
+    "user-library-read",
 )
+LIKED_PAGE = 50  # liked songs played at once: Spotify's page size
 STATE_TTL = timedelta(minutes=10)
 EARLY = timedelta(minutes=5)
 TIMEOUT = 15.0
@@ -70,6 +75,10 @@ class NeedsPremium(SpotifyError):
     """Playback control needs Spotify Premium."""
 
 
+class MissingScope(SpotifyError):
+    """Their link was made before Themi asked for this (liked songs): linking again fixes it."""
+
+
 @dataclass(frozen=True)
 class Tokens:
     access: Secret = field(repr=False)
@@ -85,6 +94,7 @@ class Item:
     name: str
     kind: str  # playlist, album or track
     link: str  # open.spotify.com, for a free account
+    count: int = 0  # a playlist's tracks, when Spotify said (for a shuffled start)
 
 
 @dataclass(frozen=True)
@@ -92,6 +102,7 @@ class Device:
     id: str
     name: str
     active: bool
+    kind: str = ""  # Spotify's type: Computer, Smartphone, Speaker, TV...
 
 
 def pkce_pair() -> tuple[str, str]:
@@ -174,17 +185,56 @@ class SpotifyClient:
         body = await self._call("GET", "/me/playlists?limit=50", access)
         return [_item(p, "playlist") for p in body.get("items") or [] if p]
 
+    async def liked(self, access: Secret, rng: random.Random, *, shuffle: bool) -> list[str]:
+        """A page of their liked songs. In order: the most recent, newest first. Shuffled:
+        from a random place in them (the most recent page when there's only one), mixed."""
+        body = await self._call("GET", f"/me/tracks?limit={LIKED_PAGE}", access)
+        total = int(body.get("total") or 0)
+        if shuffle and total > LIKED_PAGE:
+            offset = rng.randrange(total - LIKED_PAGE + 1)
+            if offset:
+                body = await self._call(
+                    "GET", f"/me/tracks?limit={LIKED_PAGE}&offset={offset}", access
+                )
+        uris = [
+            str(uri) for saved in body.get("items") or []
+            if (uri := ((saved or {}).get("track") or {}).get("uri"))
+            and not str(uri).startswith("spotify:local:")
+        ]  # fmt: skip
+        if shuffle:
+            rng.shuffle(uris)
+        return uris
+
+    async def play_tracks(self, access: Secret, uris: list[str], device_id: str) -> None:
+        await self._call("PUT", f"/me/player/play?device_id={device_id}", access, {"uris": uris})
+
     async def devices(self, access: Secret) -> list[Device]:
         body = await self._call("GET", "/me/player/devices", access)
         return [
-            Device(str(d["id"]), str(d.get("name", "")), bool(d.get("is_active")))
+            Device(
+                str(d["id"]),
+                str(d.get("name", "")),
+                bool(d.get("is_active")),
+                str(d.get("type", "")),
+            )
             for d in body.get("devices") or []
             if d.get("id") and not d.get("is_restricted")
         ]
 
-    async def play(self, access: Secret, item: Item, device_id: str) -> None:
-        body = {"uris": [item.uri]} if item.kind == "track" else {"context_uri": item.uri}
+    async def play(
+        self, access: Secret, item: Item, device_id: str, *, start: int | None = None
+    ) -> None:
+        """`start`: the track to begin at (a shuffled playlist's first, at random)."""
+        body: dict[str, Any] = (
+            {"uris": [item.uri]} if item.kind == "track" else {"context_uri": item.uri}
+        )
+        if start is not None and item.kind != "track":
+            body["offset"] = {"position": start}
         await self._call("PUT", f"/me/player/play?device_id={device_id}", access, body)
+
+    async def shuffle(self, access: Secret, on: bool, device_id: str | None = None) -> None:
+        where = f"&device_id={device_id}" if device_id else ""
+        await self._call("PUT", f"/me/player/shuffle?state={str(on).lower()}{where}", access)
 
     async def pause(self, access: Secret) -> None:
         await self._call("PUT", "/me/player/pause", access)
@@ -228,13 +278,17 @@ class SpotifyClient:
         except httpx.HTTPError as exc:
             raise SpotifyError(f"Spotify couldn't be reached ({type(exc).__name__})") from exc
         self.tally(response.status_code)
-        reason = str(_json(response).get("error", {}).get("reason", "")) if response.content else ""
+        error = _json(response).get("error", {}) if response.content else {}
+        error = error if isinstance(error, dict) else {}
+        reason = str(error.get("reason", ""))
         if response.status_code == 401:
             raise LinkRevoked("Spotify turned down the access token.")
         if response.status_code == 404 and (reason == "NO_ACTIVE_DEVICE" or "player" in path):
             raise NoDevice("No Spotify device is open.")
         if response.status_code == 403 and reason == "PREMIUM_REQUIRED":
             raise NeedsPremium("That needs Spotify Premium.")
+        if response.status_code == 403 and "scope" in str(error.get("message", "")).lower():
+            raise MissingScope(f"Their Spotify link doesn't cover {path}.")
         if response.status_code not in (200, 201, 202, 204):
             raise SpotifyError(f"Spotify answered {response.status_code} for {path}")
         return _json(response)
@@ -242,7 +296,9 @@ class SpotifyClient:
 
 def _item(raw: dict[str, Any], kind: str) -> Item:
     link = str((raw.get("external_urls") or {}).get("spotify") or "")
-    return Item(str(raw["uri"]), str(raw.get("name", "")), kind, link)
+    tracks = raw.get("tracks") or raw.get("items") or {}  # a playlist's: {"total": n}
+    count = int(tracks.get("total") or 0) if isinstance(tracks, dict) else 0
+    return Item(str(raw["uri"]), str(raw.get("name", "")), kind, link, count)
 
 
 def _json(response: httpx.Response) -> dict[str, Any]:

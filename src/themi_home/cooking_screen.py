@@ -370,6 +370,7 @@ def music(cooking: Cooking, session: Session, viewer: Member) -> dict[str, Any] 
     """CK5: the body double page's music, with BD5c's suggestion for cooking."""
     from themi.core import keys
     from themi_home.body_double_music import DEFAULTS, LOOPS
+    from themi_home.music import choices, shuffled
     from themi_home.music_mix import MUSICAL
 
     bd = cooking.services.maybe(keys.body_double)
@@ -382,7 +383,8 @@ def music(cooking: Cooking, session: Session, viewer: Member) -> dict[str, Any] 
         f"Some {name.lower()} while you cook?" if found["sound"] == usual
         else f"{name} again, like last time?"
     )  # fmt: skip
-    found["spotify"] = cooking.playlists.get(session.id, [])
+    found["spotify"] = choices(cooking.playlists.get(session.id, []))  # liked songs first
+    found["spotify_shuffle"] = shuffled(cooking.services.store, viewer)  # F47a
     found["mixes"] = cooking.mixes.kept(session.recipe_id)  # CK15b: made for this recipe
     found["musical"] = list(MUSICAL)  # the kinds a mix can be made for
     return found

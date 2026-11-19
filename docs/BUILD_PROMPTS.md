@@ -304,6 +304,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F46b | Feedback: an address they give for an event's place is used, and remembered for that place | Feedback | [x] 2026-11-17 |
 | F46c | Feedback: where they said they'll leave from stays with the event, and the heads-up uses it | Feedback | [x] 2026-11-17 |
 | F46d | Feedback: "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder | Feedback | [x] 2026-11-17 |
+| F47a | Idea: liked songs as the default, and a Shuffle toggle | Feedback | [x] 2026-11-18 |
+| F47b | Feedback: Play from a phone plays on that phone, not the laptop | Feedback | [x] 2026-11-18 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15052,6 +15054,46 @@ that day is not set and says when the heads-up comes (`TravelHeadsUps.heads_up_a
 descriptions of drive_time, add_reminder and change_calendar_event say not to move the event
 for an early arrival. Golden `tools.json`: those three specs. New tests at the end of
 `tests/scenarios/test_travel_plans.py`.
+
+### F47a · Idea (2026-11-18): liked songs as the default, and a Shuffle toggle
+Status: [x] 2026-11-18
+Depends on: F34i, CK5, CK14
+From Michael, in a coding session (2026-11-18): "under the Spotify playlists options, could
+the default be liked songs", and a toggle for the chosen playlist's songs in order or at
+random (first built as a "random playlist" choice; Michael clarified, and it was replaced).
+
+Notes (2026-11-18):
+- The pages' choice (the session page's "My Spotify", the cook screen's "Spotify
+  playlists") starts with "Liked songs" (first, so the default), then their playlists as
+  F34i ranks them (`music.choices`). The chat offer's buttons are unchanged.
+- Shuffle: a checkbox beside the choice, kept per person (`SpotifyPlayback.spotify_shuffle`,
+  module "spotify", on no settings form: the form would untick a checkbox it didn't show).
+  Ticking it posts `action=shuffle` (a new `music.shuffle` executor: Spotify's shuffle at
+  once if something plays; golden handlers.json gains it). Every Play, chat's included,
+  keeps to it: a playlist starts at a random track (`offset`, from the playlist's track
+  count) and Spotify's shuffle is set to match; off, it starts at the top, shuffle off.
+- Liked songs: `SpotifyClient.liked` reads 50. In order: the most recent, newest first.
+  Shuffled: from a random place in them, mixed. Played as `uris`; local files left out.
+  A free account gets open.spotify.com/collection/tracks.
+- New scope `user-library-read`. **Setup:** a link made before today answers 403
+  "Insufficient client scope" for liked songs; Themi says to unlink and link again on
+  Accounts (`MissingScope`, `RELINK_TEXT`). The Accounts page says so too.
+
+### F47b · Feedback (2026-11-18): Play from a phone plays on that phone, not the laptop
+Status: [x] 2026-11-18
+Depends on: F34i, CK5
+What the Pi shows: Michael's cook-screen taps (22:26) all reached Spotify and played
+Wedding Dance on "Michael Madicen KV4L4HGTQ4", his work laptop: none was active, so the
+first listed device won. With Spotify then open on his phone, Play went to the laptop again.
+
+Notes (2026-11-18):
+- `music.pick_device`: from a phone (the page's User-Agent: iPhone, Android Mobile; sent as
+  `from_phone` with the page's Play), a speaker, TV or the like already active stays; else
+  an active phone; else the one phone Spotify lists; never a computer. No phone listed
+  (iOS drops Spotify from the list soon after it stops): `PHONE_NOT_LISTED_TEXT`, "open it
+  there, then tap Play again", and nothing plays. From a computer, or chat: as before.
+- `Device.kind` is Spotify's device type.
+- A browser test shows the cook screen's Play, Pause and Shuffle each reach Spotify once.
 
 ## Conversation mode
 
