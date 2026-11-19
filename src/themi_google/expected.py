@@ -52,6 +52,7 @@ from themi.core.tools import ToolContext, tool
 from themi.localtime import to_local, to_utc_iso
 from themi.standard.currency import Money, about, find_money
 from themi_google.connectors.gmail import EmailReceived, GmailSync
+from themi_google.email_buttons import notice_buttons
 
 if TYPE_CHECKING:
     from themi_google.triage import Verdict
@@ -390,6 +391,7 @@ class ExpectedEmails:
                 subject=row["subject"],
             ),
             dedupe_key=f"expected-amount:{row['id']}",
+            email=row,
         )
 
     async def _record(self, row: dict[str, Any], money: Money) -> int | None:
@@ -466,7 +468,14 @@ class ExpectedEmails:
     # ----- escalating ------------------------------------------------------------
 
     async def _anomaly(
-        self, account: LinkedAccount, category: str, reason: str, text: str, *, dedupe_key: str
+        self,
+        account: LinkedAccount,
+        category: str,
+        reason: str,
+        text: str,
+        *,
+        dedupe_key: str,
+        email: dict[str, Any] | None = None,
     ) -> None:
         autonomy = self.services.autonomy
         member = self.store.get_member(account.member_id)
@@ -482,6 +491,8 @@ class ExpectedEmails:
                 )
             else:
                 text += PAUSED_NOT_ADMIN_TEXT.format(label=current.label)
+        if email is not None:  # F50c: the email's own buttons, then these
+            buttons = notice_buttons(self.services, email, text, keep=buttons)
         await self.services.outbox.send(
             member,
             text,

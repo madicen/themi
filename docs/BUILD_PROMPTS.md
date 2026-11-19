@@ -321,7 +321,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49i | Idea: a recipe to try that's a keeper goes into the cookbook | Feedback | [x] |
 | F50a | Feedback: a reminder you set goes at its time, whatever else is going on | Feedback | [x] 2026-11-19 |
 | F50b | Feedback: an amount in another currency is converted before it's compared | Feedback | [x] 2026-11-19 |
-| F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [ ] |
+| F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [x] 2026-11-19 |
 | F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -15794,7 +15794,7 @@ Notes:
   once live.
 
 ### F50c · Idea (2026-11-19): an email notice has buttons: open it, not important, mark read, make it a task
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: none
 Read first: `themi/channels/events.py` (`Button`, its `web_app`); `themi/channels/telegram.py`
 (drawing buttons, around `InlineKeyboardButton(... web_app=...)`); `themi/channels/outbox.py`
@@ -15849,6 +15849,37 @@ month's snapshot sends nothing. Then a Crunchyroll new-device alert: [Make it a 
 "Task added: Check Crunchyroll sign-in."
 
 Data/Setup: none. Mark #233 reviewed once live.
+
+Notes:
+- `Button.url` (`themi/channels/events.py`), with `Button.link` (a Mini App or a link: no
+  callback token). Telegram draws `InlineKeyboardButton(url=...)`; Slack a `url` button; the
+  website chat keeps link buttons in its stored list (with `url`; Mini App ones are still
+  left out) and draws them as `<a class="button small" target="_blank">`, so the other
+  buttons keep their tap index; a tap on a link's index answers nothing. The outbox stores
+  `url` with the row's buttons.
+- `themi_google/email_buttons.py`: `notice_buttons(services, row, notice, keep=...)` and
+  `EmailNoticeButtons` (installed by triage; handlers `email_quiet`, `email_read`,
+  `email_task`, `email_undo`). The notice's words, the lines added, the buttons used and an
+  `undo` ride in the payload, so a tap redraws the message: the line under it ("Mail from
+  Schwab won't alert you again.", "Marked read.", "Task added: <title>."), that button gone,
+  [Undo] after Not important or the task (for the last one only), [Open in Gmail] always.
+  No message to edit (a maybe-sent one): the line is sent as a reply.
+- [Not important]: urgency "no rush" with the sender's importance kept (`set_levels`); Undo puts
+  back exactly what was there, including "never asked" (`EmailAudit.levels_snapshot`,
+  `restore_levels`). Not shown without the email audit module.
+- [Mark read]: `stage("email_mark_read", ..., requested=True)`: the tap is their own yes, so it's
+  done at once unless the category is capped or paused (escalated), when the usual approval
+  card goes. (The prompt said "with trust it's done; otherwise the approval card"; a tap
+  counting as a yes is how the trust tiers already treat asking for exactly this.)
+- [Make it a task]: a "text" task for whoever tapped, effort 1, no nudge, titled from the
+  summary's first clause (at most 70 characters); Undo cancels it. Not done: the Gmail link in
+  the task (tasks have no notes field; the notice keeps [Open in Gmail]) and a due date.
+- Carried by: the urgent and time-sensitive alerts (`triage._act`) and the unusual-amount alert
+  (`ExpectedEmails._anomaly(email=row)`, with its own [Resume automatic] kept after them). A tap
+  by someone whose inbox it isn't: "That's Erin's inbox, so it's theirs to sort."
+- Golden: `handlers.json` (the four handlers). Tests: `tests/scenarios/test_email_buttons.py`
+  (6), `tests/scenarios/test_web_chat.py` (1), `tests/integration/test_slack_channel.py` (1).
+  **Setup:** none. Mark #233 reviewed once live.
 
 ### F50d · Feedback (2026-11-19): every recipe's steps have real short titles, not their first words
 Status: [ ]

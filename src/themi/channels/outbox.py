@@ -993,8 +993,13 @@ def _button_json(button: Button) -> dict[str, Any]:
     data = {"label": button.label, "kind": button.kind, "payload": button.payload}
     if button.web_app is not None:  # BD3a
         data["web_app"] = button.web_app
+    if button.url is not None:  # F50c
+        data["url"] = button.url
     return data
 
 
 def _button_from_json(data: dict[str, Any]) -> Button:
-    return Button(data["label"], data["kind"], data.get("payload") or {}, data.get("web_app"))
+    return Button(
+        data["label"], data["kind"], data.get("payload") or {}, data.get("web_app"),
+        data.get("url"),
+    )  # fmt: skip

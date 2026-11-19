@@ -819,6 +819,9 @@ class TelegramChannel:
         group_id, tokens = store_tokens(self.store.db, member, buttons, anyone=anyone)
         made = []
         for button, token in zip(buttons, tokens, strict=True):
+            if token is None and button.url is not None:  # F50c: a link, in their browser
+                made.append(InlineKeyboardButton(button.label, url=button.url))
+                continue
             if token is None:  # BD3a: a Mini App button opens the page; nothing comes back
                 assert button.web_app is not None
                 made.append(InlineKeyboardButton(button.label, web_app=WebAppInfo(button.web_app)))

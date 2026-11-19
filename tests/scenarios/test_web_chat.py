@@ -81,6 +81,36 @@ async def test_buttons_are_buttons_and_a_tap_goes_to_its_handler(family: SeededF
     assert [(b.label, b.kind, b.payload) for b in taps] == [("Yes", "cr20b", {"n": 1})]
 
 
+async def test_a_link_button_is_a_link_and_the_others_keep_their_places(
+    family: SeededFamily,
+) -> None:
+    """F50c: [Open in Gmail] opens the email in a new tab; the next button is still tap 1."""
+    modules = [m for m in family_modules() if m.name != "telegram"] + [WebChatModule()]
+    app = build_app(family.db, family.store.cipher, None, provider_factory=ModelBank(),
+                    modules=modules)  # fmt: skip
+    taps: list[Any] = []
+
+    async def on_tap(event: Any) -> None:
+        taps.append(event.button)
+
+    app.services.button_handlers["f50c"] = on_tap
+    from themi.channels.events import Button
+
+    chat = app.services.get(WebChatChannel)
+    erin = chat.join(family.erin)
+    link = "https://mail.google.com/mail/u/erin@gmail.com/#all/abc"
+    buttons = [Button("Open in Gmail", "email_open", url=link), Button("Undo", "f50c", {"n": 2})]
+    sent = await app.channel.send_text(erin, "An email", buttons)
+    async with web_client(SimpleNamespace(app=app)) as site:  # type: ignore[arg-type]
+        csrf = await signed_in(site, app, erin)
+        page = (await site.get("/chat")).text
+        assert f'href="{link}" target="_blank" rel="noopener">Open in Gmail</a>' in page
+        assert f'action="/chat/{sent}/1"' in page and f'action="/chat/{sent}/0"' not in page
+        await site.post(f"/chat/{sent}/0", data={"csrf": csrf})  # a link: nothing to answer
+        await site.post(f"/chat/{sent}/1", data={"csrf": csrf})
+    assert [(b.label, b.payload) for b in taps] == [("Undo", {"n": 2})]
+
+
 async def test_a_member_on_both_channels_is_answered_where_they_asked(
     family: SeededFamily, fake_telegram: FakeTelegram
 ) -> None:

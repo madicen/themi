@@ -302,6 +302,23 @@ async def test_a_failed_connection_backs_off_and_tries_again(
 # ----- SL3: buttons, edits and threads ----------------------------------------------------
 
 
+async def test_a_link_button_is_a_slack_link_button(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    """F50c: [Open in Gmail] is a url button, with no callback value."""
+    from themi.channels.events import Button
+
+    channel, _ = listening(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    link = "https://mail.google.com/mail/u/erin@gmail.com/#all/abc"
+    await channel.send_text(
+        erin, "An email", [Button("Open in Gmail", "email_open", url=link), Button("Undo", "x")]
+    )
+    opened, undo = fake_slack.last_buttons(MICHAEL)
+    assert opened["url"] == link and "value" not in opened
+    assert "value" in undo and "url" not in undo
+
+
 async def test_a_tap_reaches_the_agent_and_uses_up_the_card(
     family: SeededFamily, fake_slack: FakeSlack
 ) -> None:

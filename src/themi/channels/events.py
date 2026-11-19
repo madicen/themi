@@ -35,6 +35,13 @@ class Button:
     payload: dict[str, Any] = field(default_factory=dict)
     # BD3a: a Telegram Mini App button that opens this https page instead of calling back.
     web_app: str | None = None
+    # F50c: a link button: opens this https page in the browser (Gmail, say); no callback.
+    url: str | None = None
+
+    @property
+    def link(self) -> str | None:
+        """Where a button that calls nothing back goes (a Mini App or a link)."""
+        return self.web_app or self.url
 
 
 @dataclass(frozen=True)

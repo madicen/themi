@@ -58,6 +58,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi_google.connectors.gmail import GmailSync
 from themi_google.connectors.gmail.parse import in_primary
+from themi_google.email_buttons import EmailNoticeButtons, notice_buttons
 from themi_google.events import title_matches
 
 log = logging.getLogger(__name__)
@@ -283,6 +284,7 @@ class EmailTriage:
         s = self.services
         s.provide(keys.triage, self)
         s.button_handlers["inbox_setup"] = self.on_setup_button
+        EmailNoticeButtons(s).install()  # F50c
         s.tools.register(set_urgent_senders)
         s.tools.register(set_inbox_watched)
         s.tools.register(keep_email)
@@ -502,18 +504,22 @@ class EmailTriage:
             log.info("No alert for email %s: its sender can wait", row["id"])
         elif verdict.category == "urgent":
             at_once = verdict.severe or urgency > 1
+            alert = ALERT_TEXT.format(
+                how="urgent" if at_once else "time-sensitive",
+                kind=KIND_WORDS.get(verdict.urgent_kind or "other", KIND_WORDS["other"]),
+                address=account.address,
+                sender=sender,
+                summary=verdict.summary,
+            )
             await self.services.outbox.send(
                 member,
-                ALERT_TEXT.format(
-                    how="urgent" if at_once else "time-sensitive",
-                    kind=KIND_WORDS.get(verdict.urgent_kind or "other", KIND_WORDS["other"]),
-                    address=account.address,
-                    sender=sender,
-                    summary=verdict.summary,
-                ),
+                alert,
                 priority=Priority.URGENT if at_once else Priority.NORMAL,
                 kind="email",
                 dedupe_key=f"email-urgent:{row['id']}",
+                buttons=notice_buttons(  # F50c: open it, not important, read, a task
+                    self.services, {**row, "summary": verdict.summary}, alert
+                ),
             )
         elif verdict.category == "confirmation" and importance < 2:  # very important: theirs
             await stage(
