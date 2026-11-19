@@ -485,8 +485,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MP2 | Modules page: turning many on and off | Modules page | [x] 2026-11-19 |
 | MP3 | Modules page: one module's sheet | Modules page | [x] 2026-11-19 |
 | MP4 | Modules page: what each module owns | Modules page | [x] 2026-11-19 |
-| MP5 | Modules page: every setting on the module's page | Modules page | [~] |
-| MP6 | Modules page: the list, quicker to use | Modules page | [ ] |
+| MP5 | Modules page: every setting on the module's page | Modules page | [x] 2026-11-19 |
+| MP6 | Modules page: the list, quicker to use | Modules page | [~] |
 | MP7 | Modules page: a module's page, quicker to use | Modules page | [ ] |
 
 ## Fixed technical choices
@@ -22029,7 +22029,7 @@ Notes:
   unchanged for the Settings page.
 
 ### MP5 · Modules page: every setting on the module's page
-Status: [~]
+Status: [x] 2026-11-19
 Depends on: MP4
 Read first: the plan's "Every setting on the module's own page"; `module.html`;
 `themi/web/admin_pages.py` (Family) and `themi/web/site.py` (Settings, `from_form`);
@@ -22050,8 +22050,34 @@ shows on Settings and only for the admin who saved it; a role ticked joins the d
 lands in themi.toml after restart; secrets still never shown; a member who isn't an admin
 gets nothing.
 
+Notes:
+- `themi/web/model_forms.py` draws a household or preferences model field by field (bool,
+  whole number, `*_cents` as dollars, decimal, time, lines, `Literal` choice, text; label
+  from the field's `title` or name) and parses it back. The Settings and Family pages keep
+  their hand-written forms: theirs mix several modules and save everything at once, so a
+  module's page can't post to them. Both sides save through `store.save_household` /
+  `store.save_preferences`, so the checks are the same.
+- New routes: `POST /modules/<name>/household`, `/preferences` (the admin's own, fields
+  from `on_form`) and `/roles`. Golden: `routes.json` gained the three.
+- `Preferences.settings_anchor` names the Settings page's row each model is on
+  (`breaks`, `calendars`, `phrasing`...); the link under "Your settings" goes there. No
+  new anchors were added to the Settings page: its rows had ids already.
+- Who can use it: themi.toml gained `[roles.<name>] modules = [...]`
+  (`InstanceConfig.roles`, `with_roles` applied in `cli.py`). A role with `"*"` is
+  unticked as `["*", "-name"]`, which `RoleSpec.allowed(installed)` reads as every loaded
+  module but those; the app passes the modules it's given. `Draft.roles` holds a role's
+  whole list while waiting (counted, undone with the last change); `Planner.roles`,
+  `may_use`, `let_use`. Only roles that differ from the template's are written.
+- Accounts: the existing "links ... on Accounts" line plus a Link button to that page. It
+  doesn't come back to the module's page afterwards: the linking flows (Google's OAuth and
+  the device rows) have no return address yet. A follow-up if it's missed.
+- Settings set up in chat: the module's `website` line shows under "Nothing to fill in
+  here", rather than words taken from its guide (guides are long setup notes).
+- Its pages: the module's own menu entries, while it's on. Nothing is said for an off
+  module, since what pages it would have isn't known until it installs.
+
 ### MP6 · Modules page: the list, quicker to use
-Status: [ ]
+Status: [~]
 Depends on: MP1, MP3
 Read first: the plan's "Other improvements", "The list page".
 - A Needs attention strip (couldn't start, needs settings, needs an account), each linking to

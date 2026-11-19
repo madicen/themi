@@ -317,6 +317,7 @@ class ConversationPreferences(Preferences):
     """CR7b1: their own conversation mode switch (CM1a)."""
 
     module: ClassVar[str] = "conversation_mode"
+    settings_anchor: ClassVar[str] = "phrasing"  # MP5
     conversation_mode: bool = False
 
     @classmethod

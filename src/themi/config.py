@@ -25,7 +25,8 @@ from __future__ import annotations
 import json
 import os
 import tomllib
-from dataclasses import dataclass, field
+from collections.abc import Iterable
+from dataclasses import dataclass, field, replace
 from importlib import resources
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -53,9 +54,13 @@ class RoleSpec:
     admin: bool = False
     modules: tuple[str, ...] = ("*",)
 
-    def allowed(self) -> set[str] | None:
-        """The modules this role may use, or None for all of them."""
-        return None if "*" in self.modules else set(self.modules)
+    def allowed(self, installed: Iterable[str] = ()) -> set[str] | None:
+        """The modules this role may use, or None for all of them. MP5: `"*"` with
+        `"-name"` entries is every module in `installed` but those."""
+        if "*" not in self.modules:
+            return {m for m in self.modules if not m.startswith("-")}
+        left_out = {m[1:] for m in self.modules if m.startswith("-")}
+        return set(installed) - left_out if left_out else None
 
 
 @dataclass(frozen=True)
@@ -78,6 +83,8 @@ class InstanceConfig:
     sections: dict[str, dict[str, Any]] = field(default_factory=dict)
     path: Path | None = None  # where it was read from; None for the default
     core: dict[str, Any] = field(default_factory=dict)  # SP2: public_url
+    # MP5: the template's roles' module lists, as changed on the Modules page
+    roles: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def config_path(env: dict[str, str] | None = None) -> Path | None:
@@ -124,6 +131,8 @@ def as_toml(config: InstanceConfig) -> str:
         if values:
             lines += ["", f"[module.{name}]"]
             lines += [f"{key} = {_toml_value(value)}" for key, value in values.items()]
+    for role, modules in config.roles.items():  # MP5
+        lines += ["", f"[roles.{role}]", f"modules = {_toml_value(modules)}"]
     return "\n".join(lines) + "\n"
 
 
@@ -167,7 +176,7 @@ def load_config(path: Path | None) -> InstanceConfig:
 
 def parse_config(data: dict[str, Any], path: Path | None = None) -> InstanceConfig:
     problems = []
-    unknown = set(data) - {"template", "modules", "workspace", "module", "core"}
+    unknown = set(data) - {"template", "modules", "workspace", "module", "core", "roles"}
     if unknown:
         problems.append(f"{', '.join(sorted(unknown))} isn't something themi.toml sets")
     template = data.get("template", "family")
@@ -197,12 +206,34 @@ def parse_config(data: dict[str, Any], path: Path | None = None) -> InstanceConf
         core = {}
     elif unknown_core := set(core) - CORE_KEYS:
         problems.append(f"[core] has {', '.join(sorted(unknown_core))}, which it doesn't set")
+    roles: dict[str, tuple[str, ...]] = {}
+    raw_roles = data.get("roles", {})
+    if isinstance(raw_roles, dict):
+        for role, value in raw_roles.items():
+            listed = value.get("modules") if isinstance(value, dict) else None
+            if isinstance(listed, list) and all(isinstance(m, str) for m in listed):
+                roles[role] = tuple(listed)
+            else:
+                problems.append(f'[roles.{role}] has modules = ["name", ...]')
+    else:
+        problems.append("[roles.<name>] are sections")
     if problems:
         where = f" in {path}" if path else ""
         raise SettingsError(f"Themi can't start{where}:\n  - " + "\n  - ".join(problems))
     return InstanceConfig(
-        template, tuple(added), tuple(removed), dict(workspace), sections, path, dict(core)
+        template, tuple(added), tuple(removed), dict(workspace), sections, path, dict(core), roles
     )
+
+
+def with_roles(template: Template, config: InstanceConfig) -> Template:
+    """MP5: the template with themi.toml's role lists in place of its own."""
+    if not config.roles:
+        return template
+    roles = {
+        name: replace(spec, modules=config.roles.get(name, spec.modules))
+        for name, spec in template.roles.items()
+    }
+    return replace(template, roles=roles)
 
 
 def available_modules() -> dict[str, type[Module]]:

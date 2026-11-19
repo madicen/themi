@@ -401,6 +401,7 @@ class CookingPreferences(Preferences):
     section of the settings page."""
 
     module: ClassVar[str] = "cooking"
+    settings_anchor: ClassVar[str] = "cooking"  # MP5
     cooking_units: str = "written"  # CK2: "written" (as the recipe says) or "grams"
     cooking_chime_volume: int = 70  # CK3: a timer's chime on the cook screen, 0-100
     cooking_text_size: int = 100  # CK7: the cook screen's text, percent (A- A+)

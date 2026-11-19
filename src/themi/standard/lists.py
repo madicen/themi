@@ -136,6 +136,7 @@ class ListsPreferences(Preferences):
     """CR7b1: how a list's levels show in chat (F29g): dashes, bullets or numbers."""
 
     module: ClassVar[str] = "lists"
+    settings_anchor: ClassVar[str] = "lists"  # MP5
     list_style: str = "dashes"
 
     @field_validator("list_style")

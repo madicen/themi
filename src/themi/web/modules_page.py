@@ -18,6 +18,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi import clock
+from themi.accounts import AccountsError
+from themi.accounts.preferences import Preferences
 from themi.config import InstanceConfig, available_modules, template_packages
 from themi.localtime import to_utc_iso
 from themi.modules import Module, StartReport
@@ -36,6 +38,7 @@ from themi.modules.planning import Change, Planner
 from themi.modules.portal import Portal, PortalError
 from themi.modules.settings import FieldSpec, fields, value_sources
 from themi.modules.store import Draft, DraftStore, ModuleSecrets
+from themi.web import model_forms
 from themi.web.auth import Session
 from themi.web.kit import Kit
 from themi.web.markdown import render
@@ -357,9 +360,102 @@ def routes(kit: Kit) -> APIRouter:
             problems=problems,
             in_list=name in portal().planner(view.draft).desired(),
             metered=any(m.module == name for m in app.services.usage.meters.values()),  # UC5
+            **own_parts(cls, session.member, view),  # MP5
         )
         response.status_code = status
         return response
+
+    def own_parts(cls: type[Module], member: Any, view: Overview) -> dict[str, Any]:
+        """MP5: the rest of what configures a module, for its page: the household's settings,
+        the admin's own preferences, its pages, and who can use it."""
+        store = app.store
+        name = cls.name
+        planner = portal().planner(view.draft)
+        household = (
+            model_forms.inputs(cls.household, store.household(cls.household), None)
+            if cls.household is not None
+            else []
+        )
+        prefs: list[model_forms.Input] = []
+        if cls.preferences is not None:
+            model = cls.preferences
+            prefs = model_forms.inputs(
+                model, store.preferences(member.id, model), shown_preferences(model, member)
+            )
+        owned = app.services.owned_by(name)
+        roles = [(role, planner.may_use(role, name)) for role in sorted(planner.roles())]
+        return {
+            "household_inputs": household,
+            "pref_inputs": prefs,
+            "settings_anchor": (cls.preferences.settings_anchor if cls.preferences else ""),
+            "own_pages": [m for m in owned.menu if not m.admin_only or member.is_admin],
+            "has_pages": bool(owned.menu),
+            "is_on": name in view.built,
+            "roles": roles,
+            "roles_waiting": any(
+                role in (view.draft.roles if view.draft else {}) for role, _ in roles
+            ),
+        }
+
+    def shown_preferences(model: type[Preferences], member: Any) -> set[str] | None:
+        try:
+            return model.on_form(app.services, member)
+        except Exception:  # a module that's off may not have what its check reads
+            return None
+
+    @router.post("/modules/{name}/household", response_class=HTMLResponse)
+    async def save_household(request: Request, name: str) -> Response:
+        """MP5: the household's settings for a module, saved now (as on Family)."""
+        session, form = await kit.checked(request, admin=True)
+        cls = available_modules().get(name)
+        if cls is None or cls.household is None:
+            return kit.redirect("/modules", "That module has no household settings.")
+        try:
+            values = model_forms.parse(cls.household, form, None)
+            app.store.save_household(session.member, cls.household, **values)
+        except AccountsError as exc:
+            return show_module(request, name, (str(exc),), 400)
+        return kit.redirect(f"/modules/{name}#household", "Saved.")
+
+    @router.post("/modules/{name}/preferences", response_class=HTMLResponse)
+    async def save_preferences(request: Request, name: str) -> Response:
+        """MP5: the admin's own preferences for a module, saved now (as on Settings)."""
+        session, form = await kit.checked(request, admin=True)
+        cls = available_modules().get(name)
+        if cls is None or cls.preferences is None:
+            return kit.redirect("/modules", "That module has no settings of yours.")
+        member = session.member
+        try:
+            shown = shown_preferences(cls.preferences, member)
+            values = model_forms.parse(cls.preferences, form, shown)
+            app.store.save_preferences(member, member.id, cls.preferences, **values)
+        except AccountsError as exc:
+            return show_module(request, name, (str(exc),), 400)
+        return kit.redirect(f"/modules/{name}#yours", "Saved.")
+
+    @router.post("/modules/{name}/roles", response_class=HTMLResponse)
+    async def save_roles(request: Request, name: str) -> Response:
+        """MP5: which roles may use a module: into the draft, for themi.toml at the restart."""
+        session, form = await kit.checked(request, admin=True)
+        known = available_modules()
+        if name not in known:
+            return kit.redirect("/modules", f"There's no module called {name}.")
+        planner = portal().planner()
+        before = planner.draft.switches()
+        changed = []
+        for role in sorted(planner.roles()):
+            allowed = form.get(f"role_{role}") == "1"
+            if planner.may_use(role, name) != allowed:
+                planner.let_use(role, name, allowed)
+                changed.append(f"{role} {'may' if allowed else 'may not'}")
+        if not changed:
+            return kit.redirect(f"/modules/{name}#roles", "Nothing to change.")
+        title = known[name].title or name
+        what = f"who can use {title}: {', '.join(changed)}"
+        portal().save(planner, session.member, what, before)
+        return kit.redirect(
+            f"/modules/{name}#roles", f"Saved: {what}. It changes when Themi restarts."
+        )
 
     # ----- SP5: changes -------------------------------------------------------------------
 

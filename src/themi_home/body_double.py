@@ -211,6 +211,7 @@ class BodyDoublePreferences(Preferences):
     """CR7a: each person's body double settings (BD1a, BD5a)."""
 
     module: ClassVar[str] = "body_double"
+    settings_anchor: ClassVar[str] = "body-double"  # MP5
     sprint_work_minutes: int = 25  # a sprint's work block
     sprint_break_minutes: int = 5  # and its break
     body_double_sound: str = "lofi"  # the session page's built-in loop

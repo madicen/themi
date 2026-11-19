@@ -40,6 +40,7 @@ class DrawingsPreferences(Preferences):
     """DC3: each person's pictures. On for everyone (Michael, 2026-11-13)."""
 
     module: ClassVar[str] = NAME
+    settings_anchor: ClassVar[str] = "day-summary"  # MP5
     picture_morning: bool = True  # the day card with the morning message
     # F49g (idea #221): the morning message's words beside the card: "all", or "greeting"
     # (only what the card doesn't show). Without the card, all of them.

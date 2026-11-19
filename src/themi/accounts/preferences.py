@@ -33,6 +33,8 @@ class Preferences(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     module: ClassVar[str] = ""
+    # MP5: the Settings page's row these are on (its id), for a link from the module's page
+    settings_anchor: ClassVar[str] = ""
 
     @classmethod
     def on_form(cls, services: Any, member: Member) -> set[str] | None:

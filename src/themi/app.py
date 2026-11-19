@@ -388,7 +388,9 @@ def build_app(
         persona=template.persona,  # CR8a
         prompt_fragments=list(CORE_RULES),
         prompt_overrides=dict(template.prompt),
-        role_modules={name: role.allowed() for name, role in template.roles.items()},  # CR9
+        role_modules={  # CR9; MP5: "*" less some, of the modules given
+            name: role.allowed(m.name for m in modules) for name, role in template.roles.items()
+        },
         channels=channel,
     )
     scheduler = Scheduler(db)

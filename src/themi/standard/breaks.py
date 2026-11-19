@@ -52,6 +52,7 @@ class BreaksPreferences(Preferences):
     """CR7a: what a break's "Extend" button offers (B1)."""
 
     module: ClassVar[str] = "breaks"
+    settings_anchor: ClassVar[str] = "breaks"  # MP5
     break_extend_minutes: int = 15
 
     @field_validator("break_extend_minutes")

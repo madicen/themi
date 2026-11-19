@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from themi.config import InstanceConfig
 
 Templates = Callable[[str], tuple[str, ...]]  # a template's name -> its modules
+# MP5: a template's name -> each role's module list ("*", or names; "-name" leaves one out)
+TemplateRoles = Callable[[str], dict[str, tuple[str, ...]]]
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,7 @@ class Planner:
     draft: Draft = field(default_factory=Draft)
     # MP2: why each module that's on now came on, kept past restarts (`module_reasons`)
     reasons: dict[str, str] = field(default_factory=dict)
+    template_roles: TemplateRoles = field(default=lambda _name: {})
 
     # ----- what the Themi will be -------------------------------------------------------
 
@@ -216,6 +219,39 @@ class Planner:
         self.draft.template = None if template == self.config.template else template
         self.draft.modules.clear()
 
+    # ----- MP5: who can use what ---------------------------------------------------------
+
+    def roles(self) -> dict[str, tuple[str, ...]]:
+        """Each role's module list as it will be: the template's, themi.toml's, the draft's."""
+        out = dict(self.template_roles(self.template))
+        if not self.draft.template:
+            out.update(self.config.roles)
+        out.update({role: tuple(modules) for role, modules in self.draft.roles.items()})
+        return out
+
+    def may_use(self, role: str, name: str) -> bool:
+        modules = self.roles().get(role, ("*",))
+        if "*" in modules:
+            return f"-{name}" not in modules
+        return name in modules
+
+    def let_use(self, role: str, name: str, allowed: bool) -> None:
+        """Let `role` use `name`, or not, in the draft."""
+        if self.may_use(role, name) == allowed:
+            return
+        modules = [m for m in self.roles().get(role, ("*",)) if m not in (name, f"-{name}")]
+        if "*" in modules and not allowed:
+            modules.append(f"-{name}")
+        elif "*" not in modules and allowed:
+            modules.append(name)
+        settled = dict(self.template_roles(self.template))
+        if not self.draft.template:
+            settled.update(self.config.roles)
+        if tuple(modules) == settled.get(role, ("*",)):
+            self.draft.roles.pop(role, None)
+        else:
+            self.draft.roles[role] = modules
+
     # ----- the result -------------------------------------------------------------------
 
     def as_config(self) -> InstanceConfig:
@@ -236,4 +272,14 @@ class Planner:
             added=tuple(n for n in desired if n not in template),
             removed=tuple(n for n in template if n not in desired),
             sections={n: v for n, v in sections.items() if v},
+            roles=self._changed_roles(),
         )
+
+    def _changed_roles(self) -> dict[str, tuple[str, ...]]:
+        """MP5: the roles whose lists differ from the template's, for themi.toml."""
+        template = self.template_roles(self.template)
+        return {
+            role: modules
+            for role, modules in self.roles().items()
+            if modules != template.get(role, ("*",))
+        }

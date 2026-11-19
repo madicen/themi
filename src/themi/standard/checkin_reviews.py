@@ -65,6 +65,7 @@ class CheckinReviewsPreferences(Preferences):
     """CR7b1: now and then, ask whether a check-in is helping (idea #13)."""
 
     module: ClassVar[str] = "checkin_reviews"
+    settings_anchor: ClassVar[str] = "phrasing"  # MP5
     checkin_reviews: bool = True
 
 

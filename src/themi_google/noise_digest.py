@@ -78,6 +78,7 @@ class NoisePreferences(Preferences):
     """CR7b1: when noise emails are offered for archiving, together (F16b)."""
 
     module: ClassVar[str] = "gmail"
+    settings_anchor: ClassVar[str] = "email"  # MP5
     noise_emails: str = "daily"
 
     @field_validator("noise_emails")

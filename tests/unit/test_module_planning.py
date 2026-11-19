@@ -145,3 +145,54 @@ def test_undoing_the_last_switch_puts_the_draft_back() -> None:
     assert p.draft.undo_last() == "turned on Cooking"
     assert p.draft.modules == {"travel": True} and p.draft.reasons == {"travel": "asked"}
     assert not p.draft.can_undo_last()  # the one before kept no "before"
+
+
+# ----- MP5: who can use what --------------------------------------------------------------
+
+
+def roles_planner(config: dict | None = None) -> Planner:
+    p = planner(config)
+    p.template_roles = lambda name: {
+        role: spec.modules for role, spec in load_template(name).roles.items()
+    }
+    return p
+
+
+def test_a_role_with_every_module_leaves_one_out() -> None:
+    p = roles_planner()
+    assert p.may_use("member", "safeway")
+    p.let_use("member", "safeway", False)
+    assert not p.may_use("member", "safeway") and p.may_use("admin", "safeway")
+    assert p.draft.roles == {"member": ["*", "-safeway"]}
+    assert p.as_config().roles == {"member": ("*", "-safeway")}
+    p.let_use("member", "safeway", True)  # back as the template has it
+    assert p.draft.roles == {} and p.as_config().roles == {}
+
+
+def test_themi_tomls_roles_count() -> None:
+    p = roles_planner({"roles": {"member": {"modules": ["*", "-safeway"]}}})
+    assert not p.may_use("member", "safeway")
+    p.let_use("member", "safeway", True)
+    assert p.draft.roles == {"member": ["*"]}
+    assert p.as_config().roles == {}  # the template's own again, so nothing in themi.toml
+
+
+def test_a_listed_role_gains_and_loses_a_module() -> None:
+    from themi.config import RoleSpec
+
+    assert RoleSpec("r", modules=("tasks", "lists")).allowed() == {"tasks", "lists"}
+    assert RoleSpec("r", modules=("*", "-lists")).allowed(["tasks", "lists"]) == {"tasks"}
+    assert RoleSpec("r", modules=("*",)).allowed(["tasks"]) is None
+
+
+def test_themi_tomls_roles_replace_the_templates_and_read_back() -> None:
+    from themi.config import as_toml, with_roles
+
+    config = parse_config({"roles": {"member": {"modules": ["*", "-safeway"]}}})
+    template = with_roles(load_template("family"), config)
+    assert template.roles["member"].modules == ("*", "-safeway")
+    assert template.roles["admin"].modules == ("*",)
+    assert template.roles["member"].allowed(["safeway", "tasks"]) == {"tasks"}
+    import tomllib
+
+    assert parse_config(tomllib.loads(as_toml(config))).roles == config.roles

@@ -137,6 +137,7 @@ class FocusPreferences(Preferences):
     """CR7b1: things "for now" when it's too much (O1a), and a day's budget (O1b)."""
 
     module: ClassVar[str] = "focus"
+    settings_anchor: ClassVar[str] = "phrasing"  # MP5
     focus_count: int = 3
     day_budget: int = 0  # at most this many on a day when the rest is spread; 0: usual
 

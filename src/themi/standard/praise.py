@@ -29,6 +29,7 @@ class TasksPreferences(Preferences):
     """CR7b1: a short warm word when they mark a task done (idea #102)."""
 
     module: ClassVar[str] = "tasks"
+    settings_anchor: ClassVar[str] = "phrasing"  # MP5
     done_praise: bool = True
     # F32a: how the website's Tasks page groups them (chosen on the page itself). A value
     # the page doesn't know is read as "due".

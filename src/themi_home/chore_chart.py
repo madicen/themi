@@ -76,6 +76,7 @@ class ChartPreferences(Preferences):
     chores for either of them count toward it. The cozyla_chores module's."""
 
     module: ClassVar[str] = "cozyla_chores"
+    settings_anchor: ClassVar[str] = "chart"  # MP5
     chart_limit: int = 0  # 0 is no limit
     chart_counts_shared: bool = True
 

@@ -33,6 +33,27 @@
     {% if f.spec.hint %}<span class="muted">{{ f.spec.hint }}</span>{% endif %}
   </div>
 {% endmacro %}
+{% macro model_input(i) %}
+  {% set id = "input-" ~ i.name %}
+  <div class="field">
+    {% if i.kind == "bool" %}
+      <label class="check"><input id="{{ id }}" type="checkbox" name="{{ i.name }}"{% if i.value %} checked{% endif %}> {{ i.label }}</label>
+    {% else %}
+      <label for="{{ id }}">{{ i.label }}</label>
+      {% if i.kind == "lines" %}
+      <textarea id="{{ id }}" name="{{ i.name }}" rows="4">{{ i.value }}</textarea>
+      {% elif i.kind == "choice" %}
+      <select id="{{ id }}" name="{{ i.name }}">{% for c in i.choices %}<option{% if c == i.value %} selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+      {% else %}
+      <input id="{{ id }}" name="{{ i.name }}" value="{{ i.value }}"
+        type="{{ {'number': 'number', 'time': 'time'}.get(i.kind, 'text') }}"
+        {%- if i.kind in ('money', 'decimal') %} inputmode="decimal"{% endif %}>
+      {% endif %}
+    {% endif %}
+    {% if i.optional and i.kind == "time" %}<span class="muted">Leave it empty for off.</span>{% endif %}
+    {% if i.hint %}<span class="muted">{{ i.hint }}</span>{% endif %}
+  </div>
+{% endmacro %}
 {% block content %}
 <p><a href="/modules">All modules</a></p>
 <h1>{{ card.title }} {{ badge(card) }}</h1>
@@ -61,7 +82,8 @@
     {% endif %}
 
     {% if fields or advanced %}
-    <h2>Settings</h2>
+    <h2 id="server">Server settings</h2>
+    <p class="muted">Keys and addresses Themi starts with. They wait for a restart.</p>
     <form method="post" action="/modules/{{ card.name }}/settings" class="settings-form">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       {% for f in fields %}{{ field_input(f) }}{% endfor %}
@@ -71,7 +93,7 @@
         {% for f in advanced %}{{ field_input(f) }}{% endfor %}
       </details>
       {% endif %}
-      <button class="primary">Save</button>
+      <button class="primary">Save, for after the restart</button>
     </form>
     {% for f in fields + advanced %}{% if f.source == "environment" and not f.copied %}
     <form id="move-{{ f.spec.name }}" method="post" action="/modules/{{ card.name }}/move/{{ f.spec.name }}" hidden>
@@ -83,17 +105,58 @@
       <button>Test</button>
       <span class="muted">Tries the settings as saved here, against the service.</span>
     </form>
-    {% else %}
-    <p class="muted">Nothing to fill in here.</p>
+    {% endif %}
+
+    {% if household_inputs %}
+    <h2 id="household">For the household</h2>
+    <p class="muted">Shared by everyone, and saved now{% if not is_on %}; used once it's on{% endif %}. Also on <a href="/family">Family</a>.</p>
+    <form method="post" action="/modules/{{ card.name }}/household" class="settings-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% for i in household_inputs %}{{ model_input(i) }}{% endfor %}
+      <button class="primary">Save</button>
+    </form>
+    {% endif %}
+
+    {% if pref_inputs %}
+    <h2 id="yours">Your settings</h2>
+    <p class="muted">Yours only, and saved now{% if not is_on %}; used once it's on{% endif %}.
+      Each person sets theirs on <a href="/settings{% if settings_anchor %}#{{ settings_anchor }}{% endif %}">Settings</a>.</p>
+    <form method="post" action="/modules/{{ card.name }}/preferences" class="settings-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% for i in pref_inputs %}{{ model_input(i) }}{% endfor %}
+      <button class="primary">Save</button>
+    </form>
+    {% endif %}
+
+    {% if not (fields or advanced or household_inputs or pref_inputs) %}
+    <p class="muted">Nothing to fill in here.{% if website %} {{ website }}{% endif %}</p>
     {% endif %}
 
     {% if need %}
-    <h2>After it's on</h2>
+    <h2 id="accounts">Accounts</h2>
     <p>{{ need.who | capitalize }} links {{ need.what }} on <a href="{{ need.where }}">{{ need.where.strip("/") | capitalize }}</a>.
       {% if linked is true %}<span class="chip good">Linked</span>{% elif linked is false %}<span class="chip warn">Not linked yet</span>{% endif %}</p>
-    {% elif website %}
+    <p><a class="button" href="{{ need.where }}">Link {{ need.what }}</a></p>
+    {% elif website and (fields or advanced or household_inputs or pref_inputs) %}
     <h2>After it's on</h2>
     <p>{{ website }}</p>
+    {% endif %}
+
+    {% if has_pages %}
+    <h2 id="pages">Its pages</h2>
+    <ul>{% for p in own_pages %}<li><a href="{{ p.href }}">{{ p.label }}</a> <span class="muted">{{ p.hint }}</span></li>{% endfor %}</ul>
+    {% endif %}
+
+    {% if roles %}
+    <h2 id="roles">Who can use it</h2>
+    <form method="post" action="/modules/{{ card.name }}/roles" class="settings-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% for role, allowed in roles %}
+      <label class="check"><input type="checkbox" name="role_{{ role }}" value="1"{% if allowed %} checked{% endif %}> {{ role | capitalize }}</label>
+      {% endfor %}
+      {% if roles_waiting %}<span class="chip info">Waiting for restart</span>{% endif %}
+      <button>Save, for after the restart</button>
+    </form>
     {% endif %}
 
     <h2>Works with</h2>

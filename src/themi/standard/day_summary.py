@@ -48,6 +48,7 @@ class DaySummaryPreferences(Preferences):
     """CR7b1: a summary of their day (K2)."""
 
     module: ClassVar[str] = "day_summary"
+    settings_anchor: ClassVar[str] = "day-summary"  # MP5
     morning_summary: time | None = None  # at this time; None: off
     morning_summary_empty: bool = False  # sent on days with nothing on, too
 

@@ -119,7 +119,16 @@ class Portal:
             self.template_modules,
             draft or self.draft(),
             self.reasons(),
+            self.template_roles,
         )
+
+    def template_roles(self, name: str) -> dict[str, tuple[str, ...]]:
+        """MP5: each of a template's roles' module lists."""
+        if self._templates is not None:
+            return {}  # a test's templates have no roles
+        from themi.config import load_template
+
+        return {role: spec.modules for role, spec in load_template(name).roles.items()}
 
     def reasons(self) -> dict[str, str]:
         """MP2: why each module turned on from this page is on, kept past restarts."""
