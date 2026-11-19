@@ -6,12 +6,14 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 
+import httpx
 import pytest
+from telegram.error import TimedOut
 
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fixtures.family import ERIN_TELEGRAM_ID, HUSBAND_TELEGRAM_ID, SeededFamily
 from themi.accounts import SYSTEM
-from themi.channels.events import Button, EchoHandler, InboundEvent
+from themi.channels.events import Button, EchoHandler, InboundEvent, MaybeSent
 from themi.channels.outbox import Outbox
 from themi.channels.pda import PdaShield
 from themi.channels.telegram import (
@@ -370,6 +372,42 @@ async def test_sending_retries_after_flood_control(
     await channel.send_text(family.erin, "hello again")
     assert fake_telegram.sent_texts(ERIN_TELEGRAM_ID)[-1] == "hello again"
     assert 3.0 in channel._sleep.waits  # type: ignore[attr-defined]
+
+
+def _timing_out(cause: Exception) -> tuple[list[int], object]:
+    calls: list[int] = []
+
+    async def call() -> None:
+        calls.append(1)
+        raise TimedOut() from cause
+
+    return calls, call
+
+
+async def test_a_send_that_timed_out_reading_the_answer_isnt_sent_again(
+    channel: TelegramChannel,
+) -> None:
+    """F49a (bugs #229, #230): the request went out whole; only the answer was lost."""
+    calls, call = _timing_out(httpx.ReadTimeout("read"))
+    with pytest.raises(MaybeSent):
+        await channel._with_flood_retry(call, sends=True)
+    assert len(calls) == 1
+
+
+async def test_a_send_that_never_connected_is_tried_again(channel: TelegramChannel) -> None:
+    for cause in (httpx.ConnectTimeout("connect"), httpx.PoolTimeout("pool")):
+        calls, call = _timing_out(cause)
+        with pytest.raises(TimedOut):
+            await channel._with_flood_retry(call, sends=True)
+        assert len(calls) == 3
+
+
+async def test_an_edit_that_timed_out_is_tried_again(channel: TelegramChannel) -> None:
+    """An edit is the same each time, so trying it again is harmless."""
+    calls, call = _timing_out(httpx.ReadTimeout("read"))
+    with pytest.raises(TimedOut):
+        await channel._with_flood_retry(call)
+    assert len(calls) == 3
 
 
 async def test_unpaired_members_cannot_be_messaged(

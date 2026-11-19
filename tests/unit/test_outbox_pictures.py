@@ -4,13 +4,14 @@ caption and the buttons under it, or the picture then the words, or the words al
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import timedelta
 from typing import Any
 
 from tests.fixtures.family import SeededFamily
 from tests.unit.test_outbox import FakeSender, at
 from themi import clock
 from themi.accounts import Member
-from themi.channels.events import Button
+from themi.channels.events import Button, MaybeSent
 from themi.channels.outbox import Outbox, Priority
 from themi.channels.pda import PdaShield
 
@@ -28,6 +29,7 @@ class PictureSender(FakeSender):
         self.photos: list[tuple[bytes, str, tuple[Button, ...], str]] = []
         self.caption_edits: list[tuple[int, str, tuple[Button, ...]]] = []
         self.photo_fails = 0
+        self.photo_maybe = 0  # F49a: a picture that arrives, its answer lost
         self.order: list[str] = []
 
     async def send_photo(
@@ -44,6 +46,9 @@ class PictureSender(FakeSender):
             raise ConnectionError("upload failed")
         self.photos.append((photo, caption, tuple(buttons), kind))
         self.order.append("photo")
+        if self.photo_maybe:
+            self.photo_maybe -= 1
+            raise MaybeSent("TimedOut")
         return next(self._ids)
 
     async def send_text(self, member: Member, text: str, *args: Any, **kwargs: Any) -> int:
@@ -94,6 +99,33 @@ async def test_the_picture_goes_with_the_words_as_its_caption(family: SeededFami
     assert sender.photos == [(PNG, "Good morning, Erin.", BUTTONS, "morning")]
     assert sender.texts() == []
     assert outbox.sent_today(family.erin.id) == 1  # one message, counted once
+
+
+async def test_a_picture_that_maybe_went_isnt_followed_by_its_words(
+    family: SeededFamily,
+) -> None:
+    """F49a: the morning card's send timed out reading the answer: the words were its
+    caption, so they don't go again as text, and the row is sent."""
+    clock.freeze(at(21, 9))
+    sender = PictureSender()
+    sender.photo_maybe = 1
+    outbox = outbox_with(family, sender)
+    result = await send(outbox, family.erin)
+    assert result.status == "sent"
+    assert sender.order == ["photo"]
+    clock.advance(timedelta(hours=1))
+    await outbox.flush()
+    assert sender.order == ["photo"]
+
+
+async def test_a_picture_asked_for_that_maybe_went_isnt_sent_as_words(
+    family: SeededFamily,
+) -> None:
+    clock.freeze(at(21, 9))
+    sender = PictureSender()
+    sender.photo_maybe = 1
+    outbox = outbox_with(family, sender)
+    assert await outbox.send_photo(family.erin, PNG, "Your week")  # truthy: don't fall back
 
 
 async def test_an_edit_changes_the_caption_of_a_picture(family: SeededFamily) -> None:

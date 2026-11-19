@@ -48,7 +48,7 @@ from themi import clock
 from themi.accounts import AccountStore, Member
 from themi.ai.router import current_reply
 from themi.ai.types import CallKind
-from themi.channels.events import Button
+from themi.channels.events import Button, MaybeSent
 from themi.channels.family_group import FamilyGroup, replies_to_group, shared_reader
 from themi.channels.pauses import PauseBook
 from themi.channels.pda import PdaShield
@@ -82,6 +82,11 @@ REPLY_RETRY_BACKOFF = (
 MAX_ATTEMPTS = 5
 MAX_REPLY_ATTEMPTS = 8
 DEDUPE_WINDOW = timedelta(hours=24)
+# F49a: what a send that went out with no answer back is recorded with. It's counted as sent.
+MAYBE_SENT_ERROR = "TimedOut (maybe sent)"
+# F49a: what `send_photo`/`send_document` return for one that maybe went: not None, so the
+# caller doesn't send the words again; no real Telegram message has it.
+UNKNOWN_MESSAGE_ID = -1
 
 
 class Priority(StrEnum):
@@ -521,6 +526,9 @@ class Outbox:
         try:
             shielded = await self.shield.apply(caption, member, kind=CallKind.INTERACTIVE)
             return await send(member, photo, shielded.text, kind=kind)
+        except MaybeSent:  # F49a: it went out; the caller mustn't send the words as well
+            log.warning("A picture for member %s may have gone; not sent again", member.id)
+            return UNKNOWN_MESSAGE_ID
         except Exception:
             log.exception("A picture for member %s couldn't be sent", member.id)
             return None
@@ -538,6 +546,9 @@ class Outbox:
         try:
             shielded = await self.shield.apply(caption, member, kind=CallKind.INTERACTIVE)
             return await send(member, data, filename, shielded.text, kind=kind)
+        except MaybeSent:  # F49a
+            log.warning("A file for member %s may have gone; not sent again", member.id)
+            return UNKNOWN_MESSAGE_ID
         except Exception:
             log.exception("A file for member %s couldn't be sent", member.id)
             return None
@@ -558,29 +569,46 @@ class Outbox:
         kind = CallKind.INTERACTIVE if priority in IMMEDIATE else CallKind.BACKGROUND
         chat_id = row["chat_id"]
         reader = self._group_reader(member) if chat_id is not None else member
+        maybe = False
         try:
             shielded = await self.shield.apply(row["text"], reader, buttons=buttons, kind=kind)
             photo = await self._picture(member, row) if chat_id is None else None
             message_id = None
-            if photo is not None:
-                message_id = await self._send_picture(member, row, photo, shielded)
-            as_caption = message_id is not None
-            if message_id is None:
-                message_id = await self.sender.send_text(
-                    member,
-                    shielded.text,
-                    shielded.buttons,
-                    kind=row["kind"],
-                    link_preview=bool(row["link_preview"]),
-                    chat_id=chat_id,
-                    anyone=bool(row["shared_buttons"]),
+            try:
+                if photo is not None:
+                    message_id = await self._send_picture(member, row, photo, shielded)
+                as_caption = message_id is not None
+                if message_id is None:
+                    message_id = await self.sender.send_text(
+                        member,
+                        shielded.text,
+                        shielded.buttons,
+                        kind=row["kind"],
+                        link_preview=bool(row["link_preview"]),
+                        chat_id=chat_id,
+                        anyone=bool(row["shared_buttons"]),
+                    )
+            except MaybeSent as exc:  # F49a: it went out; no answer came back
+                log.warning(
+                    "Outbox message %s may have gone (%s): counted as sent, not sent again",
+                    row["id"],
+                    exc,
                 )
+                maybe, message_id, as_caption = True, None, False
         except Exception as exc:
             return self._record_failure(row, exc)
         self.store.db.execute(
             "UPDATE outbox SET status = 'sent', sent_at = ?, sent_text = ?, "
-            "telegram_message_id = ?, picture_sent = ?, attempts = attempts + 1 WHERE id = ?",
-            (to_utc_iso(clock.now()), shielded.text, message_id, int(as_caption), row["id"]),
+            "telegram_message_id = ?, picture_sent = ?, attempts = attempts + 1, "
+            "last_error = ? WHERE id = ?",
+            (
+                to_utc_iso(clock.now()),
+                shielded.text,
+                message_id,
+                int(as_caption),
+                MAYBE_SENT_ERROR if maybe else None,
+                row["id"],
+            ),
         )
         for listener in self.sent_listeners:
             try:
@@ -626,6 +654,10 @@ class Outbox:
                 return await send(member, photo, shielded.text, kind=row["kind"],
                                   buttons=shielded.buttons)  # fmt: skip
             await send(member, photo, "", kind=row["kind"])
+        except MaybeSent:
+            if room is not None and len(shielded.text) <= room:
+                raise  # F49a: the words went as its caption; the row counts as sent
+            log.warning("A picture for member %s may have gone; the words follow", member.id)
         except Exception:
             log.exception("A picture for member %s couldn't be sent; the words go alone",
                           member.id)  # fmt: skip

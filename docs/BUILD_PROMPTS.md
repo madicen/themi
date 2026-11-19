@@ -307,7 +307,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F47a | Idea: liked songs as the default, and a Shuffle toggle | Feedback | [x] 2026-11-18 |
 | F47b | Feedback: Play from a phone plays on that phone, not the laptop | Feedback | [x] 2026-11-18 |
 | F48a | Idea: the built-in lofi and soft piano, composed on real instruments | Feedback | [x] 2026-11-18 |
-| F49a | Feedback: a send that timed out reading Telegram's answer isn't sent again | Feedback | [ ] |
+| F49a | Feedback: a send that timed out reading Telegram's answer isn't sent again | Feedback | [x] 2026-11-18 |
 | F49b | Feedback: when Telegram's back, what's waiting goes at once; a late heads-up says leave now | Feedback | [ ] |
 | F49c | Feedback: prep keeps the unit when the grams come between number and unit | Feedback | [ ] |
 | F49d | Feedback: a step that bakes at a temperature offers the oven, any degree sign | Feedback | [ ] |
@@ -15150,7 +15150,7 @@ Notes (2026-11-18):
   `.venv/bin/python tools/compose_loops.py lofi-simmer` (the first run fetches ~190 MB).
 
 ### F49a · Feedback (2026-11-18): a send that reached Telegram but timed out waiting for its answer isn't sent again
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: none
 Read first: `themi/channels/outbox.py` (`_deliver_now`, `_record_failure`, `RETRY_BACKOFF`);
 `themi/channels/telegram.py` (`send_text`, the `HTTPXRequest` timeouts); python-telegram-bot's
@@ -15195,6 +15195,20 @@ answer, and Michael's chat has the routine once.
 
 Data/Setup: none. Mark #229 and #230 reviewed once live. Michael may want to look at the Pi's
 Wi-Fi (or plug in eth0): the outage wasn't Themi's.
+
+Notes: `themi.channels.events.MaybeSent`. Telegram's `_with_flood_retry(sends=True)` (for
+send_message, send_photo, send_document) raises it for `TimedOut` caused by
+`httpx.ReadTimeout`. That was worse than the report showed: the channel's own retry loop tried
+every `NetworkError` 3 times inside each outbox attempt, so one attempt could post 3 copies.
+Edits and reactions are still retried (the same each time). The message is still written to
+`message_log` (no id), so the model's history has it. The outbox records the row as sent:
+`telegram_message_id` NULL, `last_error` `MAYBE_SENT_ERROR` ("TimedOut (maybe sent)"),
+listeners called with None. A captioned picture that maybe went isn't followed by its words.
+`Outbox.send_photo`/`send_document` return `UNKNOWN_MESSAGE_ID` (-1) so callers don't fall back
+to text. Taps carry their message's own id, so its buttons and "Marked done" edits work (the
+spec's "new message" fallback wasn't needed). The scenario harness taps a message logged with
+no id using a stand-in id. Tests: test_outbox (2), test_outbox_pictures (2),
+test_telegram_channel (3), test_routines (scenario).
 
 ### F49b · Feedback (2026-11-18): when Telegram is back, what's waiting goes at once, and a late leave heads-up says leave now
 Status: [ ]

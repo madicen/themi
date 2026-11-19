@@ -10,7 +10,7 @@ import pytest
 from tests.fixtures.family import SeededFamily
 from themi import clock
 from themi.accounts import SYSTEM, Member
-from themi.channels.events import Button
+from themi.channels.events import Button, MaybeSent
 from themi.channels.outbox import Outbox, Priority
 from themi.channels.pda import PdaShield
 
@@ -26,6 +26,7 @@ class FakeSender:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str, tuple[Button, ...], str]] = []
         self.failures = 0
+        self.maybe = 0  # F49a: sends that arrive but whose answer never comes back
         self.edited: list[tuple[int, str, tuple[Button, ...]]] = []
         self.previews: list[bool] = []
         self.chats: list[int | None] = []  # where each went: None for the member's own chat
@@ -48,6 +49,9 @@ class FakeSender:
             raise ConnectionError("telegram unreachable")
         self.sent.append((member.name, text, tuple(buttons), kind))
         self.chats.append(chat_id)
+        if self.maybe:
+            self.maybe -= 1
+            raise MaybeSent("TimedOut")
         return next(self._ids)
 
     def texts(self) -> list[str]:
@@ -270,6 +274,42 @@ async def test_failed_sends_are_retried_with_backoff(
     clock.advance(timedelta(minutes=1))
     assert await outbox.flush() == 1
     assert sender.texts() == ["Thanks!"]
+
+
+async def test_a_send_that_went_but_timed_out_isnt_sent_again(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    """F49a (bugs #229, #230): during a flaky network the evening routine went four times:
+    each send arrived, but its answer didn't come back, and it was tried again."""
+    clock.freeze(at(21, 20, 45))
+    sender.maybe = 1
+    result = await outbox.send(
+        family.erin, "Evening routine, still open:\n- Take Meds", priority=Priority.NORMAL
+    )
+    assert result.status == "sent" and result.message_id is None
+    for _ in range(5):
+        clock.advance(timedelta(minutes=15))
+        await outbox.flush()
+    assert sender.texts() == ["Evening routine, still open:\n- Take Meds"]
+    row = family.db.one("SELECT * FROM outbox WHERE id = ?", (result.outbox_id,))
+    assert row is not None
+    assert (row["status"], row["telegram_message_id"], row["last_error"]) == (
+        "sent",
+        None,
+        "TimedOut (maybe sent)",
+    )
+    assert outbox.sent_today(family.erin.id) == 1
+
+
+async def test_a_maybe_sent_message_reaches_the_sent_listeners(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    clock.freeze(at(21, 10))
+    heard: list[tuple[int, int | None]] = []
+    outbox.sent_listeners.append(lambda row, message_id: heard.append((row["id"], message_id)))
+    sender.maybe = 1
+    result = await outbox.send(family.erin, "Washer done", priority=Priority.NORMAL)
+    assert heard == [(result.outbox_id, None)]
 
 
 async def test_a_failed_reply_is_retried_within_minutes(
