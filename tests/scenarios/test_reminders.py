@@ -306,3 +306,24 @@ async def test_with_the_other_unreachable_its_only_move_it(scenario: Scenario) -
     his = texts_to(scenario, "Husband", "Overdue: Vacuum maintenance")[-1]
     assert "I can move it." in his
     assert "to take it" not in his
+
+
+async def test_a_reminder_inside_a_busy_time_goes_at_its_time(scenario: Scenario) -> None:
+    """F50a (bug #231): "remind me to call ... at 10 tomorrow", with a 9-5 weekday busy time,
+    was held until 5 pm, past its expiry, and never came."""
+    from datetime import time
+
+    from themi.accounts import SYSTEM, BusyTime
+
+    husband = scenario.member("Husband")
+    scenario.app.store.update_settings(
+        SYSTEM, husband.id, busy_times=[BusyTime((0, 1, 2, 3, 4), time(9), time(17))]
+    )
+    await scenario.advance(hours=12, minutes=35)  # Wed 9:35 pm
+    scenario.primary.queue_tool_call(
+        "add_reminder", {"text": "Call 650-723-5001", "date": "2026-10-22", "time": "10:00"}
+    )
+    scenario.primary.queue_text("I'll remind you at 10 tomorrow.")
+    await scenario.say("Husband", "remind me to call 650-723-5001 at 10 tomorrow")
+    assert not await scenario.advance(hours=12, minutes=24)  # Thu 9:59 am
+    assert await scenario.advance(minutes=1) == ["Reminder: Call 650-723-5001"]

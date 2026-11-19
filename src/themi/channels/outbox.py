@@ -55,6 +55,8 @@ from themi.channels.pda import PdaShield
 from themi.localtime import (
     free_from,
     free_until,
+    in_busy_time,
+    in_quiet_hours,
     member_day,
     member_day_start,
     next_waking_start,
@@ -119,7 +121,10 @@ ANSWER_KINDS = (PRAISE_KIND, SERVER_KIND, BODY_DOUBLE_KIND)
 # counted. It's a kind, not `urgent`, so it isn't counted as an alert either; switching
 # `leave_heads_up` off is how they stop it.
 TRAVEL_KIND = "travel"
-BREAKTHROUGH_KINDS = (TRAVEL_KIND,)
+# F50a (Michael, bug #231: a 10 am reminder held by his 9-5 busy time and lost): a reminder
+# they set goes at the time they set, held by nothing, as the leave heads-up does.
+REMINDER_KIND = "reminder"
+BREAKTHROUGH_KINDS = (TRAVEL_KIND, REMINDER_KIND)
 UNCOUNTED_KINDS = (*ANSWER_KINDS, *BREAKTHROUGH_KINDS)
 _PRIORITY_ORDER = {Priority.REPLY: 0, Priority.URGENT: 1, Priority.NORMAL: 2, Priority.LOW: 3}
 
@@ -297,6 +302,14 @@ class Outbox:
                 now=now,
                 gated=False,
             )
+        if expires is not None and stored >= expires:
+            # F50a: it couldn't go before it stops being any use; say so, don't keep it
+            log.warning(
+                "Dropped message for member %s (%s): held by %s until %s, past its expiry",
+                member.id, kind, self._hold_reason(member, priority, max(now, not_before or now),
+                kind), stored.isoformat(),
+            )  # fmt: skip
+            return OutboxResult("failed", None)
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
             "send_after, deadline, created_at, link_preview, expires_at, reply_id, chat_id, "
@@ -383,6 +396,15 @@ class Outbox:
             else:
                 when = self._earliest(member, priority, now, deadline, row["kind"], gated=False)
             if when > now:
+                if row["expires_at"] and datetime.fromisoformat(row["expires_at"]) <= when:
+                    # F50a: held past the point it's any use; not a row that never goes
+                    self.store.db.execute("DELETE FROM outbox WHERE id = ?", (row["id"],))
+                    log.warning(
+                        "Dropped message %s (%s): held by %s until %s, past its expiry",
+                        row["id"], row["kind"], self._hold_reason(member, priority, now,
+                        row["kind"]), when.isoformat(),
+                    )  # fmt: skip
+                    continue
                 self.store.db.execute(
                     "UPDATE outbox SET send_after = ? WHERE id = ?", (to_utc_iso(when), row["id"])
                 )
@@ -856,6 +878,26 @@ class Outbox:
             if before < ends and free_from(member, before, tz, blocks) == before:
                 return before
         return when
+
+    def _hold_reason(self, member: Member, priority: Priority, now: datetime, kind: str) -> str:
+        """What's holding a message at `now`, in words for the log (F50a)."""
+        tz = self._tz
+        if self.pauses.held_until(member, kind) is not None:
+            return "a pause"
+        if in_quiet_hours(member, now, tz):
+            return "quiet hours"
+        if in_busy_time(member, now, tz):
+            return "a busy time"
+        if self.calendar_blocks and any(
+            start <= now < end
+            for start, end in self.calendar_blocks(member, now, now + timedelta(days=1))
+        ):
+            return "a calendar event"
+        if self.sent_today(member.id, now) >= member.daily_limit:
+            return "the daily limit"
+        if self.receptivity.not_before(member, priority, now) > now:
+            return "the receptivity check"
+        return "its gate"
 
     def group_members(self) -> list[Member]:
         """Everyone in the family group: the members connected to Telegram."""

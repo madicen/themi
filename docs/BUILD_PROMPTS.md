@@ -319,7 +319,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [x] 2026-11-19 |
 | F49h | Idea: recipes to try, in their own Google Doc (reading and saving) | Feedback | [x] 2026-11-19 |
 | F49i | Idea: a recipe to try that's a keeper goes into the cookbook | Feedback | [x] |
-| F50a | Feedback: a reminder you set goes at its time, whatever else is going on | Feedback | [ ] |
+| F50a | Feedback: a reminder you set goes at its time, whatever else is going on | Feedback | [x] 2026-11-19 |
 | F50b | Feedback: an amount in another currency is converted before it's compared | Feedback | [ ] |
 | F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [ ] |
 | F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [ ] |
@@ -15645,7 +15645,7 @@ Notes:
   cooking, or by asking). **Setup:** none beyond F49h's. Mark #224 reviewed once live.
 
 ### F50a · Feedback (2026-11-19): a reminder you set goes at the time you set, whatever else is going on
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: none
 Read first: `themi/standard/reminders.py` (`add_reminder`, `REMINDER_USEFUL_FOR`);
 `themi/channels/outbox.py` (`_earliest`, `flush`, `BREAKTHROUGH_KINDS`, `UNCOUNTED_KINDS`,
@@ -15689,6 +15689,18 @@ Scenario: Michael, at 9:35 pm, "remind me to call 650-723-5001 at 10 tomorrow"; 
 weekday (inside his busy time) his chat has "Reminder: Call 650-723-5001".
 
 Data/Setup: none. Mark #231 reviewed once live.
+
+Notes: `REMINDER_KIND` ("reminder") joins `BREAKTHROUGH_KINDS` in `themi/channels/outbox.py`, so
+`send_time` keeps its `not_before` and nothing holds it after (quiet hours, busy times, calendar,
+pauses including "everything", daily limit, receptivity, gates, the morning tray); it isn't
+counted. No bundler or refresher is registered for it, so it goes on its own. `add_reminder`'s
+answer is unchanged. Hardening: the flush deletes a row whose new `send_after` would be at or
+past its `expires_at`, and `send` doesn't queue one that couldn't go before its expiry
+(`OutboxResult("failed", None)`, as a duplicate has no id); both log a warning naming the row
+(or member), its kind and what held it (`Outbox._hold_reason`: a pause, quiet hours, a busy
+time, a calendar event, the daily limit, the receptivity check, its gate), which `themi
+feedback`'s log tail shows. Tests: `tests/unit/test_outbox_reminders.py` (8),
+`tests/scenarios/test_reminders.py` (1 more). **Setup:** none. Mark #231 reviewed once live.
 
 ### F50b · Feedback (2026-11-19): an amount in another currency is converted before it's compared with the usual
 Status: [ ]
