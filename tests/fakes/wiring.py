@@ -23,6 +23,7 @@ from tests.fakes.gtasks_api import FakeGtasks
 from tests.fakes.home_connect import FakeHomeConnect
 from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
+from tests.fakes.rates import FakeRates
 from tests.fakes.roborock import FakeRoborock
 from tests.fakes.search import FakeSearch
 from tests.fakes.smarthq import FakeSmartHQ
@@ -60,6 +61,7 @@ def connector_options(
     smarthq: FakeSmartHQ | None = None,
     keep: FakeKeep | None = None,
     weather: FakeWeather | None = None,
+    rates: FakeRates | None = None,
     timezone: str = "America/Los_Angeles",
 ) -> dict[str, Any]:
     return {
@@ -77,6 +79,7 @@ def connector_options(
         "smarthq": smarthq,  # OV2
         "keep": keep.connect if keep else None,
         "weather": weather.client() if weather else None,  # WX1
+        "rates": (rates or FakeRates()).client(),  # F50b: never the real Frankfurter
     }
 
 

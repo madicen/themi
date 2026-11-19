@@ -31,6 +31,7 @@ from themi.channels.channel_set import ChannelSet
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.config import Template, load_template
+from themi.connectors.rates import RateSource
 from themi.connectors.search import SearchBackend
 from themi.connectors.travel import TravelClient
 from themi.connectors.weather import WeatherSource
@@ -189,6 +190,7 @@ def family_modules(
     smarthq: SmartHQLogin | None = None,
     keep: KeepFactory | None = None,
     weather: WeatherSource | None = None,
+    rates: RateSource | None = None,  # F50b: exchange rates (Frankfurter's when None)
 ) -> list[Module]:
     """The family's modules, with each connector's only when it's set up. In install order
     (see the module docstring); CR5 turns this into the family template."""
@@ -208,7 +210,7 @@ def family_modules(
                 EmailTriageModule(),  # CR18b: Gmail's features, each its own module
                 EmailForwardingModule(),
                 UrgentSendersModule(),
-                ExpectedEmailsModule(),
+                ExpectedEmailsModule(rates),
                 NoiseDigestModule(),
             ]
             if google
@@ -314,6 +316,7 @@ def build_app(
     smarthq: SmartHQLogin | None = None,
     keep: KeepFactory | None = None,
     weather: WeatherSource | None = None,
+    rates: RateSource | None = None,  # F50b: exchange rates (Frankfurter's when None)
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
     conversation_mode: str = "trial",
@@ -346,6 +349,7 @@ def build_app(
             smarthq=smarthq,
             keep=keep,
             weather=weather,
+            rates=rates,
         )
     # ----- the core -------------------------------------------------------------------
     store = AccountStore(db, cipher)

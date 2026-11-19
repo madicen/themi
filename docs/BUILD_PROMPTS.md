@@ -320,7 +320,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49h | Idea: recipes to try, in their own Google Doc (reading and saving) | Feedback | [x] 2026-11-19 |
 | F49i | Idea: a recipe to try that's a keeper goes into the cookbook | Feedback | [x] |
 | F50a | Feedback: a reminder you set goes at its time, whatever else is going on | Feedback | [x] 2026-11-19 |
-| F50b | Feedback: an amount in another currency is converted before it's compared | Feedback | [ ] |
+| F50b | Feedback: an amount in another currency is converted before it's compared | Feedback | [x] 2026-11-19 |
 | F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [ ] |
 | F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -15703,7 +15703,7 @@ feedback`'s log tail shows. Tests: `tests/unit/test_outbox_reminders.py` (8),
 `tests/scenarios/test_reminders.py` (1 more). **Setup:** none. Mark #231 reviewed once live.
 
 ### F50b · Feedback (2026-11-19): an amount in another currency is converted before it's compared with the usual
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: none
 Read first: `themi_google/expected.py` (`on_triaged`, `paid_amount`, `parse_amount`,
 `_AMOUNT`, `dollars`, `AMOUNT_TEXT`); `themi_google/triage.py` (`Verdict.amount_paid`, its
@@ -15761,6 +15761,37 @@ Scenario: a Kickstarter confirmation for HK$ 816.00 after four dollar pledges se
 one for €400.00 sends "shows €400.00 (about $466), well above the usual".
 
 Data/Setup: migration (new table, three columns). Mark #232 reviewed once live.
+
+Notes:
+- `themi/standard/currency.py`: `find_money` (signs `$` `US$` `HK$` `CA$`/`C$` `AU$`/`A$` `NZ$`
+  `NT$` `MX$` `S$` `R$` `€` `£` `¥`/`JP¥` `CN¥` `₹` `₩`, and 26 ISO codes before or after the
+  figure; thousands in threes, two decimals with `.` or `,`), `Money` (`words()`: "HK$816.00"),
+  `Converter` (`to_dollars`, rates kept in `exchange_rates`), `in_dollars` (a model's figure with
+  no currency), `about` ("$105"). A bare `$` is US dollars: the family has no home-currency
+  setting yet. `themi/connectors/rates.py`: `FrankfurterClient`, at
+  `https://api.frankfurter.dev/v1/<date>` (the `.app` address the prompt named now redirects
+  there), 5 s timeout, any failure a `RateError` (logged, no rate). Usage meter
+  `frankfurter.calls` (Web; no published limit).
+- `expected.py`: `parse_money`/`paid_money` return the currency; `parse_amount`/`paid_amount`
+  stay (cents for dollars, None for others) so their tests read as before. `on_triaged` stores
+  `amount_cents` in dollars (converted), `currency` and `amount_original` for a foreign one, NULL
+  cents with no rate (not compared, not in later usuals). The alert says "shows HK$816.00 (about
+  $105), well above the usual $139.50"; the escalation reason the same.
+- Wiring: `ExpectedEmailsModule(rates)` provides `Converter` (`keys.currency`); `build_app` and
+  `family_modules` take `rates`. Tests: `tests/fakes/rates.py` (`FakeRates`, fixture
+  `fake_rates`); `connector_options` always hands in a fake (empty unless the test sets one).
+- Data: migration 0174 marks confirmations whose summary shows a foreign sign or code
+  (`currency = 'recheck'`, left out of the usual), and the hourly `email.amounts_recheck` reads
+  them again with their currency (on the Pi: 658, 939, 1885; a "US$" summary is cleared back to
+  dollars).
+- Receipts: no takeout receipt on the Pi is foreign. `pantry.read_receipt` passes the model's
+  total through `in_dollars`: kept unless the receipt writes that figure only in another
+  currency, then converted, or no total (left out) without a rate. Not done: the "(1 in another
+  currency)" note on the month's total, and line prices aren't converted.
+- Goldens: `jobs.json` (`email.amounts_recheck`), `handlers.json` (the `frankfurter.calls`
+  meter). `test_modules`' key count 75 -> 76. Tests: `tests/unit/test_currency.py` (6),
+  `tests/scenarios/test_expected.py` (3 more). **Setup:** none (migration). Mark #232 reviewed
+  once live.
 
 ### F50c · Idea (2026-11-19): an email notice has buttons: open it, not important, mark read, make it a task
 Status: [ ]

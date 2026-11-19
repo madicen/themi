@@ -158,6 +158,7 @@
     "anthropic.requests",
     "catgenie.calls",
     "cloudflare.pictures",
+    "frankfurter.calls",
     "gemini.embeddings",
     "gemini.pictures",
     "gemini.requests",

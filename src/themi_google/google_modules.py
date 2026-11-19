@@ -15,6 +15,7 @@ from datetime import timedelta
 from typing import Any
 
 from themi.accounts import Member
+from themi.connectors.rates import FrankfurterClient, RateSource
 from themi.core import groups
 from themi.core.approvals import ApprovalsUI, NotEver
 from themi.core.calendar_view import CalendarPreferences
@@ -23,6 +24,7 @@ from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup, as_jo
 from themi.modules.groups import SERVICES
 from themi.modules.prompt import PromptFragment
 from themi.modules.web import WaitingLink
+from themi.standard.currency import FRANKFURTER_METER, Converter
 from themi.standard.tasks import TaskBoard
 from themi.usage import Meter
 from themi_google import email_forward, google_groups
@@ -176,10 +178,18 @@ class ExpectedEmailsModule(Module):
     summary = "Watches for mail that should arrive, like a bill, and says when it doesn't."
     requires = ("gmail", "email_triage")
 
+    def __init__(self, rates: RateSource | None = None) -> None:
+        self.rates = rates  # F50b: Frankfurter's, unless tests hand in a fake
+
     def install(self, ctx: ModuleContext) -> None:
+        source = self.rates or FrankfurterClient()
+        if isinstance(source, FrankfurterClient):
+            source.tally = ctx.usage_meter(FRANKFURTER_METER)  # UC3
+        ctx.provide(Converter(ctx.services.store.db, source))
         expected = ctx.provide(ExpectedEmails(ctx.services, ctx.get(GmailSync)))
         expected.install()
         ctx.periodic("email.expected", timedelta(hours=1), expected.check_overdue)
+        ctx.periodic("email.amounts_recheck", timedelta(hours=1), expected.recheck_amounts)
 
 
 class NoiseDigestModule(Module):

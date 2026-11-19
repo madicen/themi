@@ -355,3 +355,80 @@ async def test_a_pledge_far_above_the_usual_is_still_flagged(
     assert scenario.app.services.autonomy.category(CATEGORY).escalated
     last = scenario.app.db.one("SELECT amount_cents FROM emails ORDER BY id DESC LIMIT 1")
     assert last is not None and last["amount_cents"] == 89900
+
+
+# ----- other currencies (F50b, bug #232) -------------------------------------------
+
+
+def kickstarter(amount: str) -> dict[str, Any]:
+    return {
+        "sender": "Kickstarter <no-reply@kickstarter.com>",
+        "subject": "We've collected your pledge",
+        "text": f"You're all set. We've collected your pledge of {amount} for the project.",
+    }
+
+
+async def pledges(scenario: Scenario, inbox: FakeGmail, *amounts: str) -> None:
+    for amount in amounts:
+        await sort(scenario, await arrive(scenario, inbox, kickstarter(amount)))
+
+
+def stored(scenario: Scenario) -> list[tuple[Any, Any, Any]]:
+    rows = scenario.app.db.query(
+        "SELECT amount_cents, currency, amount_original FROM emails ORDER BY id"
+    )
+    return [(r["amount_cents"], r["currency"], r["amount_original"]) for r in rows]
+
+
+async def test_a_foreign_amount_is_converted_before_its_compared(
+    scenario: Scenario, inbox: FakeGmail, fake_rates: Any
+) -> None:
+    """Bug #232: HK$816.00 (about $105) was said to be "well above the usual $139.50"."""
+    fake_rates.set("HKD", 0.1285)
+    fake_rates.set("EUR", 1.165)
+    automatic(scenario)
+    await pledges(scenario, inbox, "$179.00", "$65.00", "$100.00", "$139.50")
+    mark = outbox_mark(scenario)
+    await pledges(scenario, inbox, "HK$ 816.00")
+    assert not [t for t in queued_since(scenario, mark) if "well above" in t]
+    assert stored(scenario)[-1] == (10486, "HKD", "HK$816.00")
+
+    await pledges(scenario, inbox, "€400.00")
+    assert any(
+        t.startswith(
+            "A confirmation from Kickstarter shows €400.00 (about $466), well above the usual "
+        )
+        for t in queued_since(scenario, mark)
+    )
+    assert stored(scenario)[-1] == (46600, "EUR", "€400.00")
+
+
+async def test_without_a_rate_a_foreign_amount_isnt_compared(
+    scenario: Scenario, inbox: FakeGmail, fake_rates: Any
+) -> None:
+    fake_rates.fail = True
+    automatic(scenario)
+    await pledges(scenario, inbox, "$40.00", "$42.00", "$38.00", "CA$ 900.00")
+    assert stored(scenario)[-1] == (None, "CAD", "CA$900.00")
+    assert not [t for t in queued_since(scenario, 0) if "well above" in t]
+    fake_rates.fail = False
+    fake_rates.set("CAD", 0.72)
+    mark = outbox_mark(scenario)
+    await pledges(scenario, inbox, "CA$ 100.00")  # about $72: well above $40
+    sent = [t for t in queued_since(scenario, mark) if "well above" in t]
+    assert sent and "CA$100.00 (about $72), well above the usual $40.00" in sent[0]
+
+
+async def test_amounts_read_as_dollars_that_were_foreign_are_read_again(
+    scenario: Scenario, inbox: FakeGmail, fake_rates: Any
+) -> None:
+    """The migration marks them (emails 658, 939 and 1885 on the Pi); the hourly job reads
+    them again with their currency."""
+    fake_rates.set("HKD", 0.1285)
+    await pledges(scenario, inbox, "HK$ 816.00", "$65.00")
+    db = scenario.app.db
+    db.execute("UPDATE emails SET amount_cents = 81600, currency = 'recheck', "
+               "amount_original = NULL WHERE id = 1")  # fmt: skip
+    db.execute("UPDATE emails SET currency = 'recheck' WHERE id = 2")  # US$ in a summary
+    await scenario.run_periodic("email.amounts_recheck")
+    assert stored(scenario) == [(10486, "HKD", "HK$816.00"), (6500, None, None)]

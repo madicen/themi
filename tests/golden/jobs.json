@@ -21,6 +21,7 @@
   "devices.thinq": 300,
   "devices.thinq_push": 60,
   "devices.vacuum": 60,
+  "email.amounts_recheck": 3600,
   "email.expected": 3600,
   "email.noise": 300,
   "email.senders": 21600,

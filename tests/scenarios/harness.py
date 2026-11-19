@@ -36,6 +36,7 @@ from tests.fakes.gtasks_api import FakeGtasks
 from tests.fakes.home_connect import FakeHomeConnect
 from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
+from tests.fakes.rates import FakeRates
 from tests.fakes.roborock import FakeRoborock
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.search import FakeSearch
@@ -120,6 +121,7 @@ class Scenario:
         gdocs: FakeGdocs | None = None,
         gsheets: FakeGsheets | None = None,
         weather: FakeWeather | None = None,
+        rates: FakeRates | None = None,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
@@ -176,6 +178,7 @@ class Scenario:
                 smarthq=smarthq,
                 keep=keep,
                 weather=weather,
+                rates=rates,
                 timezone=family.family.timezone,
             ),
         )
@@ -514,6 +517,7 @@ async def scenario(
         gdocs=optional("fake_gdocs"),
         gsheets=optional("fake_gsheets"),
         weather=optional("fake_weather"),
+        rates=optional("fake_rates"),
     )
     await s.start()
     yield s
