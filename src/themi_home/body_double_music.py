@@ -16,14 +16,15 @@ from themi.accounts import Member
 from themi.core import keys
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.modules import Module, ModuleContext
-from themi_home.music_mix import BUILT_IN, Mix
+from themi_home.music_mix import BUILT_IN, COMPOSED, Mix
 
 
 @dataclass(frozen=True)
 class Track:
     name: str
     file: str  # under themi_home/web/static/audio/ (CR17b)
-    mix: Mix | None = None  # CK15a: what it is, as settings (make_loops.py renders it)
+    mix: Mix | None = None  # CK15a: rain and noise as settings (make_loops.py renders them);
+    # None for lofi and soft piano, which compose_loops.py writes from a seed (F48a)
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,8 @@ class Loop:
 
 
 def _tracks(kind: str) -> tuple[Track, ...]:
-    return tuple(Track(mix.name, file, mix) for file, mix in BUILT_IN if mix.kind == kind)
+    composed = (Track(c.name, file) for file, c in COMPOSED if c.kind == kind)
+    return (*composed, *(Track(mix.name, file, mix) for file, mix in BUILT_IN if mix.kind == kind))
 
 
 LOOPS = {

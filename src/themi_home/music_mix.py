@@ -1,11 +1,15 @@
-"""A mix: music as settings, not a file (CK15a).
+"""A mix: music as settings, not a file (CK15a); and the built-in tracks.
 
-Every built-in track is one (`BUILT_IN`), and `tools/make_loops.py` renders those to the
-`.m4a` files with ffmpeg. The cook screen's player (`static/home/mix.js`) plays a mix live
-with Web Audio, so a mix made for a recipe (CK15b) needs no file. `check()` keeps every
-value in a range that stays soft: slow (60-90 BPM), chords only from `CHORDS`, quiet levels.
+The cook screen's player (`static/home/mix.js`) plays a mix live with Web Audio, so a mix
+made for a recipe (CK15b) needs no file. `check()` keeps every value in a range that stays
+soft: slow (60-90 BPM), chords only from `CHORDS`, quiet levels.
 
-Standard library only: `make_loops.py` imports it without the app's environment.
+The built-in tracks are files. Rain and brown noise are mixes too (`BUILT_IN`), rendered
+by `tools/make_loops.py` with ffmpeg. Lofi and soft piano (F48a) are `COMPOSED`: written
+from a seed by `tools/compose_loops.py` and played on real instruments, which settings for
+a live synth can't describe.
+
+Standard library only: the tools import it without the app's environment.
 """
 
 from __future__ import annotations
@@ -14,8 +18,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 # Chords by name, low to high. A mix only uses these, so nothing harsh can be asked for.
-# Some chords come in more than one voicing ("Cmaj7 low"): they're the ones the built-in
-# tracks were written with.
+# Some chords come in more than one voicing ("Cmaj7 low"): the first built-in tracks were
+# written with them, before F48a composed those on real instruments.
 CHORDS: dict[str, tuple[str, ...]] = {
     "Cmaj7": ("C3", "E4", "G4", "B4"),
     "Cmaj7 low": ("C2", "E3", "B3", "G4"),
@@ -181,45 +185,38 @@ def from_data(data: dict[str, Any]) -> Mix:
     return mix.check()
 
 
-def _crackle(amplitude: float = 0.012) -> Noise:
-    return Noise("white", amplitude, highpass=3000)
+@dataclass(frozen=True)
+class Composed:
+    """A built-in track written by `tools/compose_loops.py` (F48a): the same seed, the same
+    track. `minor` sets a lofi track's mode; the soft piano's seed picks its own."""
+
+    name: str
+    kind: str  # one of MUSICAL
+    seed: int
+    minor: bool = False
 
 
-def _lofi(name: str, bpm: int, chords: tuple[str, ...], strikes: int = 2,
-          crackle: float = 0.012) -> Mix:  # fmt: skip
-    return Mix(name, "lofi", bpm=bpm, chords=chords, strikes=strikes, decay=1.4, level=0.045,
-               tone=2600, beat=True, noise=_crackle(crackle))  # fmt: skip
+# Lofi and soft piano, by file, in each kind's order (the first is the one it always played).
+COMPOSED: tuple[tuple[str, Composed], ...] = (
+    ("lofi.m4a", Composed("Sunday kitchen", "lofi", 1)),  # D major, 78 BPM
+    ("lofi-simmer.m4a", Composed("Slow simmer", "lofi", 2, minor=True)),  # A flat minor, 80
+    ("lofi-window.m4a", Composed("Window light", "lofi", 3)),  # B major, 78
+    ("lofi-supper.m4a", Composed("Late supper", "lofi", 4, minor=True)),  # D flat minor, 80
+    ("lofi-bread.m4a", Composed("Warm bread", "lofi", 5)),  # C major, 82
+    ("soft-piano.m4a", Composed("Quiet hour", "soft_piano", 1)),  # C minor, 71
+    ("soft-piano-evening.m4a", Composed("Evening", "soft_piano", 2)),  # G major, 67
+    ("soft-piano-snowfall.m4a", Composed("Snowfall", "soft_piano", 4)),  # D flat major, 69
+    ("soft-piano-waltz.m4a", Composed("Little waltz", "soft_piano", 3)),  # F sharp minor, in 3
+)
 
-
-def _piano(name: str, bpm: int, chords: tuple[str, ...], decay: float, level: float,
-           echo_out: float, echoes: tuple[tuple[int, float], ...], **kw: Any) -> Mix:  # fmt: skip
-    return Mix(name, "soft_piano", bpm=bpm, chords=chords, decay=decay, level=level,
-               tone=3000, echo_out=echo_out, echoes=echoes, **kw)  # fmt: skip
-
-
-# The built-in tracks, by file, in each kind's order (the first is the one it always played).
+# Rain and brown noise, by file, in each kind's order.
 BUILT_IN: tuple[tuple[str, Mix], ...] = (
-    ("lofi.m4a", _lofi("Sunday kitchen", 80, ("Cmaj7", "Am7", "Fmaj7", "G6"))),
-    ("lofi-simmer.m4a", _lofi("Slow simmer", 72, ("Dm9", "G13", "Cmaj9", "Am9"))),
-    ("lofi-window.m4a", _lofi("Window light", 84, ("Fmaj7 open", "Em7", "Dm7 low", "Cmaj7 low"),
-                              crackle=0.008)),
-    ("lofi-supper.m4a", _lofi("Late supper", 76, ("Am9 close", "Dm9 open", "Gmaj7", "Cmaj7 open"),
-                              strikes=1, crackle=0.015)),
-    ("lofi-bread.m4a", _lofi("Warm bread", 82, ("Ebmaj7", "Cm7", "Abmaj7", "Bb6"))),
     ("rain.m4a", Mix("Steady rain", "rain", noise=Noise(
         "pink", 0.6, highpass=500, lowpass=7000, swell_hz=0.15, swell_depth=0.35, gain=1.6))),
     ("rain-drizzle.m4a", Mix("Light drizzle", "rain", noise=Noise(
         "white", 0.35, highpass=1800, lowpass=9000, swell_hz=0.4, swell_depth=0.25, gain=0.9))),
     ("rain-roof.m4a", Mix("Rain on the roof", "rain", noise=Noise(
         "pink", 0.6, highpass=200, lowpass=2400, swell_hz=0.1, swell_depth=0.45, gain=1.8))),
-    ("soft-piano.m4a", _piano("Four slow chords", 66, ("Cmaj7", "Am7", "Fmaj7", "G6"), 0.9, 0.16,
-                              0.6, ((180, 0.25),))),
-    ("soft-piano-evening.m4a", _piano("Evening", 60, ("Em9", "Cmaj7", "G", "D/F#"), 0.7, 0.15,
-                                      0.7, ((260, 0.3),))),
-    ("soft-piano-snowfall.m4a", _piano("Snowfall", 70, ("Dmaj7", "Bm7", "Gmaj7 close", "A"), 1.1,
-                                       0.14, 0.5, ((120, 0.25), (360, 0.15)), strikes=2)),
-    ("soft-piano-waltz.m4a", _piano("Little waltz", 84, ("Fmaj7 high", "Dm7", "Gm7", "C"), 1.6,
-                                    0.13, 0.6, ((200, 0.2),), beats=3, strikes=3, bars=24)),
     ("brown-noise.m4a", Mix("Deep", "brown_noise", noise=Noise("brown", 0.5, lowpass=900,
                                                                gain=0.9))),
     ("brown-noise-hum.m4a", Mix("Soft hum", "brown_noise", noise=Noise("brown", 0.5, lowpass=420,
