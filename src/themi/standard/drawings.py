@@ -22,6 +22,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.drawing.render import Renderer
 from themi.drawing.svg import write_svg
 from themi.modules import Module
+from themi.modules.groups import VOICE_AND_PICTURES
 
 if TYPE_CHECKING:
     from themi.accounts import Member
@@ -39,6 +40,7 @@ class DrawingsPreferences(Preferences):
     """DC3: each person's pictures. On for everyone (Michael, 2026-11-13)."""
 
     module: ClassVar[str] = NAME
+    settings_anchor: ClassVar[str] = "day-summary"  # MP5
     picture_morning: bool = True  # the day card with the morning message
     # F49g (idea #221): the morning message's words beside the card: "all", or "greeting"
     # (only what the card doesn't show). Without the card, all of them.
@@ -211,6 +213,7 @@ class DrawingsModule(Module):
 
     name = NAME
     title = "Drawings"
+    group = VOICE_AND_PICTURES
     summary = "A picture of the day with the morning message, drawn from the calendar and weather."
     cost = "Free, no account"
     preferences = DrawingsPreferences

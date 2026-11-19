@@ -42,6 +42,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.wording import and_list
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.standard.repeat import fixed_days
 from themi.standard.tasks import Task, TaskBoard
 
@@ -75,6 +76,7 @@ class ChartPreferences(Preferences):
     chores for either of them count toward it. The cozyla_chores module's."""
 
     module: ClassVar[str] = "cozyla_chores"
+    settings_anchor: ClassVar[str] = "chart"  # MP5
     chart_limit: int = 0  # 0 is no limit
     chart_counts_shared: bool = True
 
@@ -559,6 +561,7 @@ class ChoreChartModule(Module):
 
     name = "chore_chart"
     title = "Chore chart"
+    group = TASKS
     summary = "The family's chore chart: who does what, and how many each day."
     preferences = ChartPreferences  # stored under "cozyla_chores", where they always were
     requires = ("tasks",)

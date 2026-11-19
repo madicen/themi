@@ -42,6 +42,7 @@ from themi_google.connectors.google import (
 from themi_home import cookbook as book
 from themi_home import home_groups
 from themi_home.cookbook import Line, ParsedRecipe
+from themi_home.groups import COOKING
 from themi_home.quantities import weight_after_unit
 
 if TYPE_CHECKING:
@@ -851,6 +852,7 @@ class RecipesModule(Module):
 
     name = "recipes"
     title = "Family cookbook"
+    group = COOKING
     summary = "Reads the family's recipes from their Google Doc cookbook."
     website = "Once Google is linked, pick the family cookbook on Accounts (/accounts)."
     needs_accounts = AccountNeed(

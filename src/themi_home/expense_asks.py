@@ -81,6 +81,7 @@ class SpendingPreferences(Preferences):
     """EX2b: when Themi asks about expense sheets."""
 
     module: ClassVar[str] = "spending"
+    settings_anchor: ClassVar[str] = "expenses"  # MP5
     expense_ask_after_hours: int = 24
     expense_review_day: str = "friday"
     expense_review_time: time = time(15, 0)

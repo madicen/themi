@@ -34,6 +34,7 @@ from themi.core import keys
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.standard.lists import name_key
 from themi.standard.tasks import NotFound, Task, TaskBoard, clock_words
 
@@ -482,6 +483,7 @@ class BusinessHoursModule(Module):
 
     name = "business_hours"
     title = "Opening hours"
+    group = TASKS
     summary = "Plans errands for when the place they need is open."
     requires = ("tasks",)
 

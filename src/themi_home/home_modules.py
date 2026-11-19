@@ -23,6 +23,7 @@ from themi.modules import (
     ModuleSetup,
     as_job,
 )
+from themi.modules.groups import SERVICES
 from themi.standard.tasks import TaskBoard
 from themi.usage import Limits, Meter
 from themi_home import home_groups
@@ -38,6 +39,7 @@ from themi_home.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
 from themi_home.dishwasher import Dishwasher
 from themi_home.feeders import Feeders
 from themi_home.groceries import GroceryList
+from themi_home.groups import COOKING, GROCERIES, HOME
 from themi_home.home_settings import (
     HomeConnectSettings,
     OurGroceriesSettings,
@@ -58,6 +60,7 @@ class SpotifyModule(Module):
 
     name = "spotify"
     title = "Spotify"
+    group = SERVICES
     summary = "Plays each person's own music from Spotify during tasks."
     cost = "Free"
     kind = "connector"
@@ -117,6 +120,7 @@ class OurGroceriesModule(Module):
 
     name = "ourgroceries"
     title = "OurGroceries"
+    group = GROCERIES
     summary = "Shows the grocery list in the OurGroceries app too, kept in step both ways."
     cost = "Unofficial: may stop working"
     kind = "connector"
@@ -158,6 +162,7 @@ class KeepModule(Module):
 
     name = "keep"
     title = "Google Keep shopping list"
+    group = GROCERIES
     summary = "Groceries said to a Google speaker come into the grocery list."
     cost = "Unofficial: may stop working"
     kind = "connector"
@@ -196,6 +201,7 @@ class HomeConnectModule(Module):
 
     name = "home_connect"
     title = "Dishwasher (Home Connect)"
+    group = HOME
     summary = "Knows when a Bosch or Siemens dishwasher runs, and offers to tick it off."
     cost = "Free"
     kind = "connector"
@@ -237,6 +243,7 @@ class ThinqModule(Module):
 
     name = "thinq"
     title = "Washer and dryer (LG ThinQ)"
+    group = HOME
     summary = "Says when the laundry is done and nudges someone to move it."
     cost = "Free"
     kind = "connector"
@@ -284,6 +291,7 @@ class RoborockModule(Module):
 
     name = "roborock"
     title = "Robot vacuum (Roborock)"
+    group = HOME
     summary = "Says when the robot vacuum is stuck or needs emptying."
     cost = "Unofficial: may stop working"
     kind = "connector"
@@ -323,6 +331,7 @@ class TuyaModule(Module):
 
     name = "tuya"
     title = "Pet feeders (SmartLife)"
+    group = HOME
     summary = "Says when a pet feeder runs low on food or gets stuck."
     cost = "Free, renewed monthly"
     kind = "connector"
@@ -358,6 +367,7 @@ class CatGenieModule(Module):
 
     name = "catgenie"
     title = "CatGenie litter box"
+    group = HOME
     summary = "Says when the litter box has an error or its sani-solution runs low."
     cost = "Unofficial: may stop working"
     kind = "connector"
@@ -393,6 +403,8 @@ class SmartHQModule(Module):
 
     name = "smarthq"
     title = "Oven (SmartHQ)"
+    group = HOME
+    also_in = (COOKING,)
     summary = "Reads the range's two ovens, and preheats or turns them off when asked."
     cost = "Unofficial: may stop working"
     kind = "connector"

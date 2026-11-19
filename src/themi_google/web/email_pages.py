@@ -31,7 +31,7 @@ def routes(kit: Kit) -> APIRouter:
         session, form = await kit.checked(request)
         digest = noise()
         if digest is None:
-            return kit.redirect("/email/noise", "Email isn't set up.")
+            return kit.not_set_up("/email/noise", "Email isn't set up.", "gmail")
         member = session.member
         if form.get("do") == "all":
             ids = [a.id for a in digest.waiting(member)]

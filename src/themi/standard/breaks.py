@@ -30,6 +30,7 @@ from themi.core import keys
 from themi.core.tools import SETTINGS, ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import YOUR_DAY
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -51,6 +52,7 @@ class BreaksPreferences(Preferences):
     """CR7a: what a break's "Extend" button offers (B1)."""
 
     module: ClassVar[str] = "breaks"
+    settings_anchor: ClassVar[str] = "breaks"  # MP5
     break_extend_minutes: int = 15
 
     @field_validator("break_extend_minutes")
@@ -66,6 +68,7 @@ class BreaksModule(Module):
 
     name = "breaks"
     title = "Breaks"
+    group = YOUR_DAY
     summary = "A rest mode: Themi goes quiet for a while, then checks in gently."
     tool_groups = (SETTINGS,)
     preferences = BreaksPreferences

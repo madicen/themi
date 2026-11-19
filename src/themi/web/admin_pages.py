@@ -52,7 +52,7 @@ def routes(kit: Kit) -> APIRouter:
         _, form = await kit.checked(request, admin=True)
         travel = app.services.maybe(keys.travel)
         if travel is None:
-            return kit.redirect("/family", "Travel times aren't set up.")
+            return kit.not_set_up("/family", "Travel times aren't set up.", "travel")
         address = str(form.get("address", ""))
         try:
             place = await travel.set_home(address)

@@ -23,6 +23,7 @@ from themi.core.prompts import OpenItem
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.modules.prompt import PromptFragment
 from themi.standard.memory import terms
 from themi.standard.tasks import TaskBoard
@@ -227,6 +228,7 @@ class FollowUpsModule(Module):
 
     name = "follow_ups"
     title = "Follow-ups"
+    group = TASKS
     summary = "Follows up on things someone is waiting to hear back about."
     requires = ("tasks",)
 

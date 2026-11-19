@@ -147,7 +147,9 @@ def home_connect_routes(kit: Kit) -> APIRouter:
         session, _ = await kit.checked(request, admin=True)
         account = app.services.maybe(keys.home_connect)
         if account is None:
-            return kit.redirect(back("home-connect"), "Home Connect isn't set up on this server.")
+            return kit.not_set_up(
+                back("home-connect"), "Home Connect isn't set up on this server.", "home_connect"
+            )
         redirect = HomeConnectAccount.redirect_uri(kit.ctx.base_url)
         return RedirectResponse(
             account.authorization_url(session.member, redirect), status_code=303
@@ -163,7 +165,7 @@ def home_connect_routes(kit: Kit) -> APIRouter:
         )
         to = back("home-connect")
         if account is None or dishwasher is None:
-            return kit.redirect(to, "Home Connect isn't set up on this server.")
+            return kit.not_set_up(to, "Home Connect isn't set up on this server.", "home_connect")
         if error or not state or not code:
             return kit.redirect(to, "Home Connect wasn't linked, so nothing changed.")
         try:
@@ -204,7 +206,7 @@ def thinq_routes(kit: Kit) -> APIRouter:
         watcher = app.services.maybe(keys.thinq)
         to = back("thinq")
         if watcher is None:
-            return kit.redirect(to, "LG ThinQ isn't set up on this server.")
+            return kit.not_set_up(to, "LG ThinQ isn't set up on this server.", "thinq")
         try:
             added = await watcher.link(
                 session.member, str(form.get("token", "")), str(form.get("country", ""))
@@ -248,7 +250,7 @@ def thinq_routes(kit: Kit) -> APIRouter:
             return kit.redirect(to, "The fresh hours and rewash minutes are numbers.")
         laundry = household_models(app).get("thinq")
         if laundry is None:
-            return kit.redirect(to, "The washer and dryer aren't set up.")
+            return kit.not_set_up(to, "The washer and dryer aren't set up.", "thinq")
         try:
             store.save_household(
                 session.member, laundry, laundry_fresh_hours=hours, laundry_rinse_minutes=minutes
@@ -273,7 +275,7 @@ def roborock_routes(kit: Kit) -> APIRouter:
         watcher = app.services.maybe(keys.roborock)
         to = back("roborock")
         if watcher is None:
-            return kit.redirect(to, "The vacuum isn't set up on this server.")
+            return kit.not_set_up(to, "The vacuum isn't set up on this server.", "roborock")
         try:
             email = await watcher.send_code(str(form.get("email", "")))
         except RoborockError as exc:
@@ -293,7 +295,7 @@ def roborock_routes(kit: Kit) -> APIRouter:
         watcher = app.services.maybe(keys.roborock)
         to = back("roborock")
         if watcher is None:
-            return kit.redirect(to, "The vacuum isn't set up on this server.")
+            return kit.not_set_up(to, "The vacuum isn't set up on this server.", "roborock")
         try:
             added = await watcher.link(
                 session.member, str(form.get("email", "")), str(form.get("code", ""))
@@ -326,7 +328,7 @@ def tuya_routes(kit: Kit) -> APIRouter:
         watcher = app.services.maybe(keys.tuya)
         to = back("tuya")
         if watcher is None:
-            return kit.redirect(to, "The feeders aren't set up on this server.")
+            return kit.not_set_up(to, "The feeders aren't set up on this server.", "tuya")
         try:
             added = await watcher.link(
                 session.member,
@@ -383,7 +385,7 @@ def catgenie_routes(kit: Kit) -> APIRouter:
         watcher = app.services.maybe(keys.catgenie)
         to = back("catgenie")
         if watcher is None:
-            return kit.redirect(to, "The litter box isn't set up on this server.")
+            return kit.not_set_up(to, "The litter box isn't set up on this server.", "catgenie")
         try:
             phone = await watcher.send_code(str(form.get("phone", "")))
         except CatGenieError as exc:
@@ -403,7 +405,7 @@ def catgenie_routes(kit: Kit) -> APIRouter:
         watcher = app.services.maybe(keys.catgenie)
         to = back("catgenie")
         if watcher is None:
-            return kit.redirect(to, "The litter box isn't set up on this server.")
+            return kit.not_set_up(to, "The litter box isn't set up on this server.", "catgenie")
         try:
             added = await watcher.link(
                 session.member, str(form.get("phone", "")), str(form.get("code", ""))
@@ -422,7 +424,7 @@ def catgenie_routes(kit: Kit) -> APIRouter:
         watcher, chores = app.services.maybe(keys.catgenie), app.services.maybe(keys.litter_box)
         to = back("catgenie")
         if watcher is None or chores is None:
-            return kit.redirect(to, "The litter box isn't set up on this server.")
+            return kit.not_set_up(to, "The litter box isn't set up on this server.", "catgenie")
         device = next((d for d in watcher.devices() if d.id == device_id), None)
         if device is None:
             return kit.redirect(to, "That isn't one of the litter boxes.")
@@ -458,7 +460,9 @@ def spotify_routes(kit: Kit) -> APIRouter:
         session, _ = await kit.checked(request)
         music = app.services.maybe(keys.music)
         if music is None:
-            return kit.redirect(back("spotify"), "Spotify isn't set up on this server.")
+            return kit.not_set_up(
+                back("spotify"), "Spotify isn't set up on this server.", "spotify"
+            )
         redirect = SpotifyLinks.redirect_uri(kit.ctx.base_url)
         return RedirectResponse(
             music.links.authorization_url(session.member, redirect), status_code=303
@@ -472,7 +476,7 @@ def spotify_routes(kit: Kit) -> APIRouter:
         music = app.services.maybe(keys.music)
         to = back("spotify")
         if music is None:
-            return kit.redirect(to, "Spotify isn't set up on this server.")
+            return kit.not_set_up(to, "Spotify isn't set up on this server.", "spotify")
         if error or not state or not code:
             return kit.redirect(to, "Spotify wasn't linked, so nothing changed.")
         try:
@@ -510,7 +514,7 @@ def smarthq_routes(kit: Kit) -> APIRouter:
         watcher = app.services.maybe(keys.smarthq)
         to = back("smarthq")
         if watcher is None:
-            return kit.redirect(to, "The oven isn't set up on this server.")
+            return kit.not_set_up(to, "The oven isn't set up on this server.", "smarthq")
         email = str(form.get("email", "")).strip().lower()
         try:
             linked = await watcher.sign_in(
@@ -535,7 +539,7 @@ def smarthq_routes(kit: Kit) -> APIRouter:
         watcher = app.services.maybe(keys.smarthq)
         to = back("smarthq")
         if watcher is None:
-            return kit.redirect(to, "The oven isn't set up on this server.")
+            return kit.not_set_up(to, "The oven isn't set up on this server.", "smarthq")
         try:
             await watcher.submit_code(
                 session.member, str(form.get("email", "")), str(form.get("code", ""))

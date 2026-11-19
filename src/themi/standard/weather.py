@@ -42,6 +42,7 @@ from themi.connectors.weather import (
 from themi.localtime import to_utc_iso
 from themi.modules import Module
 from themi.modules.base import AccountNeed, ModuleSetup
+from themi.modules.groups import SERVICES
 from themi.modules.settings import ModuleSettings, env_field
 from themi.usage import Limits, Meter
 
@@ -473,6 +474,7 @@ class WeatherModule(Module):
 
     name = NAME
     title = "Weather"
+    group = SERVICES
     summary = "A line in the morning message when the day's weather is worth knowing."
     cost = "Free, no account"
     kind = "connector"

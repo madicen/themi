@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Modules · Themi{% endblock %}
 {% block content %}
+<script src="{{ asset('modules.js') }}" defer></script>
 <h1>Modules</h1>
 <p class="muted">What this Themi can do. Turn modules on or off, fill in what they need,
 and restart Themi to put changes in place. Started from the {{ template }} template.</p>
@@ -11,15 +12,32 @@ and restart Themi to put changes in place. Started from the {{ template }} templ
 </section>
 {% endif %}
 
+{% if attention %}
+<section class="card attention" id="attention">
+  <p class="summary">Needs attention</p>
+  <ul>
+    {% for c, href in attention %}
+    <li><a href="{{ href }}">{{ c.title }}</a> <span class="chip {{ c.badge_colour }}">{{ c.badge_words }}</span>{% if c.reason %} <span class="muted">{{ c.reason }}</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 {% if draft %}
-<section class="card">
+<section class="card" id="changes">
   <p class="summary">Changes are waiting for a restart.</p>
   <ul>{% for entry in draft.log %}<li>{{ entry.what }}</li>{% endfor %}</ul>
   <div class="module-action">
     <a class="button primary" href="/modules/restart">Restart Themi to put them in place…</a>
+    {% if draft.can_undo_last() %}
+    <form method="post" action="/modules/undo-last">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button>Undo the last change</button>
+    </form>
+    {% endif %}
     <form method="post" action="/modules/undo">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button>Undo them</button>
+      <button>Undo them all</button>
     </form>
   </div>
 </section>
@@ -51,24 +69,56 @@ and restart Themi to put changes in place. Started from the {{ template }} templ
   </form>
 </details>
 
-<form method="get" action="/modules" class="module-search">
-  <label>Find a module <input type="search" name="q" value="{{ q }}"></label>
-  <label><input type="checkbox" name="only_on" value="1"{% if only_on %} checked{% endif %}> Only what's in use</label>
-  <button>Show</button>
+<form method="get" action="/modules" class="module-search" id="module-search">
+  <label>Find a module <input type="search" name="q" value="{{ q }}" id="module-find" autocomplete="off"></label>
+  <input type="hidden" name="show" value="{{ show }}">
+  <button class="no-js">Show</button>
 </form>
-
-{% for heading, cards in groups %}
-<h2>{{ heading }}</h2>
-<ul class="modules">
-  {% for card in cards %}
-  <li class="card module" id="module-{{ card.name }}">
-    <a href="/modules/{{ card.name }}"><strong>{{ card.title }}</strong></a>
-    <span class="chip {{ card.badge_colour }}">{{ card.badge_words }}</span>
-    <p class="muted">{{ card.summary }}</p>
-    {% if card.reason and card.badge in ("failed", "needs_settings", "needs_library") %}<p class="muted">{{ card.reason }}</p>{% endif %}
-  </li>
+<nav class="filter-chips" aria-label="Show">
+  {% for key, words in shows.items() %}
+  <a class="chip{% if key == show %} selected{% endif %}" href="/modules?show={{ key }}{% if q %}&amp;q={{ q | urlencode }}{% endif %}"{% if key == show %} aria-current="true"{% endif %}>{{ words }}</a>
   {% endfor %}
-</ul>
+</nav>
+
+{% for section in groups %}
+<details class="module-group" id="group-{{ section.group.id }}"{% if not section.group.folded or q or show != "all" %} open{% endif %}>
+  <summary><h2>{{ section.group.title }}</h2> <span class="muted">{{ section.on }} of {{ section.total }} on{% if section.attention %} · {{ section.attention }} {{ "needs" if section.attention == 1 else "need" }} attention{% endif %} · {{ section.group.summary }}</span></summary>
+  <div class="module-action">
+    {% if section.on < section.total %}
+    <a class="button" href="/modules/group/{{ section.group.id }}?to=on">{{ "Turn on the rest…" if section.on else "Turn on the group…" }}</a>
+    {% endif %}
+    {% if section.on %}
+    <a class="button" href="/modules/group/{{ section.group.id }}?to=off">Turn off the group…</a>
+    {% endif %}
+  </div>
+  <ul class="module-list">
+    {% for row in section.rows %}
+    {% set card = row.card %}
+    {% if row.home %}
+    <li class="card module guest">
+      <a href="/modules/{{ card.name }}"><strong>{{ card.title }}</strong></a>
+      <span class="chip {{ card.badge_colour }}">{{ card.badge_words }}</span>
+      <p class="muted">Listed under {{ row.home }}.</p>
+    </li>
+    {% else %}
+    <li class="card module" id="module-{{ card.name }}"{% if row.depth %} data-depth="{{ [row.depth, 3] | min }}"{% endif %}>
+      <a href="/modules/{{ card.name }}"><strong>{{ card.title }}</strong></a>
+      <span class="chip {{ card.badge_colour }}">{{ card.badge_words }}</span>
+      <p class="muted">{{ card.summary }}</p>
+      {% if card.reason and card.badge in ("failed", "needs_settings", "needs_library") %}<p class="muted">{{ card.reason }}</p>{% endif %}
+      {% if row.needs %}<p class="muted">Needs {{ row.needs | join(", ") }}</p>{% endif %}
+      {% if row.cost %}<p class="muted">{{ row.cost }}</p>{% endif %}
+      <form method="post" action="/modules/{{ card.name }}/switch" class="card-switch">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="to" value="{{ 'off' if row.on else 'on' }}">
+        <input type="hidden" name="back" value="list">
+        <button class="small" aria-label="Turn {{ 'off' if row.on else 'on' }} {{ card.title }}">{{ "Turn off" if row.on else "Turn on" }}</button>
+      </form>
+    </li>
+    {% endif %}
+    {% endfor %}
+  </ul>
+</details>
 {% else %}
 <p class="muted">No module matches that.</p>
 {% endfor %}

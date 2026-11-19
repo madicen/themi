@@ -36,6 +36,7 @@ from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi_home import home_groups
+from themi_home.groups import BODY_DOUBLING
 
 if TYPE_CHECKING:
     from themi.scheduler import Scheduler
@@ -339,6 +340,7 @@ class StepPicturesModule(Module):
 
     name = "step_pictures"
     title = "Step pictures"
+    group = BODY_DOUBLING
     summary = "Makes a picture for each step of a guided task."
     tool_groups = (home_groups.BODY_DOUBLE,)
     requires = ("body_double", "guided_steps", "image_generation")  # CR19

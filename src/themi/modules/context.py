@@ -18,7 +18,16 @@ from typing import TYPE_CHECKING, TypeVar
 from themi.modules.base import Module, ModuleError, PeriodicTask
 from themi.modules.loader import order
 from themi.modules.registry import Key, name_of
-from themi.modules.web import AccountsSection, MenuEntry, Panel, Values, Waiting, WebPages
+from themi.modules.web import (
+    AccountsSection,
+    MenuEntry,
+    Owned,
+    Panel,
+    SettingsSection,
+    Values,
+    Waiting,
+    WebPages,
+)
 from themi.storage.migrations import apply_track
 from themi.usage import Meter, Tally
 
@@ -240,6 +249,7 @@ class ModuleContext:
         CR10a: `values` adds to what the page shows; `save` takes the form after the
         preferences are saved, for what isn't a preference."""
         self.services.settings_sections.append((order, template))
+        self._own(SettingsSection(order, template, values, save))
         if values is not None:
             self.services.settings_values.append(values)
         if save is not None:
@@ -248,6 +258,8 @@ class ModuleContext:
     def web(self, routes: Callable[[Kit], APIRouter], *menu: MenuEntry) -> None:
         """CR4: the module's website pages, and where they go in the menu."""
         self.services.web_pages.append(WebPages(routes, menu))
+        for entry in menu:
+            self._own(entry)
 
     def dashboard_panel(self, template: str, order: int, *, values: Values | None = None) -> None:
         """CR17a: a panel on the dashboard, placed among the modules' by `order` (tasks 20,
@@ -266,7 +278,9 @@ class ModuleContext:
         """CR17a: a part of the Accounts page and the routes its forms post to. A member's
         own sections come first by `order`; `household` rows go under "Household
         connections", for admins only. A section whose `values` gives None isn't shown."""
-        self.services.accounts_sections.append(AccountsSection(order, template, values, household))
+        section = AccountsSection(order, template, values, household)
+        self.services.accounts_sections.append(section)
+        self._own(section)
         if routes is not None:
             self.web(routes)
 
@@ -303,6 +317,11 @@ class ModuleContext:
 
     def executor(self, name: str, fn: Executor) -> None:
         self.services.autonomy.executors.register(name)(fn)
+
+    def _own(self, item: Owned) -> None:
+        """MP4: note which module added `item`, for its page on the Modules page."""
+        if self._current:
+            self.services.owned.append((self._current, item))
 
     def _who(self) -> str:
         return f"module {self._current}" if self._current else "the app"

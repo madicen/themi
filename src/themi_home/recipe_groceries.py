@@ -39,6 +39,7 @@ from themi.modules import Module, ModuleContext
 from themi.standard.lists import name_key
 from themi_home import home_groups
 from themi_home.groceries import CATEGORY, EXECUTOR, and_list, item_name, list_summary
+from themi_home.groups import COOKING
 from themi_home.quantities import NeedsYield, describe, scale_for, scale_line
 from themi_home.recipes import Recipe, Recipes, clear_match, stem
 
@@ -663,6 +664,7 @@ class RecipeGroceriesModule(Module):
 
     name = "recipe_groceries"
     title = "Recipe groceries"
+    group = COOKING
     summary = "Puts a recipe's ingredients on the grocery list."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes",)

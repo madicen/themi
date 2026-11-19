@@ -2,6 +2,17 @@
 {% block title %}Change template · Modules · Themi{% endblock %}
 {% block content %}
 <h1>Change to the {{ switch.template }} template?</h1>
+{% if by_group %}
+<table class="template-compare">
+  <caption>Group by group</caption>
+  <thead><tr><th scope="col">Group</th><th scope="col">Turned off</th><th scope="col">Turned on</th></tr></thead>
+  <tbody>
+    {% for group, off, on in by_group %}
+    <tr><th scope="row">{{ group }}</th><td>{{ off | join(", ") or "—" }}</td><td>{{ on | join(", ") or "—" }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
 {% if switch.off %}
 <p>These will be turned off, with what needs them:</p>
 <ul>

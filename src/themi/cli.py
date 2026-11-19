@@ -170,7 +170,7 @@ def build_runtime(
     template = None
     report = None
     options: dict[str, Any] = {}
-    from themi.config import load_template, resolve_start
+    from themi.config import load_template, resolve_start, with_roles
     from themi.modules.store import ModuleSecrets
 
     # SP1: a module's problem leaves it off and Themi starts; Telegram with no token is
@@ -188,11 +188,11 @@ def build_runtime(
         config = _chat_in_the_simulator(config)
         on_fakes = {m.name: m for m in family_modules(**connectors)}
         modules, report = resolve_start(config, settings, given=on_fakes, unavailable=unavailable)
-        template = load_template(config.template)
+        template = with_roles(load_template(config.template), config)  # MP5
     else:  # CR5a: the modules themi.toml (or the family template) names
         config = config or _instance_config(settings, db)
         modules, report = resolve_start(config, settings, unavailable=unavailable, stored=stored)
-        template = load_template(config.template)
+        template = with_roles(load_template(config.template), config)  # MP5
     if config is not None and not settings.public_url and config.core.get("public_url"):
         # SP2: the website's address, as set on the Modules page (the environment wins)
         settings = settings.model_copy(

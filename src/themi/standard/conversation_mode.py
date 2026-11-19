@@ -44,6 +44,7 @@ from themi.core.prompts import PHRASING_WORDS, day_note
 from themi.localtime import to_local
 from themi.logs import redact
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import YOUR_DAY
 from themi.standard.lists import name_key
 from themi.standard.sidecar import Sidecar
 
@@ -316,6 +317,7 @@ class ConversationPreferences(Preferences):
     """CR7b1: their own conversation mode switch (CM1a)."""
 
     module: ClassVar[str] = "conversation_mode"
+    settings_anchor: ClassVar[str] = "phrasing"  # MP5
     conversation_mode: bool = False
 
     @classmethod
@@ -454,6 +456,7 @@ class ConversationModeModule(Module):
 
     name = "conversation_mode"
     title = "Conversation mode"
+    group = YOUR_DAY
     summary = "Plain chat replies, with tasks picked out in the background."
     preferences = ConversationPreferences
 

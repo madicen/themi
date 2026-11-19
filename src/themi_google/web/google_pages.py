@@ -121,7 +121,7 @@ def calendar_routes(kit: Kit) -> APIRouter:
         calendar = app.services.maybe(keys.calendar)
         to = back("family-calendar")
         if calendar is None:
-            return kit.redirect(to, "Google isn't set up on this server yet.")
+            return kit.not_set_up(to, "Google isn't set up on this server yet.", "google")
         account = str(form.get("account", ""))
         try:
             calendar.choose(int(account) if account.isdigit() else None, str(form.get("name", "")))
@@ -197,7 +197,9 @@ def routes(kit: Kit) -> APIRouter:
         session, _ = await kit.checked(request)
         accounts = google()
         if accounts is None:
-            return kit.redirect("/accounts", "Linking Gmail isn't set up on this server yet.")
+            return kit.not_set_up(
+                "/accounts", "Linking Gmail isn't set up on this server yet.", "google"
+            )
         url = accounts.link_url(session.member, redirect_uri())
         return RedirectResponse(url, status_code=303)
 
@@ -319,7 +321,7 @@ def routes(kit: Kit) -> APIRouter:
         session, form = await kit.checked(request)
         expected = app.services.maybe(keys.expected)
         if expected is None:
-            return kit.redirect("/accounts", "Email isn't set up on this server.")
+            return kit.not_set_up("/accounts", "Email isn't set up on this server.", "gmail")
         try:
             added = expected.add(
                 session.member,

@@ -14,6 +14,7 @@ from typing import ClassVar
 from themi.ai.metering import PROVIDER_METERS
 from themi.ai.router import ProviderFactory, builders_for
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import AI
 
 
 class AIProviderModule(Module):
@@ -32,6 +33,7 @@ class ClaudeModule(AIProviderModule):
 
     name = "claude"
     title = "Claude (Anthropic)"
+    group = AI
     summary = "Claude answers, with each person's own Anthropic API key."
     cost = "Paid, by use"
     adapters: ClassVar[dict[str, ProviderFactory]] = builders_for("anthropic")
@@ -42,6 +44,7 @@ class GeminiModule(AIProviderModule):
 
     name = "gemini"
     title = "Gemini (Google)"
+    group = AI
     summary = "Google's Gemini answers. Its free tier is everyone's first choice."
     cost = "Free tier is enough to start"
     adapters: ClassVar[dict[str, ProviderFactory]] = builders_for("gemini")
@@ -52,6 +55,7 @@ class OpenAICompatibleModule(AIProviderModule):
 
     name = "openai_compatible"
     title = "Your own AI server"
+    group = AI
     summary = "Ollama or LM Studio on your own computer, or another OpenAI-compatible server."
     cost = "Free on your own computer"
     adapters: ClassVar[dict[str, ProviderFactory]] = builders_for(
@@ -64,6 +68,7 @@ class CloudflareModule(AIProviderModule):
 
     name = "cloudflare"
     title = "Cloudflare Workers AI"
+    group = AI
     summary = "A free picture model, for making pictures."
     cost = "Free plan is enough"
     adapters: ClassVar[dict[str, ProviderFactory]] = builders_for("cloudflare")

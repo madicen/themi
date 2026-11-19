@@ -18,6 +18,7 @@ from themi_cozyla.cozyla_routines import CozylaRoutines
 from themi_cozyla.cozyla_todos import CozylaTodos
 from themi_cozyla.routines_wall import RoutinesWall
 from themi_cozyla.settings import CozylaSettings
+from themi_home.groups import HOME
 
 
 def _wall(setup: ModuleSetup) -> CozylaClient | None:
@@ -36,6 +37,7 @@ class CozylaTodosModule(Module):
 
     name = "cozyla_todos"
     title = "Cozyla to-do lists"
+    group = HOME
     summary = "Keeps the Cozyla wall's to-do lists in step with Themi's tasks."
     cost = "Unofficial: may stop working"
     kind = "connector"
@@ -98,6 +100,7 @@ class CozylaChoresModule(Module):
 
     name = "cozyla_chores"
     title = "Cozyla chores and routines"
+    group = HOME
     summary = "Keeps the Cozyla wall's chore chart and routines in step with Themi's."
     cost = "Unofficial: may stop working"
     kind = "connector"

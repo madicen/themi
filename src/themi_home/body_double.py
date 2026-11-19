@@ -49,6 +49,7 @@ from themi.standard.lists import name_key
 from themi.standard.tasks import NotFound, Task
 from themi_home import home_groups
 from themi_home.body_double_scene import CHEER_FOR, pick_state
+from themi_home.groups import BODY_DOUBLING
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -210,6 +211,7 @@ class BodyDoublePreferences(Preferences):
     """CR7a: each person's body double settings (BD1a, BD5a)."""
 
     module: ClassVar[str] = "body_double"
+    settings_anchor: ClassVar[str] = "body-double"  # MP5
     sprint_work_minutes: int = 25  # a sprint's work block
     sprint_break_minutes: int = 5  # and its break
     body_double_sound: str = "lofi"  # the session page's built-in loop
@@ -1278,6 +1280,7 @@ class BodyDoubleModule(Module):
 
     name = "body_double"
     title = "Body double"
+    group = BODY_DOUBLING
     summary = "Keeps someone company through a task, in timed blocks."
     tool_groups = (home_groups.BODY_DOUBLE,)
     preferences = BodyDoublePreferences

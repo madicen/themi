@@ -33,6 +33,7 @@ from themi.core import groups, keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.standard.tasks import Task, TaskBoard, TaskChange
 
 log = logging.getLogger(__name__)
@@ -347,6 +348,7 @@ class TaskPartsModule(Module):
 
     name = "task_parts"
     title = "Task parts"
+    group = TASKS
     summary = "Splits a task's steps into tasks of their own, to share or spread out."
     requires = ("tasks",)
     migrations = Path(__file__).parent / "task_parts_schema"

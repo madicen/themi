@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from themi.modules import Module, ModuleContext, ModuleSetup
 from themi.modules.base import ModuleError
+from themi.modules.groups import TALKING
 from themi.modules.settings import ModuleSettings, env_field
 from themi.storage.secrets import Secret
 
@@ -29,6 +30,7 @@ class TelegramModule(Module):
 
     name = NAME
     title = "Telegram"
+    group = TALKING
     summary = "Each person chats with Themi in Telegram, on their phone."
     cost = "Free"
     kind = "channel"

@@ -33,6 +33,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import member_day, to_utc_iso
 from themi.logs import redact
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import YOUR_DAY
 from themi.standard.memory import terms
 
 log = logging.getLogger(__name__)
@@ -225,6 +226,7 @@ class JournalModule(Module):
 
     name = "journal"
     title = "Journal"
+    group = YOUR_DAY
     summary = "Themi keeps a short journal of each day."
 
     def install(self, ctx: ModuleContext) -> None:

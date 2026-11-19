@@ -41,6 +41,7 @@ from themi.core.tools import SETTINGS, ToolContext, ToolDeclined, ToolFailed, to
 from themi.core.wording import words_in_common
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import YOUR_DAY
 from themi.standard.habits import CATEGORY as HABIT_CATEGORY
 from themi.standard.habits import EXECUTOR as HABIT_EXECUTOR
 from themi.standard.tasks import Task, TaskBoard
@@ -363,6 +364,7 @@ class BurnoutModule(Module):
 
     name = "burnout"
     title = "Burnout watch"
+    group = YOUR_DAY
     summary = "Notices when someone is running low and offers to hand their tasks over."
     tool_groups = (SETTINGS,)
     requires = ("tasks",)

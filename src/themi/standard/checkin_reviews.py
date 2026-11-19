@@ -30,6 +30,7 @@ from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import YOUR_DAY
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class CheckinReviewsPreferences(Preferences):
     """CR7b1: now and then, ask whether a check-in is helping (idea #13)."""
 
     module: ClassVar[str] = "checkin_reviews"
+    settings_anchor: ClassVar[str] = "phrasing"  # MP5
     checkin_reviews: bool = True
 
 
@@ -274,6 +276,7 @@ class CheckinReviewsModule(Module):
 
     name = "checkin_reviews"
     title = "Check-in reviews"
+    group = YOUR_DAY
     summary = "Asks now and then whether a regular check-in is still helping."
     tool_groups = (groups.SCHEDULES,)
     preferences = CheckinReviewsPreferences

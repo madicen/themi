@@ -45,6 +45,7 @@ from themi_home.groceries import (
     item_name,
     list_summary,
 )
+from themi_home.groups import GROCERIES
 
 log = logging.getLogger(__name__)
 
@@ -531,6 +532,7 @@ class PantryModule(Module):
 
     name = "pantry"
     title = "Pantry"
+    group = GROCERIES
     summary = "Keeps track of what's in the pantry and what's running low."
     tool_groups = (home_groups.PANTRY,)
     household = PantrySettings

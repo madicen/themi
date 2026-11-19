@@ -41,6 +41,7 @@ from themi.core.prompts import OpenItem
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import in_quiet_hours, start_of_local_day, to_local, to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.modules.prompt import PromptFragment
 from themi.standard.tasks import clock_words
 
@@ -746,6 +747,7 @@ class LiaisonModule(Module):
 
     name = "liaison"
     title = "Passing notes"
+    group = TASKS
     summary = "Passes a note from one partner to the other, at a good moment."
 
     def install(self, ctx: ModuleContext) -> None:

@@ -37,6 +37,7 @@ from themi.modules import Module, ModuleContext
 from themi.standard.lists import name_key
 from themi_home import home_groups
 from themi_home.groceries import and_list
+from themi_home.groups import GROCERIES
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -567,6 +568,7 @@ class SafewayModule(Module):
 
     name = "safeway"
     title = "Safeway cart"
+    group = GROCERIES
     summary = "Fills the Safeway cart from the grocery list, with the helper extension."
     tool_groups = (home_groups.PANTRY,)
     requires = ("groceries",)

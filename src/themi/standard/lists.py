@@ -30,6 +30,7 @@ from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, st
 from themi.core.wording import and_list, asks_to_add, name_key, picture_asks_to_add, refuse_spending
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.modules.prompt import PromptFragment
 
 if TYPE_CHECKING:
@@ -135,6 +136,7 @@ class ListsPreferences(Preferences):
     """CR7b1: how a list's levels show in chat (F29g): dashes, bullets or numbers."""
 
     module: ClassVar[str] = "lists"
+    settings_anchor: ClassVar[str] = "lists"  # MP5
     list_style: str = "dashes"
 
     @field_validator("list_style")
@@ -780,6 +782,7 @@ class ListsModule(Module):
 
     name = "lists"
     title = "Lists"
+    group = TASKS
     summary = "Named lists Themi keeps, made and changed from chat."
     tool_groups = (groups.LISTS,)
     preferences = ListsPreferences

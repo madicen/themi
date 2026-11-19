@@ -33,6 +33,7 @@ from themi.core.services import Services
 from themi.energy.outcomes import OutcomeTracker
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 
 log = logging.getLogger(__name__)
 
@@ -230,6 +231,7 @@ class HabitsModule(Module):
 
     name = "habits"
     title = "Habits"
+    group = TASKS
     summary = "Offers small habits when there's room in the day."
 
     def install(self, ctx: ModuleContext) -> None:

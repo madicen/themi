@@ -49,6 +49,7 @@ from themi.core.tools import (
 from themi.core.wording import and_list, near_twin, title_matches, words_in_common
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.standard import praise
 from themi.standard.lists import name_key
 from themi.standard.praise import TasksPreferences
@@ -786,6 +787,7 @@ class RoutinesModule(Module):
 
     name = "routines"
     title = "Routines"
+    group = TASKS
     summary = "Morning, evening and other routines, one step at a time."
     tool_groups = (groups.ROUTINES,)
 

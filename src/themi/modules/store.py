@@ -82,15 +82,20 @@ class Draft:
     # name -> field -> the new value, encrypted (a Fernet token as text), or None to clear
     secrets: dict[str, dict[str, str | None]] = field(default_factory=dict)
     log: list[dict[str, Any]] = field(default_factory=list)  # who changed what, when
+    # MP2: why each module turned on here is on ("asked", "needed by <name>")
+    reasons: dict[str, str] = field(default_factory=dict)
+    # MP5: a role's whole module list, where it's changed (written to themi.toml)
+    roles: dict[str, list[str]] = field(default_factory=dict)
 
     def count(self) -> int:
         """How many changes wait: the template, each module, each setting."""
         fields = sum(len(v) for v in self.sections.values())
         secrets = sum(len(v) for v in self.secrets.values())
-        return (1 if self.template else 0) + len(self.modules) + fields + secrets
+        roles = len(self.roles)
+        return (1 if self.template else 0) + len(self.modules) + fields + secrets + roles
 
     def is_empty(self) -> bool:
-        return not (self.template or self.modules or self.sections or self.secrets)
+        return not (self.template or self.modules or self.sections or self.secrets or self.roles)
 
     def put_secret(self, cipher: Cipher, module: str, name: str, value: str | None) -> None:
         """A secret to set (encrypted here, never kept in the clear) or, None, to clear."""
@@ -101,8 +106,32 @@ class Draft:
         token = self.secrets.get(module, {}).get(name)
         return cipher.decrypt(token.encode()) if token else None
 
-    def note(self, member_id: int | None, what: str) -> None:
-        self.log.append({"by": member_id, "what": what, "at": to_utc_iso(clock.now())})
+    def note(self, member_id: int | None, what: str, before: dict[str, Any] | None = None) -> None:
+        """Log a change. `before` (MP2): the switches as they were, so it can be undone."""
+        entry: dict[str, Any] = {"by": member_id, "what": what, "at": to_utc_iso(clock.now())}
+        if before is not None:
+            entry["before"] = before
+        self.log.append(entry)
+
+    def switches(self) -> dict[str, Any]:
+        """MP2: the module switches and their reasons, for undoing the next change."""
+        return {
+            "modules": dict(self.modules),
+            "reasons": dict(self.reasons),
+            "roles": {k: list(v) for k, v in self.roles.items()},
+        }
+
+    def can_undo_last(self) -> bool:
+        return bool(self.log) and "before" in self.log[-1]
+
+    def undo_last(self) -> str:
+        """MP2: put the switches back as they were before the last change; its words."""
+        entry = self.log.pop()
+        before = entry["before"]
+        self.modules = {str(k): bool(v) for k, v in before["modules"].items()}
+        self.reasons = {str(k): str(v) for k, v in before["reasons"].items()}
+        self.roles = {str(k): list(v) for k, v in before.get("roles", {}).items()}
+        return str(entry["what"])
 
 
 class DraftStore:
@@ -120,6 +149,8 @@ class DraftStore:
             sections={str(k): dict(v) for k, v in data.get("sections", {}).items()},
             secrets={str(k): dict(v) for k, v in data.get("secrets", {}).items()},
             log=list(data.get("log", [])),
+            reasons={str(k): str(v) for k, v in data.get("reasons", {}).items()},
+            roles={str(k): list(v) for k, v in data.get("roles", {}).items()},
         )
 
     def save(self, draft: Draft, member_id: int | None) -> None:

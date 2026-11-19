@@ -105,6 +105,7 @@ class TravelPreferences(Preferences):
     """CR7b1: "time to get ready" before events with a place (K4)."""
 
     module: ClassVar[str] = "travel"
+    settings_anchor: ClassVar[str] = "calendars"  # MP5
     getting_ready_minutes: int = 15
     leave_heads_up: bool = True
 

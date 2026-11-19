@@ -90,7 +90,7 @@ def routes(kit: Kit) -> APIRouter:
         book = recipes()
         back = f"/accounts/{account_id}/cookbook"
         if book is None:
-            return kit.redirect("/accounts", "Recipes aren't set up on this server.")
+            return kit.not_set_up("/accounts", "Recipes aren't set up on this server.", "recipes")
         doc_id = doc_id_from(str(form.get("doc", "")))
         if doc_id is None:
             return kit.redirect(back, "That doesn't look like a Google Doc's link.")

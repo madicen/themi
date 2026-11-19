@@ -56,6 +56,7 @@ class CalendarPreferences(Preferences):
     """CR7b1: the calendar module's settings for each person."""
 
     module: ClassVar[str] = "calendar"
+    settings_anchor: ClassVar[str] = "calendars"  # MP5
     calendar_details: str = "me"  # who sees their events' details: "me" or "partner" (K1)
     calendar_twins: str = "ask"  # F34e: the same event on two calendars: ask, guess or keep
     setup_note: bool = True  # F29a: an earlier start is noted as set-up time on the event

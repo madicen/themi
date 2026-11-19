@@ -37,6 +37,7 @@ from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.modules import Module, ModuleContext
 from themi_home import home_groups
 from themi_home.body_double import GUIDED, MODE_WORDS, MODES, SILENT, SPRINT, BodyDouble
+from themi_home.groups import BODY_DOUBLING
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -387,6 +388,7 @@ class ModeChooserModule(Module):
 
     name = "mode_chooser"
     title = "Session modes"
+    group = BODY_DOUBLING
     summary = "Picks a body double session's style and learns what works."
     tool_groups = (home_groups.BODY_DOUBLE,)
     requires = ("body_double",)

@@ -33,6 +33,7 @@ from themi.accounts import AccountStore, Member
 from themi.channels.events import Button, ButtonPress, InboundEvent, InboundHandler, Reaction
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TALKING
 from themi.modules.web import MenuEntry
 
 if TYPE_CHECKING:
@@ -374,6 +375,7 @@ class WebChatModule(Module):
 
     name = NAME
     title = "Website chat"
+    group = TALKING
     summary = "Anyone in the family can chat with Themi on its website."
     kind = "channel"
     migrations = Path(__file__).parent / "web_chat_schema"

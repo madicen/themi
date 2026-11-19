@@ -27,6 +27,7 @@ from themi.channels.outbox import Priority
 from themi.core import keys
 from themi.localtime import next_waking_start, to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi_home.groups import COOKING
 
 if TYPE_CHECKING:
     from themi.scheduler import Scheduler
@@ -378,6 +379,7 @@ class CookingTimersModule(Module):
 
     name = "cooking_timers"
     title = "Cooking timers"
+    group = COOKING
     summary = "Sets the timers a recipe's steps call for."
     requires = ("cooking",)
 

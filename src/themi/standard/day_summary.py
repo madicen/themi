@@ -35,6 +35,7 @@ from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import member_day
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import YOUR_DAY
 from themi.standard.tasks import Task, TaskBoard
 
 if TYPE_CHECKING:
@@ -47,6 +48,7 @@ class DaySummaryPreferences(Preferences):
     """CR7b1: a summary of their day (K2)."""
 
     module: ClassVar[str] = "day_summary"
+    settings_anchor: ClassVar[str] = "day-summary"  # MP5
     morning_summary: time | None = None  # at this time; None: off
     morning_summary_empty: bool = False  # sent on days with nothing on, too
 
@@ -301,6 +303,7 @@ class DaySummaryModule(Module):
 
     name = "day_summary"
     title = "Day summary"
+    group = YOUR_DAY
     summary = "What's on someone's day, and a summary each morning."
     tool_groups = (groups.CALENDAR,)
     preferences = DaySummaryPreferences

@@ -35,6 +35,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.wording import and_list
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.standard.tasks import IMPORTANCE, Task, TaskBoard, clock_words, day_arg
 
 log = logging.getLogger(__name__)
@@ -397,6 +398,7 @@ class RemindersModule(Module):
 
     name = "reminders"
     title = "Reminders"
+    group = TASKS
     summary = "Reminders at the end of the day and for overdue tasks."
     tool_groups = (groups.SCHEDULES,)
     requires = ("tasks",)

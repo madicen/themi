@@ -22,6 +22,7 @@ from themi.web.auth import COOKIE_NAME, SESSION_TTL, Session, WebAuth
 
 HERE = Path(__file__).parent
 FLASH_COOKIE = "themi_flash"
+FLASH_MODULE_COOKIE = "themi_flash_module"  # MP7: the module a flash says isn't set up
 SESSION_HEADER = "X-Themi-Session"
 
 
@@ -176,11 +177,34 @@ class Kit:
         """Render a signed-in page, with any one-off message from the previous POST."""
         raw = request.cookies.get(FLASH_COOKIE)
         flash = unquote(raw) if raw else None
+        module = request.cookies.get(FLASH_MODULE_COOKIE) if flash else None
         response = self.page(
-            request, name, flash=flash, member=session.member, csrf=session.csrf_token, **values
+            request,
+            name,
+            flash=flash,
+            flash_module=module if module and module.isidentifier() else None,
+            member=session.member,
+            csrf=session.csrf_token,
+            **values,
         )
         if flash:
             response.delete_cookie(FLASH_COOKIE)
+        if module:
+            response.delete_cookie(FLASH_MODULE_COOKIE)
+        return response
+
+    def not_set_up(self, url: str, message: str, module: str) -> RedirectResponse:
+        """MP7: back to `url` saying `message`; an admin also gets a link to set `module`
+        up on the Modules page."""
+        response = self.redirect(url, message)
+        response.set_cookie(
+            FLASH_MODULE_COOKIE,
+            module,
+            max_age=60,
+            httponly=True,
+            samesite="lax",
+            secure=self.ctx.secure_cookies,
+        )
         return response
 
     def redirect(self, url: str, message: str | None = None) -> RedirectResponse:

@@ -25,6 +25,7 @@ from themi.core.services import Services
 from themi.core.wording import and_list
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import BEHIND_THE_SCENES
 
 GOOD = frozenset({"👍", "❤", "❤️", "🙏"})
 NOT_GOOD = frozenset({"👎", "😕"})
@@ -68,6 +69,7 @@ class ReactionsModule(Module):
 
     name = "reactions"
     title = "Reactions"
+    group = BEHIND_THE_SCENES
     summary = "Learns what lands with each person from their emoji reactions."
 
     def install(self, ctx: ModuleContext) -> None:

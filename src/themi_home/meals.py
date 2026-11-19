@@ -41,6 +41,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import in_quiet_hours, to_local, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi_home import home_groups
+from themi_home.groups import COOKING, GROCERIES
 from themi_home.pantry import Pantry, PantryItem
 
 log = logging.getLogger(__name__)
@@ -412,6 +413,8 @@ class MealsModule(Module):
 
     name = "meals"
     title = "Meal ideas"
+    group = GROCERIES
+    also_in = (COOKING,)
     summary = "Suggests meals from what's in the pantry, and reminds people to eat."
     tool_groups = (home_groups.PANTRY,)
     requires = ("pantry",)

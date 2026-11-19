@@ -16,6 +16,7 @@ from themi.accounts import Member
 from themi.core import keys
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.modules import Module, ModuleContext
+from themi_home.groups import BODY_DOUBLING
 from themi_home.music_mix import BUILT_IN, COMPOSED, Mix
 
 
@@ -313,6 +314,7 @@ class MusicOffersModule(Module):
 
     name = "music_offers"
     title = "Music for tasks"
+    group = BODY_DOUBLING
     summary = "Offers music that suits the task during a body double session."
     requires = ("body_double",)
 

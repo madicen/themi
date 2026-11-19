@@ -50,6 +50,7 @@ from themi.core import keys, listening, partner
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import YOUR_DAY
 from themi.standard import priority
 from themi.standard.repeat import next_occurrences
 from themi.standard.tasks import Task, TaskBoard, clock_words
@@ -136,6 +137,7 @@ class FocusPreferences(Preferences):
     """CR7b1: things "for now" when it's too much (O1a), and a day's budget (O1b)."""
 
     module: ClassVar[str] = "focus"
+    settings_anchor: ClassVar[str] = "phrasing"  # MP5
     focus_count: int = 3
     day_budget: int = 0  # at most this many on a day when the rest is spread; 0: usual
 
@@ -455,6 +457,7 @@ class FocusModule(Module):
 
     name = "focus"
     title = "Focus"
+    group = YOUR_DAY
     summary = "A few things to do now, when everything feels like too much."
     preferences = FocusPreferences
     requires = ("tasks", "day_summary")

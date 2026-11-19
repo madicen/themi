@@ -47,6 +47,7 @@ from themi.standard.lists import (
     name_key,
 )
 from themi_home.groceries import and_list, asks_to_add, picture_asks_to_add, refuse_spending
+from themi_home.groups import GROCERIES
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -439,6 +440,7 @@ class BuyingModule(Module):
 
     name = "buying"
     title = "Things to buy"
+    group = GROCERIES
     summary = "Things to buy that aren't food, sorted by the store that has them."
     tool_groups = (groups.LISTS,)
     requires = ("lists",)

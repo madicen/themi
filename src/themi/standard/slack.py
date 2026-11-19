@@ -16,6 +16,7 @@ from pathlib import Path
 
 from themi.modules import Module, ModuleContext, ModuleSetup
 from themi.modules.base import ModuleError
+from themi.modules.groups import TALKING
 from themi.modules.settings import ModuleSettings, env_field
 from themi.storage.secrets import Secret
 
@@ -62,6 +63,7 @@ class SlackModule(Module):
 
     name = NAME
     title = "Slack"
+    group = TALKING
     summary = "Each person chats with Themi in a Slack direct message."
     cost = "Free (a workspace admin may need to approve the app)"
     kind = "channel"
