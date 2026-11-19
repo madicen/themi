@@ -306,6 +306,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F46d | Feedback: "arrive at 6:15" times the leave for 6:15 and leaves the event at 6:30; no second leave reminder | Feedback | [x] 2026-11-17 |
 | F47a | Idea: liked songs as the default, and a Shuffle toggle | Feedback | [x] 2026-11-18 |
 | F47b | Feedback: Play from a phone plays on that phone, not the laptop | Feedback | [x] 2026-11-18 |
+| F48a | Idea: the built-in lofi and soft piano, composed on real instruments | Feedback | [x] 2026-11-18 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15094,6 +15095,51 @@ Notes (2026-11-18):
   there, then tap Play again", and nothing plays. From a computer, or chat: as before.
 - `Device.kind` is Spotify's device type.
 - A browser test shows the cook screen's Play, Pause and Shuffle each reach Spotify once.
+
+### F48a · Idea (2026-11-18): the built-in lofi and soft piano, composed on real instruments
+Status: [x] 2026-11-18
+Depends on: BD5a, CK14, CK15a
+From Michael, in a coding session (2026-11-18): the lofi was "very same-y" with "a constant
+static sound in the background", and the soft piano was "a complete melodic/chord copy of
+the lofi but with a different sound font". Tried as option 1 of a library search (a
+composer and real samples; option 2, AI-made loops such as Stable Audio 3.0 Small, is kept
+for later). Prototyped and judged by ear over several rounds: "the new soft piano is a
+dramatic improvement"; the lofi went through three takes, then a quieter, rounder kit,
+then the soft snare ("ship that for now").
+
+Notes (2026-11-18):
+- What was wrong: the lofi's "crackle" was continuous white noise high-passed at 3 kHz under
+  keys that faded between strikes (noise floor -30.6 dB, against the piano's -49.9). Every
+  musical track was one engine (a sine and its octave, block chords on a grid, one drum
+  pattern), and "Four slow chords" had the lofi's own progression.
+- `tools/compose_loops.py` writes lofi and soft piano from a seed: key, tempo, chords from
+  pools, voice-led voicings, a tune, drums. The same seed gives the same track (a test).
+  Samples are fetched at pinned commits into `~/.cache/themi/loop-samples`, never
+  committed: VCSL (CC0: Kawai grand, hi-hats, snare) and jRhodes3d (Jeff Learman's 1977
+  Rhodes; samples CC BY-NC, music made with it CC0). Only the rendered `.m4a` ships, so
+  the loops stay CC0 (LICENCES.md says so and names both). Kick and bass are synthesised.
+- The lofi follows 93 lofi MIDI files (an unlicensed GitHub set, measured only, nothing
+  kept) and the genre's production guides: m7, maj7, m9 and maj9 (no altered chords), voiced
+  wide with a low root on a Rhodes or a soft grand; half in minor; a four-bar hook around
+  B4 that repeats exactly; a sine bass; dark short hats, the softest real snare hit set
+  back, a round kick on a looser swing than the hats; a short room. No record sound at all:
+  crackle, hiss and wobble were tried and judged "awful". A cross-stick "pierced through";
+  a synthesised brush snare sounded "like a walkie talkie".
+- The soft piano: the grand alone, pedal down, no drums; each eight-bar section a texture
+  (sparse, broken chords, rolled hymn chords); its own progressions; some waltzes.
+- `music_mix.COMPOSED` (`Composed`: name, kind, seed, lofi's mode) holds lofi and soft
+  piano; `BUILT_IN` keeps rain and brown noise as mixes for `make_loops.py`. A composed
+  track's `Track.mix` is None. Files and names are kept, but "Four slow chords" is now
+  "Quiet hour" (it isn't four slow chords any more). The live player and recipe mixes
+  (CK15a/b) are unchanged.
+- `finish()` high-passes before folding the tail onto the start: filtering after the fold
+  left a step at the loop point (found by a test; the tracks moved by under 0.1 dB).
+- Tests: `test_compose_loops.py` plays both styles on fake instruments at 16 kHz.
+  `test_music_mix.py`'s two built-in tests now check mixes or composed tracks, and a
+  musical mix's ffmpeg render on the test's own mix; the cook-screen browser test gets the
+  first "Slow simmer" settings written out. numpy and scipy join the dev extra.
+- **Setup:** none on the Pi (the files ship). To remake a track:
+  `.venv/bin/python tools/compose_loops.py lofi-simmer` (the first run fetches ~190 MB).
 
 ## Conversation mode
 
