@@ -60,6 +60,38 @@ def test_later_steps_on_the_fixture() -> None:
     assert [(a.kind, a.part) for a in look_ahead(baked)] == [("preheat", 3)]
 
 
+VIENNESE = recipe(
+    "Viennese Crescents",
+    ["1 Cup ground walnuts or pecans", "1 Cup butter", "3/4 Cup sugar"],
+    [
+        "Combine all ingredients. Knead to a smooth dough and roll into balls or form into "
+        "crescents. Bake on an ungreased cookie sheet at 350⁰F for 10 to 15 minutes. While "
+        "still warm, roll in powdered sugar."
+    ],
+)
+
+
+def test_a_recipe_that_only_bakes_at_a_temperature_wants_the_oven() -> None:
+    """F49d (bug #225): Viennese Crescents never says preheat; its step bakes at 350⁰F."""
+    from themi_home.cooking import oven_parts
+
+    (viennese,) = parsed(VIENNESE)
+    assert oven_parts(viennese) == {0: (350, "F")}
+    assert [(a.kind, a.text) for a in look_ahead(viennese)] == [
+        ("preheat", "Step 1 wants the oven at 350°F. Start it now?")
+    ]
+
+
+def test_a_recipe_that_says_preheat_keeps_its_own() -> None:
+    from themi_home.cooking import oven_parts
+
+    (both,) = parsed(
+        recipe("Bars", ["1 Cup oats"], ["Preheat the oven to 375°F.", "Mix.", "Bake at 375°F."])
+    )
+    assert oven_parts(both) == {0: (375, "F")}
+    assert [a.part for a in look_ahead(both) if a.kind == "preheat"] == [0]
+
+
 def test_the_offers_are_offers() -> None:
     every = [a.text for r in parsed() for a in look_ahead(r)]
     every += [a.text for a in look_ahead(parsed(BAKED)[0])]

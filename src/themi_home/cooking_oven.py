@@ -26,7 +26,7 @@ from themi.core import keys
 from themi.localtime import to_utc_iso
 from themi_home.connectors.smarthq import LOWER, UPPER, SmartHQError
 from themi_home.connectors.smarthq import events as ov
-from themi_home.cooking import PREHEAT
+from themi_home.cooking import oven_heat
 
 if TYPE_CHECKING:
     from themi.accounts import Member
@@ -51,12 +51,13 @@ def control(cooking: Cooking) -> OvenControl | None:
 
 
 def heat_for(text: str) -> tuple[int, int, str | None] | None:
-    """A step's preheat as (mode, °F, the oven it names or None)."""
-    found = PREHEAT.search(text)
+    """A step's preheat as (mode, °F, the oven it names or None): its "preheat the oven to",
+    or the temperature it bakes or roasts at (F49d)."""
+    found = oven_heat(text)
     if found is None:
         return None
-    temp = int(found.group("temp"))
-    if (found.group("scale") or "F").upper() == "C":
+    temp, scale = found
+    if scale == "C":
         temp = round((temp * 9 / 5 + 32) / 5) * 5
     mode = ov.CONV_MULTI_BAKE if CONVECTION.search(text) else ov.BAKE
     named = NAMED.search(text)

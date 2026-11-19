@@ -134,10 +134,47 @@ SOAK = re.compile(
 OVERNIGHT = re.compile(r"\bovernight\b|\b(?:24|12|8|6)\s*hours\b", re.IGNORECASE)
 ROOM_TEMP = re.compile(r"\broom temperature\b", re.IGNORECASE)
 THAW = re.compile(r"\b(?:thaw(?:ed)?|defrost(?:ed)?)\b", re.IGNORECASE)
+# F49d (bug #225): recipes write the degree sign several ways ("350⁰F", "350ºF", "350˚ F").
+DEGREE = r"(?:\s*[°⁰º˚]|\s*deg(?:rees?)?\.?)"
 PREHEAT = re.compile(
-    r"\bpreheat (?:the |your )?oven to (?P<temp>\d{2,3})\s*(?:°|degrees?)?\s*(?P<scale>[FC])?\b",
+    rf"\bpreheat (?:the |your )?oven to (?P<temp>\d{{2,3}})(?:{DEGREE})?\s*(?P<scale>[FC])?\b",
     re.IGNORECASE,
 )
+# A step that bakes or roasts at a temperature, with no "preheat" sentence anywhere: "Bake
+# on an ungreased cookie sheet at 350⁰F", "roast at 220 C", "in a 375 degree oven". A bare
+# number needs "degrees" or F/C ("bake for 350" isn't a temperature).
+BAKE_AT = re.compile(
+    rf"\b(?:bake[sd]?|baking|roast(?:s|ed|ing)?)\b[^.]{{0,80}}?\bat (?P<temp>\d{{2,3}})"
+    rf"(?:(?:{DEGREE})\s*(?P<scale>[FC])?\b|\s*(?P<bare>[FC])\b)",
+    re.IGNORECASE,
+)
+IN_OVEN = re.compile(
+    rf"\bin an? (?P<temp>\d{{2,3}})(?:{DEGREE})?[\s-]*(?P<scale>[FC])?\s*oven\b", re.IGNORECASE
+)
+
+
+def oven_heat(text: str, *, bake: bool = True) -> tuple[int, str] | None:
+    """The oven temperature a step asks for, as (number, "F" or "C"): its "preheat the oven
+    to" sentence, else (`bake`) baking or roasting at one (F49d)."""
+    for pattern in (PREHEAT, BAKE_AT, IN_OVEN) if bake else (PREHEAT,):
+        if found := pattern.search(text):
+            said = found.groupdict()
+            return int(found["temp"]), (said.get("scale") or said.get("bare") or "F").upper()
+    return None
+
+
+def oven_parts(recipe: Recipe) -> dict[int, tuple[int, str]]:
+    """The steps (`step_parts` indexes) that want the oven hot: each "preheat the oven to";
+    with none in the recipe, the first that bakes or roasts at a temperature (F49d, bug #225:
+    Viennese Crescents' only step bakes "at 350⁰F" and never says preheat)."""
+    parts = step_parts(recipe)
+    written = {i: h for i, part in enumerate(parts) if (h := oven_heat(part.text, bake=False))}
+    if written:
+        return written
+    for i, part in enumerate(parts):
+        if heat := oven_heat(part.text):
+            return {i: heat}
+    return {}
 
 
 @dataclass(frozen=True)
@@ -178,11 +215,9 @@ def ahead_of_time(recipe: Recipe, items: list[Ingredient]) -> list[Ahead]:
                 found["soak"] = Ahead("an overnight soak", True)
             else:
                 found[soaked] = Ahead(found[soaked].text.split(" (")[0], True)
-        if preheat := PREHEAT.search(text):
-            unit = (preheat.group("scale") or "F").upper()
-            found.setdefault(
-                "preheat", Ahead(f"preheat the oven to {preheat.group('temp')}°{unit}")
-            )
+    if heats := oven_parts(recipe):
+        temp, unit = next(iter(heats.values()))
+        found.setdefault("preheat", Ahead(f"preheat the oven to {temp}°{unit}"))
     return list(found.values())
 
 

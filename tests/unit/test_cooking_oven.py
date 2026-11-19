@@ -19,8 +19,18 @@ from themi_home.cooking_oven import RISE, heat_for
         ("Preheat the oven to 350°F. Bake on the upper oven rack...", (ov.BAKE, 350, UPPER)),
         ("Preheat the oven to 375°F; use the lower oven.", (ov.BAKE, 375, LOWER)),
         ("Bake for 20 minutes.", None),
+        # F49d (bug #225): a step that bakes at a temperature, any degree sign
+        ("Bake on an ungreased cookie sheet at 350⁰F for 10 to 15 minutes.", (ov.BAKE, 350, None)),
+        ("Bake at 350ºF until golden.", (ov.BAKE, 350, None)),
+        ("Bake at 350˚ F.", (ov.BAKE, 350, None)),
+        ("Bake the bars at 350 degrees F for 25 minutes.", (ov.BAKE, 350, None)),
+        ("Roast at 180 C for 40 minutes.", (ov.BAKE, 355, None)),  # 356°F, to the 5
+        ("Bake in a 375 degree oven for 30 minutes.", (ov.BAKE, 375, None)),
+        ("Preheat the oven to 400⁰F.", (ov.BAKE, 400, None)),
+        ("Bake for 35 minutes.", None),
+        ("Bake at 350 for 20 minutes.", None),  # no unit, no "degrees": not a temperature
     ],
-)
+)  # fmt: skip
 def test_a_steps_preheat(text: str, found: tuple | None) -> None:
     assert heat_for(text) == found
 

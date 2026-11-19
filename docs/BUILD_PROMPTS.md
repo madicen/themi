@@ -310,7 +310,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49a | Feedback: a send that timed out reading Telegram's answer isn't sent again | Feedback | [x] 2026-11-18 |
 | F49b | Feedback: when Telegram's back, what's waiting goes at once; a late heads-up says leave now | Feedback | [x] 2026-11-18 |
 | F49c | Feedback: prep keeps the unit when the grams come between number and unit | Feedback | [x] 2026-11-19 |
-| F49d | Feedback: a step that bakes at a temperature offers the oven, any degree sign | Feedback | [ ] |
+| F49d | Feedback: a step that bakes at a temperature offers the oven, any degree sign | Feedback | [x] 2026-11-19 |
 | F49e | Feedback: Themi stays on the stool at any size; the phone's scene isn't cropped | Feedback | [ ] |
 | F49f | Idea: scenes for gathering and prep; Themi's current look on iOS's Now Playing and icons | Feedback | [ ] |
 | F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [ ] |
@@ -15317,7 +15317,7 @@ Chocolate Peanut Butter Bars, Ube Gelato, Katy's Hummus and Katy's Chocolate Hum
 (15 oz) chickpeas"). Tests: test_prep_amounts (15 more cases), test_cooking's scenario.
 
 ### F49d · Feedback (2026-11-18): a step that bakes at a temperature offers the oven, with or without "preheat"
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: F45f, OV4
 Read first: `themi_home/cooking.py` (`PREHEAT`, `look_ahead`); `themi_home/cooking_oven.py`
 (`heat_for`, `preheat_buttons`); `themi_home/cooking_screen.py` (`step_oven`, the ready list's
@@ -15353,6 +15353,17 @@ Scenario: cooking Viennese Crescents with the fake SmartHQ: the ready list offer
 350°F, and the step does too until the oven's on.
 
 Data/Setup: none. Mark #225 reviewed once live.
+
+Notes: `themi_home.cooking`: `DEGREE` (°, ⁰, º, ˚, "deg", "degrees") in `PREHEAT`, and new
+`BAKE_AT` ("bake/baked/baking/roast… at 350⁰F", "at 180 C") and `IN_OVEN` ("in a 375 degree
+oven"). A bare number needs a degree word or F/C. `oven_heat(text)` gives (number, "F"/"C").
+`oven_parts(recipe)` gives the parts that want the oven: each written preheat, or with none, the
+first part that bakes or roasts at a temperature. It drives the ready list
+(`ahead_of_time`), the look-ahead (`look_ahead`) and the step's buttons (`step_oven` in
+`cooking_screen.state`). `cooking_oven.heat_for` reads either kind, so [Preheat] works from
+both. A recipe with a written preheat and a later "bake at" has one preheat, as before.
+Tests: test_cooking_oven (9 cases), test_cooking_look_ahead (2), and the scenario
+`test_bug_225_…` in test_oven_cook_screen (`VIENNESE` lives in test_cooking_look_ahead).
 
 ### F49e · Feedback (2026-11-18): Themi stays on the stool at any size, and the phone's cook screen isn't cropped
 Status: [ ]
