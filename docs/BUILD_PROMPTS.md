@@ -315,7 +315,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49f | Idea: scenes for gathering and prep; Themi's current look on iOS's Now Playing and icons | Feedback | [x] 2026-11-19 |
 | F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [x] 2026-11-19 |
 | F49h | Idea: recipes to try, in their own Google Doc (reading and saving) | Feedback | [x] 2026-11-19 |
-| F49i | Idea: a recipe to try that's a keeper goes into the cookbook | Feedback | [ ] |
+| F49i | Idea: a recipe to try that's a keeper goes into the cookbook | Feedback | [x] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15581,7 +15581,7 @@ Notes: split from the first F49h (2026-11-19): promoting a keeper is F49i.
   page under Accounts, choosing "Recipes to try". Migration: restart Themi.
 
 ### F49i · Idea (2026-11-18): a recipe to try that's a keeper goes into the cookbook
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: F49h
 Read first: F49h's notes; `themi_home/cookbook_save.py` (`_execute`, `entry`, `insert_at`);
 `themi_home/cooking_wrap.py` (the end-of-cooking wrap's offers); `themi_google/connectors/gdocs`
@@ -15605,6 +15605,30 @@ Scenario: Michael cooks Snowy Earthquake Cookie from Recipes to try, taps [Add t
 and [Go ahead]; it's in the cookbook's Desserts and gone from the try doc.
 
 Data/Setup: none. Mark #224 reviewed once live (with F49h).
+
+Notes:
+- Three ways in, one card: the cook screen's wrap after [All done] ("A keeper? It can go into
+  the cookbook." [Add to the cookbook] [Not yet], kind `keep`, taps `wrap_keep`/`wrap_keep_no`),
+  the chat's "all done" card for a to-try recipe (same words and buttons, recipe actions
+  `keep`/`keep_in`/`keep_no`), and "move X to the cookbook" in chat. Chat reuses
+  `save_recipe_to_cookbook` with `where: cookbook` rather than a new tool (its description
+  says so; golden `tools.json` changes). When a cookbook recipe and a to-try one share the
+  name, `where: cookbook` takes the to-try one.
+- `CookbookSave.offer` handles a to-try recipe: the section guessed or asked (`keep_in`), the
+  preview ends "Then it comes out of Recipes to try.", the card says 'Move "X" to the cookbook
+  under Desserts, out of Recipes to try', payload `keep: true`.
+- `_keep`: reads the try doc again first, then writes the entry as the preview showed it
+  (Themi's reading, so F49c's "¾ Cup (150g) sugar" order, not the doc's raw "¾ (150g) Cup"),
+  then deletes it from the try doc with `cookbook.entry_range` (heading to its `-----` or a
+  rule, or the next heading, or the doc's end) and `delete_requests`. Both writes go through
+  `_write` (the revision just read, once more on a conflict). The row keeps its id; its key,
+  section and book become the cookbook's. If the try doc keeps changing, the cookbook keeps it
+  and the answer says to delete it from Recipes to try by hand.
+- Fake: `FakeGdocs` deletes whole paragraphs (`deleteContentRange`) and has
+  `edits_before_write_to[doc_id]` for a conflict on one doc.
+- Tests: `tests/scenarios/test_recipes_to_try.py` (9 more), `tests/unit/test_cookbook_entry_range.py`.
+- Not done: no [Add to the cookbook] on a to-try recipe's ordinary chat card (only after
+  cooking, or by asking). **Setup:** none beyond F49h's. Mark #224 reviewed once live.
 
 ## Conversation mode
 

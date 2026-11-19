@@ -393,3 +393,38 @@ def insert_at(cookbook: Cookbook, section: str) -> int:
         if n + 1 < len(cookbook.sections):
             return cookbook.sections[n + 1][1]
     return max(1, cookbook.end - 1)
+
+
+def entry_range(document: dict[str, Any], key: str, name: str = "") -> tuple[int, int] | None:
+    """F49i: where an entry is in the doc, to delete it: from its Heading 4 through its
+    `-----` (or a rule), or up to the next entry's or section's heading, or the doc's end.
+    Found by its heading id, or by its name for a heading without one."""
+    found = blocks(document)
+    end = 1
+    for element in document.get("body", {}).get("content", []):
+        end = max(end, int(element.get("endIndex", 0)))
+    headings = (*SECTION_STYLES, *SUBSECTION_STYLES, RECIPE_STYLE)
+    first = next(
+        (
+            n
+            for n, b in enumerate(found)
+            if b.kind == "paragraph"
+            and b.style == RECIPE_STYLE
+            and (b.heading_id == key or (not b.heading_id and name and _plain(b.text) == name))
+        ),
+        None,
+    )
+    if first is None:
+        return None
+    for n in range(first + 1, len(found)):
+        block = found[n]
+        if block.kind == "rule" or (block.kind == "paragraph" and SEPARATOR.match(block.text)):
+            after = found[n + 1].start if n + 1 < len(found) else end - 1
+            return found[first].start, after
+        if block.kind == "paragraph" and block.style in headings:
+            return found[first].start, block.start
+    return found[first].start, end - 1
+
+
+def delete_requests(at: tuple[int, int]) -> list[dict[str, Any]]:
+    return [{"deleteContentRange": {"range": {"startIndex": at[0], "endIndex": at[1]}}}]

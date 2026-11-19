@@ -1041,14 +1041,18 @@ class Cooking:
         assert recipe is not None
         self.end(session, "finished")
         buttons = []
+        text = f"{recipe.name}, all done. Enjoy it!"
         if recipe.source == "web" and "save" in self.services.recipe_buttons:
             buttons = [
                 Button("Save to cookbook", "recipe", {"action": "save", "id": recipe.id}),
                 Button("Not now", "recipe", {"action": "save_no", "id": recipe.id}),
             ]
-        text = f"{recipe.name}, all done. Enjoy it!"
-        if buttons:
             text += "\nKeep this one in the cookbook?"
+        elif recipe.to_try and "keep" in self.services.recipe_buttons and self.recipes.doc_id:
+            from themi_home.cookbook_save import CookbookSave  # F49i
+
+            buttons = CookbookSave.keep_buttons(recipe)
+            text += "\nA keeper? It can go into the cookbook."
         await self._to_card(session, text, buttons)
         session.phase = "done"
         await self.say(session, DONE_LINE)  # CK5: the card said it already
