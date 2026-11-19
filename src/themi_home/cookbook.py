@@ -289,9 +289,33 @@ def _add(recipe: ParsedRecipe, part: Part | None, text: str, group: str, step_gr
     return now
 
 
+# An ingredient line: an amount first ("1 Cup yogurt", "½ tsp vanilla", "2 Tbsp agave"),
+# short, and no sentence after it.
+INGREDIENT_LINE = re.compile(
+    r"^(?:\d+(?:[./]\d+)?|[½¼¾⅓⅔⅛]|\d+\s?[½¼¾⅓⅔⅛])\s*"
+    r"(?:cups?|tbsps?|tsps?|tablespoons?|teaspoons?|g|grams?|kg|oz|ounces?|lbs?|pounds?|ml|"
+    r"l|liters?|litres?|pinch(?:es)?|cloves?|cans?|sticks?|pieces?|dash(?:es)?)?\.?\s"
+    r"[^.!?]{1,60}$",
+    re.IGNORECASE,
+)
+
+
+def _ingredient_groups(recipe: ParsedRecipe) -> None:
+    """F50d (recipe 42's "Sweetening"): a group under the method, after its steps, whose
+    lines are all ingredient lines is more ingredients, under that group's name."""
+    for name in dict.fromkeys(s.group for s in recipe.steps if s.group):
+        lines = [s for s in recipe.steps if s.group == name]
+        first = recipe.steps.index(lines[0])
+        if first == 0 or not all(INGREDIENT_LINE.match(s.text) for s in lines):
+            continue
+        recipe.steps = [s for s in recipe.steps if s.group != name]
+        recipe.ingredients.extend(Line(s.text, name) for s in lines)
+
+
 def _settle(recipe: ParsedRecipe) -> None:
     """What's missing after the last line, and the yield if it's written down."""
     if recipe.kind == "recipe":
+        _ingredient_groups(recipe)
         if not recipe.ingredients:
             _look(recipe, "no ingredients found")
         if not recipe.steps:

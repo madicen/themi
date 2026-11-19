@@ -459,7 +459,7 @@ class Cooking:
         self.card = StepCard(services.outbox, KIND)
         self.timers: CookingTimers | None = None  # RC3c, once the scheduler exists
         self.links = StepLinks(services)  # CK2: which lines each step uses
-        self.titles = StepTitles(services)  # CK12: the step strip's titles
+        self.titles = StepTitles(services, self.recipes)  # CK12; F50d: every recipe's
         self.mixes = CookingMixes(services)  # CK15b: music made from the recipe's name
         self.playlists: dict[int, list[dict[str, Any]]] = {}  # CK5: their Spotify, per session
 
@@ -1333,3 +1333,4 @@ class CookingModule(Module):
         cooking.install()
         ctx.periodic("cooking.expire", timedelta(minutes=15), cooking.expire)
         ctx.periodic("cooking.stuck", timedelta(minutes=5), cooking.stuck)  # CK5
+        ctx.periodic("cooking.step_titles", timedelta(minutes=30), cooking.titles.fill)  # F50d

@@ -322,7 +322,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F50a | Feedback: a reminder you set goes at its time, whatever else is going on | Feedback | [x] 2026-11-19 |
 | F50b | Feedback: an amount in another currency is converted before it's compared | Feedback | [x] 2026-11-19 |
 | F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [x] 2026-11-19 |
-| F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [ ] |
+| F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [x] 2026-11-19 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15882,7 +15882,7 @@ Notes:
   **Setup:** none. Mark #233 reviewed once live.
 
 ### F50d · Feedback (2026-11-19): every recipe's steps have real short titles, not their first words
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: none
 Read first: `themi_home/cooking_titles.py` (`fallback_title`, `StepTitles.ensure`, `store`,
 "whatever is stored is final"); `themi_home/recipe_card.py` (`items`, `card_png`);
@@ -15937,6 +15937,37 @@ Michael asks for its card and sees them.
 Data/Setup: migration (a tries column on `cooking_titles`, or a small queue table). The Pi's
 170 untitled recipes are titled by the job; recipe 42's titles are made again after the parser
 fix (its words change). Mark #234 reviewed once live and the job has caught up.
+
+Notes:
+- `StepTitles.fill` (job `cooking.step_titles`, every 30 minutes): recipes with steps and no
+  titles for their current words, in the cookbook's order (`Recipes.all`), 10 a call
+  (`BATCH_SYSTEM`/`BATCH_SCHEMA`: `{"recipes": [{"id", "titles"}]}`, each recipe its own data
+  block with its id, ingredients and numbered steps), 3 calls a run, `CallKind.BACKGROUND`,
+  on the first admin's recipes route. It tells no one. It skips the run when any AI row of the
+  usage card is "near" (75%) or over today. The Pi's 170 take about six runs (three hours),
+  longer on days the AI is near its limit. Not done: titling at once when a
+  recipe is read or changed (the next run picks it up, within 30 minutes).
+- Failures aren't final any more: `cooking_title_tries` (cooking migration 0004) counts failed
+  calls for a recipe's words; the job tries again, 3 times at most, then leaves first words.
+  `ensure` (a prepped recipe with no titles) records a try instead of storing first words, and
+  doesn't call again once one is recorded. `test_cook_tablet`'s
+  `test_a_failed_titles_call_keeps_first_words_and_doesnt_ask_again` now checks that (CK12's
+  "stored as final" is what this prompt changes); no second call is still checked.
+- `TITLES_RULE` (prep's call and the batch): an action and what it acts on ("Make the glaze"),
+  1 to 4 words, never a lone "Transfer".
+- `fallback_title` skips one or two leading clauses that open with where or when ("In a large
+  bowl,", "Once cooled,", "Meanwhile,") before taking the first three words: "Whisk the flour".
+  `test_cook_tablet`'s "In a pot, bring water to a boil." expectation changes from "In a pot"
+  to "Bring water"; four cases added. Goldens: the recipe card pictures (`recipe.svg`,
+  `recipe_dark.svg`, `recipe_grams.svg`: "If you'd like" -> "Preheat the oven", "In the
+  bottom" -> "Whisk together"), `jobs.json`.
+- Parser (`cookbook._ingredient_groups`): a group under the method, after other steps, whose
+  lines are all ingredient lines (an amount, maybe a unit, a few words, no sentence) moves to
+  the ingredients under its name (recipe 42's "Sweetening"). A group with any real step stays.
+- Tests: `tests/unit/test_step_titles.py` (5), `test_cook_tablet` (4 cases),
+  `test_cookbook_parser` (2), `test_home_modules` (the job). **Setup:** none (migration). The
+  next cookbook read re-parses recipe 42, whose words change, so it's titled again. Mark #234
+  reviewed once live and the job has caught up.
 
 ## Conversation mode
 
