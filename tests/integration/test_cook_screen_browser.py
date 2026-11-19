@@ -365,3 +365,46 @@ async def test_spotify_on_the_cook_screen_plays_and_pauses_once_a_tap(
     ).spotify_shuffle  # kept for next time
     assert fake_spotify.calls.count("PUT /v1/me/player/pause") == 1
     assert fake_spotify.paused
+
+
+SCENE = (
+    "(() => {"
+    " const box = e => JSON.parse(JSON.stringify(e.getBoundingClientRect()));"
+    " const scene = document.querySelector('.cook-scene');"
+    " return JSON.stringify({"
+    "  scene: box(scene), cham: box(scene.querySelector('.cham')),"
+    "  feet: box(scene.querySelector('.cham-foot')),"
+    "  stool: box(scene.querySelector('.scene-cooking .scene-stool')),"
+    "  mood: box(document.querySelector('.cook-company-side')),"
+    " });"
+    "})()"
+)
+
+
+@pytest.mark.parametrize(("width", "height"), [(390, 844), (768, 1024), (1440, 900)])
+async def test_themi_stays_on_the_stool(scenario: Scenario, width: int, height: int) -> None:
+    """F49e (bugs #222, #226): cut off on an iPhone; floating off the stool on a computer."""
+    import base64
+    import json
+    import os
+
+    clock.unfreeze()
+    await to_step_three(scenario)
+    async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves",
+                              width=width, height=height) as tab:  # fmt: skip
+        await tab.value("document.querySelector('.cook-company').scrollIntoView()")
+        found = json.loads(await tab.value(SCENE))
+        if folder := os.environ.get("THEMI_SHOTS"):  # to look at by eye
+            shot = await tab.call("Page.captureScreenshot", format="png")
+            data = base64.b64decode(shot["result"]["data"])
+            with open(os.path.join(folder, f"cook-scene-{width}.png"), "wb") as f:
+                f.write(data)
+    scene, cham, feet, stool = found["scene"], found["cham"], found["feet"], found["stool"]
+    assert scene["left"] - 1 <= cham["left"] and cham["right"] <= scene["right"] + 1
+    assert scene["top"] - 1 <= cham["top"] and cham["bottom"] <= scene["bottom"] + 1
+    assert abs(feet["bottom"] - stool["top"]) <= scene["height"] * 0.05  # on the seat
+    middle = (feet["left"] + feet["right"]) / 2
+    assert stool["left"] <= middle <= stool["right"]
+    assert scene["height"] <= 145
+    if width < 600:  # a phone: above the line and music, not a column beside them
+        assert scene["bottom"] <= found["mood"]["top"] + 1

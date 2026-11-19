@@ -311,7 +311,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49b | Feedback: when Telegram's back, what's waiting goes at once; a late heads-up says leave now | Feedback | [x] 2026-11-18 |
 | F49c | Feedback: prep keeps the unit when the grams come between number and unit | Feedback | [x] 2026-11-19 |
 | F49d | Feedback: a step that bakes at a temperature offers the oven, any degree sign | Feedback | [x] 2026-11-19 |
-| F49e | Feedback: Themi stays on the stool at any size; the phone's scene isn't cropped | Feedback | [ ] |
+| F49e | Feedback: Themi stays on the stool at any size; the phone's scene isn't cropped | Feedback | [x] 2026-11-19 |
 | F49f | Idea: scenes for gathering and prep; Themi's current look on iOS's Now Playing and icons | Feedback | [ ] |
 | F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [ ] |
 | F49h | Idea: recipes to try, in their own Google Doc | Feedback | [ ] |
@@ -15366,7 +15366,7 @@ Tests: test_cooking_oven (9 cases), test_cooking_look_ahead (2), and the scenari
 `test_bug_225_…` in test_oven_cook_screen (`VIENNESE` lives in test_cooking_look_ahead).
 
 ### F49e · Feedback (2026-11-18): Themi stays on the stool at any size, and the phone's cook screen isn't cropped
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: CK5, BD3c
 Read first: `themi_home/web/static/chameleon/scenes.svg` (the `cooking` scene: counter, stool),
 `chameleon.svg`; `themi_home/web/static/cook.css` (`.cook-company`, `.cook-scene`, the narrow
@@ -15399,6 +15399,19 @@ feet are within a few px of the stool's seat; at 390 px the scene is above the m
 Scenario: none (the browser test is it).
 
 Data/Setup: none. Mark #222 reviewed once live; Michael checks it on his iPhone.
+
+Notes: CSS only (`cook.css`). The cook screen's scene keeps the art's shape (`aspect-ratio:
+9 / 5`, the scenes' 360 x 200), so the sliced backdrop is never cropped. The chameleon is
+placed in percentages of that box: 65% high (130 of 200), feet (y 143 of its 150) on the stool's
+seat (y 160) at 7.1% from the left and 16.95% from the bottom. So the two scale together. On a
+phone (under 600 px) the scene is 252 x 140 px, centred on its own row. Its side margins fill
+the row so Themi's line and the music wrap under it. Deviation: not a 3:1 strip. A strip of
+another shape would crop the art again, and 9:5 at 140 px tall keeps the whole scene. A column
+layout was tried first, but at 200% text on a 360 px phone the music card's minimum width
+pushed the bar off the screen (`test_the_biggest_text_fits_a_phone`). Only `.cook-scene` is
+touched, so `/session`'s body-double scenes are as they were. Test: `test_themi_stays_on_the_stool`
+(390, 768, 1440 px) in test_cook_screen_browser. `THEMI_SHOTS=<folder>` saves its screenshots
+to look at.
 
 ### F49f · Idea (2026-11-18): the cook screen's scene for gathering and prep, Themi's current look on iOS's Now Playing and the home screen
 Status: [ ]
