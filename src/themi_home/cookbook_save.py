@@ -36,7 +36,16 @@ from themi_google.connectors.gdocs import DocsConflict, DocsError
 from themi_home import cookbook as book
 from themi_home import home_groups
 from themi_home.cookbook import Line
-from themi_home.recipes import PICTURE_SOURCE, Recipe, Recipes
+from themi_home.recipes import (
+    COOKBOOK,
+    DOC_NAMES,
+    NO_TRY_DOC_TEXT,
+    PICTURE_SOURCE,
+    TO_TRY,
+    TRY_KEY,
+    Recipe,
+    Recipes,
+)
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -81,6 +90,7 @@ class CookbookSave:
         s.recipe_buttons["save"] = self.on_save
         s.recipe_buttons["save_in"] = self.on_save_in
         s.recipe_buttons["save_no"] = self.on_save_no
+        s.recipe_buttons["save_try"] = self.on_save_try  # F49h
         s.tools.register(save_recipe_to_cookbook)
 
     # ----- choosing and staging -----------------------------------------------------------
@@ -116,6 +126,27 @@ class CookbookSave:
         lines = [f"Here's how it would go in the cookbook, under {section}:"]
         lines += [f"> {text}" for text, _ in self.entry(recipe)[:-1]]
         return "\n".join(lines)
+
+    async def offer_to_try(self, member: Member, recipe: Recipe) -> str:
+        """F49h (idea #224): show the entry and stage it for the Recipes to try doc, at its
+        end (no sections to choose). Returns what was sent."""
+        if self.recipes.try_doc_id is None:
+            raise DocsError(NO_TRY_DOC_TEXT)
+        lines = [f"Here's how it would go in {DOC_NAMES[TO_TRY]}:"]
+        lines += [f"> {text}" for text, _ in self.entry(recipe)[:-1]]
+        preview = "\n".join(lines)
+        await self.services.outbox.send(member, preview, priority=Priority.REPLY,
+                                        kind="recipes", link_preview=False)  # fmt: skip
+        await self._replace_waiting(member, recipe, DOC_NAMES[TO_TRY])
+        await self.services.autonomy.stage(
+            CATEGORY,
+            member,
+            f'Add "{recipe.name}" to {DOC_NAMES[TO_TRY]}',
+            {"recipe": recipe.id, "section": "", "book": TO_TRY},
+            EXECUTOR,
+            interactive=True,
+        )
+        return preview
 
     async def offer(self, member: Member, recipe: Recipe, section: str | None = None) -> str:
         """Ask which section, or show the entry and stage it. Returns what was sent."""
@@ -167,16 +198,24 @@ class CookbookSave:
     async def _execute(self, payload: dict[str, Any], context: ExecutionContext) -> str:
         recipe = self.recipes.get(int(payload["recipe"]))
         section = str(payload["section"])
+        which = str(payload.get("book") or COOKBOOK)  # F49h: or Recipes to try
+        where = DOC_NAMES[which]
         if recipe is None:
             return "That recipe isn't kept any more, so nothing was added."
         if recipe.source == "doc":
-            return f"{recipe.name} is in the cookbook already."  # a retry after it went in
-        settings = self.recipes.settings()
+            return f"{recipe.name} is in {DOC_NAMES[recipe.book]} already."  # a retry
+        settings = self.recipes.settings(which)
         if not settings["doc_id"] or settings["account_id"] is None:
-            raise DocsError("There's no cookbook doc to add to.")
+            raise DocsError(f"There's no {where.removeprefix('the ')} doc to add to.")
         client = self.recipes.client(settings["account_id"])
         doc_id = settings["doc_id"]
-        before = {r["key"] for r in self.db.query("SELECT key FROM recipes WHERE source = 'doc'")}
+        prefix = TRY_KEY if which == TO_TRY else ""
+        before = {
+            r["key"].removeprefix(prefix)
+            for r in self.db.query(
+                "SELECT key FROM recipes WHERE source = 'doc' AND book = ?", (which,)
+            )
+        }
         for attempt in (1, 2):
             parsed = book.parse(await client.get(doc_id))
             at = book.insert_at(parsed, section)
@@ -188,26 +227,27 @@ class CookbookSave:
             except DocsConflict:
                 if attempt == 2:
                     raise DocsError(
-                        "The cookbook kept changing while Themi wrote to it; nothing was added."
+                        f"{where.capitalize()} kept changing while Themi wrote to it; nothing "
+                        "was added."
                     ) from None
-                log.info("The cookbook changed under a write; reading it again")
+                log.info("%s changed under a write; reading it again", where.capitalize())
         after = book.parse(await client.get(doc_id))
         added = next(
             (r for r in reversed(after.recipes) if r.name == recipe.name and r.key not in before),
             None,
         )
-        if added is not None:  # the web recipe becomes the cookbook's own
+        if added is not None:  # the web recipe becomes the doc's own
             self.db.execute(
-                "UPDATE recipes SET key = ?, source = 'doc', section = ?, updated_at = ? "
-                "WHERE id = ?",
-                (added.key, section, to_utc_iso(clock.now()), recipe.id),
-            )
-        await self.recipes.sync(force=True)
+                "UPDATE recipes SET key = ?, source = 'doc', section = ?, book = ?, "
+                "updated_at = ? WHERE id = ?",
+                (prefix + added.key, added.section if prefix else section, which,
+                 to_utc_iso(clock.now()), recipe.id),
+            )  # fmt: skip
+        await self.recipes.sync(force=True, which=which)
         kept = self.recipes.get(recipe.id)
         link = self.recipes.link(kept) if kept else None
-        return f"Added {recipe.name} to the cookbook under {section}." + (
-            f" {link}" if link else ""
-        )
+        under = f" under {section}" if section else ""
+        return f"Added {recipe.name} to {where}{under}." + (f" {link}" if link else "")
 
     # ----- buttons ------------------------------------------------------------------------
 
@@ -229,6 +269,18 @@ class CookbookSave:
         assert event.button is not None
         await self._offer_from(event, str(event.button.payload.get("section") or ""))
 
+    async def on_save_try(self, event: InboundEvent) -> None:
+        """F49h: [Save to try] on a web recipe's card."""
+        assert event.button is not None
+        recipe = self.recipes.get(int(event.button.payload.get("id", 0)))
+        if recipe is None:
+            return
+        member = self.services.store.get_member(event.member.id)
+        try:
+            await self.offer_to_try(member, recipe)
+        except DocsError as exc:
+            await self.services.outbox.send(member, str(exc), priority=Priority.REPLY)
+
     async def on_save_no(self, event: InboundEvent) -> None:
         assert event.button is not None
         if event.button.message_id is not None:
@@ -247,11 +299,17 @@ def _saver(ctx: ToolContext) -> CookbookSave:
 
 @tool(
     "save_recipe_to_cookbook",
-    "Add a web recipe they liked to the family cookbook doc, when they ask ('we liked that "
-    "one, add it to the cookbook'): recipe, its name, or '' for the web recipe they had "
-    "last; section, a cookbook section they named, or ''. Shows the entry and asks for a "
-    "yes. A recipe already in the cookbook is changed in the doc itself, not here.",
-    {"recipe": {"type": "string"}, "section": {"type": "string"}},
+    "Add a web recipe to a family recipe doc, when they ask: where=cookbook for one they "
+    "liked ('we liked that one, add it to the cookbook'), where=to_try for one they want to "
+    "try ('save that to try', 'add it to the try list', 'not cookbook-worthy yet'). recipe, "
+    "its name, or '' for the web recipe they had last; section, a cookbook section they "
+    "named, or ''. Shows the entry and asks for a yes. A recipe already in a doc is changed "
+    "in the doc itself, not here.",
+    {
+        "recipe": {"type": "string"},
+        "section": {"type": "string"},
+        "where": {"type": "string", "enum": [COOKBOOK, TO_TRY]},
+    },
 )
 async def save_recipe_to_cookbook(ctx: ToolContext, args: dict[str, Any]) -> str:
     saver = _saver(ctx)
@@ -270,9 +328,18 @@ async def save_recipe_to_cookbook(ctx: ToolContext, args: dict[str, Any]) -> str
     if recipe.source == "doc":
         link = saver.recipes.link(recipe)
         raise ToolDeclined(
-            f"{recipe.name} is in the cookbook already; changing it happens in the doc itself"
-            + (f" ({link})" if link else "")
-            + ". Say so."
+            f"{recipe.name} is in {DOC_NAMES[recipe.book]} already; changing it happens in the "
+            "doc itself" + (f" ({link})" if link else "") + ". Say so."
+        )
+    if str(args.get("where") or COOKBOOK) == TO_TRY:  # F49h
+        try:
+            sent = await saver.offer_to_try(ctx.member, recipe)
+        except DocsError as exc:
+            raise ToolFailed(f"{exc} Say so.") from exc
+        ctx.cards.append(sent)
+        return (
+            "Sent them the entry and an approval card for Recipes to try. Nothing is in the "
+            "doc until they say yes."
         )
     section = str(args.get("section") or "").strip()
     if section and section.lower() not in {s.lower() for s in saver.sections()}:

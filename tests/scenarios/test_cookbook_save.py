@@ -150,7 +150,9 @@ async def test_after_cooking_a_web_recipe(scenario: Scenario, ready: FakeGdocs) 
 
 async def test_saying_so_in_chat(scenario: Scenario, ready: FakeGdocs) -> None:
     await show(scenario)
-    scenario.primary.queue_tool_call("save_recipe_to_cookbook", {"recipe": "", "section": ""})
+    scenario.primary.queue_tool_call(
+        "save_recipe_to_cookbook", {"recipe": "", "section": "", "where": "cookbook"}
+    )
     replies = await scenario.say("Erin", "We liked that one, add it to the cookbook")
     assert replies[0].startswith("Here's how it would go in the cookbook, under Desserts:")
 
@@ -159,7 +161,7 @@ async def test_a_cookbook_recipe_is_changed_in_the_doc(
     scenario: Scenario, ready: FakeGdocs
 ) -> None:
     scenario.primary.queue_tool_call(
-        "save_recipe_to_cookbook", {"recipe": "pancakes", "section": ""}
+        "save_recipe_to_cookbook", {"recipe": "pancakes", "section": "", "where": "cookbook"}
     )
     scenario.primary.queue_text("The pancakes are in the cookbook already; edit them in the doc.")
     await scenario.say("Erin", "Add the pancakes to the cookbook")
@@ -204,7 +206,8 @@ async def test_a_new_section_replaces_the_card_still_waiting(
     await show(scenario)
     await scenario.tap("Erin", "Save to cookbook")
     scenario.primary.queue_tool_call(
-        "save_recipe_to_cookbook", {"recipe": "Vegan Brownies", "section": "Breakfast"}
+        "save_recipe_to_cookbook",
+        {"recipe": "Vegan Brownies", "section": "Breakfast", "where": "cookbook"},
     )
     await scenario.say("Erin", "Save it under breakfast")
     rows = scenario.app.db.query(

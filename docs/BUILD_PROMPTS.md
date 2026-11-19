@@ -314,7 +314,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49e | Feedback: Themi stays on the stool at any size; the phone's scene isn't cropped | Feedback | [x] 2026-11-19 |
 | F49f | Idea: scenes for gathering and prep; Themi's current look on iOS's Now Playing and icons | Feedback | [x] 2026-11-19 |
 | F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [x] 2026-11-19 |
-| F49h | Idea: recipes to try, in their own Google Doc | Feedback | [ ] |
+| F49h | Idea: recipes to try, in their own Google Doc (reading and saving) | Feedback | [x] 2026-11-19 |
+| F49i | Idea: a recipe to try that's a keeper goes into the cookbook | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15519,8 +15520,8 @@ greeting/all) in the calendar group. Its answer says when the picture is off for
 recap is unchanged (words, no picture). **Setup:** Michael picks "Just the greeting" in
 Settings, or says so in chat.
 
-### F49h · Idea (2026-11-18): recipes to try, in their own Google Doc
-Status: [ ]
+### F49h · Idea (2026-11-18): recipes to try, in their own Google Doc (reading and saving)
+Status: [x] 2026-11-19
 Depends on: RC1a, RC1b, F36b (`cookbook_add`), SP5
 Read first: `themi_home/recipes.py` (the cookbook's settings, `doc_id`, reading and parsing);
 `themi_home/cookbook.py`, `cookbook_save.py` (`cookbook_add`, writing an entry); `web_recipes.py`
@@ -15542,20 +15543,68 @@ Build:
 - Saving: `cookbook_add` gains where it goes ("cookbook" or "to_try"). "Save this to try", "add
   it to the try list" goes to the to-try doc, same approval card ("Add Pumpkin bread to Recipes
   to try?"). With no to-try doc set, Themi says to set one on the Modules page.
+- Searching for a recipe looks in both, the cookbook first.
+
+Tests: the to-try doc parsed from a fixture; a to-try recipe found, labelled, cooked; "save this
+to try" writes to the to-try doc's fake, not the cookbook's; the cookbook's count is unchanged;
+no to-try doc set answers with where to choose one.
+Scenario: Michael sends a recipe link and "let's save that to try"; it's in the try doc.
+
+Data/Setup: probably a migration. **Setup:** Michael makes the "Recipes to try" Google Doc and
+picks it on the Modules page. Mark #224 reviewed once F49i is live too.
+
+Notes: split from the first F49h (2026-11-19): promoting a keeper is F49i.
+- Migration `0172_recipes_to_try.sql`: a `try_doc` table (like `cookbook`: doc, account,
+  title, version, revision, problem) and `recipes.book` ('cookbook' or 'to_try'). A to-try
+  recipe's key is `try:` + its heading id, so the docs never clash.
+- `Recipes.settings(which)`, `try_doc_id`, `choose(..., which)`, `sync(which=)`,
+  `store_doc(parsed, which)`. `sync_all` is the 15-minute job (both docs). The same doc can't be
+  both ("That doc is the cookbook already"). `summary` says "from Recipes to try". Guides are
+  offered for the cookbook only. `Recipe.book` / `to_try`. `link()` uses the recipe's own doc.
+- Chosen on the cookbook's page (/accounts/<id>/cookbook, where the picker already is, not the
+  Modules page): a "The doc I pick is: The family cookbook / Recipes to try" select on the
+  picker's form. The page shows the to-try doc's title, problem and last read. "Read it again"
+  reads both.
+- Labelled: the chat card's head "Snowy Earthquake Cookie (to try)", its link "In Recipes to
+  try: …". Buttons "Pancakes (to try)". Several matches with one to try: "From the cookbook and
+  Recipes to try:". The search puts the cookbook first among equals. The Recipes page lists them
+  under "To try" (the section chips are the cookbook's). `open_items` counts the cookbook alone
+  and names Recipes to try apart.
+- Saving: [Save to try] on a web recipe's card when there's a try doc. `save_recipe_to_cookbook`
+  gains `where` (cookbook or to_try; golden `tools.json` changes, and test_cookbook_save's three
+  scripted calls now pass `where: cookbook`). `CookbookSave.offer_to_try` previews "Here's how
+  it would go in Recipes to try:" and stages `cookbook_add` with `book: to_try`, written at the
+  doc's end (no sections). Afterwards the web recipe is the try doc's (`try:` key, `book`
+  to_try). With no try doc: `NO_TRY_DOC_TEXT`.
+- Tests: `tests/scenarios/test_recipes_to_try.py` (10).
+- **Setup:** Michael makes the "Recipes to try" Google Doc, then picks it on the cookbook's
+  page under Accounts, choosing "Recipes to try". Migration: restart Themi.
+
+### F49i · Idea (2026-11-18): a recipe to try that's a keeper goes into the cookbook
+Status: [ ]
+Depends on: F49h
+Read first: F49h's notes; `themi_home/cookbook_save.py` (`_execute`, `entry`, `insert_at`);
+`themi_home/cooking_wrap.py` (the end-of-cooking wrap's offers); `themi_google/connectors/gdocs`
+(batchUpdate; deleting a range). From Michael's idea #224 (2026-11-18, 2:33 pm), the part
+F49h left: a recipe from Recipes to try that turns out good goes into the cookbook.
+
+Build:
 - Promoting: after cooking a to-try recipe, the end-of-cooking wrap asks "A keeper? [Add to the
   cookbook] [Not yet]"; and "move X to the cookbook" in chat. Both copy it into the cookbook doc
   (the approval card), then remove it from the to-try doc (also on that card), so it's in one
   place.
-- Searching for a recipe looks in both, the cookbook first.
+- Removing an entry from the to-try doc: its heading to its `-----` (or the next entry's
+  heading), one `deleteContentRange` against the revision just read, read again on a conflict
+  as `_execute` does. The stored recipe becomes the cookbook's (`book`, key, section), not a new
+  row, so its cooking history stays with it.
 
-Tests: the to-try doc parsed from a fixture; a to-try recipe found, labelled, cooked; "save this
-to try" writes to the to-try doc's fake, not the cookbook's; promoting copies then removes; the
-cookbook's count is unchanged; no to-try doc set answers with the Modules page.
-Scenario: Michael sends a recipe link and "let's save that to try"; later he cooks it, taps [Add
-to the cookbook], and it's in the cookbook and gone from the try doc.
+Tests: promoting copies then removes (the fakes: cookbook gains it, try doc loses it); the wrap
+asks only after a to-try recipe; "move X to the cookbook" in chat; a conflict on the delete is
+read again; a recipe already in the cookbook isn't offered.
+Scenario: Michael cooks Snowy Earthquake Cookie from Recipes to try, taps [Add to the cookbook]
+and [Go ahead]; it's in the cookbook's Desserts and gone from the try doc.
 
-Data/Setup: probably a migration. **Setup:** Michael makes the "Recipes to try" Google Doc and
-picks it on the Modules page. Mark #224 reviewed once live.
+Data/Setup: none. Mark #224 reviewed once live (with F49h).
 
 ## Conversation mode
 
