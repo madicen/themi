@@ -25,6 +25,7 @@ event and start time, so a moved event gets a new one. The person can switch it 
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -124,6 +125,21 @@ class TravelHeadsUps:
     def install(self) -> None:
         self.services.provide(keys.travel, self)
         self.services.tools.register(drive_time)
+        self.services.outbox.refreshers[TRAVEL_KIND] = self._as_it_stands
+
+    def _as_it_stands(self, member: Member, row: dict[str, Any]) -> str:
+        """F49b (bugs #227, #228): a heads-up that couldn't go out until after its leave
+        time (Telegram unreachable) says to head out now, not a time already gone."""
+        found = LEAVE_AROUND.search(row["text"])
+        if found is None or not row["expires_at"]:
+            return str(row["text"])
+        tz = self._tz()
+        day = datetime.fromisoformat(row["expires_at"]).astimezone(tz).date()
+        hour = int(found["hour"]) % 12 + (12 if found["half"] == "pm" else 0)
+        leave = time(hour, int(found["minute"] or 0))
+        if clock.now() < datetime.combine(day, leave, tzinfo=tz):
+            return str(row["text"])
+        return f"{row['text'][: found.start()]}time to head out{row['text'][found.end() :]}"
 
     # ----- home -----------------------------------------------------------------------------
 
@@ -793,6 +809,13 @@ class TravelHeadsUps:
     def _tz(self) -> ZoneInfo:
         family = self.services.store.get_family()
         return ZoneInfo(family.timezone if family else "UTC")
+
+
+# The heads-up's "leave (there) around 5:52 pm[, so start getting ready now]" (`_send`).
+LEAVE_AROUND = re.compile(
+    r"leave(?: there)? around (?P<hour>\d{1,2})(?::(?P<minute>\d{2}))? (?P<half>[ap]m)"
+    r"(?:, so start getting ready now)?"
+)
 
 
 def _clock(moment: datetime) -> str:

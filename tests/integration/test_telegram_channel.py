@@ -8,12 +8,12 @@ from collections.abc import AsyncIterator
 
 import httpx
 import pytest
-from telegram.error import TimedOut
+from telegram.error import BadRequest, TimedOut
 
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fixtures.family import ERIN_TELEGRAM_ID, HUSBAND_TELEGRAM_ID, SeededFamily
 from themi.accounts import SYSTEM
-from themi.channels.events import Button, EchoHandler, InboundEvent, MaybeSent
+from themi.channels.events import Button, EchoHandler, InboundEvent, MaybeSent, Unreachable
 from themi.channels.outbox import Outbox
 from themi.channels.pda import PdaShield
 from themi.channels.telegram import (
@@ -397,7 +397,7 @@ async def test_a_send_that_timed_out_reading_the_answer_isnt_sent_again(
 async def test_a_send_that_never_connected_is_tried_again(channel: TelegramChannel) -> None:
     for cause in (httpx.ConnectTimeout("connect"), httpx.PoolTimeout("pool")):
         calls, call = _timing_out(cause)
-        with pytest.raises(TimedOut):
+        with pytest.raises(Unreachable):  # F49b: the network, not a refusal
             await channel._with_flood_retry(call, sends=True)
         assert len(calls) == 3
 
@@ -405,9 +405,18 @@ async def test_a_send_that_never_connected_is_tried_again(channel: TelegramChann
 async def test_an_edit_that_timed_out_is_tried_again(channel: TelegramChannel) -> None:
     """An edit is the same each time, so trying it again is harmless."""
     calls, call = _timing_out(httpx.ReadTimeout("read"))
-    with pytest.raises(TimedOut):
+    with pytest.raises(Unreachable):
         await channel._with_flood_retry(call)
     assert len(calls) == 3
+
+
+async def test_a_refusal_isnt_called_the_network(
+    family: SeededFamily, channel: TelegramChannel, fake_telegram: FakeTelegram
+) -> None:
+    """F49b: Telegram saying no (a BadRequest) is given up on; only the network waits."""
+    fake_telegram.fail("sendMessage", 400, "Bad Request: chat not found", times=3)
+    with pytest.raises(BadRequest):
+        await channel.send_text(family.erin, "hello")
 
 
 async def test_unpaired_members_cannot_be_messaged(

@@ -21,6 +21,11 @@ class MaybeSent(Exception):
     sent and never sent again: one lost now and then beats five copies."""
 
 
+class Unreachable(ConnectionError):
+    """F49b: the chat service couldn't be reached (the network, not a refusal). The outbox
+    keeps such a message until the service answers again, rather than giving up on it."""
+
+
 @dataclass(frozen=True)
 class Button:
     """One inline button. `kind` and `payload` stay on the server; only a token travels."""

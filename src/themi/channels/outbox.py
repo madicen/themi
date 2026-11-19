@@ -48,7 +48,7 @@ from themi import clock
 from themi.accounts import AccountStore, Member
 from themi.ai.router import current_reply
 from themi.ai.types import CallKind
-from themi.channels.events import Button, MaybeSent
+from themi.channels.events import Button, MaybeSent, Unreachable
 from themi.channels.family_group import FamilyGroup, replies_to_group, shared_reader
 from themi.channels.pauses import PauseBook
 from themi.channels.pda import PdaShield
@@ -79,8 +79,15 @@ REPLY_RETRY_BACKOFF = (
     timedelta(minutes=15),
     timedelta(hours=1),
 )
-MAX_ATTEMPTS = 5
+MAX_ATTEMPTS = 5  # F49b: for refusals; a network failure waits for the network instead
 MAX_REPLY_ATTEMPTS = 8
+# F49b (bugs #227, #228): retries after a network failure never wait longer than this, and a
+# message with an expiry (a leave heads-up) no longer than SOON. A heads-up waited an hour,
+# while Telegram was back after half of that, and was dropped as too late.
+NETWORK_BACKOFF_CAP = timedelta(minutes=15)
+EXPIRING_BACKOFF_CAP = timedelta(minutes=2)
+# last_error's ending for a failure to reach the channel at all (not a refusal).
+UNREACHABLE = " (unreachable)"
 DEDUPE_WINDOW = timedelta(hours=24)
 # F49a: what a send that went out with no answer back is recorded with. It's counted as sent.
 MAYBE_SENT_ERROR = "TimedOut (maybe sent)"
@@ -215,6 +222,8 @@ class Outbox:
         self.calendar_blocks: BlockSource | None = None
         # Rows on their way out, so a flush running meanwhile doesn't send them again.
         self._sending: set[int] = set()
+        # F49b: when a send last failed to reach the channel; a poll after it means it's back.
+        self._unreachable_at: datetime | None = None
         # Holds a feature puts on its own kind ("task": one nudge at a time, idea #11).
         self.gates: dict[str, Gate] = {}
         self.orders: dict[str, Order] = {}
@@ -341,6 +350,9 @@ class Outbox:
     async def flush(self) -> int:
         """Send whatever is due. Returns how many went out. Run it from the scheduler."""
         now = clock.now()
+        polled: datetime | None = getattr(self.sender, "last_poll_at", None)
+        if polled is not None and (self._unreachable_at is None or polled > self._unreachable_at):
+            self.back_online()  # F49b: the channel answered a poll since the last failure
         rows = self.store.db.query(
             "SELECT * FROM outbox WHERE status = 'queued' AND tray IS NULL AND send_after <= ?",
             (to_utc_iso(now),),
@@ -610,6 +622,7 @@ class Outbox:
                 row["id"],
             ),
         )
+        self.back_online()  # F49b: it got through, so may what was waiting on the network
         for listener in self.sent_listeners:
             try:
                 listener(row, message_id)
@@ -741,32 +754,48 @@ class Outbox:
         )
         return row["telegram_message_id"] if row else None
 
+    def back_online(self) -> int:
+        """F49b: the channel is reachable again, so every message waiting on a network
+        failure is due now, and goes in the next flush in its usual order. How many."""
+        now = to_utc_iso(clock.now())
+        self._unreachable_at = None
+        return self.store.db.update(
+            "UPDATE outbox SET send_after = ? WHERE status = 'queued' AND last_error LIKE ? "
+            "AND send_after > ?",
+            (now, f"%{UNREACHABLE}", now),
+        )
+
     def _record_failure(self, row: dict[str, Any], exc: Exception) -> OutboxResult:
         attempts = row["attempts"] + 1
         reply = Priority(row["priority"]) == Priority.REPLY
         backoff = REPLY_RETRY_BACKOFF if reply else RETRY_BACKOFF
-        if attempts >= (MAX_REPLY_ATTEMPTS if reply else MAX_ATTEMPTS):
-            log.error(
-                "Giving up on outbox message %s after %d attempts (%s)",
-                row["id"],
-                attempts,
-                type(exc).__name__,
-            )
+        name = _error_name(exc)
+        # F49b: a network failure isn't a refusal: it waits for the network, however long
+        # (until it's back, or the message expires), rather than using up its tries.
+        network = isinstance(exc, (ConnectionError, TimeoutError))
+        if not network and attempts >= (MAX_REPLY_ATTEMPTS if reply else MAX_ATTEMPTS):
+            log.error("Giving up on outbox message %s after %d attempts (%s)", row["id"],
+                      attempts, name)  # fmt: skip
             self.store.db.execute(
                 "UPDATE outbox SET status = 'failed', attempts = ?, last_error = ? WHERE id = ?",
-                (attempts, type(exc).__name__, row["id"]),
+                (attempts, name, row["id"]),
             )
             return OutboxResult("failed", row["id"])
-        retry_at = clock.now() + backoff[min(attempts - 1, len(backoff) - 1)]
+        wait = backoff[min(attempts - 1, len(backoff) - 1)]
+        if network:
+            self._unreachable_at = clock.now()
+            name += UNREACHABLE
+            wait = min(wait, EXPIRING_BACKOFF_CAP if row["expires_at"] else NETWORK_BACKOFF_CAP)
+        retry_at = clock.now() + wait
         log.warning(
             "Sending outbox message %s failed (%s); retrying at %s",
             row["id"],
-            type(exc).__name__,
+            name,
             retry_at.isoformat(),
         )
         self.store.db.execute(
             "UPDATE outbox SET attempts = ?, last_error = ?, send_after = ? WHERE id = ?",
-            (attempts, type(exc).__name__, to_utc_iso(retry_at), row["id"]),
+            (attempts, name, to_utc_iso(retry_at), row["id"]),
         )
         return OutboxResult("queued", row["id"], send_after=retry_at)
 
@@ -902,6 +931,13 @@ class Outbox:
             "SELECT * FROM outbox WHERE member_id = ? AND status = 'queued' ORDER BY send_after",
             (member_id,),
         )
+
+
+def _error_name(exc: BaseException) -> str:
+    """What a failure is called in the row: the channel's own error, behind `Unreachable`."""
+    if isinstance(exc, Unreachable) and exc.__cause__ is not None:
+        return type(exc.__cause__).__name__
+    return type(exc).__name__
 
 
 def _button_json(button: Button) -> dict[str, Any]:

@@ -52,7 +52,14 @@ from telegram import (
     WebAppInfo,
 )
 from telegram.constants import ChatAction, ChatType
-from telegram.error import Conflict, NetworkError, RetryAfter, TelegramError, TimedOut
+from telegram.error import (
+    BadRequest,
+    Conflict,
+    NetworkError,
+    RetryAfter,
+    TelegramError,
+    TimedOut,
+)
 from telegram.request import HTTPXRequest
 
 from themi import clock
@@ -75,6 +82,7 @@ from themi.channels.events import (
     MaybeSent,
     Picture,
     Reaction,
+    Unreachable,
     VoiceNote,
 )
 from themi.channels.family_group import FamilyGroup, replies_to_group
@@ -834,7 +842,9 @@ class TelegramChannel:
                 if sends and maybe_sent(exc):
                     raise MaybeSent(str(exc) or type(exc).__name__) from exc
                 if attempt == attempts - 1:
-                    raise
+                    if isinstance(exc, BadRequest):
+                        raise  # Telegram said no: a refusal, not the network
+                    raise Unreachable(str(exc) or type(exc).__name__) from exc
                 await self._sleep(self._rng.uniform(0, 2.0**attempt))
         raise AssertionError("unreachable")  # pragma: no cover
 

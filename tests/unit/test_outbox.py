@@ -26,6 +26,7 @@ class FakeSender:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str, tuple[Button, ...], str]] = []
         self.failures = 0
+        self.refusals = 0  # F49b: the channel says no (not the network)
         self.maybe = 0  # F49a: sends that arrive but whose answer never comes back
         self.edited: list[tuple[int, str, tuple[Button, ...]]] = []
         self.previews: list[bool] = []
@@ -44,6 +45,9 @@ class FakeSender:
         anyone: bool = False,
     ) -> int:
         self.previews.append(link_preview)
+        if self.refusals:
+            self.refusals -= 1
+            raise RuntimeError("Forbidden: bot was blocked by the user")
         if self.failures:
             self.failures -= 1
             raise ConnectionError("telegram unreachable")
@@ -372,8 +376,9 @@ async def test_a_message_being_sent_isnt_sent_again_by_a_flush(
 async def test_sending_gives_up_after_five_attempts(
     family: SeededFamily, outbox: Outbox, sender: FakeSender
 ) -> None:
+    """F49b: refusals from the channel are given up on; network failures aren't (below)."""
     clock.freeze(at(21, 10))
-    sender.failures = 10
+    sender.refusals = 10
     result = await outbox.send(family.erin, "hello", priority=Priority.NORMAL)
     for _ in range(4):
         clock.advance(timedelta(hours=2))
@@ -381,7 +386,75 @@ async def test_sending_gives_up_after_five_attempts(
     row = family.db.one(
         "SELECT status, attempts, last_error FROM outbox WHERE id = ?", (result.outbox_id,)
     )
-    assert row == {"status": "failed", "attempts": 5, "last_error": "ConnectionError"}
+    assert row == {"status": "failed", "attempts": 5, "last_error": "RuntimeError"}
+
+
+async def test_a_network_failure_waits_for_the_network_and_isnt_given_up(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    """F49b (bugs #227, #228): four messages were given up on during a four-hour outage."""
+    clock.freeze(at(21, 10))
+    sender.failures = 12
+    result = await outbox.send(family.erin, "hello", priority=Priority.NORMAL)
+    waits = []
+    for _ in range(12):
+        row = family.db.one("SELECT * FROM outbox WHERE id = ?", (result.outbox_id,))
+        assert row is not None and row["status"] == "queued"
+        assert row["last_error"] == "ConnectionError (unreachable)"
+        waits.append(datetime.fromisoformat(row["send_after"]) - clock.now())
+        clock.advance(waits[-1])
+        await outbox.flush()
+    assert max(waits) == timedelta(minutes=15)
+    assert sender.texts() == ["hello"]
+
+
+async def test_a_message_that_expires_retries_every_two_minutes_at_most(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    clock.freeze(at(21, 17))
+    sender.failures = 6
+    result = await outbox.send(
+        family.erin, "Leave around 5:52 pm.", priority=Priority.NORMAL, kind="travel",
+        expires=at(21, 18, 30),
+    )  # fmt: skip
+    for _ in range(6):
+        row = family.db.one("SELECT send_after FROM outbox WHERE id = ?", (result.outbox_id,))
+        assert row is not None
+        wait = datetime.fromisoformat(row["send_after"]) - clock.now()
+        assert wait <= timedelta(minutes=2)
+        clock.advance(wait)
+        await outbox.flush()
+    assert sender.texts() == ["Leave around 5:52 pm."]
+
+
+async def test_when_a_send_gets_through_whats_waiting_on_the_network_goes_too(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    clock.freeze(at(21, 17))
+    sender.failures = 8
+    for text in ("one", "two", "three", "four"):
+        await outbox.send(family.erin, text, priority=Priority.NORMAL)
+    clock.advance(timedelta(minutes=1))
+    await outbox.flush()  # all four failed again: next tries 5 minutes off
+    reply = await outbox.send(family.erin, "Noted, thanks.", priority=Priority.REPLY)
+    assert reply.status == "sent"
+    clock.advance(timedelta(seconds=30))
+    await outbox.flush()
+    assert sender.texts() == ["Noted, thanks.", "one", "two", "three", "four"]
+
+
+async def test_a_poll_after_the_failure_brings_waiting_messages_forward(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    clock.freeze(at(21, 17))
+    sender.last_poll_at = None  # type: ignore[attr-defined]
+    sender.failures = 1
+    await outbox.send(family.erin, "Leave around 5:52 pm.", priority=Priority.NORMAL)
+    clock.advance(timedelta(seconds=30))
+    sender.last_poll_at = clock.now() - timedelta(minutes=5)  # type: ignore[attr-defined]
+    assert await outbox.flush() == 0  # polled before it failed: not back yet
+    sender.last_poll_at = clock.now()  # type: ignore[attr-defined]
+    assert await outbox.flush() == 1
 
 
 async def test_shielding_happens_at_send_time(

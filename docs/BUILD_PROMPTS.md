@@ -308,7 +308,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F47b | Feedback: Play from a phone plays on that phone, not the laptop | Feedback | [x] 2026-11-18 |
 | F48a | Idea: the built-in lofi and soft piano, composed on real instruments | Feedback | [x] 2026-11-18 |
 | F49a | Feedback: a send that timed out reading Telegram's answer isn't sent again | Feedback | [x] 2026-11-18 |
-| F49b | Feedback: when Telegram's back, what's waiting goes at once; a late heads-up says leave now | Feedback | [ ] |
+| F49b | Feedback: when Telegram's back, what's waiting goes at once; a late heads-up says leave now | Feedback | [x] 2026-11-18 |
 | F49c | Feedback: prep keeps the unit when the grams come between number and unit | Feedback | [ ] |
 | F49d | Feedback: a step that bakes at a temperature offers the oven, any degree sign | Feedback | [ ] |
 | F49e | Feedback: Themi stays on the stool at any size; the phone's scene isn't cropped | Feedback | [ ] |
@@ -15211,7 +15211,7 @@ no id using a stand-in id. Tests: test_outbox (2), test_outbox_pictures (2),
 test_telegram_channel (3), test_routines (scenario).
 
 ### F49b · Feedback (2026-11-18): when Telegram is back, what's waiting goes at once, and a late leave heads-up says leave now
-Status: [ ]
+Status: [x] 2026-11-18
 Depends on: F49a
 Read first: `themi/channels/outbox.py` (`flush`, `_record_failure`, `RETRY_BACKOFF`,
 `MAX_ATTEMPTS`, `_refreshed`, `refreshers`); `themi/channels/telegram.py` (the polling loop's
@@ -15253,6 +15253,23 @@ Scenario: Michael's 18 Nov evening: drive_time at 4:51 pm, Telegram down 4:58-6:
 heads-up arrives at 6:06 pm saying to leave now.
 
 Data/Setup: none. Mark #227 and #228 reviewed once live.
+
+Notes: Telegram's `_with_flood_retry` raises `themi.channels.events.Unreachable` (a
+`ConnectionError`, the PTB error as its cause) for a `NetworkError` that isn't a `BadRequest`,
+once its own 3 tries are spent. The outbox treats any `ConnectionError`/`TimeoutError` as the
+network: `last_error` is "<name> (unreachable)" (e.g. "NetworkError (unreachable)"), it's never
+given up on, its backoff stops at 15 min (`NETWORK_BACKOFF_CAP`), 2 min with an expiry
+(`EXPIRING_BACKOFF_CAP`). Refusals still give up after 5 (8 for replies).
+`Outbox.back_online()` makes every "(unreachable)" row due now. It runs after any successful
+send, and at the start of a flush when the channel's `last_poll_at` is later than the last
+network failure (`_unreachable_at`, in memory; after a restart, any poll counts). No callback
+from the polling loop was needed: flush runs every 30 s. Travel registers a refresher
+(`_as_it_stands`): a heads-up going after its "leave (there) around H:MM pm" says "time to head
+out" instead, the words `_send` already uses for one first seen late. The spec's "you'd be a few
+minutes late" line was left out: the row doesn't keep the drive's minutes. Changed test:
+`test_sending_gives_up_after_five_attempts` now uses a refusal (`FakeSender.refusals`), since a
+`ConnectionError` no longer gives up; network failures have their own test. F49a's two Telegram
+tests now expect `Unreachable`. New scenario: the end of `test_travel_plans.py`.
 
 ### F49c · Feedback (2026-11-18): prep's amounts keep their unit when the grams come between the number and the unit
 Status: [ ]
