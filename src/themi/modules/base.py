@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from themi.core.services import Services
     from themi.core.tools import ToolGroup
     from themi.modules.context import ModuleContext
+    from themi.modules.groups import ModuleGroup
     from themi.settings import Settings
     from themi.storage.secrets import Secret
 
@@ -131,6 +132,10 @@ class Module:
 
     name: ClassVar[str] = ""
     kind: ClassVar[ModuleKind] = "feature"  # CR19
+    # MP1: where the Modules page lists it (Cooking, Email), and other groups it's shown in
+    # as a guest. None: "Other". Its kind still says how it plugs in.
+    group: ClassVar[ModuleGroup | None] = None
+    also_in: ClassVar[tuple[ModuleGroup, ...]] = ()
     # SP3a: for the Modules page. A plain name ("Email triage"), one sentence on what it
     # does for the family, what someone links on the website first, and a word on cost
     # ("Free plan is enough"). Its guide is `setup/<name>.md` in its package (`guide`).

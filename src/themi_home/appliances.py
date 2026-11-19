@@ -36,6 +36,7 @@ from themi_home.connectors.smarthq.events import state_words as oven_words
 from themi_home.connectors.thinq import FINISHED, IDLE, RUNNING, ThinqError
 from themi_home.connectors.tuya import TuyaError
 from themi_home.connectors.tuya.events import state_word as feeder_words
+from themi_home.groups import HOME
 
 log = logging.getLogger(__name__)
 
@@ -347,6 +348,7 @@ class AppliancesModule(Module):
 
     name = "appliances"
     title = "Appliances"
+    group = HOME
     summary = "Answers how the washer, dryer, dishwasher and other appliances are doing."
     tool_groups = (home_groups.DEVICES,)
 

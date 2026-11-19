@@ -20,7 +20,8 @@ from fastapi.responses import HTMLResponse, Response
 from themi import clock
 from themi.config import InstanceConfig, available_modules, template_packages
 from themi.localtime import to_utc_iso
-from themi.modules import KINDS, Module, StartReport
+from themi.modules import Module, StartReport
+from themi.modules.groups import ModuleGroup, group_of, guests, known_groups, members, tree
 from themi.modules.guides import guide
 from themi.modules.portal import Portal, PortalError
 from themi.modules.settings import FieldSpec, fields, value_sources
@@ -42,14 +43,6 @@ def recently_signed_in(session: Session) -> bool:
     began = session.signed_in_at
     return began is not None and clock.now() - began < RECENT_SIGN_IN
 
-
-KIND_HEADINGS = {
-    "channel": "How you talk to Themi",
-    "ai": "AI",
-    "capability": "What Themi can do with voice and pictures",
-    "connector": "Services",
-    "feature": "Features",
-}
 
 # The badge each state shows: (words, the chip's colour)
 BADGES = {
@@ -79,6 +72,45 @@ class Card:
     @property
     def badge_colour(self) -> str:
         return BADGES[self.badge][1]
+
+
+@dataclass(frozen=True)
+class Row:
+    """MP1: a card in its group's list: indented under what it builds on, or a guest from
+    another group."""
+
+    card: Card
+    depth: int = 0
+    home: str = ""  # a guest's own group's title
+
+
+@dataclass(frozen=True)
+class GroupSection:
+    group: ModuleGroup
+    rows: list[Row]
+
+
+def group_sections(
+    known: dict[str, type[Module]], cards: dict[str, Card], shown: set[str]
+) -> list[GroupSection]:
+    """MP1: the page's groups in order, each with its modules as a tree and its guests
+    after them; a group with nothing shown is left out."""
+    titles = {n: c.title for n, c in cards.items()}
+    out = []
+    for group in known_groups(known.values()):
+        rows = [
+            Row(cards[n], depth)
+            for n, depth in tree(members(group, known), known, titles)
+            if n in shown
+        ]
+        rows += [
+            Row(cards[n], 0, group_of(known[n]).title)
+            for n in sorted(guests(group, known), key=lambda n: titles[n].lower())
+            if n in shown
+        ]
+        if rows:
+            out.append(GroupSection(group, rows))
+    return out
 
 
 @dataclass(frozen=True)
@@ -210,24 +242,22 @@ def routes(kit: Kit) -> APIRouter:
         session = kit.admin(request)
         view = overview(kit)
         words = q.strip().lower()
-        cards = [view.card(name, app.services) for name in sorted(view.known)]
+        cards = {name: view.card(name, app.services) for name in view.known}
+        shown = set(cards)
         if words:
-            cards = [
-                c
-                for c in cards
+            shown = {
+                n
+                for n, c in cards.items()
                 if words in f"{c.name} {c.title} {c.summary}".lower().replace("_", " ")
-            ]
+            }
         if only_on:
-            cards = [c for c in cards if c.badge not in ("off",)]
-        groups = [
-            (KIND_HEADINGS[kind], sorted((c for c in cards if c.kind == kind), key=_by_title))
-            for kind in KINDS
-        ]
+            shown = {n for n in shown if cards[n].badge != "off"}
+        groups = group_sections(view.known, cards, shown)
         return kit.with_flash(
             request,
             "modules.html",
             session,
-            groups=[(heading, items) for heading, items in groups if items],
+            groups=groups,
             q=q,
             only_on=bool(only_on),
             warnings=view.report.warnings(),
@@ -495,7 +525,3 @@ def routes(kit: Kit) -> APIRouter:
         "/modules/{name}", module_page, methods=["GET"], response_class=HTMLResponse
     )
     return router
-
-
-def _by_title(card: Card) -> str:
-    return card.title.lower()

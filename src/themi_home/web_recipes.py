@@ -50,6 +50,7 @@ from themi_home.connectors.recipe_page import (
     page_text,
     schema_recipe,
 )
+from themi_home.groups import COOKING
 from themi_home.recipes import PICTURE_SOURCE, Recipe, Recipes, site_name
 
 if TYPE_CHECKING:
@@ -539,6 +540,7 @@ class WebRecipesModule(Module):
 
     name = "web_recipes"
     title = "Recipes from the web"
+    group = COOKING
     summary = "Reads recipes from links and finds new ones online."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes",)

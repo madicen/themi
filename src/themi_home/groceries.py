@@ -39,6 +39,7 @@ from themi.core.wording import (  # CR10a: moved there; still importable from he
 )
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi_home.groups import GROCERIES
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -249,6 +250,7 @@ class GroceriesModule(Module):
 
     name = "groceries"
     title = "Grocery list"
+    group = GROCERIES
     summary = "The family's grocery list, kept from chat and shown on the website."
 
     def install(self, ctx: ModuleContext) -> None:

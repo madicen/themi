@@ -30,6 +30,7 @@ from themi.core import keys
 from themi.core.tools import SETTINGS, ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import YOUR_DAY
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -66,6 +67,7 @@ class BreaksModule(Module):
 
     name = "breaks"
     title = "Breaks"
+    group = YOUR_DAY
     summary = "A rest mode: Themi goes quiet for a while, then checks in gently."
     tool_groups = (SETTINGS,)
     preferences = BreaksPreferences

@@ -29,6 +29,7 @@ from themi import clock
 from themi.accounts import Member, NotFound
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import BEHIND_THE_SCENES
 from themi.modules.prompt import PromptFragment
 
 if TYPE_CHECKING:
@@ -313,6 +314,7 @@ class MemoryModule(Module):
 
     name = "memory"
     title = "Memory"
+    group = BEHIND_THE_SCENES
     summary = "Remembers what it's told and brings it up when it matters."
 
     def install(self, ctx: ModuleContext) -> None:

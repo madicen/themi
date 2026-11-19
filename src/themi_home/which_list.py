@@ -25,6 +25,7 @@ from themi.core.wording import item_name
 from themi.modules import Module, ModuleContext
 from themi.standard.lists import ADD_CATEGORY, ADD_EXECUTOR, THINGS_TO_BUY, list_key, name_key
 from themi_home import buying, groceries
+from themi_home.groups import GROCERIES
 
 if TYPE_CHECKING:
     from themi.accounts import Member
@@ -174,6 +175,7 @@ class WhichListModule(Module):
 
     name = "which_list"
     title = "Which list"
+    group = GROCERIES
     summary = "Asks which list something goes on when it isn't clear."
     optional = ("lists",)
 

@@ -57,6 +57,7 @@ from themi_google.connectors.gsheets import (
 )
 from themi_home import home_groups
 from themi_home.expenses import SOURCE_WORDS, STATUS_WORDS, Book, Entry, Expenses, Field, Sheet
+from themi_home.groups import MONEY
 
 if TYPE_CHECKING:
     from themi.accounts.models import LinkedAccount
@@ -595,6 +596,7 @@ class ExpenseSyncModule(Module):
     name = "expense_sync"
     kind = "connector"
     title = "Expense sheets in Google Sheets"
+    group = MONEY
     summary = "Copies each expense spreadsheet to Google Sheets, kept up to date."
     requires = ("spending",)
     optional = ("google",)

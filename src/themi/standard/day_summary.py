@@ -35,6 +35,7 @@ from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import member_day
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import YOUR_DAY
 from themi.standard.tasks import Task, TaskBoard
 
 if TYPE_CHECKING:
@@ -301,6 +302,7 @@ class DaySummaryModule(Module):
 
     name = "day_summary"
     title = "Day summary"
+    group = YOUR_DAY
     summary = "What's on someone's day, and a summary each morning."
     tool_groups = (groups.CALENDAR,)
     preferences = DaySummaryPreferences

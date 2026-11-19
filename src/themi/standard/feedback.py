@@ -36,6 +36,7 @@ from themi.core.tools import ToolContext, tool
 from themi.localtime import to_local, to_utc_iso
 from themi.logs import recent_logs, redact
 from themi.modules import Module, ModuleContext, as_job
+from themi.modules.groups import BEHIND_THE_SCENES
 from themi.standard.checkin_reviews import CheckinReviewsPreferences
 from themi.standard.day_summary import DaySummaryPreferences
 from themi.standard.wrong_replies import ReplyReview, reply_for_message
@@ -524,6 +525,7 @@ class FeedbackModule(Module):
 
     name = "feedback"
     title = "Feedback"
+    group = BEHIND_THE_SCENES
     summary = "Bug reports and ideas sent from chat with /bug and /idea."
 
     def install(self, ctx: ModuleContext) -> None:

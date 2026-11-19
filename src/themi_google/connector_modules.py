@@ -22,6 +22,7 @@ from themi_google.email_audit import EmailAudit
 from themi_google.google_settings import GoogleSettings, TravelSettings
 from themi_google.google_tasks import GoogleTasksInbox
 from themi_google.google_tasks_list import GoogleTaskList
+from themi_google.groups import CALENDAR, EMAIL
 from themi_google.travel import JOB_EVERY, TravelHeadsUps, TravelPreferences
 
 
@@ -30,6 +31,7 @@ class EmailAuditModule(Module):
 
     name = "email_audit"
     title = "Email audit"
+    group = EMAIL
     summary = "Goes through an inbox with someone, sender by sender, to decide what matters."
     tool_groups = (google_groups.EMAIL,)
     requires = ("tasks", "gmail")
@@ -43,6 +45,7 @@ class GoogleTasksModule(Module):
 
     name = "google_tasks"
     title = "Google Tasks"
+    group = CALENDAR
     summary = "Tasks added to Google Tasks, like by voice on a speaker, come into Themi."
     kind = "connector"
     requires = ("google", "tasks")
@@ -100,6 +103,7 @@ class TravelModule(Module):
 
     name = "travel"
     title = "Travel times"
+    group = CALENDAR
     summary = "Works out travel time to events and says when it's time to get ready."
     cost = "Free plan is enough"
     kind = "connector"

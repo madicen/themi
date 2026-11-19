@@ -34,6 +34,7 @@ from themi.standard.lists import name_key
 from themi_home import home_groups
 from themi_home.cooking import ahead_of_time
 from themi_home.groceries import CATEGORY, EXECUTOR, and_list, list_summary
+from themi_home.groups import COOKING
 from themi_home.recipe_groceries import RecipeGroceries
 from themi_home.recipes import Recipe, Recipes, stem
 
@@ -210,6 +211,7 @@ class RecipeIdeasModule(Module):
 
     name = "recipe_ideas"
     title = "Cookbook meal ideas"
+    group = COOKING
     summary = "Brings the family's own recipes into meal ideas."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes", "recipe_groceries")

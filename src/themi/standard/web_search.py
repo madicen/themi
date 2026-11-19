@@ -38,6 +38,7 @@ from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import start_of_local_day, to_utc_iso
 from themi.modules import Module, ModuleContext, ModuleSetup
+from themi.modules.groups import SERVICES
 from themi.usage import Limits, Meter
 
 if TYPE_CHECKING:
@@ -490,6 +491,7 @@ class WebSearchModule(Module):
 
     name = "web_search"
     title = "Web search"
+    group = SERVICES
     summary = "Themi can look things up online and read a page."
     cost = "Free plan is enough"
     kind = "connector"  # CR19: a search service, when one is set up

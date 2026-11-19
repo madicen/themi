@@ -469,8 +469,17 @@ body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top:
 
 /* SP4: the Modules page */
 .module-search { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: end; margin: var(--space-2) 0; }
-.modules { list-style: none; padding: 0; display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); }
 .module p { margin: var(--space-1) 0 0; }
+.module-group { margin: var(--space-3) 0; }
+.module-group > summary { cursor: pointer; list-style: revert; }
+.module-group > summary h2 { display: inline; margin: 0; }
+.module-group > summary .muted { display: block; margin: var(--space-1) 0 var(--space-2); }
+.module-list { list-style: none; padding: 0; display: grid; gap: var(--space-2); }
+.module[data-depth="1"] { margin-left: 1.5rem; }
+.module[data-depth="2"] { margin-left: 3rem; }
+.module[data-depth="3"] { margin-left: 4.5rem; }
+.module.guest { opacity: 0.75; }
+@media (max-width: 30rem) { .module[data-depth="1"], .module[data-depth="2"], .module[data-depth="3"] { margin-left: 0.75rem; } }
 .module .chip { margin-left: var(--space-1); }
 .module-detail { display: grid; gap: var(--space-3); }
 @media (min-width: 52rem) { .module-detail { grid-template-columns: 1fr 1fr; align-items: start; } }

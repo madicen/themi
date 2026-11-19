@@ -38,6 +38,7 @@ from themi.core import keys
 from themi.core.approvals import ApprovalsUI
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi_home.groups import MONEY
 from themi_home.spending import SpendingSettings, money
 
 if TYPE_CHECKING:
@@ -317,6 +318,7 @@ class TakeoutModule(Module):
 
     name = "takeout"
     title = "Takeout rescue"
+    group = MONEY
     summary = (
         "On a night when everyone is worn out and nobody has eaten, offers a saved takeout "
         "favourite within the budget; a person does the checkout."

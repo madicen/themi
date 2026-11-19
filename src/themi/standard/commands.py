@@ -27,6 +27,7 @@ from themi.core.services import Services
 from themi.core.tools import SETTINGS, ToolContext, tool
 from themi.localtime import to_local
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import BEHIND_THE_SCENES
 from themi.web.auth import WebAuth
 
 TRACKING_WORDS = {
@@ -245,6 +246,7 @@ class CommandsModule(Module):
 
     name = "commands"
     title = "Chat commands"
+    group = BEHIND_THE_SCENES
     summary = "Themi's own commands, like /help and /pause."
     tool_groups = (SETTINGS,)
 

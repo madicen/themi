@@ -26,6 +26,7 @@ from themi.core.prompts import OpenItem, as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import BEHIND_THE_SCENES
 from themi.standard.lists import name_key
 
 if TYPE_CHECKING:
@@ -330,6 +331,7 @@ class GuidesModule(Module):
 
     name = "guides"
     title = "Guides"
+    group = BEHIND_THE_SCENES
     summary = "Keeps your own how-tos and cooking charts for later."
 
     def install(self, ctx: ModuleContext) -> None:

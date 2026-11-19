@@ -47,6 +47,7 @@ from themi.localtime import start_of_local_day, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.standard.guides import Guide, GuideNotes, Guides
 from themi_home import home_groups
+from themi_home.groups import COOKING
 from themi_home.quantities import AMOUNT, number
 from themi_home.recipes import stem
 
@@ -1767,6 +1768,7 @@ class GramWeightsModule(Module):
 
     name = "gram_weights"
     title = "Grams for recipes"
+    group = COOKING
     summary = "Shows recipes' amounts in grams, from your weights guide."
     requires = ("guides", "recipes")
     optional = ("web_search", "tasks")

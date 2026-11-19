@@ -44,6 +44,7 @@ from themi_google.connectors.gdocs import DocsConflict, DocsError
 from themi_home import cookbook as book
 from themi_home import home_groups
 from themi_home.cookbook import Line
+from themi_home.groups import COOKING
 from themi_home.recipes import (
     COOKBOOK,
     DOC_NAMES,
@@ -489,6 +490,7 @@ class CookbookSaveModule(Module):
 
     name = "cookbook_save"
     title = "Save to the cookbook"
+    group = COOKING
     summary = "Saves a recipe the family liked to the family cookbook."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes",)

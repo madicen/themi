@@ -39,6 +39,7 @@ from themi.energy import EnergyModel
 from themi.energy.matching import Assignment, Matcher, not_set_aside
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.modules.prompt import PromptFragment
 from themi.standard import praise
 from themi.standard.praise import TasksPreferences
@@ -2827,6 +2828,7 @@ class TasksModule(Module):
 
     name = "tasks"
     title = "Tasks and chores"
+    group = TASKS
     summary = "The task board: tasks, chores, schedules and check-ins."
     tool_groups = (groups.SCHEDULES, groups.TASK_PICTURES)
     preferences = TasksPreferences

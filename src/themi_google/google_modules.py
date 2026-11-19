@@ -20,6 +20,7 @@ from themi.core.approvals import ApprovalsUI, NotEver
 from themi.core.calendar_view import CalendarPreferences
 from themi.energy import EnergyModel
 from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup, as_job
+from themi.modules.groups import SERVICES
 from themi.modules.prompt import PromptFragment
 from themi.modules.web import WaitingLink
 from themi.standard.tasks import TaskBoard
@@ -42,6 +43,7 @@ from themi_google.connectors.google import (
 from themi_google.events import FROM_EMAIL, Events
 from themi_google.expected import ExpectedEmails
 from themi_google.google_settings import GoogleSettings
+from themi_google.groups import CALENDAR, EMAIL
 from themi_google.noise_digest import NoiseDigest, NoisePreferences
 from themi_google.senders import SenderSuggestions
 from themi_google.task_blocks import TaskBlocks
@@ -64,6 +66,7 @@ class GoogleModule(Module):
 
     name = "google"
     title = "Google accounts"
+    group = SERVICES
     summary = "Lets each person link their Google account, for Gmail, Calendar and the rest."
     cost = "Free"
     kind = "connector"
@@ -105,6 +108,7 @@ class GmailModule(Module):
 
     name = "gmail"
     title = "Gmail"
+    group = EMAIL
     summary = "Reads each linked Gmail account every minute, for the email features."
     kind = "connector"
     google_scopes = (ScopeNeed("Gmail", (GMAIL_SCOPE,)),)
@@ -124,6 +128,7 @@ class EmailTriageModule(Module):
 
     name = "email_triage"
     title = "Email triage"
+    group = EMAIL
     summary = "Sorts new mail into what needs someone now, what can wait, and what's noise."
     requires = ("gmail",)
 
@@ -138,6 +143,7 @@ class EmailForwardingModule(Module):
 
     name = "email_forwarding"
     title = "Forwarding email"
+    group = EMAIL
     summary = "Forwards an email to someone, when asked in chat."
     requires = ("gmail",)
 
@@ -150,6 +156,7 @@ class UrgentSendersModule(Module):
 
     name = "urgent_senders"
     title = "Urgent senders"
+    group = EMAIL
     summary = "Senders whose mail always counts as time-sensitive."
     requires = ("gmail",)
 
@@ -165,6 +172,7 @@ class ExpectedEmailsModule(Module):
 
     name = "expected_emails"
     title = "Expected emails"
+    group = EMAIL
     summary = "Watches for mail that should arrive, like a bill, and says when it doesn't."
     requires = ("gmail", "email_triage")
 
@@ -180,6 +188,7 @@ class NoiseDigestModule(Module):
 
     name = "noise_digest"
     title = "Noise digest"
+    group = EMAIL
     summary = "Gathers emails that look like noise and offers to archive them together."
     preferences = NoisePreferences  # kept under "gmail", where they always were
     requires = ("gmail", "email_triage")
@@ -233,6 +242,7 @@ class CalendarModule(Module):
 
     name = "calendar"
     title = "Google Calendar"
+    group = CALENDAR
     summary = "Each person's calendars, events made from chat, and the family calendar."
     kind = "connector"
     google_scopes = (ScopeNeed("the calendar", CALENDAR_SCOPES),)
@@ -281,6 +291,7 @@ class CalendarBusyModule(Module):
 
     name = "calendar_busy"
     title = "Busy times"
+    group = CALENDAR
     summary = "Reads calendars every 15 minutes so Themi doesn't nudge people while they're busy."
     requires = ("calendar",)
 
@@ -300,6 +311,7 @@ class CalendarTwinsModule(Module):
 
     name = "calendar_twins"
     title = "Duplicate events"
+    group = CALENDAR
     summary = "Notices the same event on two calendars and asks about it once."
     requires = ("calendar", "calendar_busy")
 
@@ -312,6 +324,7 @@ class CalendarCopiesModule(Module):
 
     name = "calendar_copies"
     title = "Calendar copies"
+    group = CALENDAR
     summary = "Shows a calendar on the family calendar, with as much detail as its owner chooses."
     requires = ("calendar", "calendar_busy")
 
@@ -324,6 +337,7 @@ class TaskBlocksModule(Module):
 
     name = "task_blocks"
     title = "Time for tasks"
+    group = CALENDAR
     summary = "Holds time on the calendar for a task."
     requires = ("calendar",)
     optional = ("calendar_busy",)  # windows outside busy times, when it's there

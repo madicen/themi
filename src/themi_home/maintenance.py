@@ -55,6 +55,7 @@ from themi_google.connectors.gcal import CalendarSync, event_id
 from themi_google.events import title_matches
 from themi_home import home_groups
 from themi_home.groceries import and_list
+from themi_home.groups import HOME
 
 log = logging.getLogger(__name__)
 
@@ -817,6 +818,7 @@ class MaintenanceModule(Module):
 
     name = "maintenance"
     title = "Home maintenance"
+    group = HOME
     summary = "Offers upkeep like filters and gutters when it comes due."
     tool_groups = (home_groups.MAINTENANCE,)
     requires = ("tasks",)

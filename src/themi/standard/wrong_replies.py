@@ -39,6 +39,7 @@ from themi.core.services import Services
 from themi.core.tools import TWINS
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import BEHIND_THE_SCENES
 from themi.standard.reactions import CARDS
 from themi.storage.db import Database
 
@@ -76,6 +77,7 @@ class WrongRepliesModule(Module):
 
     name = "wrong_replies"
     title = "Wrong replies"
+    group = BEHIND_THE_SCENES
     summary = "A reply marked wrong with a reaction is kept for review."
 
     def install(self, ctx: ModuleContext) -> None:

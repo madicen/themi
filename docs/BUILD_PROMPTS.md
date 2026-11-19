@@ -481,8 +481,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | UC3 | Usage: device and API meters | Usage | [x] 2026-11-18 |
 | UC4 | Usage: the usage card and /usage | Usage | [x] 2026-11-18 |
 | UC5 | Usage: the Usage page and limit overrides | Usage | [x] 2026-11-18 |
-| MP1 | Modules page: groups in the manifest | Modules page | [ ] |
-| MP2 | Modules page: turning many on and off | Modules page | [ ] |
+| MP1 | Modules page: groups in the manifest | Modules page | [x] 2026-11-19 |
+| MP2 | Modules page: turning many on and off | Modules page | [~] |
 | MP3 | Modules page: one module's sheet | Modules page | [ ] |
 | MP4 | Modules page: what each module owns | Modules page | [ ] |
 | MP5 | Modules page: every setting on the module's page | Modules page | [ ] |
@@ -21898,7 +21898,7 @@ and every setting a module has reachable from its own page. Rules every MP promp
 - Every form works without JavaScript; htmx only makes it quicker.
 
 ### MP1 · Modules page: groups in the manifest
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: none
 Read first: the plan's "Groups"; `themi/modules/base.py` (`Module`, `KINDS`);
 `themi/config.py` (`available_modules`); `themi/web/modules_page.py`; `modules.html`.
@@ -21919,8 +21919,29 @@ Tests: every shipped module names a declared group; an undeclared group lands in
 group order; indentation follows `requires`; a guest shows in both places; page golden by
 group.
 
+Notes:
+- `themi/modules/groups.py`: `ModuleGroup(id, title, summary, order, starter, folded)`, the
+  core's groups, and `group_of`, `known_groups`, `members`, `guests`, `starter`, `tree`.
+  Packs declare theirs in `themi_home/groups.py` and `themi_google/groups.py`; Cozyla's two
+  modules use the home pack's Home and devices.
+- A module points at the group object (`group = COOKING`), not an id string, so an
+  undeclared group can't happen; a module with no group is in Other, and a test fails for
+  any shipped module that is. Two different groups with one id raise `ModuleError`.
+- Chore chart wasn't in the plan's table: it's under Tasks.
+- `starter`: the group's own list, or every member with no `needs_accounts`. Cooking names
+  all eight (Family cookbook links a Google account, so the default would drop it).
+- `tree`: a module goes under the requirement in its group that's furthest down; at each
+  level, ones with add-ons come first, then by title. Depth is shown up to 3
+  (`data-depth`), less indented on a phone.
+- No page golden exists for HTML, so the page is checked by a scenario instead
+  (`test_add_ons_are_indented_and_guests_listed_in_both_groups`).
+- `test_modules_page.py`: `card_of`'s regex takes attributes after the card's id (the
+  indent), and the kind-order test now checks group order. `KIND_HEADINGS` is gone.
+- Search and "Only what's in use" work as before, within groups; matching group names is
+  MP6.
+
 ### MP2 · Modules page: turning many on and off
-Status: [ ]
+Status: [~]
 Depends on: MP1
 Read first: the plan's "Turning things on and off"; `themi/modules/planning.py` (`turn_on`,
 `turn_off`, `apply`); `themi/modules/store.py` (`Draft`); `module_confirm.html`.

@@ -41,6 +41,7 @@ from themi_home.expense_asks import ASK_EVERY, ExpenseAsks, SpendingPreferences
 from themi_home.expense_fill import FILL_EVERY, ExpenseFill
 from themi_home.expense_sheets import ExpenseSheets
 from themi_home.expenses import Entry, Expenses, Value
+from themi_home.groups import MONEY
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -422,6 +423,7 @@ class SpendingModule(Module):
 
     name = "spending"
     title = "Spending"
+    group = MONEY
     summary = "Keeps track of takeout, eating out and business expenses."
     tool_groups = (home_groups.SPENDING,)
     household = SpendingSettings

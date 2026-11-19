@@ -31,6 +31,7 @@ from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.standard.tasks import Task, TaskBoard, TaskChange
 from themi_home import home_groups
 
@@ -293,6 +294,7 @@ class CallsModule(Module):
 
     name = "calls"
     title = "Calls"
+    group = TASKS
     summary = "Prepares calls to companies and vendors, for a person to make."
     tool_groups = (home_groups.CALLS,)
     requires = ("tasks",)

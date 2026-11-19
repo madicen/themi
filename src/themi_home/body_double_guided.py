@@ -38,6 +38,7 @@ from themi.modules import Module, ModuleContext
 from themi.standard.tasks import clean_steps
 from themi_home.body_double import KIND, OPEN_ENDED, SILENT, BodyDouble, Session
 from themi_home.body_double_scene import CHEER_FOR
+from themi_home.groups import BODY_DOUBLING
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -393,6 +394,7 @@ class GuidedStepsModule(Module):
 
     name = "guided_steps"
     title = "Guided steps"
+    group = BODY_DOUBLING
     summary = "Steps through a task one small step at a time during a body double session."
     requires = ("body_double",)
 

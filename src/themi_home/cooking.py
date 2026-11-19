@@ -56,6 +56,7 @@ from themi_home import home_groups
 from themi_home.cooking_links import UNITS, StepLinks
 from themi_home.cooking_mixes import CookingMixes
 from themi_home.cooking_titles import TITLES_FIELD, TITLES_RULE, StepTitles
+from themi_home.groups import COOKING
 from themi_home.quantities import AMOUNT, NeedsYield, describe, scale_for, scale_line
 from themi_home.recipe_groceries import Ingredient, resolve
 from themi_home.recipes import Recipe, Recipes, stem
@@ -1315,6 +1316,7 @@ class CookingModule(Module):
 
     name = "cooking"
     title = "Cooking along"
+    group = COOKING
     summary = "Walks through a recipe: the prep first, then one step at a time."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes", "recipe_groceries")

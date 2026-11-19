@@ -17,7 +17,7 @@ from themi.modules.store import Draft, DraftStore, ModuleSecrets
 
 
 def card_of(page: str, name: str) -> str:
-    match = re.search(rf'<li class="card module" id="module-{name}">(.*?)</li>', page, re.S)
+    match = re.search(rf'<li class="card module" id="module-{name}"[^>]*>(.*?)</li>', page, re.S)
     assert match, f"no card for {name}"
     return match.group(1)
 
@@ -29,7 +29,7 @@ async def admin_site(scenario: Scenario) -> AsyncIterator[httpx.AsyncClient]:
         yield client
 
 
-async def test_the_page_shows_each_module_by_kind_with_its_state(scenario: Scenario) -> None:
+async def test_the_page_shows_each_module_by_group_with_its_state(scenario: Scenario) -> None:
     report = StartReport(template="family")
     for module in scenario.app.modules:
         report.note(module.name, "on", type(module).kind)
@@ -40,11 +40,15 @@ async def test_the_page_shows_each_module_by_kind_with_its_state(scenario: Scena
     scenario.app.services.start_report = report
     async with admin_site(scenario) as site:
         page = (await site.get("/modules")).text
+    # MP1: by group (what it's for), not by kind
     assert (
-        page.index("How you talk to Themi")
+        page.index("<h2>Talking to Themi</h2>")
         < page.index("<h2>AI</h2>")
-        < page.index("<h2>Features</h2>")
+        < page.index("<h2>Tasks</h2>")
+        < page.index("<h2>Cooking</h2>")
+        < page.index("<h2>Behind the scenes</h2>")
     )
+    assert "<h2>Features</h2>" not in page
     assert "On" in card_of(page, "tasks")
     travel = card_of(page, "travel")
     assert "Couldn&#39;t start" in travel and "TomTom turned the key down" in travel
@@ -132,3 +136,18 @@ async def test_the_dashboards_warning_links_to_the_modules_page(scenario: Scenar
     async with admin_site(scenario) as site:
         home = (await site.get("/")).text
     assert 'href="/modules"' in home and "travel couldn&#39;t start: bad key" in home
+
+
+async def test_add_ons_are_indented_and_guests_listed_in_both_groups(scenario: Scenario) -> None:
+    async with admin_site(scenario) as site:
+        page = (await site.get("/modules")).text
+    cooking = page.split('id="group-cooking"', 1)[1].split("</details>", 1)[0]
+    assert cooking.index('id="module-recipes"') < cooking.index('id="module-cooking"')
+    assert 'id="module-cooking" data-depth="2"' in cooking
+    assert 'id="module-recipes" data-depth' not in cooking
+    # the Oven lives in Home and devices and is a guest here
+    assert "Oven (SmartHQ)" in cooking and "Listed under Home and devices." in cooking
+    assert 'id="module-smarthq"' in page.split('id="group-home"', 1)[1]
+    # Behind the scenes starts folded
+    assert '<details class="module-group" id="group-behind_the_scenes">' in page
+    assert '<details class="module-group" id="group-cooking" open>' in page

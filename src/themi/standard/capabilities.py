@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from themi.core.capabilities import IMAGE_GENERATION, PICTURES, VOICE_NOTES
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import VOICE_AND_PICTURES
 
 
 class CapabilityModule(Module):
@@ -28,6 +29,7 @@ class VoiceNotesModule(CapabilityModule):
 
     name = VOICE_NOTES
     title = "Voice notes"
+    group = VOICE_AND_PICTURES
     summary = "Themi listens to voice notes and writes them down."
 
 
@@ -36,6 +38,7 @@ class PicturesModule(CapabilityModule):
 
     name = PICTURES
     title = "Pictures in chat"
+    group = VOICE_AND_PICTURES
     summary = "Themi looks at pictures people send it."
 
 
@@ -44,4 +47,5 @@ class ImageGenerationModule(CapabilityModule):
 
     name = IMAGE_GENERATION
     title = "Making pictures"
+    group = VOICE_AND_PICTURES
     summary = "Themi can make pictures with a picture model."

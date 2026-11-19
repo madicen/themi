@@ -22,6 +22,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.drawing.render import Renderer
 from themi.drawing.svg import write_svg
 from themi.modules import Module
+from themi.modules.groups import VOICE_AND_PICTURES
 
 if TYPE_CHECKING:
     from themi.accounts import Member
@@ -211,6 +212,7 @@ class DrawingsModule(Module):
 
     name = NAME
     title = "Drawings"
+    group = VOICE_AND_PICTURES
     summary = "A picture of the day with the morning message, drawn from the calendar and weather."
     cost = "Free, no account"
     preferences = DrawingsPreferences

@@ -19,6 +19,7 @@ from themi.channels.outbox import Priority
 from themi.core import keys
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.modules import Module, ModuleContext
+from themi.modules.groups import TASKS
 from themi.standard.tasks import TaskBoard
 
 if TYPE_CHECKING:
@@ -131,6 +132,7 @@ class TakingModule(Module):
 
     name = "taking"
     title = "Taking tasks on"
+    group = TASKS
     summary = "Lets someone take a task on from another person or the chart."
     requires = ("tasks",)
 

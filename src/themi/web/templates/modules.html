@@ -57,18 +57,29 @@ and restart Themi to put changes in place. Started from the {{ template }} templ
   <button>Show</button>
 </form>
 
-{% for heading, cards in groups %}
-<h2>{{ heading }}</h2>
-<ul class="modules">
-  {% for card in cards %}
-  <li class="card module" id="module-{{ card.name }}">
-    <a href="/modules/{{ card.name }}"><strong>{{ card.title }}</strong></a>
-    <span class="chip {{ card.badge_colour }}">{{ card.badge_words }}</span>
-    <p class="muted">{{ card.summary }}</p>
-    {% if card.reason and card.badge in ("failed", "needs_settings", "needs_library") %}<p class="muted">{{ card.reason }}</p>{% endif %}
-  </li>
-  {% endfor %}
-</ul>
+{% for section in groups %}
+<details class="module-group" id="group-{{ section.group.id }}"{% if not section.group.folded or q %} open{% endif %}>
+  <summary><h2>{{ section.group.title }}</h2> <span class="muted">{{ section.group.summary }}</span></summary>
+  <ul class="module-list">
+    {% for row in section.rows %}
+    {% set card = row.card %}
+    {% if row.home %}
+    <li class="card module guest">
+      <a href="/modules/{{ card.name }}"><strong>{{ card.title }}</strong></a>
+      <span class="chip {{ card.badge_colour }}">{{ card.badge_words }}</span>
+      <p class="muted">Listed under {{ row.home }}.</p>
+    </li>
+    {% else %}
+    <li class="card module" id="module-{{ card.name }}"{% if row.depth %} data-depth="{{ [row.depth, 3] | min }}"{% endif %}>
+      <a href="/modules/{{ card.name }}"><strong>{{ card.title }}</strong></a>
+      <span class="chip {{ card.badge_colour }}">{{ card.badge_words }}</span>
+      <p class="muted">{{ card.summary }}</p>
+      {% if card.reason and card.badge in ("failed", "needs_settings", "needs_library") %}<p class="muted">{{ card.reason }}</p>{% endif %}
+    </li>
+    {% endif %}
+    {% endfor %}
+  </ul>
+</details>
 {% else %}
 <p class="muted">No module matches that.</p>
 {% endfor %}
