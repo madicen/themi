@@ -107,7 +107,9 @@ themi feedback --all        # include reviewed ones
 ### Connecting services
 
 Each service's steps are also its guide on the Modules page, where its values go (and
-are kept encrypted when they're secrets). The sections below name the `.env` variables,
+are kept encrypted when they're secrets). The page lists modules by what they're for
+(Cooking, Email, Home and devices), turns a whole group on at once, and keeps everything a
+module has (server keys, the household's settings, your own, who can use it) on its own page. The sections below name the `.env` variables,
 for setting them on the server instead.
 
 ### Google sign-in and Gmail (Google Cloud setup)

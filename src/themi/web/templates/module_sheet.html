@@ -7,6 +7,7 @@
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <input type="hidden" name="to" value="{{ 'on' if on else 'off' }}">
   <input type="hidden" name="confirmed" value="1">
+  {% if back_field %}<input type="hidden" name="back" value="{{ back_field }}">{% endif %}
 
   {% if picks %}
   <fieldset>

@@ -483,6 +483,19 @@ body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top:
 .filter-chips .chip { text-decoration: none; }
 .filter-chips .chip.selected { font-weight: 600; outline: 2px solid currentColor; }
 .card-switch { margin-top: var(--space-1); }
+.breadcrumb { margin: var(--space-2) 0; }
+.setup-steps ol { list-style: none; padding: 0; margin: var(--space-1) 0 0; }
+.setup-steps .done { color: var(--muted); }
+.inline-switch { display: inline; margin-left: var(--space-1); }
+.works-tree .below { margin-left: 1.5rem; }
+.works-tree .this { margin: var(--space-1) 0 var(--space-1) 0.75rem; }
+.module-neighbours ul { list-style: none; padding: 0; }
+.module-neighbours li[data-depth="1"] { margin-left: 1rem; }
+.module-neighbours li[data-depth="2"] { margin-left: 2rem; }
+.module-neighbours li[data-depth="3"] { margin-left: 3rem; }
+.module-guide > summary { cursor: pointer; font-weight: 600; }
+.template-compare { width: 100%; border-collapse: collapse; margin: var(--space-2) 0; }
+.template-compare th, .template-compare td { text-align: left; vertical-align: top; padding: var(--space-1); border-bottom: 1px solid var(--line); }
 .js .module-search .no-js { display: none; }
 .sheet-list { list-style: none; padding: 0; display: grid; gap: var(--space-1); }
 .module-sheet fieldset { border: 0; padding: 0; margin: var(--space-3) 0; }

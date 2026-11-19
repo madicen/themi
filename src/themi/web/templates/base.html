@@ -37,7 +37,7 @@
     <a href="/modules#changes">Review</a> · <a href="/modules/restart">Restart</a></p>
   {% endif %}{% endif %}
   <main>
-    {% if flash %}<p class="flash" role="status">{{ flash }}</p>{% endif %}
+    {% if flash %}<p class="flash" role="status">{{ flash }}{% if flash_module and member and member.is_admin %} <a href="/modules/{{ flash_module }}">Set it up</a>{% endif %}</p>{% endif %}
     {% block content %}{% endblock %}
   </main>
 </body>

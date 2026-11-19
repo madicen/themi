@@ -28,7 +28,7 @@ def routes(kit: Kit) -> APIRouter:
         groceries = app.services.maybe(keys.groceries)
         to = "/lists?open=groceries#groceries"
         if groceries is None:
-            return kit.redirect(to, "The grocery list isn't set up on this server.")
+            return kit.not_set_up(to, "The grocery list isn't set up on this server.", "groceries")
         try:
             name = item_name(str(form.get("item", "")))
         except InvalidValue:

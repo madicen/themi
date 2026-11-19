@@ -487,7 +487,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MP4 | Modules page: what each module owns | Modules page | [x] 2026-11-19 |
 | MP5 | Modules page: every setting on the module's page | Modules page | [x] 2026-11-19 |
 | MP6 | Modules page: the list, quicker to use | Modules page | [x] 2026-11-19 |
-| MP7 | Modules page: a module's page, quicker to use | Modules page | [~] |
+| MP7 | Modules page: a module's page, quicker to use | Modules page | [x] 2026-11-19 |
 
 ## Fixed technical choices
 
@@ -22112,7 +22112,7 @@ Notes:
 - The script isn't tested (no browser tests here); the page is tested without it.
 
 ### MP7 · Modules page: a module's page, quicker to use
-Status: [~]
+Status: [x] 2026-11-19
 Depends on: MP5
 Read first: the plan's "A module's page" and "Elsewhere".
 - Breadcrumb ("Modules › Cooking › Cooking timers") and the group's other modules in a side
@@ -22128,3 +22128,25 @@ Read first: the plan's "A module's page" and "Elsewhere".
   layout.
 Tests: checklist steps tick from state; no Test button without `check()`; the last test
 result shown; a "not set up" message links to the module for an admin and not for a member.
+
+Notes:
+- Breadcrumb (Modules › group › title) replaces "All modules"; "Also in <group>" lists the
+  group's modules as the list shows them, this one marked.
+- Setup checklist, shown while the module is in the list and a step is left: Turned on,
+  Settings filled in (when it has settings), Tested (when it has a check; done when the
+  last test "worked"), Running (restarted since the last change), and its account linked
+  (when it needs one).
+- Test shows only when the module overrides `check()`. The last result comes from the
+  audit (`Portal.last_test`, the "tested <title>: ..." row).
+- Works with: needs above the module, what needs it below (indented), with a Turn on
+  button on each one that's off (by the draft's list, not the start report). It posts
+  `back=<this module>` and comes back to `#works-with`, through the review sheet too.
+- `kit.not_set_up(url, words, module)`: the same flash, plus a "Set it up" link to the
+  module for admins only. The 21 "isn't set up" redirects in the web pages use it.
+- The template switch's page gains a group-by-group table of what goes and comes.
+- `static/modules.js` also warns before leaving with unsaved settings (forms marked
+  `data-watch`) and folds the guide (now a `<details>`) on a phone.
+- README says how the page is laid out. Follow-up: the Setup Portal Plan's Modules page
+  section should point at the Modules Page Rework Plan. This session couldn't open that
+  doc, so it isn't done.
+- Not looked at in a browser, only through the page tests.

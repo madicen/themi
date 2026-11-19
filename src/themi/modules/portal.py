@@ -284,6 +284,16 @@ class Portal:
         )
         return outcome.message
 
+    def last_test(self, title: str) -> tuple[str, str] | None:
+        """MP7: what the last Test of a module said, and when (from the audit)."""
+        row = self.db.one(
+            "SELECT what, at FROM config_audit WHERE what LIKE ? ORDER BY id DESC LIMIT 1",
+            (f"tested {title}: %",),
+        )
+        if row is None:
+            return None
+        return str(row["what"]).removeprefix(f"tested {title}: "), str(row["at"])
+
     async def _run_test(self, payload: dict[str, Any], context: ExecutionContext) -> str:
         name = str(payload["module"])
         cls = self.known()[name]

@@ -34,7 +34,7 @@ from themi.modules.groups import (
     tree,
 )
 from themi.modules.guides import guide
-from themi.modules.planning import Change, Planner
+from themi.modules.planning import Change, Planner, TemplateSwitch
 from themi.modules.portal import Portal, PortalError
 from themi.modules.settings import FieldSpec, fields, value_sources
 from themi.modules.store import Draft, DraftStore, ModuleSecrets
@@ -173,6 +173,21 @@ def group_sections(
                     sum(cards[n].badge in ATTENTION for n in own),
                 )
             )
+    return out
+
+
+def template_by_group(
+    switch: TemplateSwitch, known: dict[str, type[Module]]
+) -> list[tuple[str, list[str], list[str]]]:
+    """MP7: what a template switch turns off and on, group by group: (group, off, on)."""
+    gone = [n for name, more in switch.off for n in (name, *more)]
+    out = []
+    for group in known_groups(known.values()):
+        own = set(members(group, known))
+        off = sorted((known[n].title or n) for n in gone if n in own)
+        on = sorted((known[n].title or n) for n in switch.on if n in own)
+        if off or on:
+            out.append((group.title, off, on))
     return out
 
 
@@ -405,6 +420,7 @@ def routes(kit: Kit) -> APIRouter:
             in_list=name in portal().planner(view.draft).desired(),
             metered=any(m.module == name for m in app.services.usage.meters.values()),  # UC5
             **own_parts(cls, session.member, view),  # MP5
+            **page_helps(cls, card, view, module),  # MP7
         )
         response.status_code = status
         return response
@@ -439,6 +455,42 @@ def routes(kit: Kit) -> APIRouter:
             "roles_waiting": any(
                 role in (view.draft.roles if view.draft else {}) for role, _ in roles
             ),
+        }
+
+    def page_helps(
+        cls: type[Module], card: Card, view: Overview, module: Module | None
+    ) -> dict[str, Any]:
+        """MP7: where the module sits (its group and the group's others), the setup
+        checklist, and whether it has a Test, with the last one's result."""
+        name = cls.name
+        known = view.known
+        group = group_of(cls)
+        own = members(group, known)
+        titles = {n: (known[n].title or n) for n in known}
+        neighbours = [(view.card(n, app.services), depth) for n, depth in tree(own, known, titles)]
+        has_check = cls.check is not Module.check
+        last = portal().last_test(card.title) if has_check else None
+        desired = set(portal().planner(view.draft).desired())
+        in_list = name in desired
+        need = cls.needs_accounts
+        linked = module.accounts_linked(app.services) if module is not None else None
+        steps: list[tuple[str, bool]] = [("Turned on", in_list)]
+        if cls.settings is not None and fields(cls.settings):
+            steps.append(("Settings filled in", card.badge not in ("needs_settings", "failed")))
+        if has_check:
+            steps.append(("Tested", bool(last) and last[0].endswith(" worked.")))
+        steps.append(
+            ("Running (restarted since the last change)", card.badge in ("on", "needs_account"))
+        )
+        if need is not None:
+            steps.append((f"{need.what[:1].upper()}{need.what[1:]} linked", linked is True))
+        return {
+            "group": group,
+            "neighbours": neighbours,
+            "has_check": has_check,
+            "last_test": last,
+            "steps": steps if in_list and not all(done for _, done in steps) else [],
+            "desired": desired,
         }
 
     def shown_preferences(model: type[Preferences], member: Any) -> set[str] | None:
@@ -542,6 +594,7 @@ def routes(kit: Kit) -> APIRouter:
                 kept=change.kept,
                 button=f"Yes, turn {'them' if len(names) > 1 else 'it'} {'on' if on else 'off'}",
                 back=f"/modules/{name}",
+                back_field=str(form.get("back", "")),
             )
         before = planner.draft.switches()
         added = [n for n, _ in extras if form.get(f"add_{n}") == "1"]
@@ -558,6 +611,8 @@ def routes(kit: Kit) -> APIRouter:
         back = f"/modules/{name}"
         if form.get("back") == "list":  # MP6: a card's switch goes back to its card
             back = f"/modules#module-{name}"
+        elif str(form.get("back", "")) in known:  # MP7: from another module's page
+            back = f"/modules/{form.get('back')}#works-with"
         return kit.redirect(back, f"Saved: {what}. It changes when Themi restarts.")
 
     def offers(name: str, planner: Planner, change: Change) -> list[tuple[str, str]]:
@@ -680,7 +735,14 @@ def routes(kit: Kit) -> APIRouter:
             session,
             needed=[view.card(n, app.services) for n in needed],
             kept=[(view.card(n, app.services), why) for n, why in kept],
-            **{"picks": [], "offered": [], "offered_words": "", "subject": "", **values},
+            **{
+                "picks": [],
+                "offered": [],
+                "offered_words": "",
+                "subject": "",
+                "back_field": "",
+                **values,
+            },
         )
 
     @router.post("/modules/undo-last", response_class=HTMLResponse)
@@ -711,6 +773,7 @@ def routes(kit: Kit) -> APIRouter:
                 session,
                 switch=switch,
                 title=lambda n: known[n].title or n if n in known else n,
+                by_group=template_by_group(switch, known),  # MP7
             )
         planner.use_template(chosen)
         portal().save(planner, session.member, f"switched to the {chosen} template")

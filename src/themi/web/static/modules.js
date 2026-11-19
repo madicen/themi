@@ -44,7 +44,32 @@
     });
   }
 
+  // MP7: a module's page. Settings typed and not saved are asked about before leaving;
+  // the setup guide starts folded on a phone, under the settings.
+  function modulePage() {
+    var dirty = false;
+    document.querySelectorAll("form[data-watch]").forEach(function (form) {
+      form.addEventListener("input", function () {
+        dirty = true;
+      });
+      form.addEventListener("submit", function () {
+        dirty = false;
+      });
+    });
+    window.addEventListener("beforeunload", function (event) {
+      if (dirty) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    });
+    var guide = document.querySelector("details.module-guide");
+    if (guide && window.matchMedia && window.matchMedia("(max-width: 52rem)").matches) {
+      guide.open = false;
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    modulePage();
     var params = new URLSearchParams(window.location.search);
     var searching = params.get("q") || (params.get("show") && params.get("show") !== "all");
     var saved = folded();
