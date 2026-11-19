@@ -21,7 +21,15 @@ from themi import clock
 from themi.config import InstanceConfig, available_modules, template_packages
 from themi.localtime import to_utc_iso
 from themi.modules import Module, StartReport
-from themi.modules.groups import ModuleGroup, group_of, guests, known_groups, members, tree
+from themi.modules.groups import (
+    ModuleGroup,
+    group_of,
+    guests,
+    known_groups,
+    members,
+    starter,
+    tree,
+)
 from themi.modules.guides import guide
 from themi.modules.portal import Portal, PortalError
 from themi.modules.settings import FieldSpec, fields, value_sources
@@ -85,13 +93,45 @@ class Row:
 
 
 @dataclass(frozen=True)
+class Pick:
+    """MP2: a module on a review sheet, ticked or not; `fixed` when it's on already."""
+
+    card: Card
+    checked: bool
+    fixed: bool = False
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class Offer:
+    """MP2: an extra on a review sheet: `field` is the form's name for it (`spare`)."""
+
+    card: Card
+    field: str
+    checked: bool = False
+    note: str = ""
+
+
+def _note(cls: type[Module]) -> str:
+    """What a module asks for on a sheet: an account, or its cost."""
+    if cls.needs_accounts is not None:
+        return f"Needs {cls.needs_accounts.what} linked"
+    return cls.cost
+
+
+@dataclass(frozen=True)
 class GroupSection:
     group: ModuleGroup
     rows: list[Row]
+    on: int = 0  # MP2: its own modules on (or waiting to come on)
+    total: int = 0
 
 
 def group_sections(
-    known: dict[str, type[Module]], cards: dict[str, Card], shown: set[str]
+    known: dict[str, type[Module]],
+    cards: dict[str, Card],
+    shown: set[str],
+    desired: set[str] | frozenset[str] = frozenset(),
 ) -> list[GroupSection]:
     """MP1: the page's groups in order, each with its modules as a tree and its guests
     after them; a group with nothing shown is left out."""
@@ -109,7 +149,8 @@ def group_sections(
             if n in shown
         ]
         if rows:
-            out.append(GroupSection(group, rows))
+            own = members(group, known)
+            out.append(GroupSection(group, rows, sum(n in desired for n in own), len(own)))
     return out
 
 
@@ -252,7 +293,8 @@ def routes(kit: Kit) -> APIRouter:
             }
         if only_on:
             shown = {n for n in shown if cards[n].badge != "off"}
-        groups = group_sections(view.known, cards, shown)
+        desired = set(portal().planner(view.draft).desired())
+        groups = group_sections(view.known, cards, shown, desired)
         return kit.with_flash(
             request,
             "modules.html",
@@ -330,22 +372,149 @@ def routes(kit: Kit) -> APIRouter:
         change = planner.turn_on(name) if on else planner.turn_off(name)
         names = change.on if on else change.off
         if not names:
+            if change.kept:
+                return kit.redirect(f"/modules/{name}", change.kept[0][1])
             return kit.redirect(f"/modules/{name}", "Nothing to change.")
-        if len(names) > 1 and form.get("confirmed") != "1":
+        if (len(names) > 1 or change.spare or change.kept) and form.get("confirmed") != "1":
             view = overview(kit)
-            return kit.with_flash(
+            card = view.card(name, app.services)
+            return sheet(
                 request,
-                "module_confirm.html",
                 session,
-                card=view.card(name, app.services),
+                view,
+                heading=f"Turn {'on' if on else 'off'} {card.title}?",
+                action=f"/modules/{name}/switch",
                 on=on,
-                others=[view.card(n, app.services) for n in names if n != name],
+                needed=[n for n in names if n != name],
+                subject=card.title,
+                offered=[Offer(view.card(n, app.services), "spare", True) for n in change.spare],
+                kept=change.kept,
+                button=f"Yes, turn {'them' if len(names) > 1 else 'it'} {'on' if on else 'off'}",
+                back=f"/modules/{name}",
             )
+        before = planner.draft.switches()
         planner.apply(change)
-        titles = [known[n].title or n for n in names]
+        spare = [n for n in change.spare if form.get(f"spare_{n}") == "1"]
+        if spare:
+            planner.apply(planner.turn_off_many(spare))
+        titles = [known[n].title or n for n in (*names, *spare)]
         what = f"turned {'on' if on else 'off'} {', '.join(titles)}"
-        portal().save(planner, session.member, what)
+        portal().save(planner, session.member, what, before)
         return kit.redirect(f"/modules/{name}", f"Saved: {what}. It changes when Themi restarts.")
+
+    # ----- MP2: a group at once -------------------------------------------------------------
+
+    def find_group(group_id: str) -> ModuleGroup | None:
+        return next(
+            (g for g in known_groups(available_modules().values()) if g.id == group_id), None
+        )
+
+    @router.get("/modules/group/{group_id}", response_class=HTMLResponse)
+    def group_sheet(request: Request, group_id: str, to: str = "on") -> Response:
+        session = kit.admin(request)
+        group = find_group(group_id)
+        if group is None:
+            return kit.redirect("/modules", "There's no such group.")
+        view = overview(kit)
+        known = view.known
+        planner = portal().planner(view.draft)
+        desired = set(planner.desired())
+        names = members(group, known)
+        on = to != "off"
+        if on:
+            ticked = [n for n in starter(group, known) if n not in desired]
+            picks = [
+                Pick(
+                    view.card(n, app.services),
+                    n in ticked or n in desired,
+                    n in desired,
+                    _note(known[n]),
+                )
+                for n in names
+            ]
+            change = planner.turn_on_many(ticked)
+            needed = [n for n in change.on if n not in names]
+            kept: tuple[tuple[str, str], ...] = ()
+            offered: list[Offer] = []
+        else:
+            ticked = [n for n in names if n in desired]
+            picks = [Pick(view.card(n, app.services), True, False) for n in ticked]
+            change = planner.turn_off_many(ticked)
+            needed = [n for n in change.off if n not in names]
+            kept = change.kept
+            offered = [Offer(view.card(n, app.services), "spare", True) for n in change.spare]
+        if not ticked and not (on and any(not p.fixed for p in picks)):
+            words = "is on already" if on else "has nothing on"
+            return kit.redirect(f"/modules#group-{group.id}", f"{group.title} {words}.")
+        return sheet(
+            request,
+            session,
+            view,
+            heading=f"Turn {'on' if on else 'off'} {group.title}?",
+            action=f"/modules/group/{group.id}/switch",
+            on=on,
+            picks=picks,
+            needed=needed,
+            offered=offered,
+            offered_words="No longer needed: on only for what's going",
+            kept=kept,
+            button=f"Turn {'on' if on else 'off'} what's ticked",
+            back=f"/modules#group-{group.id}",
+        )
+
+    @router.post("/modules/group/{group_id}/switch", response_class=HTMLResponse)
+    async def group_switch(request: Request, group_id: str) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        group = find_group(group_id)
+        if group is None:
+            return kit.redirect("/modules", "There's no such group.")
+        known = available_modules()
+        planner = portal().planner()
+        on = form.get("to") == "on"
+        picked = [n for n in members(group, known) if form.get(f"pick_{n}") == "1"]
+        change = planner.turn_on_many(picked) if on else planner.turn_off_many(picked)
+        names = list(change.on if on else change.off)
+        spare = [n for n in change.spare if form.get(f"spare_{n}") == "1"]
+        if not names and not spare:
+            return kit.redirect(f"/modules#group-{group.id}", "Nothing to change.")
+        before = planner.draft.switches()
+        planner.apply(change)
+        if spare:
+            planner.apply(planner.turn_off_many(spare))
+        every = [*names, *spare]
+        titles = ", ".join(known[n].title or n for n in every)
+        count = f"{len(every)} module{'s' if len(every) != 1 else ''}"
+        what = f"turned {'on' if on else 'off'} {group.title}: {count} ({titles})"
+        portal().save(planner, session.member, what, before)
+        return kit.redirect(
+            f"/modules#group-{group.id}", f"Saved: {what}. It changes when Themi restarts."
+        )
+
+    def sheet(
+        request: Request,
+        session: Session,
+        view: Overview,
+        *,
+        needed: list[str],
+        kept: tuple[tuple[str, str], ...] = (),
+        **values: Any,
+    ) -> HTMLResponse:
+        return kit.with_flash(
+            request,
+            "module_sheet.html",
+            session,
+            needed=[view.card(n, app.services) for n in needed],
+            kept=[(view.card(n, app.services), why) for n, why in kept],
+            **{"picks": [], "offered": [], "offered_words": "", "subject": "", **values},
+        )
+
+    @router.post("/modules/undo-last", response_class=HTMLResponse)
+    async def undo_last(request: Request) -> Response:
+        session, _ = await kit.checked(request, admin=True)
+        what = portal().undo_last(session.member)
+        if what is None:
+            return kit.redirect("/modules", "There's no switch to undo.")
+        return kit.redirect("/modules", f"Undone: {what}.")
 
     @router.post("/modules/template", response_class=HTMLResponse)
     async def template(request: Request) -> Response:

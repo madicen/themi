@@ -482,8 +482,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | UC4 | Usage: the usage card and /usage | Usage | [x] 2026-11-18 |
 | UC5 | Usage: the Usage page and limit overrides | Usage | [x] 2026-11-18 |
 | MP1 | Modules page: groups in the manifest | Modules page | [x] 2026-11-19 |
-| MP2 | Modules page: turning many on and off | Modules page | [~] |
-| MP3 | Modules page: one module's sheet | Modules page | [ ] |
+| MP2 | Modules page: turning many on and off | Modules page | [x] 2026-11-19 |
+| MP3 | Modules page: one module's sheet | Modules page | [~] |
 | MP4 | Modules page: what each module owns | Modules page | [ ] |
 | MP5 | Modules page: every setting on the module's page | Modules page | [ ] |
 | MP6 | Modules page: the list, quicker to use | Modules page | [ ] |
@@ -21941,7 +21941,7 @@ Notes:
   MP6.
 
 ### MP2 · Modules page: turning many on and off
-Status: [~]
+Status: [x] 2026-11-19
 Depends on: MP1
 Read first: the plan's "Turning things on and off"; `themi/modules/planning.py` (`turn_on`,
 `turn_off`, `apply`); `themi/modules/store.py` (`Draft`); `module_confirm.html`.
@@ -21960,8 +21960,32 @@ Tests: planner closure; unticking a module drops the requirements only it needed
 AI provider kept; "no longer needed" leaves what something else needs; one Undo reverts the
 sheet. A scenario: an admin turns on Cooking, restarts, and the modules are on.
 
+Notes:
+- `Planner.turn_on_many` / `turn_off_many`; `turn_on` / `turn_off` are the one-name case.
+  `Change` gains `why` (each turned on: `asked` or `needed by <name>`), `spare` (no longer
+  needed) and `kept` (the last AI provider, with the reason). Of several AI providers going,
+  the first in the list stays. Asking for a module that's already on makes it `asked`.
+- Reasons: `Draft.reasons` while waiting, then `module_reasons` (migration 0173) once
+  applied (`Portal._keep_reasons`); the planner reads both (`Planner.reasons`). Template
+  modules have none and count as asked. A draft whose only change is a reason is dropped
+  like an empty one (nothing to restart for), so making an on module "asked" without any
+  switch isn't kept.
+- One review sheet for everything, `module_sheet.html` (replaces `module_confirm.html`):
+  picks (`pick_<name>`), what's needed or going with them, offers (`<field>_<name>`, here
+  `spare`; MP3 adds its own), and what stays on. The form posts plain fields, since
+  `kit.checked` reads the form as a dict.
+- Group routes: `GET /modules/group/<id>?to=on|off` (the sheet) and `POST
+  /modules/group/<id>/switch`. The list's group headers show "N of M on" and Turn on the
+  group… / the rest… / Turn off the group….
+- The button says "Turn on what's ticked", not a count: the count would go stale as boxes
+  are ticked without a script. MP6 can add one.
+- Undo: each switch logs the draft's switches before it (`Draft.note(..., before)`), and
+  "Undo the last change" (`POST /modules/undo-last`) puts back only the latest one. "Undo
+  them" is now "Undo them all".
+- Golden: `routes.json` gained the three routes.
+
 ### MP3 · Modules page: one module's sheet
-Status: [ ]
+Status: [~]
 Depends on: MP2
 Read first: the plan's "Turning on one module".
 - The single-module confirm page gains "It does more with" (`optional`) and "Add-ons"

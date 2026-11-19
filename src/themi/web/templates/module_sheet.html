@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} · Modules · Themi{% endblock %}
+{% macro chip(c) %}<span class="chip {{ c.badge_colour }}">{{ c.badge_words }}</span>{% endmacro %}
+{% block content %}
+<h1>{{ heading }}</h1>
+<form method="post" action="{{ action }}" class="module-sheet">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="to" value="{{ 'on' if on else 'off' }}">
+  <input type="hidden" name="confirmed" value="1">
+
+  {% if picks %}
+  <fieldset>
+    <legend>{{ "Turn on" if on else "Turn off" }}</legend>
+    <ul class="sheet-list">
+      {% for p in picks %}
+      <li>
+        <label class="check">
+          <input type="checkbox" name="pick_{{ p.card.name }}" value="1"{% if p.checked %} checked{% endif %}{% if p.fixed %} disabled{% endif %}>
+          {{ p.card.title }}
+        </label>
+        {{ chip(p.card) }}
+        {% if p.note %}<span class="muted">{{ p.note }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </fieldset>
+  {% endif %}
+
+  {% if needed %}
+  <section>
+    <h2>{% if subject %}{% if on %}{{ subject }} needs these, so they'll be turned on too:{% else %}These need {{ subject }}, so they'll be turned off too:{% endif %}
+      {%- elif on %}Also needed, from other groups{% else %}These need them, so they'll be turned off too{% endif %}</h2>
+    <ul class="sheet-list">
+      {% for c in needed %}<li><a href="/modules/{{ c.name }}">{{ c.title }}</a> {{ chip(c) }}</li>{% endfor %}
+    </ul>
+    {% if picks %}<p class="muted">Each comes on only if something ticked needs it.</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if offered %}
+  <fieldset>
+    <legend>{{ offered_words }}</legend>
+    <ul class="sheet-list">
+      {% for p in offered %}
+      <li>
+        <label class="check">
+          <input type="checkbox" name="{{ p.field }}_{{ p.card.name }}" value="1"{% if p.checked %} checked{% endif %}>
+          {{ p.card.title }}
+        </label>
+        {{ chip(p.card) }}
+        {% if p.note %}<span class="muted">{{ p.note }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </fieldset>
+  {% endif %}
+
+  {% if kept %}
+  <section>
+    <h2>Staying on</h2>
+    <ul class="sheet-list">
+      {% for c, why in kept %}<li>{{ c.title }} <span class="muted">{{ why }}</span></li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if on %}<p class="muted">Any marked "Needs settings" will need filling in before they work.</p>{% endif %}
+  <p class="muted">Nothing changes until Themi restarts.</p>
+  <div class="module-action">
+    <button class="primary">{{ button }}</button>
+    <a href="{{ back }}">Leave it as it is</a>
+  </div>
+</form>
+{% endblock %}

@@ -17,9 +17,15 @@ and restart Themi to put changes in place. Started from the {{ template }} templ
   <ul>{% for entry in draft.log %}<li>{{ entry.what }}</li>{% endfor %}</ul>
   <div class="module-action">
     <a class="button primary" href="/modules/restart">Restart Themi to put them in place…</a>
+    {% if draft.can_undo_last() %}
+    <form method="post" action="/modules/undo-last">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button>Undo the last change</button>
+    </form>
+    {% endif %}
     <form method="post" action="/modules/undo">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button>Undo them</button>
+      <button>Undo them all</button>
     </form>
   </div>
 </section>
@@ -59,7 +65,15 @@ and restart Themi to put changes in place. Started from the {{ template }} templ
 
 {% for section in groups %}
 <details class="module-group" id="group-{{ section.group.id }}"{% if not section.group.folded or q %} open{% endif %}>
-  <summary><h2>{{ section.group.title }}</h2> <span class="muted">{{ section.group.summary }}</span></summary>
+  <summary><h2>{{ section.group.title }}</h2> <span class="muted">{{ section.on }} of {{ section.total }} on · {{ section.group.summary }}</span></summary>
+  <div class="module-action">
+    {% if section.on < section.total %}
+    <a class="button" href="/modules/group/{{ section.group.id }}?to=on">{{ "Turn on the rest…" if section.on else "Turn on the group…" }}</a>
+    {% endif %}
+    {% if section.on %}
+    <a class="button" href="/modules/group/{{ section.group.id }}?to=off">Turn off the group…</a>
+    {% endif %}
+  </div>
   <ul class="module-list">
     {% for row in section.rows %}
     {% set card = row.card %}

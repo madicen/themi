@@ -113,14 +113,41 @@ class Portal:
         return self.drafts.get() or Draft()
 
     def planner(self, draft: Draft | None = None) -> Planner:
-        return Planner(self.config(), self.known(), self.template_modules, draft or self.draft())
+        return Planner(
+            self.config(),
+            self.known(),
+            self.template_modules,
+            draft or self.draft(),
+            self.reasons(),
+        )
+
+    def reasons(self) -> dict[str, str]:
+        """MP2: why each module turned on from this page is on, kept past restarts."""
+        return {
+            row["module"]: row["reason"]
+            for row in self.db.query("SELECT module, reason FROM module_reasons")
+        }
 
     # ----- changes ------------------------------------------------------------------------
 
-    def save(self, planner: Planner, member: Member, what: str) -> None:
-        planner.draft.note(member.id, what)
+    def save(
+        self, planner: Planner, member: Member, what: str, before: dict[str, Any] | None = None
+    ) -> None:
+        """Keep the planner's draft. `before`: its switches before this change, so the
+        change can be undone on its own (MP2)."""
+        planner.draft.note(member.id, what, before)
         self.drafts.save(planner.draft, member.id)
         self.audit.note(member.id, what)
+
+    def undo_last(self, member: Member) -> str | None:
+        """MP2: undo the last switch waiting for a restart; its words, or None."""
+        draft = self.drafts.get()
+        if draft is None or not draft.can_undo_last():
+            return None
+        what = draft.undo_last()
+        self.drafts.save(draft, member.id)
+        self.audit.note(member.id, f"undid: {what}")
+        return what
 
     def undo(self, member: Member) -> None:
         self.drafts.discard()
@@ -355,7 +382,9 @@ class Portal:
             (as_toml(current), json.dumps(snapshot), now),
         )
         if not draft.is_empty():
-            config = self.planner(draft).as_config()
+            planner = self.planner(draft)
+            config = planner.as_config()
+            self._keep_reasons(planner)
             write_config(config, write_path(config, self.services.environment or None))
             self.services.instance_config = config
             for module, values in draft.secrets.items():
@@ -371,6 +400,20 @@ class Portal:
         )
         self.drafts.discard()
         self.audit.note(member.id, "restarted Themi to put the changes in place")
+
+    def _keep_reasons(self, planner: Planner) -> None:
+        """MP2: the draft's reasons kept for the modules that stay on; gone for the rest."""
+        desired = set(planner.desired())
+        now = to_utc_iso(clock.now())
+        for name, reason in planner.draft.reasons.items():
+            if name in desired:
+                self.db.execute(
+                    "INSERT INTO module_reasons (module, reason, at) VALUES (?, ?, ?) "
+                    "ON CONFLICT(module) DO UPDATE SET reason = excluded.reason, at = excluded.at",
+                    (name, reason, now),
+                )
+        for name in [n for n in planner.reasons if n not in desired]:
+            self.db.execute("DELETE FROM module_reasons WHERE module = ?", (name,))
 
     async def announce(self) -> None:
         """Once Themi is back: tell whoever restarted it what changed and what didn't start."""
