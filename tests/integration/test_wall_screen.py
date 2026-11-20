@@ -244,7 +244,7 @@ async def test_a_weather_alert_is_the_note_and_the_weather_is_shown(
     assert "Wind Advisory until 10 pm. Worth a look before heading out." in page
     assert "Bring bins in is still waiting" not in page
     top = page[page.index('id="wall-top"') : page.index('id="wall-note"')]
-    assert '<p class="wall-high">54°</p>' in top and "low 49° tonight" in top
+    assert '<span class="wall-high">54°</span>' in top and "low 49° tonight" in top
     assert 'src="data:image/svg+xml;base64,' in top
 
 
@@ -275,7 +275,7 @@ async def test_no_email_on_the_wall(wall: Scenario) -> None:
 
 async def test_each_part_refreshes_on_its_own(wall: Scenario) -> None:
     page = await screen(wall)
-    assert 'hx-get="/wall/part/columns" hx-trigger="every 30s"' in page
+    assert 'hx-get="/wall/part/columns" hx-trigger="every 30s, wall-refresh from:body"' in page
     assert 'hx-get="/wall/part/smalls" hx-trigger="every 600s"' in page
     await task(wall, "Erin", "New errand")
     async with web_client(wall) as client:
@@ -441,7 +441,7 @@ async def test_events_are_busy_unless_their_owner_shares_the_details(
     clock.advance(EVENING)
     page = await screen(calendar)
     erin = page[page.index(f'id="tl-m{calendar.member("Erin").id}"') :]
-    erin = erin[: erin.index("</div>\n    </div>")]
+    erin = erin[: erin.index('class="tl-row', 1)]
     assert re.findall(r'<span class="tl-title">([^<]+)</span>', erin) == ["Busy", "Busy"]
     assert "Dentist" not in page and "Smile Dental" not in page and "Sam" not in page
     share(calendar)

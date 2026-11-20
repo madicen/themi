@@ -500,7 +500,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL2 | Wall: the home screen, read-only | Wall | [x] 2026-11-20 |
 | WL3 | Wall: today's timeline and the week ahead | Wall | [x] 2026-11-20 |
 | WL4 | Wall: ticking things off | Wall | [x] 2026-11-20 |
-| WL5 | Wall: the views | Wall | [ ] |
+| WL5a | Wall: the views, part 1 (Event, Day, Weather, Person) | Wall | [x] 2026-11-20 |
+| WL5b | Wall: the views, part 2 (List, Dish, Note) | Wall | [ ] |
 | WL6 | Wall: time of day, night, and the frame | Wall | [ ] |
 
 ## Fixed technical choices
@@ -22733,43 +22734,75 @@ Notes:
   today gets one nudge, and nothing follows within the evening either way. The test is
   instead the warm word reaching the right person.
 
-### WL5 · Wall: the views
-Status: [ ]
+### WL5a · Wall: the views, part 1 (Event, Day, Weather, Person)
+Status: [x] 2026-11-20
 Depends on: WL3, WL4
-Read first: the plan's "Tapping things" (all rows and the rules above the table); the
-canvas's Event, Day, List and Note views. If this is too big for one session, split it
-into WL5a (Event, Day, Weather, Person) and WL5b (List, Dish, Note) first.
+Read first: the plan's "Tapping things" (the rules above the table, and the Event, Day,
+Weather and Person rows); the canvas's Event and Day views. Split from WL5 (2026-11-20).
 - One view at a time, sliding up over the dimmed home screen; Close or Back, a tap on the
-  dimmed screen, or 2 minutes with no touches closes it. A view never opens another.
+  dimmed screen, or 2 minutes with no touches closes it. A view never opens another (the
+  Day view's arrows change its day in place).
 - Event: whose calendar, time, "Happening now · N minutes left" or how long until it starts,
-  place, leave-by when the travel lead-in has one, notes shortened (as data, never
-  instructions), and Send to <person>'s phone through the outbox. No editing.
+  place, leave-by when the travel lead-in has one, and Send to <person>'s phone through the
+  outbox. No editing. The Busy rule from WL3 holds here too.
 - Day: that day's timeline in the same rows, all-day pills, what's due that day, its
   weather once in range, arrows to the day before and after.
 - Weather: the hourly forecast for the rest of the day, laid out like the Day view.
 - Person: that person's whole day: events, morning, afternoon and evening routines with
   each step ticked or not, chores and to-dos for today; ticks as in the column.
+Tests: each view's page test; Send to my phone queues one outbox message to that person;
+the Person view shows all three parts of the day; the Event view shows a Busy event with
+nothing else; the 2-minute close is in the page (the script closes it).
+
+Notes:
+- Split from WL5 (seven views in one prompt was too much); WL5b has List, Dish and Note.
+- `themi_home/wall_views.py` (`WallViews`): `event`, `day`, `weather`, `person`. Each view
+  is a fragment (`/wall/view/event?day&m&c&e`, `/wall/view/day/<date>`,
+  `/wall/view/weather`, `/wall/view/person/<id>`) swapped into `#wall-view`, wrapped by
+  `wall/_sheet.html`'s macro (backdrop, sheet, Close). `wall.js` empties it on Close, a tap
+  on the backdrop, or `data-close-after` (120 s) without a touch. That timer is the
+  script's, so it's tested only as markup, not with a frozen clock.
+- Event: found again from the event's member, calendar id and event id (in each timeline
+  block's address). The Busy rule holds: a Busy event shows only its time and whose.
+  "Leave around" uses travel's `rough_drive` (no lookup). There's no event description in
+  Themi's calendar store, so the plan's "notes shortened" isn't shown. Send to <name>'s
+  phone: the owner, or anyone for a family-calendar event; the outbox, as a reply
+  ("From the wall: ...").
+- Day: today to 13 days out; another day's timeline has no now line or shading
+  (`TodayLine.live`). Due that day: open tasks due that day, with whose. Weather from the
+  forecast's day once it's in range.
+- Weather: the stored forecast's hours from this hour to midnight, with a chance shown from
+  10%.
+- Person: their own events, every routine with its steps, chores due by today and to-dos due
+  by today (or undated). A tap there posts `view=person/<id>`, answers with the view, and
+  sends `HX-Trigger: wall-refresh`, which the columns part listens for.
+- The timeline markup is a macro (`wall/_timeline.html`) shared by today and the Day view.
+  Column headers, week days, the weather and timeline blocks are buttons now.
+
+### WL5b · Wall: the views, part 2 (List, Dish, Note)
+Status: [ ]
+Depends on: WL5a
+Read first: the plan's "Tapping things" (the List, Dish and Note rows); the canvas's List
+and Note views.
 - List (to-dos and Groceries): the whole list in order, an Add box, "Ticked off lately";
   an item's words offer Tomorrow, Next week, Give to <other person>, Make it a family to-do,
   Change the words. All through `stage`.
 - Dish (a Things to cook item): its ingredients as a checklist; Add the rest to Groceries
   puts the unticked ones on the grocery list, once each; Start cooking opens the cook
-  screen on the wall when the dish has a recipe. The ingredients and recipe come through a
-  `dish_details` hook the cooking pack fills; with no pack, the view shows the item alone.
+  screen on the wall when the dish has a recipe. The home pack's cooking and recipes are
+  used directly; without a recipe, the view shows the item alone.
 - Note: the note, why Themi mentioned it, and its answers (for a chore: They're in, which
-  asks who with Both of us; Later tonight; In the morning, which moves it to the morning
+  asks who with Both of us; Later tonight; In the morning, which leaves it for the morning
   message).
-Tests: each view's page test; the 2-minute close with a frozen clock; Send to my phone
-queues one outbox message to that person; Give to moves the task; Add the rest adds only
-unticked ingredients and not ones already on the list; the Person view shows all three
-parts of the day; the Event view shows a private event as "Busy" with nothing else; the
-Note's In the morning puts it in the next morning message.
+Tests: each view's page test; Give to moves the task; Add the rest adds only unticked
+ingredients and not ones already on the list; the Note's In the morning leaves the chore
+for the next morning message and off the wall tonight.
 
 Notes:
 
 ### WL6 · Wall: time of day, night, and the frame
 Status: [ ]
-Depends on: WL5
+Depends on: WL5b
 Read first: the plan's "What the family sees" (By time of day) and "Setting up the frame".
 - Columns switch routine part by the routine's own morning, afternoon and evening times;
   "Nothing set for this evening" for a person with none.

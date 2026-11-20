@@ -1,0 +1,25 @@
+{% from "wall/_sheet.html" import sheet with context %}
+{% from "wall/_timeline.html" import timeline %}
+{% call sheet(view.heading) %}
+<div class="sheet-nav">
+  {% if view.before %}<button type="button" class="sheet-arrow" aria-label="The day before" hx-get="/wall/view/day/{{ view.before }}" hx-target="#wall-view" hx-swap="innerHTML">&lsaquo;</button>{% else %}<span class="sheet-arrow-gap"></span>{% endif %}
+  <div><p class="sheet-kicker">{{ view.near }}</p><h2 class="sheet-title">{{ view.heading }}</h2></div>
+  {% if view.after %}<button type="button" class="sheet-arrow" aria-label="The day after" hx-get="/wall/view/day/{{ view.after }}" hx-target="#wall-view" hx-swap="innerHTML">&rsaquo;</button>{% else %}<span class="sheet-arrow-gap"></span>{% endif %}
+</div>
+<div class="wall-day">
+  {% if view.line.all_day %}<div class="wall-chips"><span class="wall-label">All day</span>{% for c in view.line.all_day %}<span class="pill tone-{{ c.tone }}">{{ c.title }}</span>{% endfor %}</div>{% endif %}
+  {{ timeline(view.line) }}
+</div>
+<div class="sheet-pair">
+  <section class="sheet-box">
+    <h3>Due that day</h3>
+    {% if view.due %}<ul>{% for d in view.due %}<li>{{ d.title }} <span class="wall-sub">{{ d.whose }}</span></li>{% endfor %}</ul>
+    {% else %}<p class="wall-empty">Nothing yet</p>{% endif %}
+  </section>
+  <section class="sheet-box">
+    <h3>Weather</h3>
+    {% if view.weather %}<p class="sheet-weather">{% if view.icon %}<img src="{{ view.icon }}" alt="" width="48" height="48">{% endif %}{{ view.weather }}</p>
+    {% else %}<p class="wall-empty">Not in the forecast yet</p>{% endif %}
+  </section>
+</div>
+{% endcall %}

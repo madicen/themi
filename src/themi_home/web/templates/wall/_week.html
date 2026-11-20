@@ -3,12 +3,12 @@
   <div class="wall-card-head"><h2>The week ahead</h2></div>
   <div class="wk">
     {% for d in screen.week %}
-    <div class="wk-day">
-      <p class="wk-head"><b>{{ d.weekday }}</b> {{ d.date }}</p>
+    <button type="button" class="wk-day" hx-get="/wall/view/day/{{ d.iso }}" hx-target="#wall-view" hx-swap="innerHTML">
+      <span class="wk-head"><b>{{ d.weekday }}</b> {{ d.date }}</span>
       {% for c in d.events %}<span class="wk-ev tone-{{ c.tone }}">{{ c.title }}</span>{% endfor %}
       {% if d.more %}<span class="wall-sub">+{{ d.more }} more</span>{% endif %}
       {% if not d.events %}<span class="wall-empty">Free</span>{% endif %}
-    </div>
+    </button>
     {% endfor %}
   </div>
 </section>

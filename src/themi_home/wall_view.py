@@ -106,6 +106,22 @@ class WallEvent:
     start: datetime  # local
     end: datetime
     all_day: bool = False
+    # WL5a: where it came from, for its view: whose reading, the calendar and the event
+    member_id: int = 0
+    calendar_id: str = ""
+    event_id: str = ""
+    place: str = ""  # "" unless its details are shown
+    video: bool = False
+
+    @property
+    def ref(self) -> str:
+        """The Event view's query string."""
+        from urllib.parse import urlencode
+
+        return urlencode(
+            {"day": self.start.date().isoformat(), "m": self.member_id,
+             "c": self.calendar_id, "e": self.event_id}
+        )  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -117,6 +133,7 @@ class Block:
     lane: int  # stacked in its row: this lane of `lanes`
     lanes: int
     past: bool
+    ref: str = ""  # WL5a: the Event view's query string
 
 
 @dataclass(frozen=True)
@@ -150,12 +167,14 @@ class TodayLine:
     all_day: tuple[Chip, ...]
     now: float  # % along the hours, held inside them
     tomorrow: tuple[Chip, ...]
+    live: bool = True  # WL5a: today's, with a now line (a Day view's other days have none)
 
 
 @dataclass(frozen=True)
 class WeekDay:
     weekday: str  # "Fri"
     date: str  # "20"
+    iso: str  # WL5a: for its Day view
     events: tuple[Chip, ...]
     more: int = 0
 
@@ -482,14 +501,20 @@ class WallView:
                     continue
                 seen.add((entry.calendar_id, entry.event_id))
                 family = bool(whose)  # " (on the Madicen Family calendar)"
+                shown = family or shares
                 out.append(
                     WallEvent(
                         row="family" if family else f"m{member.id}",
                         tone="family" if family else f"p{index % 4}",
-                        title=entry.title if family or shares else "Busy",
+                        title=entry.title if shown else "Busy",
                         start=entry.starts_at.astimezone(tz),
                         end=entry.ends_at.astimezone(tz),
                         all_day=entry.all_day,
+                        member_id=member.id,
+                        calendar_id=entry.calendar_id,
+                        event_id=entry.event_id,
+                        place=entry.location if shown and not entry.video else "",
+                        video=entry.video,
                     )
                 )
         return out
@@ -517,6 +542,7 @@ class WallView:
                 WeekDay(
                     f"{day:%a}",
                     str(day.day),
+                    day.isoformat(),
                     chips[:WEEK_EVENTS],
                     max(0, len(chips) - WEEK_EVENTS),
                 )
@@ -603,6 +629,8 @@ def lay_out_today(
     rows: list[tuple[str, str, str]],
     events: list[WallEvent],
     tomorrow: list[WallEvent],
+    *,
+    live: bool = True,
 ) -> TodayLine:
     """Today's events on hours laid sideways, by the day card's rules (`themi.drawing.
     layout`): 8 am to 9 pm, stretched to take in an earlier or later event; a label every
@@ -631,7 +659,8 @@ def lay_out_today(
                     width=round(max(line.y(e.end) - x, MIN_BLOCK), 2),
                     lane=lane,
                     lanes=count,
-                    past=e.end <= now,
+                    past=live and e.end <= now,
+                    ref=e.ref,
                 )
             )
         placed.append(TimelineRow(key, name, tone, tuple(blocks)))
@@ -646,6 +675,7 @@ def lay_out_today(
             Chip(e.title, e.tone)
             for e in sorted(tomorrow, key=lambda e: (not e.all_day, e.start))[:TOMORROW_SHOWN]
         ),
+        live=live,
     )
 
 

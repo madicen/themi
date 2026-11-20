@@ -20,7 +20,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -37,7 +37,8 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
-from themi_home.wall_view import WallView
+from themi_home.wall_view import WallItem, WallView
+from themi_home.wall_views import WallViews
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -53,6 +54,7 @@ DEFAULT_NAME = "Wall"
 PARTS = ("top", "note", "today", "columns", "week", "smalls")  # refreshed on their own
 TAP = "wall_tap"  # WL4: the category and executor of a tick on the wall
 WHERE = "on the wall"  # as praise says it ("Ticked off on the wall: ...")
+CLOSE_AFTER = 120  # WL5a: seconds without a touch before a view closes itself
 
 
 def _hash(value: str) -> str:
@@ -221,6 +223,15 @@ class WallTaps:
 # ----- the website ---------------------------------------------------------------------
 
 
+def _day(value: str) -> date:
+    """A day from a view's address; today's date for nonsense (the view then shows nothing
+    it shouldn't, since each looks the day up itself)."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return clock.now().date()
+
+
 def routes(kit: Kit) -> APIRouter:
     from themi.web.kit import NotSignedIn
 
@@ -266,19 +277,37 @@ def routes(kit: Kit) -> APIRouter:
         screen = WallView(kit.app.services).screen()
         return kit.page(request, f"wall/_{part}.html", screen=screen)
 
+    async def posted(request: Request) -> dict[str, str] | None:
+        """A POST's form after its CSRF check (the frame's token or a member's session's);
+        None when nobody is looking any more."""
+        csrf = viewer(request)
+        if csrf is None:
+            return None
+        form = {k: str(v) for k, v in (await request.form()).items()}
+        submitted = form.get("csrf") or request.headers.get("X-CSRF-Token") or ""
+        if not submitted or not hmac.compare_digest(csrf, submitted):
+            raise PermissionError("missing or wrong CSRF token")
+        return form
+
     @router.post("/wall/tap", response_class=HTMLResponse)
     async def tap(request: Request) -> Response:
         """WL4: tick or untick something showing on the wall. A Together item asks who did
-        it first. Answers with the columns, already changed."""
-        csrf = viewer(request)
-        if csrf is None:
+        it first. Answers with the columns, already changed; a tap in a Person view (WL5a,
+        `view=person/<id>`) answers with that view and has the columns refresh."""
+        form = await posted(request)
+        if form is None:
             return gone()
-        form = await request.form()
-        submitted = str(form.get("csrf") or request.headers.get("X-CSRF-Token") or "")
-        if not submitted or not hmac.compare_digest(csrf, submitted):
-            raise PermissionError("missing or wrong CSRF token")
         view = WallView(kit.app.services)
-        key = str(form.get("key", ""))
+        key = form.get("key", "")
+        whose = form.get("view", "").removeprefix("person/")
+        if whose.isdigit():
+            item = WallViews(view).find(int(whose), key)
+            by = next((m for m in view.people() if m.id == int(whose)), None)
+            if item is not None and item.tappable and by is not None:
+                await stage(by, key, item)
+            response = person_view(request, view, int(whose))
+            response.headers["HX-Trigger"] = "wall-refresh"
+            return response
         found = view.find(key) if not form.get("cancel") else None
         if found is None or not found[1].tappable:
             return columns(request, view)
@@ -289,19 +318,79 @@ def routes(kit: Kit) -> APIRouter:
         elif item.done:  # unticking a shared one: whoever ticked it doesn't matter
             by = next(iter(people.values()), None)
         else:
-            raw = str(form.get("by", ""))
+            raw = form.get("by", "")
             by = people.get(int(raw)) if raw.isdigit() else None
             if by is None:
                 return columns(request, view, ask=key)
-        if by is None:
-            return columns(request, view)
+        if by is not None:
+            await stage(by, key, item)
+        return columns(request, view)
+
+    async def stage(by: Member, key: str, item: WallItem) -> None:
         summary = f"{'Untick' if item.done else 'Tick off'} {item.title} {WHERE}"
         payload = {"key": key, "by": by.id, "done": not item.done}
         await kit.app.services.autonomy.stage(TAP, by, summary, payload, TAP, requested=True)
-        return columns(request, view)
 
     def columns(request: Request, view: WallView, ask: str = "") -> HTMLResponse:
         return kit.page(request, "wall/_columns.html", screen=view.screen(ask))
+
+    # ----- WL5a: the views -------------------------------------------------------------
+
+    def sheet(request: Request, template: str, **values: Any) -> HTMLResponse:
+        return kit.page(request, f"wall/{template}", close_after=CLOSE_AFTER, **values)
+
+    def person_view(request: Request, view: WallView, member_id: int) -> HTMLResponse:
+        found = WallViews(view).person(member_id)
+        if found is None:
+            return HTMLResponse("")
+        return sheet(request, "_view_person.html", person=found)
+
+    @router.get("/wall/view/event", response_class=HTMLResponse)
+    def event_view(
+        request: Request, day: str = "", m: int = 0, c: str = "", e: str = ""
+    ) -> Response:
+        if viewer(request) is None:
+            return gone()
+        found = WallViews(WallView(kit.app.services)).event(_day(day), m, c, e)
+        return sheet(request, "_view_event.html", event=found) if found else HTMLResponse("")
+
+    @router.post("/wall/view/event/send", response_class=HTMLResponse)
+    async def send_event(request: Request) -> Response:
+        form = await posted(request)
+        if form is None:
+            return gone()
+        views = WallViews(WallView(kit.app.services))
+        query = request.query_params  # the event, as its view's address names it
+        day = _day(query.get("day", ""))
+        m = int(query["m"]) if query.get("m", "").isdigit() else 0
+        found = views.event(day, m, query.get("c", ""), query.get("e", ""))
+        to = next(
+            (p for p, _ in (found.send_to if found else ()) if str(p) == form.get("to")), None
+        )
+        if found is None or to is None:
+            return HTMLResponse("")
+        sent = await views.send_event(found, day, kit.app.store.get_member(to))
+        return sheet(request, "_view_event.html", event=replace(found, sent=sent))
+
+    @router.get("/wall/view/day/{day}", response_class=HTMLResponse)
+    def day_view(request: Request, day: str) -> Response:
+        if viewer(request) is None:
+            return gone()
+        found = WallViews(WallView(kit.app.services)).day(_day(day))
+        return sheet(request, "_view_day.html", view=found) if found else HTMLResponse("")
+
+    @router.get("/wall/view/weather", response_class=HTMLResponse)
+    def weather_view(request: Request) -> Response:
+        if viewer(request) is None:
+            return gone()
+        found = WallViews(WallView(kit.app.services)).weather()
+        return sheet(request, "_view_weather.html", view=found) if found else HTMLResponse("")
+
+    @router.get("/wall/view/person/{member_id:int}", response_class=HTMLResponse)
+    def person(request: Request, member_id: int) -> Response:
+        if viewer(request) is None:
+            return gone()
+        return person_view(request, WallView(kit.app.services), member_id)
 
     @router.get("/wall/pair", response_class=HTMLResponse)
     def pair_form(request: Request) -> Response:

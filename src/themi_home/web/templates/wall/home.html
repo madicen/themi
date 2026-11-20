@@ -21,7 +21,7 @@
   <div id="wall-today" hx-get="/wall/part/today" hx-trigger="every 30s" hx-swap="innerHTML">
     {% include "wall/_today.html" %}
   </div>
-  <div class="wall-columns" id="wall-columns" hx-get="/wall/part/columns" hx-trigger="every 30s" hx-swap="innerHTML">
+  <div class="wall-columns" id="wall-columns" hx-get="/wall/part/columns" hx-trigger="every 30s, wall-refresh from:body" hx-swap="innerHTML">
     {% include "wall/_columns.html" %}
   </div>
   <div id="wall-week" hx-get="/wall/part/week" hx-trigger="every 600s" hx-swap="innerHTML">
@@ -31,6 +31,7 @@
     {% include "wall/_smalls.html" %}
   </div>
   <p class="wall-stale" id="wall-stale" role="status" hidden>Updated <span></span></p>
+  <div id="wall-view"></div>
 </main>
 </body>
 </html>

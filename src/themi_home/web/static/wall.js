@@ -43,11 +43,32 @@
     today.querySelectorAll(".tl-past").forEach(function (el) { el.style.width = at + "%"; });
   }
 
+  // WL5a: a view slides up into #wall-view. Close, a tap on the dimmed screen, or its
+  // data-close-after seconds without a touch empty it again.
+  var idle = null;
+  function closeView() {
+    var view = document.getElementById("wall-view");
+    if (view) view.innerHTML = "";
+    if (idle) { clearTimeout(idle); idle = null; }
+  }
+  function watchView() {
+    if (idle) clearTimeout(idle);
+    var sheet = document.querySelector("#wall-view .wall-sheet");
+    if (!sheet) { idle = null; return; }
+    var seconds = Number(sheet.getAttribute("data-close-after")) || 120;
+    idle = setTimeout(closeView, seconds * 1000);
+  }
+  document.addEventListener("click", function (event) {
+    if (event.target.closest && event.target.closest("[data-close]")) closeView();
+  });
+  document.addEventListener("pointerdown", function () { if (idle) watchView(); });
+
   document.addEventListener("htmx:sendError", function () { stale(true); });
   document.addEventListener("htmx:responseError", function () { stale(true); });
   document.addEventListener("htmx:afterSwap", function (event) {
     stale(false);
     place(event.target);
+    if (event.target.id === "wall-view") watchView();
   });
   document.addEventListener("DOMContentLoaded", function () {
     place(document);
