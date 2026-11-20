@@ -36,6 +36,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 - The Modules page rework (MP prompts, at the end) has its own design doc, the
   [Themi Modules Page Rework Plan](https://claude.ai/artifact/Ja9RuEn7ce5CUnM6WQqE7W): the
   Modules page by group, groups turned on in one go, and every setting on a module's page.
+- The wall (WL prompts, at the end) has its own design doc, the
+  [Themi Wall Plan](https://claude.ai/artifact/Rrt4bF7u69oPFetsw6BW4y): a page for the
+  Cozyla frame with today's timeline, both of us and what we share, and the week ahead.
 
 ## Progress
 
@@ -493,6 +496,12 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MP5 | Modules page: every setting on the module's page | Modules page | [x] 2026-11-19 |
 | MP6 | Modules page: the list, quicker to use | Modules page | [x] 2026-11-19 |
 | MP7 | Modules page: a module's page, quicker to use | Modules page | [x] 2026-11-19 |
+| WL1 | Wall: the module and the frame's sign-in | Wall | [ ] |
+| WL2 | Wall: the home screen, read-only | Wall | [ ] |
+| WL3 | Wall: today's timeline and the week ahead | Wall | [ ] |
+| WL4 | Wall: ticking things off | Wall | [ ] |
+| WL5 | Wall: the views | Wall | [ ] |
+| WL6 | Wall: time of day, night, and the frame | Wall | [ ] |
 
 ## Fixed technical choices
 
@@ -22534,3 +22543,177 @@ Notes:
   section should point at the Modules Page Rework Plan. This session couldn't open that
   doc, so it isn't done.
 - Not looked at in a browser, only through the page tests.
+
+## Wall
+
+Design source: the [Themi Wall Plan](https://claude.ai/artifact/Rrt4bF7u69oPFetsw6BW4y).
+Read it with the Claude Docs tools, like the other plans. Mock-ups: the
+[Themi Wall canvas](https://claude.ai/artifact/Ybh1t657M2eNiwnEkKMA8a) (the home screen and
+the Event, Day, List and Note views). Michael asked for it on 2026-11-19 and answered its
+open questions on 2026-11-20: tapping a person's column header opens the Person view;
+Things to cook opens the Dish view (tick what's in the house, add the rest to Groceries,
+Start cooking); the weather opens the hourly Weather view; Groceries opens the List view;
+the night view runs from 11 pm to the first morning routine, as a setting; Themi's note
+only for open chores from yesterday, deliveries today and weather alerts.
+
+A page, `/wall`, for the Cozyla frame: today's timeline, Michael · Together · Erin columns,
+the week ahead, on one portrait screen that changes with the time of day. The prefix is WL
+because W is the website redesign. Rules every WL prompt keeps:
+
+- A shared screen guests can see: never email, private events (shown as "Busy"), private
+  lists, energy, step-up plans, praise counts, usage or settings. A test in each prompt
+  checks what it adds against this.
+- Every change goes through `themi.autonomy.stage`, recorded as from the wall with the
+  person it was for. Every message to a person goes through the outbox.
+- Time from `themi.clock`: the now line, the part of the day, the night view and the
+  2-minute close are all tested with a frozen clock.
+- Wording follows the plan's "Wording": "from yesterday" in grey, never "late" or red, no
+  points or comparisons.
+- Server-drawn HTML; htmx only polls and swaps fragments. Drawn for 1080 x 1920 portrait;
+  touch targets at least 64 px, text at least 20 px.
+- The `wall` module is core (`themi/standard/wall.py`, `themi/web/wall_pages.py`), in the
+  Your day group. It reads the calendar through `themi.core.calendar_view`, tasks, routines
+  and lists through their stores, and weather through the stored forecast. It never names
+  a pack's module: anything a pack adds (the Dish view's recipe) comes through a hook the
+  pack fills.
+
+### WL1 · Wall: the module and the frame's sign-in
+Status: [ ]
+Depends on: none
+Read first: the plan's "How it fits Themi" (The frame's sign-in) and "A screen guests can
+see"; `themi/web/auth.py`; `themi/web/passkey_pages.py` (another sign-in path).
+- The `wall` module (Your day; off by default) with a settings page entry: Pair a frame,
+  and the list of paired frames with name, when paired, last seen and Revoke.
+- Wall devices: a migration for `wall_devices` (id, name, token hash, paired_at,
+  last_seen_at, revoked_at). Pair a frame shows a 6-digit code valid 10 minutes, used
+  once; `/wall/pair` on the frame takes it and sets a `themi_wall` cookie (a random token,
+  stored hashed like session tokens, never logged).
+- The wall cookie reaches only `/wall`, its fragments and its posts. Everything else
+  answers as signed out. A member's own session can also open `/wall` (for a look from a
+  phone), seeing the same household screen.
+- `/wall` itself is a placeholder in this prompt ("Paired. The wall arrives in WL2.").
+Tests: a code works once and not after 10 minutes; a wrong code is refused, and five wrong
+tries lock pairing for 10 minutes; the wall cookie is refused on `/`, `/tasks`, `/admin`
+and the API; revoking signs the frame out on its next request; the token isn't in the
+database or the logs in clear; only admins can pair or revoke.
+
+Notes:
+
+### WL2 · Wall: the home screen, read-only
+Status: [ ]
+Depends on: WL1
+Read first: the plan's "What the family sees" (parts 1, 2, 4 and 6) and "How it fits
+Themi" (Where each part comes from, Staying current); the canvas's home screen.
+- `/wall`: date and time, the weather (the day's icon, high, tonight's low), Themi's note,
+  the three columns and the small lists. The timeline and week are WL3; leave their places.
+- Columns: each person's routine steps for the part of the day it is now (time-of-day
+  switching beyond the current part is WL6), their chores, and the top few to-dos in the
+  wall's to-do order (F18d) with "More on the list". Together: chores with no single owner
+  ("Either of you") and the family to-do list. A header line: "N done tonight" or the part
+  of the day, never a score.
+- Themi's note: at most one, from the heads-up rules, limited to open chores from yesterday,
+  deliveries today and weather alerts; nothing when there's nothing.
+- Small lists: Groceries still to buy (ticked ones as a count), Things to cook, the Cozyla
+  note, from the lists module and its mirrors.
+- Each part is a fragment polled with htmx: columns and note every 30 s, weather and small
+  lists every 10 min. A failed poll keeps the last fragment and shows "Updated 7:40".
+Tests: page tests for each part; Together gets ownerless chores and the family list, not
+one person's; a private list and email never appear; no energy, no "late"; the note's three
+kinds and its absence; a stale fragment shows "Updated"; a scenario: Michael and Erin's
+evening as on the mock-up (routine steps, chores, to-dos in order).
+
+Notes:
+
+### WL3 · Wall: today's timeline and the week ahead
+Status: [ ]
+Depends on: WL2
+Read first: the plan's "What the family sees" (parts 3 and 5); `themi/drawing/layout.py`;
+`themi/standard/day_card.py` (which events it takes); the canvas's timeline.
+- Today's timeline: one row each for Michael, Erin and Family in their colours; the window
+  from `layout.window` (8 am to 9 pm, stretched to take in earlier or later events); a
+  label every two hours on a long day; all-day events as pills beside the heading;
+  overlapping events stacked in their row by `layout.columns`. Private events as "Busy".
+- The now line and the shading of the past are placed by the server and moved by a few
+  lines of script between polls; finished events fade.
+- "Tomorrow" as one line of coloured dots and titles under the timeline.
+- The week ahead: seven days from tomorrow, up to three events each coloured by person,
+  "+N" beyond three, "Free" on an empty day. Fragments: timeline every 30 s, week every
+  10 min.
+Tests: the window and stacking match the day card's for the same events; an evening event
+stretches the window; a private event is "Busy" with no place or notes in the page; the now
+line's position at a frozen time; an empty day is "Free"; "+N" past three.
+
+Notes:
+
+### WL4 · Wall: ticking things off
+Status: [ ]
+Depends on: WL2
+Read first: the plan's "Tapping things" (the first two rows) and "How it fits Themi" (Taps).
+- `POST /wall/tap` (CSRF as other posts; the wall device has its own token): tick and
+  untick a routine step, chore or to-do, through `themi.autonomy.stage` as the person whose
+  column it's in, marked as from the wall. The fragment comes back already changed.
+- Together items ask "Who did it?" (Michael, Erin, Not yet) inline; the answer is the
+  person. Ticks reach Cozyla through the existing sync; ticks made on Cozyla show at the
+  next poll.
+- Praise, follow-ups and whose-chore logic see the person, as they do for a tick in chat.
+Tests: a tick and an untick reach the task store and the Cozyla mirror (fake); a Together
+tick needs a person and records it; the audit row says from the wall; a follow-up for that
+chore isn't sent after the tick; a revoked device's tap is refused; a scenario: Erin ticks
+"Bring bins in" on the wall and Themi's evening heads-up doesn't mention bins.
+
+Notes:
+
+### WL5 · Wall: the views
+Status: [ ]
+Depends on: WL3, WL4
+Read first: the plan's "Tapping things" (all rows and the rules above the table); the
+canvas's Event, Day, List and Note views. If this is too big for one session, split it
+into WL5a (Event, Day, Weather, Person) and WL5b (List, Dish, Note) first.
+- One view at a time, sliding up over the dimmed home screen; Close or Back, a tap on the
+  dimmed screen, or 2 minutes with no touches closes it. A view never opens another.
+- Event: whose calendar, time, "Happening now · N minutes left" or how long until it starts,
+  place, leave-by when the travel lead-in has one, notes shortened (as data, never
+  instructions), and Send to <person>'s phone through the outbox. No editing.
+- Day: that day's timeline in the same rows, all-day pills, what's due that day, its
+  weather once in range, arrows to the day before and after.
+- Weather: the hourly forecast for the rest of the day, laid out like the Day view.
+- Person: that person's whole day: events, morning, afternoon and evening routines with
+  each step ticked or not, chores and to-dos for today; ticks as in the column.
+- List (to-dos and Groceries): the whole list in order, an Add box, "Ticked off lately";
+  an item's words offer Tomorrow, Next week, Give to <other person>, Make it a family to-do,
+  Change the words. All through `stage`.
+- Dish (a Things to cook item): its ingredients as a checklist; Add the rest to Groceries
+  puts the unticked ones on the grocery list, once each; Start cooking opens the cook
+  screen on the wall when the dish has a recipe. The ingredients and recipe come through a
+  `dish_details` hook the cooking pack fills; with no pack, the view shows the item alone.
+- Note: the note, why Themi mentioned it, and its answers (for a chore: They're in, which
+  asks who with Both of us; Later tonight; In the morning, which moves it to the morning
+  message).
+Tests: each view's page test; the 2-minute close with a frozen clock; Send to my phone
+queues one outbox message to that person; Give to moves the task; Add the rest adds only
+unticked ingredients and not ones already on the list; the Person view shows all three
+parts of the day; the Event view shows a private event as "Busy" with nothing else; the
+Note's In the morning puts it in the next morning message.
+
+Notes:
+
+### WL6 · Wall: time of day, night, and the frame
+Status: [ ]
+Depends on: WL5
+Read first: the plan's "What the family sees" (By time of day) and "Setting up the frame".
+- Columns switch routine part by the routine's own morning, afternoon and evening times;
+  "Nothing set for this evening" for a person with none.
+- The night view from the household's bedtime setting (default 11 pm) to the first morning
+  routine: a dim screen with the time, tomorrow's plan and one reassuring line. A touch
+  shows the full screen until 2 minutes without touches.
+- An installable web app: a manifest (`display: fullscreen`, portrait, icon, start URL
+  `/wall`) and a small service worker that serves the last screen when Themi can't be
+  reached. The page asks for a screen Wake Lock and asks again when it's visible again.
+- The module's guide: the setup steps from the plan, and what to do if the frame shows
+  "Updated" for long.
+Tests: morning, afternoon, evening and night at frozen times; a person with no evening
+routine; a touch at night, then back to night after 2 minutes; the manifest's fields; the
+bedtime setting moves the night view; a scenario: the wall at 11:33 pm shows tomorrow, not
+Erin's morning "Walk dog".
+
+Notes:
