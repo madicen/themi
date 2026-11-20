@@ -323,7 +323,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F50b | Feedback: an amount in another currency is converted before it's compared | Feedback | [x] 2026-11-19 |
 | F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [x] 2026-11-19 |
 | F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [x] 2026-11-19 |
-| F51a | Feedback: Unlink Spotify on the Accounts page unlinks it instead of showing an error | Feedback | [ ] |
+| F51a | Feedback: Unlink Spotify on the Accounts page unlinks it instead of showing an error | Feedback | [x] 2026-11-19 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15971,7 +15971,7 @@ Notes:
   reviewed once live and the job has caught up.
 
 ### F51a · Feedback (2026-11-19): Unlink Spotify on the Accounts page unlinks it instead of showing an error
-Status: [ ]
+Status: [x] 2026-11-19
 Depends on: none
 Read first: `themi_home/web/device_pages.py` (`spotify_routes`, `unlink_spotify`);
 `themi_google/web/google_pages.py` (the `/accounts/{account_id}/...` routes, `unlink`);
@@ -16010,6 +16010,19 @@ Spotify button.
 Data/Setup: none. `tests/golden/routes.json` changes (`{account_id}` -> `{account_id:int}` and
 the like); the prompt says it should. Michael relinks Spotify afterwards if he wants it back.
 Mark #235 reviewed once live.
+
+Notes:
+- The google module's pages are included only when Google is set up, and before the spotify
+  module's (module order), which is why the old tests (no Google) never saw it.
+- Every route parameter annotated `int` now has `:int` in its path, in 19 files (accounts,
+  recipes, lists, tasks, spending, session, chat, and so on). A non-number in such a path is now
+  a 404 instead of a 422. `GET /modules/{name}`, `/rules/{rule_id:int}/{change}` and the other
+  string parameters are unchanged.
+- Tests: `test_spotify::test_unlink_on_the_accounts_page_unlinks` (with `fake_google`; it got
+  the 422 before the fix); `tests/integration/test_route_shadowing.py` (an `int` parameter
+  must use `:int`; no fixed path is matched by an earlier route with a parameter). Golden:
+  `routes.json` (`{x}` -> `{x:int}`, 60 lines), as the prompt says. **Setup:** none. Mark #235
+  reviewed once live.
 
 ## Conversation mode
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import httpx
+import pytest
 
 from tests.fakes.spotify import FakeSpotify
 from tests.fixtures.web import sign_in
@@ -117,3 +118,19 @@ async def test_not_linked_says_where_to_link(scenario: Scenario, fake_spotify: F
     scenario.primary.queue_text("Spotify isn't linked yet; it's on the Accounts page.")
     replies = await scenario.say("Erin", "play some lofi")
     assert replies == ["Spotify isn't linked yet; it's on the Accounts page."]
+
+
+@pytest.mark.usefixtures("fake_google")
+async def test_unlink_on_the_accounts_page_unlinks(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    """F51a (#235): Google's pages are included before Spotify's, so its
+    /accounts/{account_id}/unlink took this path and answered 422 ("spotify" isn't a number)."""
+    await link(scenario, site, fake_spotify)
+    page = await site.get("/accounts")
+    csrf = page.text.split('name="csrf" value="', 1)[1].split('"', 1)[0]
+    done = await site.post("/accounts/spotify/unlink", data={"csrf": csrf})
+    assert done.status_code == 303 and done.headers["location"].startswith("/accounts")
+    assert scenario.app.db.one("SELECT * FROM spotify_links") is None
+    page = await site.get(done.headers["location"])
+    assert "Unlinked Spotify." in page.text and "Link Spotify" in page.text

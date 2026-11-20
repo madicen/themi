@@ -52,7 +52,7 @@ def routes(kit: Kit) -> APIRouter:
 
     # ----- the journal (M1) ---------------------------------------------------------
 
-    @router.post("/journal/{entry_id}/delete")
+    @router.post("/journal/{entry_id:int}/delete")
     async def delete_entry(request: Request, entry_id: int) -> Response:
         session, _ = await kit.checked(request)
         journal = app.services.maybe(keys.journal)
@@ -62,7 +62,7 @@ def routes(kit: Kit) -> APIRouter:
 
     # ----- rules ------------------------------------------------------------------
 
-    @router.post("/rules/{rule_id}/{change}")
+    @router.post("/rules/{rule_id:int}/{change}")
     async def change_rule(request: Request, rule_id: int, change: str) -> Response:
         session, _ = await kit.checked(request)
         rulebook = app.rulebook
@@ -89,7 +89,7 @@ def routes(kit: Kit) -> APIRouter:
             return None
         return fact if memory().can_edit(member, fact) else None
 
-    @router.post("/facts/{fact_id}/{change}")
+    @router.post("/facts/{fact_id:int}/{change}")
     async def change_fact(request: Request, fact_id: int, change: str) -> Response:
         session, form = await kit.checked(request)
         fact = editable(session.member, fact_id)

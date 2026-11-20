@@ -51,7 +51,7 @@ def routes(kit: Kit) -> APIRouter:
     def own_account(member: Member, account_id: int) -> LinkedAccount | None:
         return next((a for a in app.store.linked_accounts(member.id) if a.id == account_id), None)
 
-    @router.get("/accounts/{account_id}/cookbook", response_class=HTMLResponse)
+    @router.get("/accounts/{account_id:int}/cookbook", response_class=HTMLResponse)
     def cookbook_page(request: Request, account_id: int) -> Response:
         session = kit.current(request)
         account = own_account(session.member, account_id)
@@ -84,7 +84,7 @@ def routes(kit: Kit) -> APIRouter:
         response.headers[PICKER_HEADER] = "picker"
         return response
 
-    @router.post("/accounts/{account_id}/cookbook")
+    @router.post("/accounts/{account_id:int}/cookbook")
     async def choose_cookbook(request: Request, account_id: int) -> Response:
         session, form = await kit.checked(request)
         book = recipes()
@@ -101,7 +101,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect(back, str(exc))
         return kit.redirect(back, said)
 
-    @router.post("/accounts/{account_id}/cookbook/read")
+    @router.post("/accounts/{account_id:int}/cookbook/read")
     async def read_now(request: Request, account_id: int) -> Response:
         await kit.checked(request)
         book = recipes()
@@ -181,11 +181,11 @@ def routes(kit: Kit) -> APIRouter:
     def kitchen() -> Response:
         return kit.redirect("/session")
 
-    @router.post("/recipes/kitchen/{session_id}/{action}")
+    @router.post("/recipes/kitchen/{session_id:int}/{action}")
     def kitchen_move(session_id: int, action: str) -> Response:
         return kit.redirect("/session")
 
-    @router.get("/recipes/{recipe_id}/card.png")
+    @router.get("/recipes/{recipe_id:int}/card.png")
     async def recipe_card_png(request: Request, recipe_id: int) -> Response:
         """DC10: the recipe as a picture, to keep or print."""
         session = kit.current(request)
@@ -197,7 +197,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect(f"/recipes/{recipe_id}", "The picture couldn't be drawn.")
         return Response(png, media_type="image/png")
 
-    @router.get("/recipes/{recipe_id}", response_class=HTMLResponse)
+    @router.get("/recipes/{recipe_id:int}", response_class=HTMLResponse)
     def recipe_page(request: Request, recipe_id: int, scale: str = Query("")) -> Response:
         session = kit.current(request)
         recipe = book().get(recipe_id)
@@ -224,7 +224,7 @@ def routes(kit: Kit) -> APIRouter:
             chart=recipe.chart,
         )
 
-    @router.post("/recipes/{recipe_id}/groceries")
+    @router.post("/recipes/{recipe_id:int}/groceries")
     async def to_groceries(request: Request, recipe_id: int) -> Response:
         signed, form = await kit.checked(request)
         recipe = book().get(recipe_id)
@@ -241,7 +241,7 @@ def routes(kit: Kit) -> APIRouter:
             f"/recipes/{recipe_id}?scale={said}", "The grocery card is in your Telegram chat."
         )
 
-    @router.post("/recipes/{recipe_id}/cook")
+    @router.post("/recipes/{recipe_id:int}/cook")
     async def cook(request: Request, recipe_id: int) -> Response:
         signed, form = await kit.checked(request)
         recipe = book().get(recipe_id)

@@ -127,7 +127,7 @@ def routes(kit: Kit) -> APIRouter:
         )
         return JSONResponse({"next": "/passkeys"})
 
-    @router.post("/passkeys/{passkey_id}/remove")
+    @router.post("/passkeys/{passkey_id:int}/remove")
     async def remove(request: Request, passkey_id: int) -> Response:
         session, _ = await kit.checked(request, admin=True)
         keys.remove(session.member, passkey_id)

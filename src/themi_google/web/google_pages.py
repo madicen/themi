@@ -203,7 +203,7 @@ def routes(kit: Kit) -> APIRouter:
         url = accounts.link_url(session.member, redirect_uri())
         return RedirectResponse(url, status_code=303)
 
-    @router.post("/accounts/{account_id}/settings")
+    @router.post("/accounts/{account_id:int}/settings")
     async def account_settings(request: Request, account_id: int) -> Response:
         session, form = await kit.checked(request)
         senders = str(form.get("urgent_senders", "")).replace(",", "\n").splitlines()
@@ -236,7 +236,7 @@ def routes(kit: Kit) -> APIRouter:
     def own_account(member: Member, account_id: int) -> LinkedAccount | None:
         return next((a for a in app.store.linked_accounts(member.id) if a.id == account_id), None)
 
-    @router.get("/accounts/{account_id}/calendars", response_class=HTMLResponse)
+    @router.get("/accounts/{account_id:int}/calendars", response_class=HTMLResponse)
     async def calendars_page(request: Request, account_id: int) -> Response:
         session = kit.current(request)
         account = own_account(session.member, account_id)
@@ -270,7 +270,7 @@ def routes(kit: Kit) -> APIRouter:
             copies=copies is not None,
         )  # fmt: skip
 
-    @router.post("/accounts/{account_id}/calendars/shown")
+    @router.post("/accounts/{account_id:int}/calendars/shown")
     async def show_calendars(request: Request, account_id: int) -> Response:
         """F34f: how each calendar of theirs shows on the family calendar, and the labels."""
         session, form = await kit.checked(request)
@@ -303,7 +303,7 @@ def routes(kit: Kit) -> APIRouter:
             f"/accounts/{account.id}/calendars", " ".join(said) or "Saved the labels."
         )
 
-    @router.post("/accounts/{account_id}/calendars")
+    @router.post("/accounts/{account_id:int}/calendars")
     async def choose_calendars(request: Request, account_id: int) -> Response:
         session, form = await kit.checked(request)
         account = own_account(session.member, account_id)
@@ -316,7 +316,7 @@ def routes(kit: Kit) -> APIRouter:
         names = ", ".join(n for _, n in chosen) or "your primary calendar"
         return kit.redirect("/accounts", f"Themi reads {names} for {account.address}.")
 
-    @router.post("/accounts/{account_id}/expected")
+    @router.post("/accounts/{account_id:int}/expected")
     async def add_expected(request: Request, account_id: int) -> Response:
         session, form = await kit.checked(request)
         expected = app.services.maybe(keys.expected)
@@ -339,7 +339,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect("/accounts", "That account isn't one of yours.")
         return kit.redirect("/accounts", f"Watching for {added.name}.")
 
-    @router.post("/accounts/{account_id}/expected/{expected_id}/remove")
+    @router.post("/accounts/{account_id:int}/expected/{expected_id:int}/remove")
     async def remove_expected(request: Request, account_id: int, expected_id: int) -> Response:
         session, _ = await kit.checked(request)
         expected = app.services.maybe(keys.expected)
@@ -351,7 +351,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect("/accounts", "That account isn't one of yours.")
         return kit.redirect("/accounts", f"No longer watching for {removed.name}.")
 
-    @router.post("/accounts/{account_id}/unlink")
+    @router.post("/accounts/{account_id:int}/unlink")
     async def unlink(request: Request, account_id: int) -> Response:
         session, _ = await kit.checked(request)
         accounts = google()

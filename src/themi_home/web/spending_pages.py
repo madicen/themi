@@ -120,7 +120,7 @@ def routes(kit: Kit) -> APIRouter:
             headers={"Content-Disposition": f'attachment; filename="business-{first:%Y-%m}.csv"'},
         )
 
-    @router.get("/expenses/{sheet_id}.csv")
+    @router.get("/expenses/{sheet_id:int}.csv")
     def sheet_csv(request: Request, sheet_id: int) -> Response:
         """EX3: a sheet as CSV, with each value's status, how sure, and where it came from."""
         found = visible(request, sheet_id)
@@ -152,7 +152,7 @@ def routes(kit: Kit) -> APIRouter:
             return None
         return session, sheet
 
-    @router.get("/spending/sheets/{sheet_id}", response_class=HTMLResponse)
+    @router.get("/spending/sheets/{sheet_id:int}", response_class=HTMLResponse)
     def sheet_page(request: Request, sheet_id: int) -> Response:
         found = visible(request, sheet_id)
         if found is None:
@@ -229,7 +229,7 @@ def routes(kit: Kit) -> APIRouter:
             field_types=FIELD_TYPES,
         )
 
-    @router.post("/spending/sheets/{sheet_id}/check/{entry_id}")
+    @router.post("/spending/sheets/{sheet_id:int}/check/{entry_id:int}")
     async def check_entry(request: Request, sheet_id: int, entry_id: int) -> Response:
         session, _ = await kit.checked(request)
         back = f"/spending/sheets/{sheet_id}"
@@ -239,7 +239,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect(back, str(exc))
         return kit.redirect(back, text)
 
-    @router.post("/spending/sheets/{sheet_id}/entries")
+    @router.post("/spending/sheets/{sheet_id:int}/entries")
     async def add_entry(request: Request, sheet_id: int) -> Response:
         """An entry typed on the website: what they type is theirs, so checked."""
         session, form = await kit.checked(request)
@@ -269,7 +269,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect("/spending", "Only the sheet's owner changes its fields.")
         return found[1], form
 
-    @router.post("/spending/sheets/{sheet_id}/fields")
+    @router.post("/spending/sheets/{sheet_id:int}/fields")
     async def add_field(request: Request, sheet_id: int) -> Response:
         got = await owner_form(request, sheet_id)
         if isinstance(got, Response):
@@ -292,7 +292,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect(back, f"Not added: {exc}.")
         return kit.redirect(back, f"Added the {label} field.")
 
-    @router.post("/spending/sheets/{sheet_id}/fields/{key}")
+    @router.post("/spending/sheets/{sheet_id:int}/fields/{key}")
     async def change_field(request: Request, sheet_id: int, key: str) -> Response:
         got = await owner_form(request, sheet_id)
         if isinstance(got, Response):
@@ -313,7 +313,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect(back, f"Not changed: {exc}.")
         return kit.redirect(back, "Saved.")
 
-    @router.post("/spending/sheets/{sheet_id}/settings")
+    @router.post("/spending/sheets/{sheet_id:int}/settings")
     async def change_sheet(request: Request, sheet_id: int) -> Response:
         got = await owner_form(request, sheet_id)
         if isinstance(got, Response):
