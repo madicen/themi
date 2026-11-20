@@ -530,3 +530,6 @@ a.button.small { min-height: 36px; padding: .3rem .8rem; font-size: .9rem; }
 /* DC7: today's picture on the dashboard, as wide as the column allows */
 .today-card svg { display: block; width: 100%; max-width: 540px; height: auto; border-radius: 12px; }
 .usage-card svg { display: block; width: 100%; max-width: 760px; height: auto; border-radius: 12px; } /* UC5 */
+
+/* WL1: the pairing code on Wall frames, big enough to read across a room */
+.pairing-code { font-size: 2.6rem; font-weight: 700; letter-spacing: 0.12em; margin: 0.4rem 0; }

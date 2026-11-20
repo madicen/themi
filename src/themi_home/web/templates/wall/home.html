@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Wall · Themi{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>{% if device %}Paired{% else %}The wall{% endif %}</h1>
+  <p>{% if device %}This frame is paired as {{ device.name }}.{% endif %}
+  The wall arrives in WL2.</p>
+</section>
+{% endblock %}

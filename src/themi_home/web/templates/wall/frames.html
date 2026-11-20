@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_row.html" import row %}
+{% block title %}Wall frames · Themi{% endblock %}
+{% block content %}
+<h1>Wall frames</h1>
+<p class="muted">A frame shows the wall page for the whole household. It can open only the
+wall, never the rest of the website.</p>
+
+{% if code %}
+<section class="card" id="code">
+  <h2>Type this on the frame</h2>
+  <p class="pairing-code" aria-label="Pairing code">{{ code }}</p>
+  <p>On the frame, open <strong>/wall/pair</strong> on Themi's address and type it. It works
+  once, for the next {{ minutes }} minutes.</p>
+</section>
+{% endif %}
+
+<form method="post" action="/wall/frames/code">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="primary">Pair a frame</button>
+</form>
+
+<h2>Paired frames</h2>
+{% if frames %}
+<div class="rows">
+{% for f in frames %}
+{% call(part) row(f.name, meta="Last seen " ~ (f.last_seen_at | local_time), id="frame-" ~ f.id) %}
+{% if part == "body" %}
+  <p class="muted">Paired {{ f.paired_at | local_time }}.</p>
+  <form method="post" action="/wall/frames/{{ f.id }}/revoke">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button>Sign this frame out</button>
+  </form>
+{% endif %}
+{% endcall %}
+{% endfor %}
+</div>
+{% else %}
+<p class="muted">No frames yet.</p>
+{% endif %}
+{% endblock %}

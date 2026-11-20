@@ -496,7 +496,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MP5 | Modules page: every setting on the module's page | Modules page | [x] 2026-11-19 |
 | MP6 | Modules page: the list, quicker to use | Modules page | [x] 2026-11-19 |
 | MP7 | Modules page: a module's page, quicker to use | Modules page | [x] 2026-11-19 |
-| WL1 | Wall: the module and the frame's sign-in | Wall | [ ] |
+| WL1 | Wall: the module and the frame's sign-in | Wall | [x] 2026-11-20 |
 | WL2 | Wall: the home screen, read-only | Wall | [ ] |
 | WL3 | Wall: today's timeline and the week ahead | Wall | [ ] |
 | WL4 | Wall: ticking things off | Wall | [ ] |
@@ -22571,14 +22571,15 @@ because W is the website redesign. Rules every WL prompt keeps:
   points or comparisons.
 - Server-drawn HTML; htmx only polls and swaps fragments. Drawn for 1080 x 1920 portrait;
   touch targets at least 64 px, text at least 20 px.
-- The `wall` module is core (`themi/standard/wall.py`, `themi/web/wall_pages.py`), in the
-  Your day group. It reads the calendar through `themi.core.calendar_view`, tasks, routines
-  and lists through their stores, and weather through the stored forecast. It never names
-  a pack's module: anything a pack adds (the Dish view's recipe) comes through a hook the
-  pack fills.
+- The `wall` module is in the home pack (`themi_home/wall.py`, templates under
+  `themi_home/web/templates/wall/`), in the Your day group: the core's standard modules
+  never name the wall (CR21b, `test_no_standard_module_names_cozyla_or_the_wall`). It reads
+  the calendar through `themi.core.calendar_view`, tasks, routines and lists through their
+  stores, and weather through the stored forecast. Being in the home pack, the Dish view
+  can use the cooking module directly; no hook is needed.
 
 ### WL1 · Wall: the module and the frame's sign-in
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: none
 Read first: the plan's "How it fits Themi" (The frame's sign-in) and "A screen guests can
 see"; `themi/web/auth.py`; `themi/web/passkey_pages.py` (another sign-in path).
@@ -22598,6 +22599,18 @@ and the API; revoking signs the frame out on its next request; the token isn't i
 database or the logs in clear; only admins can pair or revoke.
 
 Notes:
+- In the home pack, not the core as the plan said: the core's standard modules never name
+  the wall (CR21b's architecture test). `themi_home/wall.py` holds `WallDevices` and the
+  routes; its track is `themi_home/wall_schema` (frames, pairing codes, missed codes).
+  The plan's "How it fits Themi" says so now.
+- The admin page is `/wall/frames` (Admin menu, "Wall frames"), so it's listed on the
+  module's page among its pages. Pair a frame shows the code on that page (not a redirect,
+  so it's shown once). A new code retires any code still open.
+- `/wall/pair` takes the code and an optional frame name ("Wall"). The frame's cookie is
+  `themi_wall`, kept 400 days. Each frame has its own CSRF token for WL4's taps
+  (`WallDevices.csrf_ok`).
+- `/wall` is a placeholder; a member's own session sees it too.
+- The module is off unless turned on (not in the family template).
 
 ### WL2 · Wall: the home screen, read-only
 Status: [ ]
