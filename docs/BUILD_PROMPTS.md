@@ -499,7 +499,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL1 | Wall: the module and the frame's sign-in | Wall | [x] 2026-11-20 |
 | WL2 | Wall: the home screen, read-only | Wall | [x] 2026-11-20 |
 | WL3 | Wall: today's timeline and the week ahead | Wall | [x] 2026-11-20 |
-| WL4 | Wall: ticking things off | Wall | [ ] |
+| WL4 | Wall: ticking things off | Wall | [x] 2026-11-20 |
 | WL5 | Wall: the views | Wall | [ ] |
 | WL6 | Wall: time of day, night, and the frame | Wall | [ ] |
 
@@ -22699,7 +22699,7 @@ Notes:
 - The week: seven days from tomorrow, all-day events first, three each and "+N more".
 
 ### WL4 · Wall: ticking things off
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL2
 Read first: the plan's "Tapping things" (the first two rows) and "How it fits Themi" (Taps).
 - `POST /wall/tap` (CSRF as other posts; the wall device has its own token): tick and
@@ -22715,6 +22715,23 @@ chore isn't sent after the tick; a revoked device's tap is refused; a scenario: 
 "Bring bins in" on the wall and Themi's evening heads-up doesn't mention bins.
 
 Notes:
+- `POST /wall/tap` (the frame's own CSRF token, or a member's session's) takes an item's
+  key (`task-12`, `step-5-2026-11-19`). Only items showing on the wall now can be tapped
+  (`WallView.find`); anything else answers with the columns, unchanged. The answer is the
+  columns fragment, already changed.
+- Staged as `wall_tap` (a new category in the wall's track, `0002_wall_tap.sql`: "Tick
+  things off on the wall", automatic, family) with `requested=True`, as the person whose
+  column it's in; a Together item asks "Who did it?" (each person, and Not yet) and is
+  staged as the one picked. The audit has "Tick off <title> on the wall".
+- `WallTaps.execute`: a task is `complete(..., ticked_on="on the wall")`, so the person gets
+  the same warm word as for a tick on Cozyla, and the Cozyla sync sends it on; unticking a
+  one-off is `reopen`. Steps are `Routines.tick`/`untick`.
+- Things done today stay on the wall, struck through (`done_between`), Together's with
+  "<name> did it". A chore's round can't be undone (Themi has no way to), so a done chore
+  is shown but isn't a button.
+- The prompt's "no follow-up after the tick" turned out not to be testable: a chore due
+  today gets one nudge, and nothing follows within the evening either way. The test is
+  instead the warm word reaching the right person.
 
 ### WL5 · Wall: the views
 Status: [ ]

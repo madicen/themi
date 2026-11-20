@@ -13,9 +13,25 @@
     {% if sec.items %}
     <ul>
       {% for i in sec.items %}
-      <li class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}">
-        <span class="ring" aria-hidden="true"></span>
-        <span class="wall-words"><span class="wall-title">{{ i.title }}</span>{% if i.sub %}<span class="wall-sub">{{ i.sub }}</span>{% endif %}</span>
+      <li class="wall-entry">
+        {% if i.tappable %}
+        <button type="button" class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}" aria-pressed="{{ 'true' if i.done else 'false' }}"
+          hx-post="/wall/tap" hx-vals='{"key": "{{ i.key }}"}' hx-target="#wall-columns" hx-swap="innerHTML">
+        {% else %}
+        <div class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}">
+        {% endif %}
+          <span class="ring" aria-hidden="true"></span>
+          <span class="wall-words"><span class="wall-title">{{ i.title }}</span>{% if i.sub %}<span class="wall-sub">{{ i.sub }}</span>{% endif %}</span>
+        {% if i.tappable %}</button>{% else %}</div>{% endif %}
+        {% if i.asking %}
+        <div class="wall-who" role="group" aria-label="Who did it?">
+          <span>Who did it?</span>
+          {% for p in screen.people %}
+          <button type="button" class="tone-{{ p.tone }}" hx-post="/wall/tap" hx-vals='{"key": "{{ i.key }}", "by": "{{ p.id }}"}' hx-target="#wall-columns" hx-swap="innerHTML">{{ p.name }}</button>
+          {% endfor %}
+          <button type="button" class="wall-not-yet" hx-post="/wall/tap" hx-vals='{"cancel": "1"}' hx-target="#wall-columns" hx-swap="innerHTML">Not yet</button>
+        </div>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>

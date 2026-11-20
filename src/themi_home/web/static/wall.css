@@ -129,3 +129,15 @@ body.wall {
   font-size: 0.95rem; line-height: 1.2; padding: 0.3rem 0.45rem; border-radius: 0.5rem; background: var(--tone); color: #fff;
   font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* WL4: tapping things off */
+.wall-entry { display: flex; flex-direction: column; }
+button.wall-item { width: 100%; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+button.wall-item:focus-visible { outline: 0.2rem solid #2f6fdb; outline-offset: 0.15rem; }
+.wall-who { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; padding: 0.4rem 0.4rem 0.6rem 3.6rem; }
+.wall-who span { width: 100%; font-size: 1.05rem; color: #4a4e55; }
+.wall-who button {
+  min-height: 3rem; padding: 0 1.1rem; border-radius: 1.5rem; border: 0; background: var(--tone); color: #fff;
+  font: inherit; font-size: 1.1rem; font-weight: 600; cursor: pointer;
+}
+.wall-who .wall-not-yet { background: #fff; color: #4a4e55; border: 0.12rem solid #c9ccd1; }

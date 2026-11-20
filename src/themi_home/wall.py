@@ -21,15 +21,17 @@ import hashlib
 import hmac
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from themi import clock
 from themi.accounts import Member
+from themi.autonomy import ExecutionContext
+from themi.core import keys
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
@@ -38,6 +40,7 @@ from themi.storage.db import Database
 from themi_home.wall_view import WallView
 
 if TYPE_CHECKING:
+    from themi.core.services import Services
     from themi.web.kit import Kit
 
 NAME = "wall"
@@ -47,7 +50,9 @@ LOCKED_FOR = timedelta(minutes=10)
 WALL_COOKIE = "themi_wall"
 COOKIE_AGE = timedelta(days=400)  # the longest a browser keeps a cookie
 DEFAULT_NAME = "Wall"
-PARTS = ("top", "note", "today", "columns", "week", "smalls")  # what the page refreshes on its own
+PARTS = ("top", "note", "today", "columns", "week", "smalls")  # refreshed on their own
+TAP = "wall_tap"  # WL4: the category and executor of a tick on the wall
+WHERE = "on the wall"  # as praise says it ("Ticked off on the wall: ...")
 
 
 def _hash(value: str) -> str:
@@ -179,6 +184,40 @@ def _device(row: dict) -> WallDevice:
     )
 
 
+# ----- WL4: ticking things off ------------------------------------------------------------
+
+
+class WallTaps:
+    """A tap's change, run by the trust tiers (`wall_tap`, automatic: the person's own
+    decision), as the person it was for. Payload: the item's key, who, and ticked or not."""
+
+    def __init__(self, services: Services) -> None:
+        self.services = services
+
+    async def execute(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        key, done = str(payload["key"]), bool(payload["done"])
+        by = self.services.store.get_member(int(payload["by"]))
+        kind, _, rest = key.partition("-")
+        if kind == "task":
+            board = self.services.get(keys.taskboard)
+            if done:
+                return await board.complete(int(rest), by, ticked_on=WHERE)
+            task = await board.reopen(int(rest))
+            return f"{task.title} is open again."
+        if kind == "step":
+            routines = self.services.get(keys.routines)
+            item_id, _, day = rest.partition("-")
+            item = routines.item(int(item_id))
+            if item is None:
+                return "That step isn't in the routine any more."
+            if done:
+                routines.tick(item, date.fromisoformat(day))
+                return f"Ticked {item.title}."
+            routines.untick(item, date.fromisoformat(day))
+            return f"Unticked {item.title}."
+        raise ValueError(f"not something on the wall: {key}")
+
+
 # ----- the website ---------------------------------------------------------------------
 
 
@@ -226,6 +265,43 @@ def routes(kit: Kit) -> APIRouter:
             return gone()
         screen = WallView(kit.app.services).screen()
         return kit.page(request, f"wall/_{part}.html", screen=screen)
+
+    @router.post("/wall/tap", response_class=HTMLResponse)
+    async def tap(request: Request) -> Response:
+        """WL4: tick or untick something showing on the wall. A Together item asks who did
+        it first. Answers with the columns, already changed."""
+        csrf = viewer(request)
+        if csrf is None:
+            return gone()
+        form = await request.form()
+        submitted = str(form.get("csrf") or request.headers.get("X-CSRF-Token") or "")
+        if not submitted or not hmac.compare_digest(csrf, submitted):
+            raise PermissionError("missing or wrong CSRF token")
+        view = WallView(kit.app.services)
+        key = str(form.get("key", ""))
+        found = view.find(key) if not form.get("cancel") else None
+        if found is None or not found[1].tappable:
+            return columns(request, view)
+        column, item = found
+        people = {m.id: m for m in view.people()}
+        if column.member_id is not None:
+            by = people.get(column.member_id)
+        elif item.done:  # unticking a shared one: whoever ticked it doesn't matter
+            by = next(iter(people.values()), None)
+        else:
+            raw = str(form.get("by", ""))
+            by = people.get(int(raw)) if raw.isdigit() else None
+            if by is None:
+                return columns(request, view, ask=key)
+        if by is None:
+            return columns(request, view)
+        summary = f"{'Untick' if item.done else 'Tick off'} {item.title} {WHERE}"
+        payload = {"key": key, "by": by.id, "done": not item.done}
+        await kit.app.services.autonomy.stage(TAP, by, summary, payload, TAP, requested=True)
+        return columns(request, view)
+
+    def columns(request: Request, view: WallView, ask: str = "") -> HTMLResponse:
+        return kit.page(request, "wall/_columns.html", screen=view.screen(ask))
 
     @router.get("/wall/pair", response_class=HTMLResponse)
     def pair_form(request: Request) -> Response:
@@ -304,6 +380,7 @@ class WallModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(WallDevices(ctx.services.store.db))
+        ctx.executor(TAP, WallTaps(ctx.services).execute)
         ctx.web(
             routes,
             MenuEntry(

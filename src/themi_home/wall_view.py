@@ -15,7 +15,7 @@ and the family's to-dos (tasks on both lists).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
@@ -47,6 +47,18 @@ class WallItem:
     title: str
     sub: str = ""
     done: bool = False
+    # WL4: a tap ticks it (or unticks it). A chore's round, once done, can't be undone.
+    tappable: bool = True
+    asking: bool = False  # "Who did it?" is showing under it
+
+
+@dataclass(frozen=True)
+class WallPerson:
+    """Someone a Together item can be ticked for."""
+
+    id: int
+    name: str
+    tone: str
 
 
 @dataclass(frozen=True)
@@ -160,6 +172,7 @@ class WallScreen:
     smalls: tuple[SmallList, ...] = field(default=())
     today: TodayLine | None = None  # WL3: None when there's no calendar
     week: tuple[WeekDay, ...] = ()
+    people: tuple[WallPerson, ...] = ()  # WL4: "Who did it?"
 
 
 class WallView:
@@ -168,7 +181,8 @@ class WallView:
 
     # ----- the whole screen -------------------------------------------------------------
 
-    def screen(self) -> WallScreen:
+    def screen(self, ask: str = "") -> WallScreen:
+        """The whole screen; `ask`: the Together item whose "Who did it?" is showing."""
         now = self.now()
         return WallScreen(
             now=now,
@@ -177,10 +191,13 @@ class WallView:
             meridiem="AM" if now.hour < 12 else "PM",
             weather=self.weather(),
             note=self.note(),
-            columns=self.columns(),
+            columns=self.columns(ask),
             smalls=self.smalls(),
             today=self.today_line(),
             week=self.week(),
+            people=tuple(
+                WallPerson(m.id, m.name, f"p{i % 4}") for i, m in enumerate(self.people())
+            ),
         )
 
     def tz(self) -> ZoneInfo:
@@ -195,14 +212,42 @@ class WallView:
 
     # ----- the columns ------------------------------------------------------------------
 
-    def columns(self) -> tuple[WallColumn, ...]:
+    def columns(self, ask: str = "") -> tuple[WallColumn, ...]:
         people = self.people()
         today = self.now().date()
         tasks = self._open_tasks(people)
-        columns = [self._person(i, m, tasks, today) for i, m in enumerate(people)]
-        together = self._together(tasks, today)
+        done = self._done_tasks(people)
+        columns = [self._person(i, m, tasks, done, today) for i, m in enumerate(people)]
+        together = self._together(tasks, done, today, {m.id: m.name for m in people})
+        if ask:
+            together = _asking(together, ask)
         columns.insert(len(columns) // 2 if len(columns) > 1 else len(columns), together)
         return tuple(columns)
+
+    def find(self, key: str) -> tuple[WallColumn, WallItem] | None:
+        """WL4: an item showing on the wall now, and its column. Only what's shown can be
+        tapped."""
+        for column in self.columns():
+            for section in column.sections:
+                for item in section.items:
+                    if item.key == key:
+                        return column, item
+        return None
+
+    def _done_tasks(self, people: list[Member]) -> list[tuple[Task, int | None]]:
+        """Tasks (or a chore's round) done today, each once, with who did it: they stay on
+        the wall, ticked, until the day ends."""
+        board = self.services.maybe(keys.taskboard)
+        if board is None:
+            return []
+        now = self.now()
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        seen: dict[int, tuple[Task, int | None]] = {}
+        for member in people:
+            for done in board.done_between(member, start, now + timedelta(seconds=1)):
+                if not done.task.off_displays:
+                    seen.setdefault(done.task.id, (done.task, done.by))
+        return list(seen.values())
 
     def _open_tasks(self, people: list[Member]) -> list[Task]:
         board = self.services.maybe(keys.taskboard)
@@ -215,7 +260,14 @@ class WallView:
                     seen.setdefault(task.id, task)
         return list(seen.values())
 
-    def _person(self, index: int, member: Member, tasks: list[Task], today: date) -> WallColumn:
+    def _person(
+        self,
+        index: int,
+        member: Member,
+        tasks: list[Task],
+        done: list[tuple[Task, int | None]],
+        today: date,
+    ) -> WallColumn:
         sections: list[WallSection] = []
         routine_section = self._routine(member)
         if routine_section is not None:
@@ -225,34 +277,57 @@ class WallView:
             (t for t in mine if t.repeats and t.due_on is not None and t.due_on <= today),
             key=lambda t: _rank(t, today),
         )
-        sections.append(WallSection("Chores", tuple(self._task_item(t, today) for t in chores)))
         todos = sorted((t for t in mine if not t.repeats), key=lambda t: _rank(t, today))
+        shown = {t.id for t in chores} | {t.id for t in todos[:TODOS_SHOWN]}
+        finished = [
+            t for t, _ in done if t.assignee == member.id and not _for_both(t) and t.id not in shown
+        ]
+        sections.append(
+            WallSection(
+                "Chores",
+                tuple(self._task_item(t, today) for t in chores)
+                + tuple(_done_item(t) for t in finished if t.repeats),
+            )
+        )
         sections.append(
             WallSection(
                 "To-do",
-                tuple(self._task_item(t, today) for t in todos[:TODOS_SHOWN]),
+                tuple(self._task_item(t, today) for t in todos[:TODOS_SHOWN])
+                + tuple(_done_item(t) for t in finished if not t.repeats),
                 empty="Nothing on the list",
                 more=len(todos) > TODOS_SHOWN,
             )
         )
-        done = self._done_today(member)
+        count = self._done_today(member)
         return WallColumn(
             key=f"m{member.id}",
             name=member.name,
             initial=member.name[:1].upper(),
             tone=f"p{index % 4}",
-            summary=f"{done} done {self._today_word()}" if done else self._part_word(),
+            summary=f"{count} done {self._today_word()}" if count else self._part_word(),
             sections=tuple(s for s in sections if s.items or s.empty),
             member_id=member.id,
         )
 
-    def _together(self, tasks: list[Task], today: date) -> WallColumn:
+    def _together(
+        self,
+        tasks: list[Task],
+        done: list[tuple[Task, int | None]],
+        today: date,
+        names: dict[int, str],
+    ) -> WallColumn:
         both = [t for t in tasks if _for_both(t)]
         either = sorted(
             (t for t in both if t.repeats and t.due_on is not None and t.due_on <= today),
             key=lambda t: _rank(t, today),
         )
         family = sorted((t for t in both if not t.repeats), key=lambda t: _rank(t, today))
+        shown = {t.id for t in either} | {t.id for t in family[:FAMILY_TODOS_SHOWN]}
+        finished = [
+            (t, _done_item(t, f"{names[by]} did it" if by in names else ""))
+            for t, by in done
+            if _for_both(t) and t.id not in shown
+        ]
         return WallColumn(
             key=TOGETHER,
             name="Together",
@@ -260,10 +335,15 @@ class WallView:
             tone="family",
             summary=self._part_word(),
             sections=(
-                WallSection("Either of you", tuple(self._task_item(t, today) for t in either)),
+                WallSection(
+                    "Either of you",
+                    tuple(self._task_item(t, today) for t in either)
+                    + tuple(item for t, item in finished if t.repeats),
+                ),
                 WallSection(
                     "Family to-do",
-                    tuple(self._task_item(t, today) for t in family[:FAMILY_TODOS_SHOWN]),
+                    tuple(self._task_item(t, today) for t in family[:FAMILY_TODOS_SHOWN])
+                    + tuple(item for t, item in finished if not t.repeats),
                     empty="Nothing on the list",
                     more=len(family) > FAMILY_TODOS_SHOWN,
                 ),
@@ -567,3 +647,21 @@ def lay_out_today(
             for e in sorted(tomorrow, key=lambda e: (not e.all_day, e.start))[:TOMORROW_SHOWN]
         ),
     )
+
+
+def _done_item(task: Task, sub: str = "") -> WallItem:
+    """Ticked today: struck through. A one-off can be unticked; a chore's round can't."""
+    return WallItem(f"task-{task.id}", task.title, sub, done=True, tappable=not task.repeats)
+
+
+def _asking(column: WallColumn, key: str) -> WallColumn:
+    sections = tuple(
+        replace(
+            section,
+            items=tuple(
+                replace(i, asking=True) if i.key == key and not i.done else i for i in section.items
+            ),
+        )
+        for section in column.sections
+    )
+    return replace(column, sections=sections)
