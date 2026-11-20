@@ -18,11 +18,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 from zoneinfo import ZoneInfo
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.household import HouseholdSettings
 from themi.core import keys
 from themi.localtime import to_utc_iso
 
@@ -196,6 +199,32 @@ class WeekDay:
     more: int = 0
 
 
+class WallSettings(HouseholdSettings):
+    """WL6: when the wall goes quiet for the night. It wakes at the first morning routine."""
+
+    module: ClassVar[str] = "wall"
+    bedtime: str = "23:00"
+
+    @field_validator("bedtime")
+    @classmethod
+    def _bedtime(cls, value: str) -> str:
+        try:
+            hour, minute = (int(part) for part in value.strip().split(":")[:2])
+            return f"{time(hour, minute):%H:%M}"
+        except ValueError as exc:
+            raise ValueError(f"'{value}' isn't a time like 23:00") from exc
+
+
+@dataclass(frozen=True)
+class NightView:
+    """WL6: the dim screen from bedtime to the first morning routine."""
+
+    heading: str  # "Tomorrow, Thursday", or "This morning" after midnight
+    plan: tuple[Chip, ...]  # the day's first events and morning steps, with whose
+    low: str  # "49° tonight", or ""
+    line: str  # one reassuring line
+
+
 @dataclass(frozen=True)
 class WallScreen:
     now: datetime  # local
@@ -209,6 +238,7 @@ class WallScreen:
     today: TodayLine | None = None  # WL3: None when there's no calendar
     week: tuple[WeekDay, ...] = ()
     people: tuple[WallPerson, ...] = ()  # WL4: "Who did it?"
+    night: NightView | None = None  # WL6: None by day
 
 
 class WallView:
@@ -234,7 +264,61 @@ class WallView:
             people=tuple(
                 WallPerson(m.id, m.name, f"p{i % 4}") for i, m in enumerate(self.people())
             ),
+            night=self.night(),
         )
+
+    # ----- WL6: the night -------------------------------------------------------------
+
+    def bedtime(self) -> time:
+        hour, minute = self.services.store.household(WallSettings).bedtime.split(":")
+        return time(int(hour), int(minute))
+
+    def morning(self) -> time:
+        """When the wall wakes: the first morning routine anyone has (8 am by default)."""
+        routines = self.services.maybe(keys.routines)
+        starts = [r.starts for m in self.people() for r in (routines.of(m) if routines else [])]
+        return min(starts, default=time(DAY_STARTS))
+
+    def is_night(self) -> bool:
+        at, bed, wake = self.now().time(), self.bedtime(), self.morning()
+        if bed > wake:  # 11 pm to 8 am, across midnight
+            return at >= bed or at < wake
+        return bed <= at < wake  # a bedtime after midnight
+
+    def night(self) -> NightView | None:
+        if not self.is_night():
+            return None
+        now = self.now()
+        after_midnight = now.time() < self.morning()
+        day = now.date() if after_midnight else now.date() + timedelta(days=1)
+        heading = "This morning" if after_midnight else f"Tomorrow, {day:%A}"
+        events = sorted(self.events(day), key=lambda e: (not e.all_day, e.start))
+        plan = [Chip(e.title, e.tone) for e in events[:TOMORROW_SHOWN]]
+        routines = self.services.maybe(keys.routines)
+        for index, member in enumerate(self.people()):
+            if routines is None:
+                break
+            first = next(iter(routines.of(member)), None)
+            if first is None:
+                continue
+            for item in routines.today_items(first, day)[:2]:
+                plan.append(
+                    Chip(f"{item.title} · {member.name}, {first.name.lower()}", f"p{index % 4}")
+                )
+        weather = self.weather()
+        left = any(
+            not i.done
+            for c in self.columns()
+            for s in c.sections
+            if s.title != "To-do" and s.title != "Family to-do"
+            for i in s.items
+        )
+        line = (
+            "A few things from today will still be here in the morning. Nothing needs doing now."
+            if left
+            else "Nothing needs doing now."
+        )
+        return NightView(heading, tuple(plan), f"{weather.low} tonight" if weather else "", line)
 
     def tz(self) -> ZoneInfo:
         family = self.services.store.get_family()

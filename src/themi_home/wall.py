@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from themi import clock
 from themi.accounts import Member
@@ -38,7 +38,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
-from themi_home.wall_view import WallItem, WallView
+from themi_home.wall_view import WallItem, WallSettings, WallView
 from themi_home.wall_views import WallViews, _recipe, dish_view, list_view, note_view
 
 if TYPE_CHECKING:
@@ -52,7 +52,7 @@ LOCKED_FOR = timedelta(minutes=10)
 WALL_COOKIE = "themi_wall"
 COOKIE_AGE = timedelta(days=400)  # the longest a browser keeps a cookie
 DEFAULT_NAME = "Wall"
-PARTS = ("top", "note", "today", "columns", "week", "smalls")  # refreshed on their own
+PARTS = ("top", "note", "today", "columns", "week", "smalls", "night")  # refreshed on their own
 TAP = "wall_tap"  # WL4: the category and executor of a tick on the wall
 WHERE = "on the wall"  # as praise says it ("Ticked off on the wall: ...")
 CLOSE_AFTER = 120  # WL5a: seconds without a touch before a view closes itself
@@ -436,6 +436,51 @@ def routes(kit: Kit) -> APIRouter:
             return gone()
         return person_view(request, WallView(kit.app.services), member_id)
 
+    # ----- WL6: an app on the frame ----------------------------------------------------
+
+    @router.get("/wall/manifest.webmanifest")
+    def manifest() -> JSONResponse:
+        """Added to the frame's home screen, /wall opens as its own app: full screen,
+        portrait, no browser bars. Nothing private in it."""
+        from themi.web.kit import asset
+
+        def icon(name: str, size: int) -> dict[str, str]:
+            return {
+                "src": asset(f"home/icons/{name}", kit.static_folders),
+                "sizes": f"{size}x{size}",
+                "type": "image/png",
+                "purpose": "any maskable",
+            }
+
+        return JSONResponse(
+            {
+                "name": "Themi Wall",
+                "short_name": "Wall",
+                "id": "/wall",
+                "start_url": "/wall",
+                "scope": "/wall",
+                "display": "fullscreen",
+                "display_override": ["fullscreen", "standalone"],
+                "orientation": "portrait",
+                "background_color": "#e8ece6",
+                "theme_color": "#e8ece6",
+                "icons": [icon("icon-192.png", 192), icon("icon-512.png", 512)],
+            },
+            media_type="application/manifest+json",
+        )
+
+    @router.get("/wall/sw.js")
+    def service_worker() -> Response:
+        """The frame's last good screen, for when Themi can't be reached (WL6)."""
+        from themi.web.kit import static_file
+
+        body = static_file("home/wall-sw.js", kit.static_folders).read_text()
+        return Response(
+            body,
+            media_type="text/javascript",
+            headers={"Service-Worker-Allowed": "/wall", "Cache-Control": "no-cache"},
+        )
+
     # ----- WL5b: List, Dish and Note --------------------------------------------------
 
     def views() -> WallViews:
@@ -682,6 +727,7 @@ class WallModule(Module):
     )
     cost = "Free"
     migrations = Path(__file__).parent / "wall_schema"
+    household = WallSettings  # WL6: when the wall goes quiet for the night
     website = "Pair the frame on Wall frames (/wall/frames), then open /wall/pair on it."
 
     def install(self, ctx: ModuleContext) -> None:

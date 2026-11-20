@@ -6,11 +6,17 @@
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
   <title>Wall · Themi</title>
   <meta name="theme-color" content="#e8ece6">
+  <link rel="manifest" href="/wall/manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="{{ asset('home/icons/apple-touch-icon.png') }}">
   <link rel="stylesheet" href="{{ asset('home/wall.css') }}">
   <script src="{{ asset('htmx.min.js') }}" defer></script>
   <script src="{{ asset('home/wall.js') }}" defer></script>
 </head>
-<body class="wall" hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
+<body class="wall{% if screen.night %} night{% endif %}" hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
+<div id="wall-night" hx-get="/wall/part/night" hx-trigger="every 60s" hx-swap="innerHTML">
+  {% include "wall/_night.html" %}
+</div>
 <main class="wall-screen">
   <header class="wall-top" id="wall-top" hx-get="/wall/part/top" hx-trigger="every 30s" hx-swap="innerHTML">
     {% include "wall/_top.html" %}

@@ -69,9 +69,40 @@
     stale(false);
     place(event.target);
     if (event.target.id === "wall-view") watchView();
+    if (event.target.id === "wall-night") nightMode();
   });
+  // WL6: the night. The night part says whether it's night (data-night); a touch shows
+  // the full screen until it's left alone for two minutes.
+  var awake = null;
+  function nightMode() {
+    var mode = document.querySelector("#wall-night .wall-night-mode");
+    var night = mode && mode.getAttribute("data-night") === "1";
+    document.body.classList.toggle("night", !!night);
+    if (!night) wake(false);
+  }
+  function wake(on) {
+    if (awake) { clearTimeout(awake); awake = null; }
+    document.body.classList.toggle("awake", on);
+    if (on) awake = setTimeout(function () { wake(false); }, 120000);
+  }
+  document.addEventListener("pointerdown", function () {
+    if (document.body.classList.contains("night")) wake(true);
+  });
+
+  // WL6: keep the screen on while the wall is open, and ask again when it's seen again.
+  function hold() {
+    if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+    navigator.wakeLock.request("screen").catch(function () {});
+  }
+  document.addEventListener("visibilitychange", hold);
+
   document.addEventListener("DOMContentLoaded", function () {
     place(document);
+    nightMode();
+    hold();
     setInterval(tick, 60000);
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/wall/sw.js", { scope: "/wall" }).catch(function () {});
+    }
   });
 })();

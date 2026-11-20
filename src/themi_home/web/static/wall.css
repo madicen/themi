@@ -221,3 +221,18 @@ button.wall-item:focus-visible { outline: 0.2rem solid #2f6fdb; outline-offset: 
 .wall-small-open { display: block; width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; padding: 0; cursor: pointer; }
 .wall-dishes { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .wall-dish { min-height: 3rem; padding: 0 0.9rem; border-radius: 1.5rem; border: 0.12rem solid var(--line); background: var(--soft); font: inherit; font-size: 1.15rem; cursor: pointer; }
+
+/* WL6: the night. Dim, the time, tomorrow's plan; a touch shows everything (.awake). */
+#wall-night { display: none; }
+body.night:not(.awake) #wall-night { display: block; }
+body.night:not(.awake) .wall-screen { display: none; }
+body.night:not(.awake) { background: #14161b; }
+.wall-night { min-height: 100vh; padding: 7.5rem 6rem; color: #e9e6e0; display: flex; flex-direction: column; gap: 2.5rem; }
+.night-time { font-size: 10rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+.night-time span { font-size: 3rem; margin-left: 0.8rem; color: #a9a6a0; }
+.night-date { font-size: 2.25rem; color: #a9a6a0; }
+.night-heading { font-size: 1.4rem; letter-spacing: 0.1em; text-transform: uppercase; color: #8e8b86; font-weight: 600; margin-top: 2rem; }
+.night-plan { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; font-size: 2.1rem; }
+.night-plan .dot-chip::before { width: 0.9rem; height: 0.9rem; }
+.night-line { font-size: 1.9rem; line-height: 1.4; color: #bdb9b2; max-width: 48rem; }
+.night-hint { margin-top: auto; font-size: 1.3rem; color: #8e8b86; }

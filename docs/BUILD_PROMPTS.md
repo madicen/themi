@@ -502,7 +502,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL4 | Wall: ticking things off | Wall | [x] 2026-11-20 |
 | WL5a | Wall: the views, part 1 (Event, Day, Weather, Person) | Wall | [x] 2026-11-20 |
 | WL5b | Wall: the views, part 2 (List, Dish, Note) | Wall | [x] 2026-11-20 |
-| WL6 | Wall: time of day, night, and the frame | Wall | [ ] |
+| WL6 | Wall: time of day, night, and the frame | Wall | [x] 2026-11-20 |
 
 ## Fixed technical choices
 
@@ -22827,7 +22827,7 @@ Notes:
   the note and the small lists refresh on it.
 
 ### WL6 · Wall: time of day, night, and the frame
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL5b
 Read first: the plan's "What the family sees" (By time of day) and "Setting up the frame".
 - Columns switch routine part by the routine's own morning, afternoon and evening times;
@@ -22846,3 +22846,21 @@ bedtime setting moves the night view; a scenario: the wall at 11:33 pm shows tom
 Erin's morning "Walk dog".
 
 Notes:
+- Routines by part of the day came with WL2 (`current_routine`); WL6 tests morning,
+  afternoon, evening and night at frozen times.
+- `WallSettings` (household, `bedtime`, "23:00") is the module's `household` model, so
+  it's on the module's page (MP5). Night runs from bedtime to the first routine anyone has
+  (`WallView.morning()`, 8 am by default); a bedtime after midnight works too.
+- The night view is its own part (`/wall/part/night`, every 60 s) carrying `data-night`;
+  `wall.js` puts the body in `night` (the dim screen) and a touch adds `awake` for two
+  minutes. The touch is the script's, so it's tested as markup only. Before midnight it
+  shows "Tomorrow, <day>"; after, "This morning". Its plan: the day's first events and each
+  person's first routine's first two steps.
+- `/wall/manifest.webmanifest` (full screen, portrait, the home pack's icons) and
+  `/wall/sw.js` (`home/wall-sw.js`, scope `/wall` via `Service-Worker-Allowed`): the page
+  itself is kept and served when Themi can't be reached; its parts aren't, so the page
+  shows "Updated" until they come back. Screen Wake Lock is asked for on load and again
+  when the page is visible again.
+- The guide (`themi_home/setup/wall.md`) has the frame's steps and the bedtime.
+- Not looked at on the frame or in a browser: everything is tested through the pages. To
+  try it: turn the Wall module on, restart, pair the frame from Wall frames.
