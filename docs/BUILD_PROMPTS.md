@@ -501,7 +501,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL3 | Wall: today's timeline and the week ahead | Wall | [x] 2026-11-20 |
 | WL4 | Wall: ticking things off | Wall | [x] 2026-11-20 |
 | WL5a | Wall: the views, part 1 (Event, Day, Weather, Person) | Wall | [x] 2026-11-20 |
-| WL5b | Wall: the views, part 2 (List, Dish, Note) | Wall | [ ] |
+| WL5b | Wall: the views, part 2 (List, Dish, Note) | Wall | [x] 2026-11-20 |
 | WL6 | Wall: time of day, night, and the frame | Wall | [ ] |
 
 ## Fixed technical choices
@@ -22780,7 +22780,7 @@ Notes:
   Column headers, week days, the weather and timeline blocks are buttons now.
 
 ### WL5b · Wall: the views, part 2 (List, Dish, Note)
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL5a
 Read first: the plan's "Tapping things" (the List, Dish and Note rows); the canvas's List
 and Note views.
@@ -22799,6 +22799,32 @@ ingredients and not ones already on the list; the Note's In the morning leaves t
 for the next morning message and off the wall tonight.
 
 Notes:
+- List: `/wall/view/list/todo/<member id>`, `todo/family`, `groceries` ("More on the list";
+  the Groceries card). Changes post to the same address with `op` (tomorrow, nextweek,
+  give, family, words, add, bought) and go through `wall_tap` as the list's owner (the
+  first member for the family list); `WallTaps._change` calls `reschedule`, `reassign`
+  (`shared=True` for a family to-do), `update`, `create`. Only rows on that list can be
+  changed. Adding to Groceries goes through the grocery list's own `grocery_list_add`
+  category (so it may wait for a yes, as everywhere else). "Ticked off lately": one-offs
+  done in the last 7 days. The category's label is now "Change to-dos and lists from the
+  wall" (`0003_wall_lists_and_note.sql`).
+- Dish: a household list whose name has "cook" in it ("Things to cook") makes each of its
+  items a Dish button. The recipe is the cookbook's best match (exact, or every word in its
+  name); its ingredients are `RecipeGroceries.known` (as already read, else by rule: no
+  model call on the wall). Add the rest stages `grocery_list_add` with the unticked ones
+  not already needed, as the first member.
+- Start cooking differs from the plan: it asks who's cooking and starts their session
+  (`Cooking.start`), so the cook screen is on their phone, not the frame. The cook screen
+  is a member's own page (`/session`), and the frame isn't anyone's sign-in; opening it on
+  the frame would need a cook-only sign-in for the frame (a follow-up, if wanted). Not
+  covered by a test: starting reads the ingredients with a model call.
+- Note: `WallView.note()` is now a `WallNote` (text, why, key, task). The Note view offers
+  It's done (asks who for an either chore, with Both of us, staged as the first member),
+  Later tonight (quiet until 9 pm, `wall_note_quiet`), In the morning (quiet until 6 am;
+  the chore stays open and overdue, so the morning message's tasks have it), and Got it for
+  a weather alert (quiet 12 hours).
+- Changes made in a view answer with the view and `HX-Trigger: wall-refresh`; the columns,
+  the note and the small lists refresh on it.
 
 ### WL6 · Wall: time of day, night, and the frame
 Status: [ ]

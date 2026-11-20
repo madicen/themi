@@ -24,6 +24,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -38,7 +39,7 @@ from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
 from themi_home.wall_view import WallItem, WallView
-from themi_home.wall_views import WallViews
+from themi_home.wall_views import WallViews, _recipe, dish_view, list_view, note_view
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -55,6 +56,9 @@ PARTS = ("top", "note", "today", "columns", "week", "smalls")  # refreshed on th
 TAP = "wall_tap"  # WL4: the category and executor of a tick on the wall
 WHERE = "on the wall"  # as praise says it ("Ticked off on the wall: ...")
 CLOSE_AFTER = 120  # WL5a: seconds without a touch before a view closes itself
+LATER_TONIGHT = 21  # WL5b: "Later tonight" brings the note back at 9 pm
+QUIET_ALERT_HOURS = 12  # an alert's "Got it": quiet for the rest of it, or this long
+OP_WORDS = {"tomorrow": "tomorrow", "nextweek": "next week", "family": "a family to-do"}
 
 
 def _hash(value: str) -> str:
@@ -197,8 +201,10 @@ class WallTaps:
         self.services = services
 
     async def execute(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
-        key, done = str(payload["key"]), bool(payload["done"])
         by = self.services.store.get_member(int(payload["by"]))
+        if "op" in payload:  # WL5b: a change made in a List view
+            return await self._change(payload, by)
+        key, done = str(payload["key"]), bool(payload["done"])
         kind, _, rest = key.partition("-")
         if kind == "task":
             board = self.services.get(keys.taskboard)
@@ -218,6 +224,44 @@ class WallTaps:
             routines.untick(item, date.fromisoformat(day))
             return f"Unticked {item.title}."
         raise ValueError(f"not something on the wall: {key}")
+
+    async def _change(self, payload: dict[str, Any], by: Member) -> str:
+        """Tomorrow, Next week, Give to, Make it a family to-do, Change the words, Add, and
+        (on the grocery list) Bought."""
+        op, text = str(payload["op"]), str(payload.get("text", "")).strip()
+        if op == "bought":
+            groceries = self.services.get(keys.groceries)
+            groceries.finish(text, "bought")
+            return f"{text} is off the grocery list."
+        board = self.services.get(keys.taskboard)
+        if op == "add":
+            owner = payload.get("owner")
+            doer = self.services.store.get_member(int(owner)) if owner else by
+            task = await board.create(by, text, "errand", 1, assignee=doer)
+            if not owner:  # the family list
+                await board.reassign(task.id, None, shared=True)
+            return f"Added {task.title}."
+        task_id = int(payload["task"])
+        today = clock.now().astimezone(self._tz()).date()
+        if op == "tomorrow":
+            return await board.reschedule(task_id, today + timedelta(days=1))
+        if op == "nextweek":
+            return await board.reschedule(task_id, today + timedelta(days=7))
+        if op == "give":
+            to = self.services.store.get_member(int(payload["to"]))
+            task = await board.reassign(task_id, to)
+            return f"{task.title} is {to.name}'s now."
+        if op == "family":
+            task = await board.reassign(task_id, None, shared=True)
+            return f"{task.title} is on the family list now."
+        if op == "words":
+            task = await board.update(task_id, by, title=text)
+            return f"It reads {task.title} now."
+        raise ValueError(f"not a change the wall makes: {op}")
+
+    def _tz(self) -> ZoneInfo:
+        family = self.services.store.get_family()
+        return ZoneInfo(family.timezone if family else "UTC")
 
 
 # ----- the website ---------------------------------------------------------------------
@@ -391,6 +435,179 @@ def routes(kit: Kit) -> APIRouter:
         if viewer(request) is None:
             return gone()
         return person_view(request, WallView(kit.app.services), member_id)
+
+    # ----- WL5b: List, Dish and Note --------------------------------------------------
+
+    def views() -> WallViews:
+        return WallViews(WallView(kit.app.services))
+
+    def list_sheet(request: Request, which: str, opened: int = 0, said: str = "") -> Response:
+        found = list_view(views(), which, opened, said)
+        if found is None:
+            return HTMLResponse("")
+        response = sheet(request, "_view_list.html", view=found)
+        if said:
+            response.headers["HX-Trigger"] = "wall-refresh"
+        return response
+
+    @router.get("/wall/view/list/{which:path}", response_class=HTMLResponse)
+    def list_page(request: Request, which: str, open: int = 0) -> Response:
+        if viewer(request) is None:
+            return gone()
+        return list_sheet(request, which, open)
+
+    @router.post("/wall/view/list/{which:path}", response_class=HTMLResponse)
+    async def list_change(request: Request, which: str) -> Response:
+        form = await posted(request)
+        if form is None:
+            return gone()
+        found = list_view(views(), which)
+        if found is None:
+            return HTMLResponse("")
+        op, text = form.get("op", ""), form.get("text", "").strip()[:200]
+        people = {m.id: m for m in WallView(kit.app.services).people()}
+        row = next((r for r in found.rows if str(r.id) == form.get("id")), None)
+        whose = which.removeprefix("todo/")
+        owner = people.get(int(whose)) if whose.isdigit() else None
+        by = owner or next(iter(people.values()), None)
+        if by is None:
+            return HTMLResponse("")
+        payload: dict[str, Any] = {"op": op, "by": by.id}
+        if op == "add" and text:
+            if found.groceries:  # the grocery list's own way in, through its own category
+                outcome = await stage_groceries(by, [text])
+                return list_sheet(request, which, said=outcome)
+            payload.update(text=text, owner=owner.id if owner else None)
+            summary = f"Add {text} to {found.title} {WHERE}"
+        elif row is None:
+            return list_sheet(request, which)
+        elif op == "bought" and found.groceries:
+            payload["text"] = row.title.lower()
+            summary = f"{row.title} bought, {WHERE}"
+        elif op in ("tomorrow", "nextweek", "family") and not found.groceries:
+            payload["task"] = row.id
+            summary = f"{row.title}: {OP_WORDS[op]} {WHERE}"
+        elif op == "give" and form.get("to", "").isdigit() and int(form["to"]) in people:
+            payload.update(task=row.id, to=int(form["to"]))
+            summary = f"Give {row.title} to {people[int(form['to'])].name} {WHERE}"
+        elif op == "words" and text and not found.groceries:
+            payload.update(task=row.id, text=text)
+            summary = f"Reword {row.title} as {text} {WHERE}"
+        else:
+            return list_sheet(request, which, row.id)
+        outcome = await kit.app.services.autonomy.stage(
+            TAP, by, summary, payload, TAP, requested=True
+        )
+        return list_sheet(request, which, said=outcome.message)
+
+    async def stage_groceries(by: Member, names: list[str]) -> str:
+        from themi_home.groceries import CATEGORY, EXECUTOR, list_summary
+
+        outcome = await kit.app.services.autonomy.stage(
+            CATEGORY, by, list_summary(names), {"items": names}, EXECUTOR, requested=True
+        )
+        return outcome.message
+
+    @router.get("/wall/view/dish/{item_id:int}", response_class=HTMLResponse)
+    def dish_page(request: Request, item_id: int) -> Response:
+        if viewer(request) is None:
+            return gone()
+        found = dish_view(views(), item_id)
+        return sheet(request, "_view_dish.html", view=found) if found else HTMLResponse("")
+
+    @router.post("/wall/view/dish/{item_id:int}/add", response_class=HTMLResponse)
+    async def dish_add(request: Request, item_id: int) -> Response:
+        """Add the rest to Groceries: the ingredients not ticked as in the house, and not
+        already on the list, once each, through the grocery list's own category."""
+        if await posted(request) is None:
+            return gone()
+        found = dish_view(views(), item_id)
+        if found is None:
+            return HTMLResponse("")
+        have = set((await request.form()).getlist("have"))
+        groceries = kit.app.services.maybe(keys.groceries)
+        rest = [
+            name
+            for name in found.ingredients
+            if name not in have and (groceries is None or not groceries.is_needed(name))
+        ]
+        people = WallView(kit.app.services).people()
+        said = "Everything's in the house or on the list already."
+        if rest and people:
+            said = await stage_groceries(people[0], rest)
+        return sheet(request, "_view_dish.html", view=replace(found, said=said))
+
+    @router.post("/wall/view/dish/{item_id:int}/cook", response_class=HTMLResponse)
+    async def dish_cook(request: Request, item_id: int) -> Response:
+        """Start cooking: a cooking session for whoever's cooking. Its cook screen opens on
+        their phone (the frame isn't anyone's own sign-in)."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        found = dish_view(views(), item_id)
+        cooking = kit.app.services.maybe(keys.cooking)
+        people = {m.id: m for m in WallView(kit.app.services).people()}
+        cook = people.get(int(form.get("by", "0") or 0))
+        recipe = _recipe(views(), found.name) if found else None
+        if found is None or cooking is None or cook is None or recipe is None:
+            return HTMLResponse("")
+        await cooking.start(cook, recipe)
+        said = f"Started {recipe.name}. The cook screen is on {cook.name}'s phone."
+        return sheet(request, "_view_dish.html", view=replace(found, said=said))
+
+    @router.get("/wall/view/note", response_class=HTMLResponse)
+    def note_page(request: Request) -> Response:
+        if viewer(request) is None:
+            return gone()
+        found = note_view(views())
+        return sheet(request, "_view_note.html", view=found) if found else HTMLResponse("")
+
+    @router.post("/wall/view/note", response_class=HTMLResponse)
+    async def note_answer(request: Request) -> Response:
+        """They're in (asks who; Both of us), Later tonight (back at 9 pm), In the morning
+        (off the wall until then: the morning message has it), Got it (an alert)."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        view = WallView(kit.app.services)
+        note = view.note()
+        found = note_view(views())
+        if note is None or found is None:
+            return HTMLResponse("")
+        answer = form.get("answer", "")
+        now = view.now()
+        people = {m.id: m for m in view.people()}
+        if answer == "done" and note.task_id is not None:
+            if note.both and not form.get("by"):
+                return sheet(request, "_view_note.html", view=replace(found, asking=True))
+            raw = form.get("by", "")
+            by = (
+                next(iter(people.values()), None)
+                if raw == "both"
+                else people.get(int(raw))
+                if raw.isdigit()
+                else people.get(note.assignee or 0)
+            )
+            if by is None:
+                return sheet(request, "_view_note.html", view=found)
+            await stage(by, note.key, WallItem(note.key, note.text.split(" is still")[0]))
+            said = "Thank you, both." if raw == "both" else f"Thank you, {by.name}."
+        elif answer == "later":
+            later = now.replace(hour=LATER_TONIGHT, minute=0, second=0, microsecond=0)
+            view.quiet(note.key, later if later > now else now + timedelta(hours=1))
+            said = f"I'll leave it for now. The note comes back around {LATER_TONIGHT - 12} pm."
+        elif answer == "morning":
+            morning = (now + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
+            view.quiet(note.key, morning)
+            said = "Morning it is. It'll be in the morning message, not on the wall tonight."
+        elif answer == "ok":
+            view.quiet(note.key, now + timedelta(hours=QUIET_ALERT_HOURS))
+            said = "Got it."
+        else:
+            return sheet(request, "_view_note.html", view=found)
+        response = sheet(request, "_view_note.html", view=replace(found, said=said))
+        response.headers["HX-Trigger"] = "wall-refresh"
+        return response
 
     @router.get("/wall/pair", response_class=HTMLResponse)
     def pair_form(request: Request) -> Response:

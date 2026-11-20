@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from themi.core import keys
 from themi_home.wall_view import (
@@ -387,3 +387,177 @@ def _span(gap: timedelta) -> str:
     hours, rest = divmod(minutes, 60)
     whole = f"{hours} hour{'s' if hours != 1 else ''}"
     return whole if rest < 10 else f"{whole} {rest} minutes"
+
+
+# ----- WL5b: List, Dish and Note --------------------------------------------------------
+
+LATELY = timedelta(days=7)
+
+
+@dataclass(frozen=True)
+class ListRow:
+    id: int
+    title: str
+    sub: str = ""
+    open: bool = False  # its menu is showing
+
+
+@dataclass(frozen=True)
+class ListView:
+    which: str  # "todo/3", "todo/family", "groceries"
+    title: str  # "Erin's to-do list"
+    tone: str
+    rows: tuple[ListRow, ...]
+    lately: tuple[str, ...] = ()  # ticked off in the last week
+    give_to: tuple[tuple[int, str], ...] = ()  # the others it can go to
+    family: bool = False  # "Make it a family to-do" is offered
+    groceries: bool = False
+    said: str = ""  # what the last change did
+
+
+@dataclass(frozen=True)
+class DishView:
+    item_id: int
+    name: str
+    ingredients: tuple[str, ...]  # shopping items, from the recipe; () without one
+    recipe: bool
+    people: tuple[tuple[int, str], ...]
+    said: str = ""
+
+
+@dataclass(frozen=True)
+class NoteView:
+    text: str
+    why: str
+    key: str
+    chore: bool  # They're in / Later tonight / In the morning; else just Got it
+    both: bool  # "Who brought them in?" with Both of us
+    people: tuple[tuple[int, str], ...]
+    asking: bool = False
+    said: str = ""
+
+
+def list_view(views: WallViews, which: str, opened: int = 0, said: str = "") -> ListView | None:
+    view = views.view
+    people = view.people()
+    today = view.now().date()
+    if which == "groceries":
+        groceries = views.services.maybe(keys.groceries)
+        if groceries is None:
+            return None
+        rows = tuple(
+            ListRow(g.id, g.name[:1].upper() + g.name[1:], open=g.id == opened)
+            for g in groceries.needed()
+        )
+        return ListView(which, "Groceries", "family", rows, groceries=True, said=said)
+    whose = which.removeprefix("todo/")
+    tasks = view._open_tasks(people)
+    if whose == "family":
+        mine = [t for t in tasks if _for_both(t) and not t.repeats]
+        owner, title, tone = None, "Family to-do", "family"
+    elif whose.isdigit() and (index := _index(people, int(whose))) is not None:
+        owner = people[index]
+        mine = [t for t in tasks if t.assignee == owner.id and not _for_both(t) and not t.repeats]
+        title, tone = f"{owner.name}'s to-do list", f"p{index % 4}"
+    else:
+        return None
+    rows = tuple(
+        ListRow(
+            t.id, t.title, since(t.due_on, today) or _due_words(t.due_on, today), t.id == opened
+        )
+        for t in sorted(mine, key=lambda t: _rank(t, today))
+    )
+    lately = _lately(views, people, owner)
+    others = tuple((m.id, m.name) for m in people if owner is None or m.id != owner.id)
+    return ListView(which, title, tone, rows, lately, others, family=owner is not None, said=said)
+
+
+def _index(people: list[Member], member_id: int) -> int | None:
+    return next((i for i, m in enumerate(people) if m.id == member_id), None)
+
+
+def _due_words(due: date | None, today: date) -> str:
+    if due is None:
+        return ""
+    if due == today:
+        return "today"
+    if due == today + timedelta(days=1):
+        return "tomorrow"
+    return f"{due:%a %b} {due.day}"
+
+
+def _lately(views: WallViews, people: list[Member], owner: Member | None) -> tuple[str, ...]:
+    board = views.services.maybe(keys.taskboard)
+    if board is None:
+        return ()
+    now = views.view.now()
+    seen: dict[int, str] = {}
+    for member in [owner] if owner is not None else people:
+        for done in board.done_between(member, now - LATELY, now + timedelta(seconds=1)):
+            task = done.task
+            if task.repeats or task.off_displays:
+                continue
+            if (owner is None) == _for_both(task) and (owner is None or task.assignee == owner.id):
+                seen.setdefault(task.id, task.title)
+    return tuple(seen.values())
+
+
+def dish_view(views: WallViews, item_id: int, said: str = "") -> DishView | None:
+    """A Things to cook item: its recipe's ingredients as shopping items (as already read,
+    or by rule: never a model call on the wall), or the item alone without a recipe."""
+    lists = views.services.maybe(keys.lists)
+    people = views.view.people()
+    if lists is None or not people:
+        return None
+    item = next(
+        (
+            i
+            for nl in lists.visible(people[0])
+            if not nl.personal
+            for i in nl.open_items
+            if i.id == item_id
+        ),
+        None,
+    )
+    if item is None:
+        return None
+    recipe = _recipe(views, item.name)
+    shopping = views.services.maybe(keys.recipe_groceries)
+    names: tuple[str, ...] = ()
+    if recipe is not None and shopping is not None:
+        names = tuple(dict.fromkeys(i.item for i in shopping.known(recipe) if i.item))
+    return DishView(
+        item_id,
+        item.name,
+        names,
+        recipe is not None,
+        tuple((m.id, m.name) for m in people),
+        said,
+    )
+
+
+def _recipe(views: WallViews, name: str) -> Any:
+    recipes = views.services.maybe(keys.recipes)
+    if recipes is None:
+        return None
+    matches = recipes.find(name, charts=False)
+    best = matches[0] if matches else None
+    if best is None or not (best.exact or best.name_hits == best.wanted):
+        return None
+    return best.recipe
+
+
+def note_view(views: WallViews, asking: bool = False, said: str = "") -> NoteView | None:
+    note = views.view.note()
+    if note is None:
+        return None
+    return NoteView(
+        note.text,
+        note.why,
+        note.key,
+        chore=note.task_id is not None,
+        both=note.both,
+        people=tuple((m.id, m.name) for m in views.view.people()),
+        asking=asking,
+        said=said,
+    )

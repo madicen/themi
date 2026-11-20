@@ -261,7 +261,7 @@ async def test_groceries_and_household_lists_but_never_a_personal_one(wall: Scen
     wall.app.services.get(keys.groceries).add(["Dried mango"], by=erin)
     page = await screen(wall)
     smalls = words(page[page.index('id="wall-smalls"') :])
-    assert "Groceries Dried mango" in smalls and "Things to cook Bean soup · Creami prep" in smalls
+    assert "Groceries Dried mango" in smalls and "Things to cook Bean soup Creami prep" in smalls
     assert "Gift ideas" not in page and "A secret" not in page
 
 
@@ -276,7 +276,7 @@ async def test_no_email_on_the_wall(wall: Scenario) -> None:
 async def test_each_part_refreshes_on_its_own(wall: Scenario) -> None:
     page = await screen(wall)
     assert 'hx-get="/wall/part/columns" hx-trigger="every 30s, wall-refresh from:body"' in page
-    assert 'hx-get="/wall/part/smalls" hx-trigger="every 600s"' in page
+    assert 'hx-get="/wall/part/smalls" hx-trigger="every 600s, wall-refresh from:body"' in page
     await task(wall, "Erin", "New errand")
     async with web_client(wall) as client:
         await frame(wall, client)

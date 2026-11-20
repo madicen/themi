@@ -15,7 +15,7 @@
   <header class="wall-top" id="wall-top" hx-get="/wall/part/top" hx-trigger="every 30s" hx-swap="innerHTML">
     {% include "wall/_top.html" %}
   </header>
-  <div id="wall-note" hx-get="/wall/part/note" hx-trigger="every 30s" hx-swap="innerHTML">
+  <div id="wall-note" hx-get="/wall/part/note" hx-trigger="every 30s, wall-refresh from:body" hx-swap="innerHTML">
     {% include "wall/_note.html" %}
   </div>
   <div id="wall-today" hx-get="/wall/part/today" hx-trigger="every 30s" hx-swap="innerHTML">
@@ -27,7 +27,7 @@
   <div id="wall-week" hx-get="/wall/part/week" hx-trigger="every 600s" hx-swap="innerHTML">
     {% include "wall/_week.html" %}
   </div>
-  <div class="wall-smalls" id="wall-smalls" hx-get="/wall/part/smalls" hx-trigger="every 600s" hx-swap="innerHTML">
+  <div class="wall-smalls" id="wall-smalls" hx-get="/wall/part/smalls" hx-trigger="every 600s, wall-refresh from:body" hx-swap="innerHTML">
     {% include "wall/_smalls.html" %}
   </div>
   <p class="wall-stale" id="wall-stale" role="status" hidden>Updated <span></span></p>

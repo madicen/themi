@@ -1,0 +1,52 @@
+{% from "wall/_sheet.html" import sheet with context %}
+{% set base = "/wall/view/list/" ~ view.which %}
+{% call sheet(view.title) %}
+<div class="tone-{{ view.tone }} sheet-list">
+  <h2 class="sheet-title">{{ view.title }}</h2>
+  <form class="sheet-add" hx-post="{{ base }}" hx-target="#wall-view" hx-swap="innerHTML">
+    <input type="hidden" name="op" value="add">
+    <label class="sr-only" for="wall-add">Add to {{ view.title }}</label>
+    <input id="wall-add" name="text" maxlength="200" autocomplete="off" placeholder="Add to {{ view.title }}">
+    <button class="sheet-button primary">Add</button>
+  </form>
+  {% if view.said %}<p class="sheet-done" role="status">{{ view.said }}</p>{% endif %}
+  {% if not view.groceries %}<p class="sheet-note">In Themi's order. Tap the words for more.</p>{% endif %}
+  <ul class="sheet-rows">
+    {% for r in view.rows %}
+    <li class="sheet-row{% if r.open %} open{% endif %}" id="row-{{ r.id }}">
+      {% if view.groceries %}
+      <button type="button" class="wall-item" hx-post="{{ base }}" hx-vals='{"op": "bought", "id": "{{ r.id }}"}' hx-target="#wall-view" hx-swap="innerHTML">
+        <span class="ring" aria-hidden="true"></span><span class="wall-words"><span class="wall-title">{{ r.title }}</span></span>
+      </button>
+      {% else %}
+      <button type="button" class="wall-item" aria-expanded="{{ 'true' if r.open else 'false' }}" hx-get="{{ base }}?open={{ 0 if r.open else r.id }}" hx-target="#wall-view" hx-swap="innerHTML">
+        <span class="wall-words"><span class="wall-title">{{ r.title }}</span>{% if r.sub %}<span class="wall-sub">{{ r.sub }}</span>{% endif %}</span>
+      </button>
+      {% if r.open %}
+      <div class="sheet-menu" role="group" aria-label="{{ r.title }}">
+        <button type="button" class="sheet-button" hx-post="{{ base }}" hx-vals='{"op": "tomorrow", "id": "{{ r.id }}"}' hx-target="#wall-view" hx-swap="innerHTML">Tomorrow</button>
+        <button type="button" class="sheet-button" hx-post="{{ base }}" hx-vals='{"op": "nextweek", "id": "{{ r.id }}"}' hx-target="#wall-view" hx-swap="innerHTML">Next week</button>
+        {% for id, name in view.give_to %}
+        <button type="button" class="sheet-button" hx-post="{{ base }}" hx-vals='{"op": "give", "id": "{{ r.id }}", "to": "{{ id }}"}' hx-target="#wall-view" hx-swap="innerHTML">Give to {{ name }}</button>
+        {% endfor %}
+        {% if view.family %}<button type="button" class="sheet-button" hx-post="{{ base }}" hx-vals='{"op": "family", "id": "{{ r.id }}"}' hx-target="#wall-view" hx-swap="innerHTML">Make it a family to-do</button>{% endif %}
+        <form class="sheet-words" hx-post="{{ base }}" hx-target="#wall-view" hx-swap="innerHTML">
+          <input type="hidden" name="op" value="words"><input type="hidden" name="id" value="{{ r.id }}">
+          <label class="sr-only" for="words-{{ r.id }}">Change the words</label>
+          <input id="words-{{ r.id }}" name="text" value="{{ r.title }}" maxlength="200">
+          <button class="sheet-button">Change the words</button>
+        </form>
+      </div>
+      {% endif %}
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if not view.rows %}<p class="wall-empty">Nothing on the list</p>{% endif %}
+  {% if view.lately %}
+  <details class="sheet-lately"><summary>Ticked off lately ({{ view.lately | length }})</summary>
+    <ul>{% for t in view.lately %}<li>{{ t }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+</div>
+{% endcall %}

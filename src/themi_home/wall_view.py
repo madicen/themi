@@ -15,6 +15,7 @@ and the family's to-dos (tasks on both lists).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
@@ -23,6 +24,7 @@ from zoneinfo import ZoneInfo
 from themi import clock
 from themi.accounts import Member
 from themi.core import keys
+from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -35,6 +37,7 @@ SMALL_ITEMS = 4
 EVENING_BEFORE_QUIET = timedelta(hours=1)  # as routines' own evening (R1a)
 IMPORTANCE = {"high": 0, "normal": 1, "low": 2}
 TOGETHER = "together"
+COOKING = re.compile(r"\bcook", re.IGNORECASE)  # a list of dishes ("Things to cook")
 DAY_STARTS = 8  # the timeline's earliest start, unless an event is earlier
 MIN_BLOCK = 1.5  # % of the hours: the narrowest event drawn (a 5-minute one is still seen)
 WEEK_EVENTS = 3
@@ -93,6 +96,20 @@ class SmallList:
     name: str
     items: tuple[str, ...]
     more: int = 0
+    # WL5b: what a tap opens: "groceries" (its List view), or "dishes" (each item its Dish
+    # view, by `ids`), or "" (nothing)
+    opens: str = ""
+    ids: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class WallNote:
+    text: str
+    why: str  # for the Note view
+    key: str  # "task-12", "alert-Wind Advisory"
+    task_id: int | None = None
+    both: bool = False  # a chore either of you can do
+    assignee: int | None = None
 
 
 @dataclass(frozen=True)
@@ -186,7 +203,7 @@ class WallScreen:
     time: str  # "7:42"
     meridiem: str  # "PM"
     weather: WallWeather | None
-    note: str | None
+    note: WallNote | None
     columns: tuple[WallColumn, ...]
     smalls: tuple[SmallList, ...] = field(default=())
     today: TodayLine | None = None  # WL3: None when there's no calendar
@@ -443,23 +460,34 @@ class WallView:
             alert=alerts[0].event if alerts else "",
         )
 
-    def note(self) -> str | None:
+    def note(self) -> WallNote | None:
         """At most one line, worded as an offer (the plan's "Themi's note"): a weather alert
-        first, then a chore still open from before today, one either of you can do first."""
+        first, then a chore still open from before today, one either of you can do first.
+        One put off from the wall ("Later tonight") waits until then (WL5b)."""
         weather = self.services.maybe(keys.weather)
         now = self.now()
+        quiet = self._quiet()
         if weather is not None:
-            alerts = [a for a in weather.latest_alerts() if a.starts <= now and _in_force(a, now)]
-            if alerts:
-                alert = alerts[0]
-                until = f" until {_clock(alert.ends.astimezone(now.tzinfo))}" if alert.ends else ""
-                return f"{alert.event}{until}. Worth a look before heading out."
+            for alert in weather.latest_alerts():
+                key = f"alert-{alert.event}"
+                if alert.starts <= now and _in_force(alert, now) and key not in quiet:
+                    until = (
+                        f" until {_clock(alert.ends.astimezone(now.tzinfo))}" if alert.ends else ""
+                    )
+                    return WallNote(
+                        f"{alert.event}{until}. Worth a look before heading out.",
+                        "The National Weather Service has it in force here now.",
+                        key,
+                    )
         today = now.date()
         waiting = sorted(
             (
                 t
                 for t in self._open_tasks(self.people())
-                if t.repeats and t.due_on is not None and t.due_on < today
+                if t.repeats
+                and t.due_on is not None
+                and t.due_on < today
+                and f"task-{t.id}" not in quiet
             ),
             # either of you first: an offer suits a shared screen best
             key=lambda t: (not _for_both(t), IMPORTANCE.get(t.importance, 1), t.due_on, t.id),
@@ -467,10 +495,34 @@ class WallView:
         if not waiting:
             return None
         task = waiting[0]
+        assert task.due_on is not None
         when = "yesterday" if task.due_on == today - timedelta(days=1) else "earlier"
+        names = {m.id: m.name for m in self.people()}
         if _for_both(task):
-            return f"{task.title} is still waiting from {when}. Whoever has a moment could do it."
-        return f"{task.title} is still waiting from {when}, whenever there's a moment."
+            text = f"{task.title} is still waiting from {when}. Whoever has a moment could do it."
+            whose = "either of you"
+        else:
+            text = f"{task.title} is still waiting from {when}, whenever there's a moment."
+            whose = names.get(task.assignee or 0, "")
+        why = (
+            f"{task.title} was due {when if when == 'yesterday' else f'on {task.due_on:%A}'} "
+            f"and is still open ({whose})."
+        )
+        return WallNote(text, why, f"task-{task.id}", task.id, _for_both(task), task.assignee)
+
+    def _quiet(self) -> set[str]:
+        rows = self.services.store.db.query(
+            "SELECT note_key FROM wall_note_quiet WHERE until > ?",
+            (to_utc_iso(clock.now()),),
+        )
+        return {r["note_key"] for r in rows}
+
+    def quiet(self, key: str, until: datetime) -> None:
+        """WL5b: no note about this until then."""
+        self.services.store.db.execute(
+            "INSERT OR REPLACE INTO wall_note_quiet (note_key, until) VALUES (?, ?)",
+            (key, to_utc_iso(until)),
+        )
 
     # ----- the calendar: today's timeline and the week ahead (WL3) --------------------------
 
@@ -556,7 +608,7 @@ class WallView:
         groceries = self.services.maybe(keys.groceries)
         if groceries is not None:
             names = [g.name[:1].upper() + g.name[1:] for g in groceries.needed()]
-            found.append(_small("Groceries", names))
+            found.append(replace(_small("Groceries", names), opens="groceries"))
         lists = self.services.maybe(keys.lists)
         people = self.people()
         if lists is not None and people:
@@ -566,7 +618,11 @@ class WallView:
                 if not nl.personal and nl.purpose is None and nl.open_items
             ]
             for nl in household[:2]:
-                found.append(_small(nl.name, [i.name for i in nl.open_items]))
+                small = _small(nl.name, [i.name for i in nl.open_items])
+                if COOKING.search(nl.name):  # "Things to cook": each one a dish (WL5b)
+                    ids = tuple(i.id for i in nl.open_items[:SMALL_ITEMS])
+                    small = replace(small, opens="dishes", ids=ids)
+                found.append(small)
         return tuple(found)
 
 

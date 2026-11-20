@@ -1,10 +1,17 @@
 {% for small in screen.smalls %}
 <section class="wall-card wall-small" aria-label="{{ small.name }}">
-  <h2>{{ small.name }}</h2>
+  {% if small.opens == "groceries" %}
+  <button type="button" class="wall-small-open" hx-get="/wall/view/list/groceries" hx-target="#wall-view" hx-swap="innerHTML"><h2>{{ small.name }}</h2>
+  {% else %}<h2>{{ small.name }}</h2>{% endif %}
   {% if small.items %}
+  {% if small.opens == "dishes" %}
+  <p class="wall-dishes">{% for name in small.items %}<button type="button" class="wall-dish" hx-get="/wall/view/dish/{{ small.ids[loop.index0] }}" hx-target="#wall-view" hx-swap="innerHTML">{{ name }}</button>{% endfor %}{% if small.more %} <span class="wall-sub">+{{ small.more }} more</span>{% endif %}</p>
+  {% else %}
   <p>{{ small.items | join(" · ") }}{% if small.more %} <span class="wall-sub">+{{ small.more }} more</span>{% endif %}</p>
+  {% endif %}
   {% else %}
   <p class="wall-empty">Nothing needed</p>
   {% endif %}
+  {% if small.opens == "groceries" %}</button>{% endif %}
 </section>
 {% endfor %}

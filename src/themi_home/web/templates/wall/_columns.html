@@ -38,7 +38,7 @@
     {% else %}
     <p class="wall-empty">{{ sec.empty }}</p>
     {% endif %}
-    {% if sec.more %}<p class="wall-more">More on the list</p>{% endif %}
+    {% if sec.more %}<button type="button" class="wall-more" hx-get="/wall/view/list/todo/{{ c.member_id or 'family' }}" hx-target="#wall-view" hx-swap="innerHTML">More on the list</button>{% endif %}
   {% endif %}{% endfor %}
   </div>
 </section>

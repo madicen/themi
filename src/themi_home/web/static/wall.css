@@ -40,7 +40,8 @@ body.wall {
   flex: none; width: 3.25rem; height: 3.25rem; border-radius: 1rem; background: var(--fg); color: #fff;
   display: grid; place-items: center; font-weight: 800; font-size: 1.5rem;
 }
-.wall-note p { font-size: 1.6rem; line-height: 1.35; }
+.wall-note { width: 100%; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.wall-note-text { font-size: 1.6rem; line-height: 1.35; }
 
 /* the columns */
 .wall-columns { display: flex; gap: 1.25rem; flex: 1; min-height: 0; }
@@ -75,7 +76,10 @@ button.wall-col-head { cursor: pointer; }
 .wall-title { font-size: 1.3rem; line-height: 1.25; font-weight: 500; }
 .wall-sub { font-size: 1rem; color: #62666d; }
 .wall-empty { margin: 0 0.5rem 0.4rem; font-size: 1.2rem; color: #6a6e75; }
-.wall-more { margin: 0.2rem 0.5rem; font-size: 1.05rem; font-weight: 700; color: var(--tone); }
+.wall-more {
+  align-self: flex-start; min-height: 2.75rem; margin: 0.2rem 0.25rem; padding: 0 0.75rem; border: 0; border-radius: 1.4rem;
+  background: none; font: inherit; font-size: 1.05rem; font-weight: 700; color: var(--tone); cursor: pointer;
+}
 .tone-p0 { --tone: var(--p0); --tint: var(--p0-tint); --item-bg: var(--p0-bg); --ring: var(--p0-ring); }
 .tone-p1 { --tone: var(--p1); --tint: var(--p1-tint); --item-bg: var(--p1-bg); --ring: var(--p1-ring); }
 .tone-p2 { --tone: var(--p2); --tint: var(--p2-tint); --item-bg: var(--p2-bg); --ring: var(--p2-ring); }
@@ -190,3 +194,30 @@ button.wall-item:focus-visible { outline: 0.2rem solid #2f6fdb; outline-offset: 
 .sheet-person .sheet-title { color: var(--tone); }
 .sheet-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.5rem; }
 .sheet-sections ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+
+/* WL5b: List, Dish and Note */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sheet-list { display: flex; flex-direction: column; gap: 1rem; }
+.sheet-add, .sheet-words { display: flex; gap: 0.75rem; }
+.sheet-add input, .sheet-words input {
+  flex: 1; min-width: 0; height: 4.5rem; border-radius: 1.25rem; border: 0.12rem solid #c9ccd1; padding: 0 1.5rem;
+  font: inherit; font-size: 1.5rem; color: var(--fg); background: #fff;
+}
+.sheet-rows { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.sheet-row { border-radius: 1.25rem; }
+.sheet-row.open { background: var(--item-bg, var(--soft)); }
+.sheet-row .wall-item { min-height: 4.5rem; background: transparent; }
+.sheet-row .wall-title { font-size: 1.5rem; }
+.sheet-menu { display: flex; gap: 0.6rem; flex-wrap: wrap; padding: 0.25rem 1rem 1.1rem; }
+.sheet-menu .sheet-button { min-height: 3.5rem; font-size: 1.25rem; padding: 0 1.4rem; }
+.sheet-words { width: 100%; }
+.sheet-lately summary { font-size: 1.25rem; font-weight: 700; color: var(--tone); min-height: 3rem; cursor: pointer; }
+.sheet-lately ul { font-size: 1.3rem; color: #62666d; }
+.sheet-checks { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.sheet-checks label { display: flex; align-items: center; gap: 0.9rem; min-height: 4rem; padding: 0 1rem; border-radius: 1rem; background: var(--soft); font-size: 1.4rem; }
+.sheet-checks input { width: 2rem; height: 2rem; }
+.sheet-note-head { display: flex; gap: 1.25rem; align-items: flex-start; }
+.sheet-note-text { font-size: 2rem; line-height: 1.35; font-weight: 500; }
+.wall-small-open { display: block; width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; padding: 0; cursor: pointer; }
+.wall-dishes { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.wall-dish { min-height: 3rem; padding: 0 0.9rem; border-radius: 1.5rem; border: 0.12rem solid var(--line); background: var(--soft); font: inherit; font-size: 1.15rem; cursor: pointer; }
