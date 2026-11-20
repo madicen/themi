@@ -323,6 +323,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F50b | Feedback: an amount in another currency is converted before it's compared | Feedback | [x] 2026-11-19 |
 | F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [x] 2026-11-19 |
 | F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [x] 2026-11-19 |
+| F51a | Feedback: Unlink Spotify on the Accounts page unlinks it instead of showing an error | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15968,6 +15969,47 @@ Notes:
   `test_cookbook_parser` (2), `test_home_modules` (the job). **Setup:** none (migration). The
   next cookbook read re-parses recipe 42, whose words change, so it's titled again. Mark #234
   reviewed once live and the job has caught up.
+
+### F51a · Feedback (2026-11-19): Unlink Spotify on the Accounts page unlinks it instead of showing an error
+Status: [ ]
+Depends on: none
+Read first: `themi_home/web/device_pages.py` (`spotify_routes`, `unlink_spotify`);
+`themi_google/web/google_pages.py` (the `/accounts/{account_id}/...` routes, `unlink`);
+`themi_home/web/recipe_pages.py` (`/accounts/{account_id}/cookbook...`); `themi/web/site.py`
+and `themi_home/home_modules.py` (the order modules' routers are included);
+`tests/golden/routes.json`. From Michael's bug #235 (2026-11-19, 9:39 pm, "unlinking spotify
+on the accounts page gave this response: {"detail": [{"type": "int_parsing", "loc": ["path",
+"account_id"], ... "input": "spotify"}]}").
+
+What the Pi shows: the Unlink Spotify button posts to `/accounts/spotify/unlink`. The google
+module's router is included before the spotify module's, and its `POST
+/accounts/{account_id}/unlink` (`account_id: int`) matches that path first, so FastAPI answers
+422 with the raw JSON and Spotify stays linked. `/accounts/spotify/link` works only because
+there's no `/accounts/{account_id}/link`. The same shape is in three other pairs, which work
+today only because of registration order: `GET /modules/restart` vs `/modules/{name}`, `GET
+/recipes/kitchen` vs `/recipes/{recipe_id}`, `POST /takeout/settings` vs
+`/takeout/{favourite_id}`.
+
+Build:
+- Bug fix: start with the failing test below.
+- Integer path parameters say so in the path: `{account_id:int}` on every `/accounts/{account_id}`
+  route (google and recipes), and the same for `{recipe_id}`, `{favourite_id}`,
+  `{expected_id}` and any other `int` path parameter, so a word like `spotify` can't match them
+  and falls through to its own route, whatever order modules are included in.
+- A guard: a unit test builds the app and fails when a fixed path is matched by an earlier
+  route with a parameter for the same method (what matched instead, and how to fix it), so a
+  new module's fixed route can't be shadowed silently again.
+- Not in scope: the raw 422 JSON for a genuinely bad form post (a separate polish).
+
+Tests: start with a failing one: a member with Spotify linked (fake) posts
+`/accounts/spotify/unlink`, is redirected to the Accounts page with "Unlinked Spotify.", and the
+link is gone. Then the guard test above; `/accounts/3/unlink` still unlinks Google account 3.
+Scenario: Michael opens Accounts, taps Unlink Spotify, sees "Unlinked Spotify." and the Link
+Spotify button.
+
+Data/Setup: none. `tests/golden/routes.json` changes (`{account_id}` -> `{account_id:int}` and
+the like); the prompt says it should. Michael relinks Spotify afterwards if he wants it back.
+Mark #235 reviewed once live.
 
 ## Conversation mode
 
