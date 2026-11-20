@@ -38,6 +38,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
+from themi_home.wall_columns import TONES, BadLayout, WallColumns, moved
 from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
 from themi_home.wall_views import WallViews, _recipe, dish_view, list_view, note_view
 
@@ -703,26 +704,61 @@ def routes(kit: Kit) -> APIRouter:
         )
         return response
 
-    @router.get("/wall/frames", response_class=HTMLResponse)
-    def frames(request: Request) -> HTMLResponse:
-        session = kit.admin(request)
-        return kit.with_flash(
-            request, "wall/frames.html", session, frames=devices.all(), displays=DISPLAYS
-        )
+    def wall_columns() -> WallColumns:
+        return WallColumns(kit.app.services.store.db)
 
-    @router.post("/wall/frames/code", response_class=HTMLResponse)
-    async def new_code(request: Request) -> HTMLResponse:
-        session, _ = await kit.checked(request, admin=True)
-        code = devices.new_code(session.member)
+    def frames_page(request: Request, session: Any, **values: Any) -> HTMLResponse:
+        members = kit.app.services.store.list_members()
         return kit.with_flash(
             request,
             "wall/frames.html",
             session,
             frames=devices.all(),
             displays=DISPLAYS,
+            columns=wall_columns().layout(members),
+            chosen=bool(wall_columns().chosen()),
+            tones=TONES,
+            **values,
+        )
+
+    @router.get("/wall/frames", response_class=HTMLResponse)
+    def frames(request: Request) -> HTMLResponse:
+        return frames_page(request, kit.admin(request))
+
+    @router.post("/wall/frames/code", response_class=HTMLResponse)
+    async def new_code(request: Request) -> HTMLResponse:
+        session, _ = await kit.checked(request, admin=True)
+        code = devices.new_code(session.member)
+        return frames_page(
+            request,
+            session,
             code=f"{code[:3]} {code[3:]}",
             minutes=int(CODE_TTL.total_seconds() // 60),
         )
+
+    @router.post("/wall/frames/columns")
+    async def save_columns(request: Request) -> Response:
+        """F53: People on the wall. Save keeps the colours; Up or Down moves a column (and
+        keeps the colours on the form too); Put them back goes back to the defaults."""
+        session, form = await kit.checked(request, admin=True)
+        back = "/wall/frames#columns"
+        if form.get("reset"):
+            wall_columns().reset()
+            return kit.redirect(back, "The wall's columns are back as they were.")
+        members = kit.app.services.store.list_members()
+        order = [k for k in str(form.get("order", "")).split(",") if k]
+        tones = {k: str(form[f"tone_{k}"]) for k in order if f"tone_{k}" in form}
+        said = "Saved the colours."
+        move = str(form.get("move", ""))
+        key, _, way = move.rpartition(":")
+        if key and way in ("up", "down"):
+            order = moved(order, key, -1 if way == "up" else 1)
+            said = "Moved."
+        try:
+            wall_columns().save(session.member, members, order, tones)
+        except BadLayout as exc:
+            return kit.redirect(back, f"{exc} Nothing changed.")
+        return kit.redirect(back, f"{said} The wall shows it at its next refresh.")
 
     @router.post("/wall/frames/{device_id:int}/revoke")
     async def revoke(request: Request, device_id: int) -> Response:

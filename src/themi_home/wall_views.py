@@ -196,8 +196,7 @@ class WallViews:
         today = now.date()
         if not (today <= day <= today + timedelta(days=DAYS_AHEAD)):
             return None
-        rows = [(f"m{m.id}", m.name, f"p{i % 4}") for i, m in enumerate(self.view.people())]
-        rows.append(("family", "Family", "family"))
+        rows = self.view.timeline_rows()
         live = day == today
         moment = now if live else datetime.combine(day, now.time().min, tzinfo=now.tzinfo)
         line = lay_out_today(moment, rows, self.view.events(day), [], live=live)
@@ -287,7 +286,7 @@ class WallViews:
         return PersonView(
             member_id=member.id,
             name=member.name,
-            tone=f"p{index % 4}",
+            tone=self.view.tone_of(member),
             events=events,
             sections=(*self._routines(member), *self._tasks(member, today)),
         )
@@ -460,16 +459,16 @@ def list_view(views: WallViews, which: str, opened: int = 0, said: str = "") -> 
             ListRow(g.id, g.name[:1].upper() + g.name[1:], open=g.id == opened)
             for g in groceries.needed()
         )
-        return ListView(which, "Groceries", "family", rows, groceries=True, said=said)
+        return ListView(which, "Groceries", view.together_tone(), rows, groceries=True, said=said)
     whose = which.removeprefix("todo/")
     tasks = view._open_tasks(people)
     if whose == "family":
         mine = [t for t in tasks if _for_both(t) and not t.repeats]
-        owner, title, tone = None, "Family to-do", "family"
+        owner, title, tone = None, "Family to-do", view.together_tone()
     elif whose.isdigit() and (index := _index(people, int(whose))) is not None:
         owner = people[index]
         mine = [t for t in tasks if t.assignee == owner.id and not _for_both(t) and not t.repeats]
-        title, tone = f"{owner.name}'s to-do list", f"p{index % 4}"
+        title, tone = f"{owner.name}'s to-do list", view.tone_of(owner)
     else:
         return None
     rows = tuple(

@@ -29,6 +29,7 @@ from themi.accounts.household import HouseholdSettings
 from themi.core import keys
 from themi.core.wording import and_list
 from themi.localtime import to_utc_iso
+from themi_home.wall_columns import TOGETHER, TOGETHER_TONE, Place, WallColumns, key_of
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -40,7 +41,6 @@ FAMILY_TODOS_SHOWN = 5
 SMALL_ITEMS = 4
 EVENING_BEFORE_QUIET = timedelta(hours=1)  # as routines' own evening (R1a)
 IMPORTANCE = {"high": 0, "normal": 1, "low": 2}
-TOGETHER = "together"
 COOKING = re.compile(r"\bcook", re.IGNORECASE)  # a list of dishes ("Things to cook")
 DAY_STARTS = 8  # the timeline's earliest start, unless an event is earlier
 EVENING_STARTS = time(17)  # F52b: when nobody has an evening routine, as routines' default
@@ -261,6 +261,7 @@ class WallScreen:
 class WallView:
     def __init__(self, services: Services) -> None:
         self.services = services
+        self._places: list[Place] | None = None
 
     # ----- the whole screen -------------------------------------------------------------
 
@@ -278,9 +279,7 @@ class WallView:
             smalls=self.smalls(),
             today=self.today_line(),
             week=self.week(),
-            people=tuple(
-                WallPerson(m.id, m.name, f"p{i % 4}") for i, m in enumerate(self.people())
-            ),
+            people=tuple(WallPerson(m.id, m.name, self.tone_of(m)) for m in self.people()),
             night=self.night(),
             look=self.look(),
         )
@@ -338,7 +337,7 @@ class WallView:
         events = sorted(self.events(day), key=lambda e: (not e.all_day, e.start))
         plan = [Chip(e.title, e.tone) for e in events[:TOMORROW_SHOWN]]
         routines = self.services.maybe(keys.routines)
-        for index, member in enumerate(self.people()):
+        for member in self.people():
             if routines is None:
                 break
             first = next(iter(routines.of(member)), None)
@@ -346,7 +345,9 @@ class WallView:
                 continue
             for item in routines.today_items(first, day)[:2]:
                 plan.append(
-                    Chip(f"{item.title} · {member.name}, {first.name.lower()}", f"p{index % 4}")
+                    Chip(
+                        f"{item.title} · {member.name}, {first.name.lower()}", self.tone_of(member)
+                    )
                 )
         weather = self.weather()
         left = any(
@@ -370,8 +371,29 @@ class WallView:
     def now(self) -> datetime:
         return clock.now().astimezone(self.tz())
 
+    def places(self) -> list[Place]:
+        """F53: the columns in the wall's order, each with its colour (as chosen on Wall
+        frames, else the defaults)."""
+        if self._places is None:
+            members = self.services.store.list_members()
+            self._places = WallColumns(self.services.store.db).layout(members)
+        return self._places
+
     def people(self) -> list[Member]:
-        return self.services.store.list_members()
+        """The household, in the wall's order (F53)."""
+        return [p.member for p in self.places() if p.member is not None]
+
+    def together_tone(self) -> str:
+        return next((p.tone for p in self.places() if p.member is None), TOGETHER_TONE)
+
+    def timeline_rows(self) -> list[tuple[str, str, str]]:
+        """The timeline's rows: each person in the wall's order, then Family."""
+        rows = [(key_of(m), m.name, self.tone_of(m)) for m in self.people()]
+        return [*rows, ("family", "Family", self.together_tone())]
+
+    def tone_of(self, member: Member) -> str:
+        """F53: the colour class a person is drawn in."""
+        return next((p.tone for p in self.places() if p.member and p.member.id == member.id), "p0")
 
     # ----- the columns ------------------------------------------------------------------
 
@@ -380,11 +402,15 @@ class WallView:
         today = self.now().date()
         tasks = self._open_tasks(people)
         done = self._done_tasks(people)
-        columns = [self._person(i, m, tasks, done, today) for i, m in enumerate(people)]
-        together = self._together(tasks, done, today, {m.id: m.name for m in people})
-        if ask:
-            together = _asking(together, ask)
-        columns.insert(len(columns) // 2 if len(columns) > 1 else len(columns), together)
+        columns = []
+        for place in self.places():
+            if place.member is not None:
+                columns.append(self._person(place.member, place.tone, tasks, done, today))
+                continue
+            together = self._together(tasks, done, today, {m.id: m.name for m in people})
+            if ask:
+                together = _asking(together, ask)
+            columns.append(replace(together, tone=place.tone))
         return tuple(columns)
 
     def find(self, key: str) -> tuple[WallColumn, WallItem] | None:
@@ -425,8 +451,8 @@ class WallView:
 
     def _person(
         self,
-        index: int,
         member: Member,
+        tone: str,
         tasks: list[Task],
         done: list[tuple[Task, int | None]],
         today: date,
@@ -466,7 +492,7 @@ class WallView:
             key=f"m{member.id}",
             name=member.name,
             initial=member.name[:1].upper(),
-            tone=f"p{index % 4}",
+            tone=tone,
             summary=f"{count} done {self._today_word()}" if count else self._part_word(),
             sections=tuple(s for s in sections if s.items or s.empty),
             member_id=member.id,
@@ -706,7 +732,7 @@ class WallView:
         tz = self.tz()
         out: list[WallEvent] = []
         seen: set[tuple[str, str]] = set()
-        for index, member in enumerate(self.people()):
+        for member in self.people():
             prefs = self.services.store.preferences(member.id, CalendarPreferences)
             shares = prefs.calendar_details == "partner"
             for entry, whose in summary.events(member, day, tasks=False, scope="mine"):
@@ -718,7 +744,7 @@ class WallView:
                 out.append(
                     WallEvent(
                         row="family" if family else f"m{member.id}",
-                        tone="family" if family else f"p{index % 4}",
+                        tone=self.together_tone() if family else self.tone_of(member),
                         title=entry.title if shown else "Busy",
                         start=entry.starts_at.astimezone(tz),
                         end=entry.ends_at.astimezone(tz),
@@ -737,8 +763,7 @@ class WallView:
         if not self.has_calendar():
             return None
         now = self.now()
-        rows = [(f"m{m.id}", m.name, f"p{i % 4}") for i, m in enumerate(self.people())]
-        rows.append(("family", "Family", "family"))
+        rows = self.timeline_rows()
         tomorrow = self.events(now.date() + timedelta(days=1))
         return lay_out_today(now, rows, self.events(now.date()), tomorrow)
 

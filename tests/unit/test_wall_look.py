@@ -8,12 +8,13 @@ from pathlib import Path
 
 import pytest
 
+from themi_home.wall_columns import TONES
 from themi_home.wall_view import THEME_COLOR
 
 CSS = (Path(__file__).parents[2] / "src/themi_home/web/static/wall.css").read_text()
 SCRIPT = (Path(__file__).parents[2] / "src/themi_home/web/static/wall.js").read_text()
 COLOUR = re.compile(r"#[0-9a-fA-F]{3,8}\b|rgba?\(")
-PEOPLE = ("p0", "p1", "p2", "p3", "family")
+PEOPLE = tuple(TONES)  # F53: every colour Wall frames offers
 
 
 def blocks() -> list[tuple[str, str]]:
@@ -123,3 +124,9 @@ def test_the_people_keep_their_hues() -> None:
 def test_the_night_keeps_its_own_colours() -> None:
     assert tokens(":root", "--night-bg")["--night-bg"] == "#14161b"
     assert "body.night:not(.awake) { background: var(--night-bg); }" in CSS
+
+
+def test_every_colour_on_offer_has_a_tone_rule() -> None:
+    """F53: a colour chosen on Wall frames draws something."""
+    for tone in TONES:
+        assert f".tone-{tone} {{ --tone: var(--{tone});" in CSS, tone
