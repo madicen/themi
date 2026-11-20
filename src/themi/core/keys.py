@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from themi.standard.burnout import Burnout
     from themi.standard.business_hours import BusinessHours
     from themi.standard.conversation_mode import ConversationMode
+    from themi.standard.currency import Converter
     from themi.standard.day_summary import DaySummary
     from themi.standard.drawings import Drawings
     from themi.standard.feedback import FeedbackChat
@@ -109,6 +110,7 @@ email_audit: Key[EmailAudit] = Key("EmailAudit")
 triage: Key[EmailTriage] = Key("EmailTriage")
 noise: Key[NoiseDigest] = Key("NoiseDigest")
 expected: Key[ExpectedEmails] = Key("ExpectedEmails")
+currency: Key[Converter] = Key("Converter")  # F50b: foreign amounts in dollars
 feedback: Key[FeedbackChat] = Key("FeedbackChat")
 groceries: Key[GroceryList] = Key("GroceryList")
 pantry: Key[Pantry] = Key("Pantry")

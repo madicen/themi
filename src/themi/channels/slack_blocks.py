@@ -60,7 +60,7 @@ def sections(text: str) -> list[dict[str, Any]]:
 
 def button_blocks(buttons: Sequence[Button], tokens: Sequence[str | None]) -> list[dict[str, Any]]:
     """The buttons as `actions` blocks, a row each. `tokens[i]` is button i's callback
-    token, or None for a link button (`web_app`)."""
+    token, or None for a link button (`web_app`, `url`)."""
     if not buttons:
         return []
     blocks: list[dict[str, Any]] = []
@@ -74,7 +74,7 @@ def button_blocks(buttons: Sequence[Button], tokens: Sequence[str | None]) -> li
                 "action_id": f"themi-{i}",
             }
             if token is None:
-                element["url"] = button.web_app
+                element["url"] = button.link
             else:
                 element["value"] = token
             elements.append(element)

@@ -50,7 +50,11 @@ async def to_steps(scenario: Scenario, cooking: Cooking, prep: dict) -> int:
     [
         ("Add the mushrooms to the hot olive oil. Cook for 7 minutes.", "Add the mushrooms"),
         ("Drain and discard water from soaked cashews.", "Drain and discard"),
-        ("In a pot, bring water to a boil.", "In a pot"),
+        ("In a pot, bring water to a boil.", "Bring water"),  # F50d: past the "In a pot,"
+        ("In a large bowl, whisk the flour and salt.", "Whisk the flour"),
+        ("Once cooled, slice into squares", "Slice into squares"),
+        ("Meanwhile, make the glaze", "Make the glaze"),
+        ("When the oven is hot, bake for 12 minutes.", "Bake for 12"),
         ("Heat a large nonstick skillet or griddle over medium-low heat.", "Heat a large"),
         ("Serve.", "Serve"),
         ("whisk together the flours", "Whisk together"),
@@ -155,7 +159,9 @@ async def test_a_failed_titles_call_keeps_first_words_and_doesnt_ask_again(
     scenario.primary.queue_error(PermanentError("no key"), op="structured")
     scenario.fallback.queue_error(PermanentError("no key"), op="structured")
     await cooking.titles.ensure(erin, recipe)
-    assert cooking.titles.cached(recipe) == [fallback_title(s.text) for s in recipe.steps]
+    # F50d: first words aren't stored as final; the background job tries again (3 at most)
+    assert cooking.titles.cached(recipe) is None and cooking.titles.tries(recipe) == 1
+    assert cooking.titles.titles(recipe) == [fallback_title(s.text) for s in recipe.steps]
     calls = len(scenario.primary.requests) + len(scenario.fallback.requests)
     await cooking.titles.ensure(erin, recipe)
     assert len(scenario.primary.requests) + len(scenario.fallback.requests) == calls

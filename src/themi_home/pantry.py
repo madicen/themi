@@ -35,6 +35,7 @@ from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.standard.currency import in_dollars
 from themi_google.triage import ReceiptFound
 from themi_home import home_groups
 from themi_home.groceries import (
@@ -377,6 +378,13 @@ class Pantry:
             # X1: the month's takeout; EX2a: any receipt may fill an expense sheet in. What
             # the model read is kept only when the receipt has it written.
             total = data.get("total_cents")
+            receipt_text = (
+                f"{row['from_name']}\n{row['subject']}\n{row['body_text'][:RECEIPT_CHARS]}"
+            )
+            if isinstance(total, int) and total > 0:  # F50b: a foreign total in dollars
+                total = await in_dollars(
+                    self.services.maybe(keys.currency), total, receipt_text, purchased_at.date()
+                )
             prices = tuple(
                 int(line["price_cents"])
                 for line in lines
@@ -389,7 +397,7 @@ class Pantry:
                 vendor,
                 total if isinstance(total, int) and total > 0 else None,
                 purchased_at,
-                f"{row['from_name']}\n{row['subject']}\n{row['body_text'][:RECEIPT_CHARS]}",
+                receipt_text,
                 items=tuple(str(line.get("name", "")) for line in lines),
                 prices=prices,
             )

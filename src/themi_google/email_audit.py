@@ -132,6 +132,43 @@ class EmailAudit:
             self.store.update_linked_account(member, account.id, urgent_senders=listed)
         await self.refresh(member)
 
+    def levels_snapshot(self, account: LinkedAccount, address: str) -> dict[str, Any]:
+        """What a sender's levels are now, to put back with `restore_levels` (F50c's Undo):
+        their row's answer (None if never asked) and whether the inbox lists them."""
+        row = self.db.one(
+            "SELECT label, urgency, importance, answer, answered_at FROM email_audit_items "
+            "WHERE account_id = ? AND address = ? AND email_id IS NULL",
+            (account.id, address.lower()),
+        )
+        listed = address.lower() in [p.lower() for p in account.urgent_senders]
+        return {"row": dict(row) if row else None, "listed": listed}
+
+    async def restore_levels(
+        self, account: LinkedAccount, address: str, snapshot: dict[str, Any]
+    ) -> None:
+        address = address.lower()
+        row = snapshot.get("row")
+        if row is None:
+            self.db.execute(
+                "DELETE FROM email_audit_items WHERE account_id = ? AND address = ? "
+                "AND email_id IS NULL",
+                (account.id, address),
+            )
+        else:
+            self.db.execute(
+                "UPDATE email_audit_items SET urgency = ?, importance = ?, answer = ?, "
+                "answered_at = ? WHERE account_id = ? AND address = ? AND email_id IS NULL",
+                (row["urgency"], row["importance"], row["answer"], row["answered_at"],
+                 account.id, address),
+            )  # fmt: skip
+        listed = [p for p in account.urgent_senders if p.lower() != address]
+        if snapshot.get("listed"):
+            listed.append(address)
+        member = self.store.get_member(account.member_id)
+        if listed != list(account.urgent_senders):
+            self.store.update_linked_account(member, account.id, urgent_senders=listed)
+        await self.refresh(member)
+
     def add_email(self, account: LinkedAccount, row: dict[str, Any], summary: str) -> None:
         self.db.execute(
             "INSERT INTO email_audit_items (member_id, account_id, email_id, address, label, "

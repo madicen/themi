@@ -50,7 +50,9 @@ from themi.core import keys
 from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
 from themi.localtime import to_local, to_utc_iso
+from themi.standard.currency import Money, about, find_money
 from themi_google.connectors.gmail import EmailReceived, GmailSync
+from themi_google.email_buttons import notice_buttons
 
 if TYPE_CHECKING:
     from themi_google.triage import Verdict
@@ -62,6 +64,7 @@ AMOUNT_HISTORY = 6  # earlier confirmations compared against
 AMOUNT_MIN_HISTORY = 3
 AMOUNT_FACTOR = 1.5  # unusual: above 1.5x the usual amount...
 AMOUNT_MIN_JUMP_CENTS = 2000  # ...and at least $20 more
+RECHECK = "recheck"  # F50b: an amount stored as dollars that looks foreign, to read again
 
 OVERDUE_TEXT = (
     "{name} hasn't shown up in {address} yet. It usually comes every {cadence}; "
@@ -81,7 +84,6 @@ PAUSED_NOT_ADMIN_TEXT = (
 RESUMED_TEXT = '"{label}" is automatic again.'
 ALREADY_RESUMED_TEXT = '"{label}" was already resumed.'
 
-_AMOUNT = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?")
 _AMOUNT_WORDS = re.compile(
     r"\b(total|amount|paid|payment|charged|balance|due|your pledge|you pledged)\b", re.I
 )
@@ -141,39 +143,46 @@ def _expected_from_row(row: dict[str, Any]) -> ExpectedEmail:
     )
 
 
-def _amounts(text: str) -> list[tuple[bool, int]]:
-    """Every dollar figure in the text, in cents, with whether a payment word comes just
-    before it. A figure followed by "pledged" or "goal" isn't counted."""
-    found: list[tuple[bool, int]] = []
-    for match in _AMOUNT.finditer(text):
-        cents = int(match.group(1).replace(",", "")) * 100 + int(match.group(2) or 0)
-        before = text[max(0, match.start() - 40) : match.start()]
-        if _NOT_PAID_AFTER.search(text[match.end() : match.end() + 40]):
+def _amounts(text: str) -> list[tuple[bool, Money]]:
+    """Every amount in the text, with its currency (F50b), and whether a payment word comes
+    just before it. A figure followed by "pledged" or "goal" isn't counted."""
+    found: list[tuple[bool, Money]] = []
+    for amount in find_money(text):
+        before = text[max(0, amount.start - 40) : amount.start]
+        if _NOT_PAID_AFTER.search(text[amount.end : amount.end + 40]):
             continue
-        found.append((bool(_AMOUNT_WORDS.search(before)), cents))
+        found.append((bool(_AMOUNT_WORDS.search(before)), amount.money))
     return found
 
 
-def parse_amount(text: str) -> int | None:
-    """The dollar amount an email says was paid, in cents: the largest one next to a word
+def parse_money(text: str) -> Money | None:
+    """The amount an email says was paid, with its currency: the largest one next to a word
     like "total" or "paid". None without one: the largest figure in an email was a
     project's total pledged, not the reader's pledge (bug #145)."""
-    labelled = [cents for near, cents in _amounts(text) if near]
-    return max(labelled, default=None)
+    labelled = [money for near, money in _amounts(text) if near]
+    return max(labelled, key=lambda m: m.value, default=None)
+
+
+def paid_money(said: str, text: str) -> Money | None:
+    """The amount triage read as paid ("HK$ 816.00"), kept only when that figure is in the
+    email in the same currency: the model can't make one up."""
+    given = find_money(said)
+    if not given:
+        return None
+    money = given[0].money
+    return money if money in {f.money for f in find_money(text)} else None
+
+
+def parse_amount(text: str) -> int | None:
+    """`parse_money`, in cents, for an amount in dollars; None for any other currency."""
+    money = parse_money(text)
+    return money.cents if money is not None and not money.foreign else None
 
 
 def paid_amount(said: str, text: str) -> int | None:
-    """The amount triage read as paid ("$179.00"), in cents, kept only when that figure
-    is in the email: the model can't make one up."""
-    match = _AMOUNT.search(said)
-    if match is None:
-        return None
-    cents = int(match.group(1).replace(",", "")) * 100 + int(match.group(2) or 0)
-    in_text = {
-        int(m.group(1).replace(",", "")) * 100 + int(m.group(2) or 0)
-        for m in _AMOUNT.finditer(text)
-    }
-    return cents if cents in in_text else None
+    """`paid_money`, in cents, for an amount in dollars; None for any other currency."""
+    money = paid_money(said, text)
+    return money.cents if money is not None and not money.foreign else None
 
 
 def dollars(cents: int) -> str:
@@ -347,21 +356,22 @@ class ExpectedEmails:
         # Triage's figure for what the reader paid, if it's in the email; "" is none (a
         # project reaching its goal, bug #145). Without one, the labelled amount.
         said = verdict.amount_paid
-        amount = paid_amount(said, text) if said else None
-        if amount is None and (said is None or said.strip()):
-            amount = parse_amount(text)
-        if amount is None:
+        money = paid_money(said, text) if said else None
+        if money is None and (said is None or said.strip()):
+            money = parse_money(text)
+        if money is None:
             return
-        self.db.execute("UPDATE emails SET amount_cents = ? WHERE id = ?", (amount, row["id"]))
-        if row["initial"]:
+        amount = await self._record(row, money)
+        if row["initial"] or amount is None:
             return
         earlier = [
             r["amount_cents"]
             for r in self.db.query(
                 "SELECT amount_cents FROM emails WHERE account_id = ? AND from_address = ? "
                 "AND category = 'confirmation' AND amount_cents IS NOT NULL AND id != ? "
+                "AND (currency IS NULL OR currency != ?) "
                 "ORDER BY received_at DESC LIMIT ?",
-                (account.id, row["from_address"], row["id"], AMOUNT_HISTORY),
+                (account.id, row["from_address"], row["id"], RECHECK, AMOUNT_HISTORY),
             )
         ]
         if len(earlier) < AMOUNT_MIN_HISTORY:
@@ -369,18 +379,51 @@ class ExpectedEmails:
         usual = int(statistics.median(earlier))
         if amount <= max(usual * AMOUNT_FACTOR, usual + AMOUNT_MIN_JUMP_CENTS):
             return
+        shown = f"{money.words()} (about {about(amount)})" if money.foreign else dollars(amount)
         await self._anomaly(
             account,
             DEFAULT_CATEGORY,
-            f"an unusually large amount ({dollars(amount)}) from {row['from_address']}",
+            f"an unusually large amount ({shown}) from {row['from_address']}",
             AMOUNT_TEXT.format(
                 sender=row["from_name"] or row["from_address"],
-                amount=dollars(amount),
+                amount=shown,
                 usual=dollars(usual),
                 subject=row["subject"],
             ),
             dedupe_key=f"expected-amount:{row['id']}",
+            email=row,
         )
+
+    async def _record(self, row: dict[str, Any], money: Money) -> int | None:
+        """Keep an email's amount: in dollars, converted at its day's rate when it's in
+        another currency (F50b), or None (and not compared) when there's no rate."""
+        amount: int | None = money.cents
+        if money.foreign:
+            converter = self.services.maybe(keys.currency)
+            day = datetime.fromisoformat(row["received_at"]).date()
+            amount = await converter.to_dollars(money, day) if converter else None
+        self.db.execute(
+            "UPDATE emails SET amount_cents = ?, currency = ?, amount_original = ? WHERE id = ?",
+            (amount, money.currency if money.foreign else None,
+             money.words() if money.foreign else None, row["id"]),
+        )  # fmt: skip
+        return amount
+
+    async def recheck_amounts(self) -> int:
+        """F50b's migration marked the confirmations whose amount was read as dollars but
+        looks foreign: read again, with the currency. Returns how many were read."""
+        rows = self.db.query("SELECT * FROM emails WHERE currency = ? ORDER BY id", (RECHECK,))
+        for row in rows:
+            text = f"{row['subject']}\n{row['body_text']}"
+            money = paid_money(row["summary"] or "", text) or parse_money(text)
+            if money is None:
+                self.db.execute(
+                    "UPDATE emails SET amount_cents = NULL, currency = NULL WHERE id = ?",
+                    (row["id"],),
+                )
+                continue
+            await self._record(row, money)
+        return len(rows)
 
     # ----- overdue ---------------------------------------------------------------
 
@@ -425,7 +468,14 @@ class ExpectedEmails:
     # ----- escalating ------------------------------------------------------------
 
     async def _anomaly(
-        self, account: LinkedAccount, category: str, reason: str, text: str, *, dedupe_key: str
+        self,
+        account: LinkedAccount,
+        category: str,
+        reason: str,
+        text: str,
+        *,
+        dedupe_key: str,
+        email: dict[str, Any] | None = None,
     ) -> None:
         autonomy = self.services.autonomy
         member = self.store.get_member(account.member_id)
@@ -441,6 +491,8 @@ class ExpectedEmails:
                 )
             else:
                 text += PAUSED_NOT_ADMIN_TEXT.format(label=current.label)
+        if email is not None:  # F50c: the email's own buttons, then these
+            buttons = notice_buttons(self.services, email, text, keep=buttons)
         await self.services.outbox.send(
             member,
             text,

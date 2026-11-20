@@ -63,6 +63,7 @@ class ChatMessage:
     edited: bool = False
     reactions: tuple[str, ...] = ()  # on Themi's: theirs; on theirs: Themi's
     quote: str = ""  # the start of the message this one replies to
+    links: tuple[str | None, ...] = ()  # F50c: by button, where a link button goes
 
 
 class WebChatChannel:
@@ -195,6 +196,8 @@ class WebChatChannel:
         if not 0 <= index < len(buttons):
             return False
         b = buttons[index]
+        if b.get("url"):  # F50c: a link opens in the browser; nothing to answer
+            return False
         press = ButtonPress(b["label"], b["kind"], b["payload"], message_id)
         member = self.join(member)
         event = InboundEvent("button", member, member.id, message_id, clock.now(), 0, button=press)
@@ -218,6 +221,7 @@ class WebChatChannel:
                 edited=r["edited_at"] is not None,
                 reactions=tuple(json.loads(r["reactions"])),
                 quote=_quote(r["quoted"]),
+                links=tuple(b.get("url") for b in json.loads(r["buttons"])),
             )
             for r in reversed(rows)
         ]
@@ -287,8 +291,14 @@ def _quote(text: str | None) -> str:
 
 
 def _buttons(buttons: Sequence[Button]) -> str:
+    """A Mini App button (Telegram's) isn't shown here; a link button is, as a link."""
     return json.dumps(
-        [{"label": b.label, "kind": b.kind, "payload": b.payload} for b in buttons if not b.web_app]
+        [
+            {"label": b.label, "kind": b.kind, "payload": b.payload}
+            | ({"url": b.url} if b.url else {})
+            for b in buttons
+            if not b.web_app
+        ]
     )
 
 

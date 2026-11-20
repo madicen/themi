@@ -164,3 +164,36 @@ def test_entry_requests_style_every_paragraph() -> None:
     assert ranges[0] == {"startIndex": 100, "endIndex": 106}
     assert ranges[1] == {"startIndex": 106, "endIndex": 118}
     assert len(ranges) == len(paragraphs)
+
+
+def test_ingredient_lines_under_a_method_heading_are_ingredients() -> None:
+    """F50d: Thick Oat-Cashew Yogurt's "Sweetening" group (after the method) was read as
+    three steps, "1 Cup yogurt" among them."""
+    blocks = [
+        ("H4", "Thick Yogurt"), ("H5", "Ingredients"), ("P", "4 Cups (950g) water"),
+        ("P", "1 Cup (100g) rolled oats"), ("H5", "Instructions"),
+        ("P", "Blend oats and water for 1 minute."), ("P", "Stir in the culture and chill."),
+        ("H6", "Sweetening"), ("P", "1 Cup yogurt"), ("P", "2 Tbsp agave"),
+        ("P", "\u00bd tsp vanilla extract"), ("P", "-----"),
+    ]  # fmt: skip
+    yogurt = named(parse(blocks), "Thick Yogurt")
+    assert [s.text for s in yogurt.steps] == [
+        "Blend oats and water for 1 minute.", "Stir in the culture and chill.",
+    ]  # fmt: skip
+    assert yogurt.ingredients[-3:] == [
+        Line("1 Cup yogurt", "Sweetening"), Line("2 Tbsp agave", "Sweetening"),
+        Line("\u00bd tsp vanilla extract", "Sweetening"),
+    ]  # fmt: skip
+
+
+def test_a_method_group_with_real_steps_stays_steps() -> None:
+    blocks = [
+        ("H4", "Two Parts"), ("H5", "Ingredients"), ("P", "1 Cup flour"),
+        ("H5", "Instructions"), ("P", "Mix the dough."), ("H6", "Glaze"),
+        ("P", "2 Tbsp maple syrup, whisked with the sugar"), ("P", "Drizzle over the top."),
+        ("P", "-----"),
+    ]  # fmt: skip
+    two = named(parse(blocks), "Two Parts")
+    assert [(s.text, s.group) for s in two.steps][1:] == [
+        ("2 Tbsp maple syrup, whisked with the sugar", "Glaze"), ("Drizzle over the top.", "Glaze"),
+    ]  # fmt: skip

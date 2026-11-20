@@ -15,11 +15,16 @@
     {% if message.buttons %}
     <div class="buttons">
       {% for label in message.buttons %}
+      {% set link = message.links[loop.index0] if message.links else None %}
+      {% if link %}
+      <a class="button small" href="{{ link }}" target="_blank" rel="noopener">{{ label }}</a>
+      {% else %}
       <form method="post" action="/chat/{{ message.id }}/{{ loop.index0 }}"
             hx-post="/chat/{{ message.id }}/{{ loop.index0 }}" hx-target="#chat-log" hx-swap="outerHTML">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <button class="small">{{ label }}</button>
       </form>
+      {% endif %}
       {% endfor %}
     </div>
     {% endif %}

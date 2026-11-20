@@ -47,7 +47,7 @@ def store_tokens(
     now = clock.now()
     tokens: list[str | None] = []
     for button in buttons:
-        if button.web_app is not None:
+        if button.link is not None:  # a Mini App (BD3a) or a link (F50c)
             tokens.append(None)
             continue
         token = secrets.token_urlsafe(12)  # Telegram allows 64 bytes of callback data

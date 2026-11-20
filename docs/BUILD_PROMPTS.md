@@ -319,6 +319,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F49g | Idea: the morning message's text can be just the greeting when the picture shows the day | Feedback | [x] 2026-11-19 |
 | F49h | Idea: recipes to try, in their own Google Doc (reading and saving) | Feedback | [x] 2026-11-19 |
 | F49i | Idea: a recipe to try that's a keeper goes into the cookbook | Feedback | [x] |
+| F50a | Feedback: a reminder you set goes at its time, whatever else is going on | Feedback | [x] 2026-11-19 |
+| F50b | Feedback: an amount in another currency is converted before it's compared | Feedback | [x] 2026-11-19 |
+| F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [x] 2026-11-19 |
+| F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [x] 2026-11-19 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -15639,6 +15643,331 @@ Notes:
 - Tests: `tests/scenarios/test_recipes_to_try.py` (9 more), `tests/unit/test_cookbook_entry_range.py`.
 - Not done: no [Add to the cookbook] on a to-try recipe's ordinary chat card (only after
   cooking, or by asking). **Setup:** none beyond F49h's. Mark #224 reviewed once live.
+
+### F50a · Feedback (2026-11-19): a reminder you set goes at the time you set, whatever else is going on
+Status: [x] 2026-11-19
+Depends on: none
+Read first: `themi/standard/reminders.py` (`add_reminder`, `REMINDER_USEFUL_FOR`);
+`themi/channels/outbox.py` (`_earliest`, `flush`, `BREAKTHROUGH_KINDS`, `UNCOUNTED_KINDS`,
+`_gated`, the morning tray `_put_in_tray`); F38b's notes (the leave heads-up, the kind that
+already breaks through). From Michael's bug #231 (2026-11-19, 10:08 am, "I didn't get a
+reminder about the phone call I was supposed to make").
+
+What the Pi shows: reply 512 (Wed 18 Nov, 9:35 pm) set "Call 650-723-5001" for Thu 19 Nov,
+10 am: outbox 2157, kind `reminder`, `send_after` = `deadline` = 18:00 UTC, `expires_at` 20:00
+UTC. Michael has a weekday busy time, 9 am-5 pm (`members.busy_times`). At 10:00 the flush found
+the deadline already reached (`overdue`, since a reminder's deadline is its own time), so none
+of the deadline caps applied, and `free_from` moved `send_after` to 5 pm (01:00 UTC on the 20th),
+past its expiry. The flush only reads rows whose `send_after` has come, so it was going to be
+deleted at 5 pm as "too late to be any use", without a word. Nothing else held it (the cooking
+pause started at 10:54 am, calendar busy was only 12-2 pm).
+
+Decided (Michael, 2026-11-19, bug #231): a reminder he set goes at exactly its time: through
+busy times, calendar events, quiet hours, a cooking session's pause, the daily limit, the
+receptivity check and the morning tray. Like the leave heads-up.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `reminder` joins `BREAKTHROUGH_KINDS` (and so `UNCOUNTED_KINDS`): queued with `not_before`
+  its time, it goes at the first flush at or after it, held by nothing. Check every place that
+  reads `BREAKTHROUGH_KINDS` (bundling, the tray, `sent_today`, `_gated`, F49b's catch-up after
+  Telegram is back) does the right thing for a reminder; a reminder isn't bundled with other
+  messages.
+- `add_reminder` still refuses a time that has passed. Its answer doesn't change.
+- Hardening, for every kind: when the flush moves a row's `send_after` past its `expires_at`,
+  it deletes it there and then, with a warning in the log naming the row, its kind and what held
+  it (quiet hours, busy time, calendar, pause, limit), instead of keeping a row that will never
+  go. `themi feedback`'s log section shows these lines.
+- The outbox row 2157 on the Pi is due to drop at 5 pm; nothing to do for it.
+
+Tests: start with failing ones (clock frozen): a reminder at 10 am inside a 9-5 busy time goes
+at 10 am; one inside quiet hours (11 pm) goes at 11 pm; one inside a calendar busy event; one
+during a cooking pause; one when the daily limit is used up; one at the morning tray's time
+isn't put in the tray; a reminder doesn't count toward the daily limit. Hardening: a normal
+message held by a busy time past its expiry is deleted at that flush, with the warning.
+Scenario: Michael, at 9:35 pm, "remind me to call 650-723-5001 at 10 tomorrow"; at 10 am on a
+weekday (inside his busy time) his chat has "Reminder: Call 650-723-5001".
+
+Data/Setup: none. Mark #231 reviewed once live.
+
+Notes: `REMINDER_KIND` ("reminder") joins `BREAKTHROUGH_KINDS` in `themi/channels/outbox.py`, so
+`send_time` keeps its `not_before` and nothing holds it after (quiet hours, busy times, calendar,
+pauses including "everything", daily limit, receptivity, gates, the morning tray); it isn't
+counted. No bundler or refresher is registered for it, so it goes on its own. `add_reminder`'s
+answer is unchanged. Hardening: the flush deletes a row whose new `send_after` would be at or
+past its `expires_at`, and `send` doesn't queue one that couldn't go before its expiry
+(`OutboxResult("failed", None)`, as a duplicate has no id); both log a warning naming the row
+(or member), its kind and what held it (`Outbox._hold_reason`: a pause, quiet hours, a busy
+time, a calendar event, the daily limit, the receptivity check, its gate), which `themi
+feedback`'s log tail shows. Tests: `tests/unit/test_outbox_reminders.py` (8),
+`tests/scenarios/test_reminders.py` (1 more). **Setup:** none. Mark #231 reviewed once live.
+
+### F50b · Feedback (2026-11-19): an amount in another currency is converted before it's compared with the usual
+Status: [x] 2026-11-19
+Depends on: none
+Read first: `themi_google/expected.py` (`on_triaged`, `paid_amount`, `parse_amount`,
+`_AMOUNT`, `dollars`, `AMOUNT_TEXT`); `themi_google/triage.py` (`Verdict.amount_paid`, its
+rule in the triage prompt); `themi_home/spending.py` (takeout and receipt amounts, the same
+`$` reading); `tests/fakes` (how a network connector's fake is made). From Michael's bug #232
+(2026-11-19, 11:09 am, "the Kickstarter email shows HK$816.00 which is in Hong Kong dollars. A
+conversion would be required to know if it is above my norm"), with a screenshot of the email.
+
+What the Pi shows: email 1885 (Kickstarter, "We've collected your pledge for CeraDice", 7:06 am)
+says "HK$ 816.00". Triage's `amount_paid` was "HK$ 816.00"; `paid_amount` matched `$ 816.00`
+and stored `amount_cents` 81600, as US dollars. Outbox 2173: "A confirmation from Kickstarter
+shows $816.00, well above the usual $139.50". HK$816 is about US$105, below his usual. Two
+other stored amounts are foreign and read as dollars too: email 658 (HK$ 816.00, the same
+pledge's backing) and 939 (CA$ 100.00, Eldritch Pirate), so the usual itself is skewed.
+
+Decided (Michael, 2026-11-19, bug #232): convert with the day's exchange rate and compare in
+dollars; the alert gives both ("HK$816.00, about $105"). When the rate can't be had, that
+amount isn't compared (no alert, nothing guessed).
+
+Build:
+- Bug fix: start with the failing tests below.
+- Reading the currency: an amount's prefix or code: `US$`/`$` (dollars), `HK$`, `CA$`/`C$`,
+  `A$`/`AU$`, `NZ$`, `NT$`, `S$`, `MX$`, `€`, `£`, `¥`/`JP¥`, `₹`, `CHF`, and a three-letter
+  ISO code before or after the figure ("EUR 12.00", "12,00 EUR"). A bare `$` is the family's
+  dollars. `paid_amount` and `parse_amount` return the figure and its currency; `paid_amount`
+  still keeps only a figure that's in the email, with the same currency.
+- Exchange rates: a small connector (`themi/money/rates.py` or where the code's layout says)
+  for Frankfurter (ECB reference rates, `https://api.frankfurter.app/<date>?from=HKD&to=USD`,
+  no key), the rate on the email's received date (Frankfurter gives the last working day's).
+  Kept in a new table (`exchange_rates`: day, from, to, rate, fetched_at) so a day's rate is
+  fetched once. A failed or slow fetch (5 s) means no rate. It counts in the usage card as a
+  web call if UC's limits cover plain fetches; check UC's notes. The default test run uses a
+  fake in `tests/fakes`.
+- Storing: `emails` gains `currency` (ISO code, NULL for dollars) and `amount_cents` stays the
+  amount in dollars when converted, NULL when it couldn't be (with the original kept in
+  `amount_original` text, "HK$ 816.00"). Migration.
+- Comparing: only dollar amounts (given or converted) go into the usual and are compared.
+  `AMOUNT_TEXT` for a converted one: 'A confirmation from {sender} shows HK$816.00 (about
+  $105), well above the usual $139.50: "{subject}".'
+- The same currency reading for `spending.py`'s receipts: a foreign takeout receipt is
+  converted for the month's total, or left out of it with "(1 in another currency)" when it
+  can't be. Check whether its emails ever are foreign first; if none on the Pi, just the
+  reading and the same rule, with a test.
+- Data: the migration re-reads `amount_cents` for confirmation emails whose summary or body
+  shows a foreign amount (658, 939 and 1885 on the Pi), converting where the rate is fetched at
+  the next triage pass, so the usual is right.
+
+Tests: start with failing ones: "HK$ 816.00" with a fake rate of 0.1285 is stored as 10486 cents
+and HKD, isn't above a usual of $139.50, and isn't alerted; "CA$ 100.00" well above a usual of
+$40 is alerted with both amounts; a bare "$179.00" is dollars, as now; "12,00 EUR" reads as
+EUR 12.00; no rate (fake fails): `amount_cents` NULL, no alert, the next confirmation's usual
+leaves it out; a day's rate is fetched once for two emails; `paid_amount` with "HK$ 816.00"
+said and only "$816.00" (dollars) in the email keeps nothing.
+Scenario: a Kickstarter confirmation for HK$ 816.00 after four dollar pledges sends nothing;
+one for €400.00 sends "shows €400.00 (about $466), well above the usual".
+
+Data/Setup: migration (new table, three columns). Mark #232 reviewed once live.
+
+Notes:
+- `themi/standard/currency.py`: `find_money` (signs `$` `US$` `HK$` `CA$`/`C$` `AU$`/`A$` `NZ$`
+  `NT$` `MX$` `S$` `R$` `€` `£` `¥`/`JP¥` `CN¥` `₹` `₩`, and 26 ISO codes before or after the
+  figure; thousands in threes, two decimals with `.` or `,`), `Money` (`words()`: "HK$816.00"),
+  `Converter` (`to_dollars`, rates kept in `exchange_rates`), `in_dollars` (a model's figure with
+  no currency), `about` ("$105"). A bare `$` is US dollars: the family has no home-currency
+  setting yet. `themi/connectors/rates.py`: `FrankfurterClient`, at
+  `https://api.frankfurter.dev/v1/<date>` (the `.app` address the prompt named now redirects
+  there), 5 s timeout, any failure a `RateError` (logged, no rate). Usage meter
+  `frankfurter.calls` (Web; no published limit).
+- `expected.py`: `parse_money`/`paid_money` return the currency; `parse_amount`/`paid_amount`
+  stay (cents for dollars, None for others) so their tests read as before. `on_triaged` stores
+  `amount_cents` in dollars (converted), `currency` and `amount_original` for a foreign one, NULL
+  cents with no rate (not compared, not in later usuals). The alert says "shows HK$816.00 (about
+  $105), well above the usual $139.50"; the escalation reason the same.
+- Wiring: `ExpectedEmailsModule(rates)` provides `Converter` (`keys.currency`); `build_app` and
+  `family_modules` take `rates`. Tests: `tests/fakes/rates.py` (`FakeRates`, fixture
+  `fake_rates`); `connector_options` always hands in a fake (empty unless the test sets one).
+- Data: migration 0174 marks confirmations whose summary shows a foreign sign or code
+  (`currency = 'recheck'`, left out of the usual), and the hourly `email.amounts_recheck` reads
+  them again with their currency (on the Pi: 658, 939, 1885; a "US$" summary is cleared back to
+  dollars).
+- Receipts: no takeout receipt on the Pi is foreign. `pantry.read_receipt` passes the model's
+  total through `in_dollars`: kept unless the receipt writes that figure only in another
+  currency, then converted, or no total (left out) without a rate. Not done: the "(1 in another
+  currency)" note on the month's total, and line prices aren't converted.
+- Goldens: `jobs.json` (`email.amounts_recheck`), `handlers.json` (the `frankfurter.calls`
+  meter). `test_modules`' key count 75 -> 76. Tests: `tests/unit/test_currency.py` (6),
+  `tests/scenarios/test_expected.py` (3 more). **Setup:** none (migration). Mark #232 reviewed
+  once live.
+
+### F50c · Idea (2026-11-19): an email notice has buttons: open it, not important, mark read, make it a task
+Status: [x] 2026-11-19
+Depends on: none
+Read first: `themi/channels/events.py` (`Button`, its `web_app`); `themi/channels/telegram.py`
+(drawing buttons, around `InlineKeyboardButton(... web_app=...)`); `themi/channels/outbox.py`
+(`_button_dict`/the stored buttons); `themi/channels/slack.py` and the website chat (how they
+draw buttons); `themi_google/triage.py` (the urgent alert, `ALERT_TEXT`, around line 500; the
+confirmation's `email_mark_read` stage); `themi_google/connectors/gmail/parse.py` (`web_link`);
+`themi_google/email_audit.py` (`set_levels`, `no_rush`, `set_sender_levels`, F42b's
+`NOT_FLAGGED_TEXT`); the task tools (`themi/standard/tasks.py`). From Michael's idea #233
+(2026-11-19, 11:28 am, "urgent email notices aren't actionable. There should be a way to go to
+the email, mark it as not important, or read, or make it a task or something").
+
+What the Pi shows: every email notice since 12 Nov has `buttons` '[]': the urgent and
+time-sensitive alerts (outbox 2159 Crunchyroll new device, 2177 Capital One, 2185 Schwab, 2120,
+2143, 2152, 2188 for Erin), and the unusual-amount one (2173). 2185 is a Schwab "monthly account
+snapshot" sent as urgent: just the kind a [Not important] is for.
+
+Decided (Michael, 2026-11-19, idea #233): all four: open in Gmail, not important, mark read,
+make it a task.
+
+Build:
+- A link button: `Button.url` (an https URL; no callback, no token). Telegram draws it as
+  `InlineKeyboardButton(label, url=...)`; Slack as a link button; the website chat as a link
+  that opens in a new tab. Stored with the outbox row like `web_app`.
+- The urgent and time-sensitive alerts, and the unusual-amount alert, get:
+  [Open in Gmail] (url: `web_link(account.address, gmail_id)`), [Not important], [Mark read],
+  [Make it a task]. Two rows on a phone: the link and Not important, then Mark read and task.
+- [Not important]: the sender's urgency set to none, as `set_sender_levels` with urgency
+  "no rush" does (`audit.set_levels`), so its mail no longer alerts; the message is edited to
+  end "Mail from Schwab won't alert you again." with [Undo] (puts back the levels it had,
+  including "not asked"). Its importance is left as it was.
+- [Mark read]: through `stage("email_mark_read", ...)` with the email's payload, as triage does
+  for a confirmation: with trust it's done and the message edited "Marked read."; otherwise the
+  usual approval card.
+- [Make it a task]: a task for the person tapping, titled from the summary (the model's short
+  title if a task title is already made this way elsewhere; else the summary's first clause),
+  notes with the Gmail link, nothing due unless the email's summary has a date that triage read
+  (`urgent_kind` deadline or similar; check). The message is edited: "Task added: <title>." with
+  [Undo]. Through the task board's usual add, so it's on the wall if theirs are.
+- After a tap the other buttons stay, except the one used (Open in Gmail always stays).
+- Erin's notices get the same buttons. A shared or family-group notice: the tap acts for the
+  one who tapped, on the account the email is in only if it's theirs (else "That's Erin's
+  inbox").
+
+Tests: the Telegram fake draws a url button with no callback data; Slack and website chat draw
+the link; an urgent alert has the four buttons; [Not important] sets no rush and the next email
+from that sender sends nothing; its [Undo] restores the levels; [Mark read] stages
+`gmail.mark_read` (trusted: done and edited; untrusted: approval card); [Make it a task] adds a
+task with the link in its notes and edits the message; a tap on someone else's inbox's notice
+says so.
+Scenario: the Schwab monthly snapshot arrives as urgent; Michael taps [Not important]; next
+month's snapshot sends nothing. Then a Crunchyroll new-device alert: [Make it a task] gives
+"Task added: Check Crunchyroll sign-in."
+
+Data/Setup: none. Mark #233 reviewed once live.
+
+Notes:
+- `Button.url` (`themi/channels/events.py`), with `Button.link` (a Mini App or a link: no
+  callback token). Telegram draws `InlineKeyboardButton(url=...)`; Slack a `url` button; the
+  website chat keeps link buttons in its stored list (with `url`; Mini App ones are still
+  left out) and draws them as `<a class="button small" target="_blank">`, so the other
+  buttons keep their tap index; a tap on a link's index answers nothing. The outbox stores
+  `url` with the row's buttons.
+- `themi_google/email_buttons.py`: `notice_buttons(services, row, notice, keep=...)` and
+  `EmailNoticeButtons` (installed by triage; handlers `email_quiet`, `email_read`,
+  `email_task`, `email_undo`). The notice's words, the lines added, the buttons used and an
+  `undo` ride in the payload, so a tap redraws the message: the line under it ("Mail from
+  Schwab won't alert you again.", "Marked read.", "Task added: <title>."), that button gone,
+  [Undo] after Not important or the task (for the last one only), [Open in Gmail] always.
+  No message to edit (a maybe-sent one): the line is sent as a reply.
+- [Not important]: urgency "no rush" with the sender's importance kept (`set_levels`); Undo puts
+  back exactly what was there, including "never asked" (`EmailAudit.levels_snapshot`,
+  `restore_levels`). Not shown without the email audit module.
+- [Mark read]: `stage("email_mark_read", ..., requested=True)`: the tap is their own yes, so it's
+  done at once unless the category is capped or paused (escalated), when the usual approval
+  card goes. (The prompt said "with trust it's done; otherwise the approval card"; a tap
+  counting as a yes is how the trust tiers already treat asking for exactly this.)
+- [Make it a task]: a "text" task for whoever tapped, effort 1, no nudge, titled from the
+  summary's first clause (at most 70 characters); Undo cancels it. Not done: the Gmail link in
+  the task (tasks have no notes field; the notice keeps [Open in Gmail]) and a due date.
+- Carried by: the urgent and time-sensitive alerts (`triage._act`) and the unusual-amount alert
+  (`ExpectedEmails._anomaly(email=row)`, with its own [Resume automatic] kept after them). A tap
+  by someone whose inbox it isn't: "That's Erin's inbox, so it's theirs to sort."
+- Golden: `handlers.json` (the four handlers). Tests: `tests/scenarios/test_email_buttons.py`
+  (6), `tests/scenarios/test_web_chat.py` (1), `tests/integration/test_slack_channel.py` (1).
+  **Setup:** none. Mark #233 reviewed once live.
+
+### F50d · Feedback (2026-11-19): every recipe's steps have real short titles, not their first words
+Status: [x] 2026-11-19
+Depends on: none
+Read first: `themi_home/cooking_titles.py` (`fallback_title`, `StepTitles.ensure`, `store`,
+"whatever is stored is final"); `themi_home/recipe_card.py` (`items`, `card_png`);
+`themi_home/cooking_screen.py` (the step strip); `themi_home/cooking.py` (`prep_jobs`, where
+titles come with the prep call); `themi_home/recipes.py` or the cookbook reader (where a recipe
+is read or its words change); the recipe parser for picture and page recipes (step splitting);
+UC's notes (usage against the free tier). The Cooking Companion Plan's CK12 section. From
+Michael's bug #234 (2026-11-19, 2:02 pm, "the recipe instruction headings are just the first
+few words of the instruction and they don't really make sense. This is true for all the
+recipes").
+
+What the Pi shows: 186 recipes; only 16 have titles in `cooking_titles`, the ones cooked since
+CK12 (titles come with the prep call, or `ensure` for a recipe with prep). Every other recipe's
+card picture and cook screen strip show `fallback_title`: the first three words up to a comma,
+which read like "Add the cream" at best and like "In a large" at worst. Among the 16, some
+model titles are wrong too: Thick Oat-Cashew Yogurt's last three are "1 Cup yogurt", "2 Tbsp
+agave", "½ tsp vanilla" (ingredient lines read as steps); Pressure Cooker Anko has "Transfer"
+and "Further cooking". Recipe 42's last three steps are a "Sweetening" group under the method
+in the doc (ingredient lines), so the parser made them steps.
+
+Build:
+- Bug fix: start with the failing tests below.
+- Titles for every recipe, not only cooked ones: a background job (`ctx.periodic`, every 30
+  minutes) takes recipes with no titles for their current words, up to 10 per call and a few
+  calls per run, oldest first, with `AITask.RECIPES` and `CallKind.BACKGROUND`, and stores them
+  as `store` does. A recipe read or changed (cookbook read, to-try doc, a picture or page
+  import) is queued at once. It stops for the day when the usage card says the recipes route
+  is near its free limit (UC), and says nothing to anyone. The 170 on the Pi are done over a
+  day or two.
+- A failed call no longer stores first words as final: the recipe is tried again on a later
+  run (at most 3 tries, kept in a column), so a bad night doesn't fix fallbacks forever.
+- The prompt gets better titles: each title says what the step does as a cook would label it
+  ("Make the glaze", "Shape the crescents"), not a word like "Transfer" alone; the step's
+  ingredients and the recipe's name are context. One title per step, in order, as now.
+- The fallback, for the moments before titles exist, reads the step's main verb and its object
+  rather than the first three words: skip a leading clause ("In a large bowl,", "Once cooled,",
+  "Meanwhile,"), then the verb and up to two words after it ("Whisk the flour"). Still no model.
+- Steps that are ingredient lines: the cookbook parser read recipe 42's "Sweetening" group
+  ("1 Cup yogurt", "2 Tbsp agave", "½ tsp vanilla extract", after the method) as steps. A group
+  under the method whose lines are all ingredient-shaped (an amount and a unit, no verb) goes
+  to the ingredients, under its group name, with its own test.
+
+Tests: start with failing ones: the background job titles a recipe never cooked (fake model),
+and its card shows them; 10 per call; a recipe whose words change is titled again; a failed call
+leaves no stored titles and is tried on the next run, three times at most; the usage limit
+stops the run; `fallback_title` on "In a large bowl, whisk the flour and salt." is "Whisk the
+flour", on "Once cooled, slice into squares" is "Slice into squares", on "Meanwhile, make the
+glaze" is "Make the glaze"; the parser doesn't make "1 Cup yogurt" a step.
+Scenario: a recipe imported from a page has a card picture with model titles by the next run;
+Michael asks for its card and sees them.
+
+Data/Setup: migration (a tries column on `cooking_titles`, or a small queue table). The Pi's
+170 untitled recipes are titled by the job; recipe 42's titles are made again after the parser
+fix (its words change). Mark #234 reviewed once live and the job has caught up.
+
+Notes:
+- `StepTitles.fill` (job `cooking.step_titles`, every 30 minutes): recipes with steps and no
+  titles for their current words, in the cookbook's order (`Recipes.all`), 10 a call
+  (`BATCH_SYSTEM`/`BATCH_SCHEMA`: `{"recipes": [{"id", "titles"}]}`, each recipe its own data
+  block with its id, ingredients and numbered steps), 3 calls a run, `CallKind.BACKGROUND`,
+  on the first admin's recipes route. It tells no one. It skips the run when any AI row of the
+  usage card is "near" (75%) or over today. The Pi's 170 take about six runs (three hours),
+  longer on days the AI is near its limit. Not done: titling at once when a
+  recipe is read or changed (the next run picks it up, within 30 minutes).
+- Failures aren't final any more: `cooking_title_tries` (cooking migration 0004) counts failed
+  calls for a recipe's words; the job tries again, 3 times at most, then leaves first words.
+  `ensure` (a prepped recipe with no titles) records a try instead of storing first words, and
+  doesn't call again once one is recorded. `test_cook_tablet`'s
+  `test_a_failed_titles_call_keeps_first_words_and_doesnt_ask_again` now checks that (CK12's
+  "stored as final" is what this prompt changes); no second call is still checked.
+- `TITLES_RULE` (prep's call and the batch): an action and what it acts on ("Make the glaze"),
+  1 to 4 words, never a lone "Transfer".
+- `fallback_title` skips one or two leading clauses that open with where or when ("In a large
+  bowl,", "Once cooled,", "Meanwhile,") before taking the first three words: "Whisk the flour".
+  `test_cook_tablet`'s "In a pot, bring water to a boil." expectation changes from "In a pot"
+  to "Bring water"; four cases added. Goldens: the recipe card pictures (`recipe.svg`,
+  `recipe_dark.svg`, `recipe_grams.svg`: "If you'd like" -> "Preheat the oven", "In the
+  bottom" -> "Whisk together"), `jobs.json`.
+- Parser (`cookbook._ingredient_groups`): a group under the method, after other steps, whose
+  lines are all ingredient lines (an amount, maybe a unit, a few words, no sentence) moves to
+  the ingredients under its name (recipe 42's "Sweetening"). A group with any real step stays.
+- Tests: `tests/unit/test_step_titles.py` (5), `test_cook_tablet` (4 cases),
+  `test_cookbook_parser` (2), `test_home_modules` (the job). **Setup:** none (migration). The
+  next cookbook read re-parses recipe 42, whose words change, so it's titled again. Mark #234
+  reviewed once live and the job has caught up.
 
 ## Conversation mode
 
