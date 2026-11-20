@@ -16054,10 +16054,14 @@ bar and Android's bars. `THEMI_PUBLIC_URL` is HTTPS (Tailscale Funnel), so the p
 context, and WL6's manifest already says `display: fullscreen` with a service worker that has a
 fetch handler. Full screen then depends on how Chrome opens it: an installed app (a WebAPK,
 which needs Google Play services on the frame) opens full screen; a plain Add to Home screen
-shortcut or a Chrome tab doesn't. Cozyla frames may not have Google Play. (The linked page
-couldn't be read automatically. Its usual answers are the manifest, the Fullscreen API on a
-touch, a kiosk browser, or `adb shell settings put global policy_control immersive.full=...`,
-which Android 11 and later ignore.)
+shortcut or a Chrome tab doesn't. Cozyla frames may not have Google Play. The linked page
+(pasted by Michael, 2026-11-20): its top answer (29 votes) runs `requestFullscreen()` from
+a bookmarklet, which hides Chrome's address bar and Android's bars. Its comments add two
+catches: the call is gated by user activation (it works only from a touch, so a bookmarklet
+or the page's own touch handler, never on load), and some pages stop scrolling in full
+screen, fixed by setting `overflow: auto` afterwards. Nothing there forces it without a touch
+(an OS-level helper through Tasker or an accessibility service was tried and called clunky).
+Android 11 and later also ignore the older `adb ... policy_control immersive.full` trick.
 
 Build:
 - Full screen on the first touch: when the wall isn't already full screen (`matchMedia(
@@ -16065,7 +16069,9 @@ Build:
   `pointerdown` calls `document.documentElement.requestFullscreen({navigationUI: "hide"})`.
   If it's left (Back, a swipe), the next touch asks again. The touch still does what it was
   for (opening a view, ticking), and nothing is drawn to prompt for it. At night a touch
-  still wakes the screen as before.
+  still wakes the screen as before. It's the root element, not `body`, so the page's
+  scaling (`html.wall-root`) and background hold, and the sheets still scroll in full
+  screen (the linked page's `overflow` catch; checked in the CSS).
 - The frame says how it's shown: each part poll sends a `Themi-Wall-Display` header
   (`fullscreen`, `standalone`, `browser`, or `fullscreen-api` while the Fullscreen API holds
   it). It's kept on `wall_devices.display` with `last_seen_at`. Wall frames shows it ("Full
