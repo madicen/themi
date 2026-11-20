@@ -28,6 +28,7 @@ class Entry:
     source: str | None  # set for Themi's own events ("task:12")
     calendar_id: str = ""
     event_id: str = ""  # with calendar_id: the same event, read through two accounts
+    notes: str = ""  # WL7: its description as plain text, for the wall only; never the model
 
 
 def _clock(moment: datetime) -> str:

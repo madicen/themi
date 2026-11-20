@@ -27,6 +27,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.accounts.household import HouseholdSettings
 from themi.core import keys
+from themi.core.wording import and_list
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -132,6 +133,7 @@ class WallEvent:
     event_id: str = ""
     place: str = ""  # "" unless its details are shown
     video: bool = False
+    notes: str = ""  # WL7: its notes, "" unless its details are shown (the Event view only)
 
     @property
     def ref(self) -> str:
@@ -200,10 +202,12 @@ class WeekDay:
 
 
 class WallSettings(HouseholdSettings):
-    """WL6: when the wall goes quiet for the night. It wakes at the first morning routine."""
+    """WL6: when the wall goes quiet for the night. It wakes at the first morning routine.
+    WL8: whether Themi's note mentions parcels due today (off for present season)."""
 
     module: ClassVar[str] = "wall"
     bedtime: str = "23:00"
+    deliveries: bool = True
 
     @field_validator("bedtime")
     @classmethod
@@ -546,8 +550,9 @@ class WallView:
 
     def note(self) -> WallNote | None:
         """At most one line, worded as an offer (the plan's "Themi's note"): a weather alert
-        first, then a chore still open from before today, one either of you can do first.
-        One put off from the wall ("Later tonight") waits until then (WL5b)."""
+        first, then a parcel that came today (WL8), then a chore still open from before
+        today, one either of you can do first, then a parcel due today. One put off from the
+        wall ("Later tonight", "Got it") waits until then (WL5b)."""
         weather = self.services.maybe(keys.weather)
         now = self.now()
         quiet = self._quiet()
@@ -564,6 +569,39 @@ class WallView:
                         key,
                     )
         today = now.date()
+        came, due = self._deliveries(today, quiet)
+        if came is not None:
+            return came
+        chore = self._chore_note(today, quiet)
+        return chore if chore is not None else due
+
+    def _deliveries(self, today: date, quiet: set[str]) -> tuple[WallNote | None, WallNote | None]:
+        """WL8: notes for the parcels that came today and those still due, from shipping
+        emails. Only the shop's name: the wall is shared, and a parcel can be a present."""
+        deliveries = self.services.maybe(keys.deliveries)
+        if deliveries is None or not self.services.store.household(WallSettings).deliveries:
+            return None, None
+        found = deliveries.on(today)
+        came = [d.shop for d in found if d.status == "delivered"]
+        due = [d.shop for d in found if d.status != "delivered"]
+        notes: list[WallNote | None] = []
+        for shops, kind in ((came, "came"), (due, "due")):
+            key = f"delivery-{kind}-{today.isoformat()}-{','.join(shops)}"
+            if not shops or key in quiet:
+                notes.append(None)
+                continue
+            several = len(shops) > 1
+            what = f"{'Deliveries' if several else 'A delivery'} from {and_list(shops)}"
+            if kind == "came":
+                text = f"{what} came today. {'They' if several else 'It'} may be at the door."
+                why = "A shipping email says it was delivered today."
+            else:
+                text = f"{what} {'are' if several else 'is'} due today."
+                why = "A shipping email says it's expected today."
+            notes.append(WallNote(text, why, key))
+        return notes[0], notes[1]
+
+    def _chore_note(self, today: date, quiet: set[str]) -> WallNote | None:
         waiting = sorted(
             (
                 t
@@ -651,6 +689,7 @@ class WallView:
                         event_id=entry.event_id,
                         place=entry.location if shown and not entry.video else "",
                         video=entry.video,
+                        notes=entry.notes if shown else "",
                     )
                 )
         return out

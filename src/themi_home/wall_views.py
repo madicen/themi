@@ -37,6 +37,15 @@ if TYPE_CHECKING:
     from themi.core.calendar_view import Entry
 
 DAYS_AHEAD = 13  # the Day view goes from today to two weeks out
+NOTES_SHOWN = 280  # WL7: an event's notes, shortened for the Event view
+
+
+def shorten(notes: str, most: int = NOTES_SHOWN) -> str:
+    """An event's notes cut at a word, with an ellipsis when there was more."""
+    if len(notes) <= most:
+        return notes
+    cut = notes[:most].rsplit(None, 1)[0] if " " in notes[:most] else notes[:most]
+    return cut.rstrip(" ,.;:") + "\u2026"
 
 
 @dataclass(frozen=True)
@@ -51,6 +60,7 @@ class EventView:
     send_to: tuple[tuple[int, str], ...]  # who can have it on their phone
     ref: str
     sent: str = ""  # "Sent to Erin's phone."
+    notes: str = ""  # WL7: the event's notes, shortened; "" for a Busy event
 
 
 @dataclass(frozen=True)
@@ -136,6 +146,7 @@ class WallViews:
             leave_by=self._leave_by(found, member_id),
             send_to=send_to,
             ref=found.ref,
+            notes=shorten(found.notes),
         )
 
     def _leave_by(self, event: WallEvent, member_id: int) -> str:

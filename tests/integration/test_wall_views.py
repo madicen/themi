@@ -82,6 +82,35 @@ async def test_a_busy_event_shows_nothing_more(calendar: Scenario, fake_gcal: Fa
     assert "Dentist" not in view.text and "Smile Dental" not in view.text
 
 
+async def notes(s: Scenario, fake: FakeGcal, description: str) -> str:
+    """Erin's dentist at 10 with notes; returns its Event view, as words."""
+    fake.add_event(ERIN, local(10), local(11), summary="Dentist", description=description)
+    await s.run_periodic("calendar.busy")
+    found = re.search(r'hx-get="(/wall/view/event\?[^"]+)"', (await get(s, "/wall")).text)
+    assert found
+    return words((await get(s, found[1].replace("&amp;", "&"))).text)
+
+
+async def test_the_event_view_shows_its_notes(calendar: Scenario, fake_gcal: FakeGcal) -> None:
+    """WL7: the event's notes, as plain text, a line each."""
+    share(calendar)
+    shown = await notes(calendar, fake_gcal, "Bring the <b>insurance card</b>.<br>Park out back.")
+    assert "Notes Bring the insurance card. Park out back." in shown
+
+
+async def test_long_notes_are_shortened_at_a_word(calendar: Scenario, fake_gcal: FakeGcal) -> None:
+    share(calendar)
+    shown = await notes(calendar, fake_gcal, "Fill in the forms. " * 40)
+    said = shown[shown.index("Notes ") + 6 :]
+    assert said.startswith("Fill in the forms.") and "\u2026" in said
+    assert len(said[: said.index("\u2026")]) <= 280 and "Fill in the forms. " * 20 not in said
+
+
+async def test_a_busy_events_notes_stay_hidden(calendar: Scenario, fake_gcal: FakeGcal) -> None:
+    shown = await notes(calendar, fake_gcal, "Bring the insurance card.")
+    assert "insurance" not in shown and "Notes" not in shown
+
+
 async def test_send_to_my_phone_goes_through_the_outbox(
     calendar: Scenario, fake_gcal: FakeGcal
 ) -> None:

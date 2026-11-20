@@ -503,6 +503,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL5a | Wall: the views, part 1 (Event, Day, Weather, Person) | Wall | [x] 2026-11-20 |
 | WL5b | Wall: the views, part 2 (List, Dish, Note) | Wall | [x] 2026-11-20 |
 | WL6 | Wall: time of day, night, and the frame | Wall | [x] 2026-11-20 |
+| WL7 | Wall: event notes in the Event view | Wall | [x] 2026-11-20 |
+| WL8 | Wall: deliveries from email in Themi's note | Wall | [x] 2026-11-20 |
 
 ## Fixed technical choices
 
@@ -22864,3 +22866,51 @@ Notes:
 - The guide (`themi_home/setup/wall.md`) has the frame's steps and the bedtime.
 - Not looked at on the frame or in a browser: everything is tested through the pages. To
   try it: turn the Wall module on, restart, pair the frame from Wall frames.
+
+### WL7 · Wall: event notes in the Event view
+Status: [x] 2026-11-20
+Depends on: WL5a
+Read first: the plan's Event view ("the event's notes shortened").
+Michael's follow-up on 2026-11-20: calendar events have notes; use them. WL5a left them out
+because K1 never kept descriptions.
+- The calendar read keeps each event's description as plain text (`calendar_entries.notes`,
+  HTML tags gone, lines kept, at most 600 characters), on `Entry.notes`.
+- The Event view shows them under "Notes", shortened at a word to 280 characters, only when
+  the event's details are shown at all (a Busy event shows none).
+- The notes never reach the model: `CalendarBusy.context` and `event_line` leave them out.
+Tests: notes shown a line each, HTML stripped; long notes shortened; a Busy event's notes
+hidden; a scenario that the notes are kept and that neither person's prompt has them, even
+with details shared.
+
+Notes:
+- This changes K1's rule ("never descriptions"): they are kept now, for showing on the
+  wall only. Jinja escapes them, and no prompt reads them. K1's test that there's no
+  `description` column still holds (the column is `notes`); a new test next to it checks
+  the model never sees them.
+- Notes ride on `WallEvent.notes` ("" unless the details are shown), so the Event view
+  needs no second read.
+
+### WL8 · Wall: deliveries from email in Themi's note
+Status: [x] 2026-11-20
+Depends on: WL5b
+Read first: the plan's "Themi's note" and "Which notes suit the wall".
+Michael's follow-up on 2026-11-20: delivery information can come from emails. WL2 left
+"a delivery today" out because Themi had no source for it.
+- Email triage fills a `delivery` for any email about a parcel coming to the family: the
+  shop's name only (never what's in it: the wall is shared and a parcel can be a present),
+  the day it's expected or came, and `on_the_way`, `out_for_delivery` or `delivered`.
+- `Deliveries` (Google pack, `keys.deliveries`) keeps them as a verdict listener, a row per
+  email in `deliveries`, two weeks. An undated email counts for the day it arrived when
+  it's out for delivery or delivered; an undated "on its way" is left out.
+- The wall's note: a weather alert, then parcels that came today ("A delivery from Chewy
+  came today. It may be at the door."), then chores from yesterday, then parcels due today
+  ("Deliveries from Amazon and Chewy are due today."). "Got it" quiets it; a parcel that
+  then comes is a new note.
+- A household setting on the Wall module's page, `deliveries` (on), turns them off.
+Tests: due, came, several shops, the order against a chore, other days and undated, Got it,
+the setting, an email with no parcel; that the wall never shows what's in it; the parse.
+
+Notes:
+- Verdict listeners run before the first-sync check, so a parcel in mail found by a first
+  sync still counts (it's data, not an action).
+- Nothing tells the person on Telegram; the wall's note is the only place it shows.

@@ -42,6 +42,7 @@ from themi_google.connectors.google import (
     GoogleOAuth,
     ScopeNeed,
 )
+from themi_google.deliveries import Deliveries
 from themi_google.events import FROM_EMAIL, Events
 from themi_google.expected import ExpectedEmails
 from themi_google.google_settings import GoogleSettings
@@ -137,6 +138,8 @@ class EmailTriageModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         triage = ctx.provide(EmailTriage(ctx.services, ctx.get(GmailSync)))
         triage.install()
+        deliveries = ctx.provide(Deliveries(ctx.services))  # WL8: parcels, for the wall
+        triage.verdict_listeners.append(deliveries.on_verdict)
         ctx.periodic("email.triage", timedelta(minutes=1), triage.run)
 
 

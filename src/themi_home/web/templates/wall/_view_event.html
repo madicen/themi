@@ -11,6 +11,7 @@
   {% if event.leave_by %}<div><dt>Leaving</dt><dd>{{ event.leave_by }}</dd></div>{% endif %}
 </dl>
 {% endif %}
+{% if event.notes %}<div class="sheet-notes"><h3>Notes</h3>{% for line in event.notes.splitlines() %}<p>{{ line }}</p>{% endfor %}</div>{% endif %}
 {% if event.sent %}<p class="sheet-done" role="status">{{ event.sent }}</p>{% endif %}
 <div class="sheet-actions">
   {% for id, name in event.send_to %}

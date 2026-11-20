@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from themi_google.connectors.gcal.busy import CalendarBusy
     from themi_google.connectors.gmail import GmailSync
     from themi_google.connectors.google import GoogleAccounts
+    from themi_google.deliveries import Deliveries
     from themi_google.email_audit import EmailAudit
     from themi_google.events import Events
     from themi_google.expected import ExpectedEmails
@@ -108,6 +109,7 @@ wall_routines: Key[CozylaRoutines] = Key("CozylaRoutines")
 senders: Key[SenderSuggestions] = Key("SenderSuggestions")
 email_audit: Key[EmailAudit] = Key("EmailAudit")
 triage: Key[EmailTriage] = Key("EmailTriage")
+deliveries: Key[Deliveries] = Key("Deliveries")  # WL8: parcels from shipping emails
 noise: Key[NoiseDigest] = Key("NoiseDigest")
 expected: Key[ExpectedEmails] = Key("ExpectedEmails")
 currency: Key[Converter] = Key("Converter")  # F50b: foreign amounts in dollars

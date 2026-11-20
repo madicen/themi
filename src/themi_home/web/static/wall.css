@@ -236,3 +236,8 @@ body.night:not(.awake) { background: #14161b; }
 .night-plan .dot-chip::before { width: 0.9rem; height: 0.9rem; }
 .night-line { font-size: 1.9rem; line-height: 1.4; color: #bdb9b2; max-width: 48rem; }
 .night-hint { margin-top: auto; font-size: 1.3rem; color: #8e8b86; }
+
+/* WL7: an event's notes in its view */
+.sheet-notes { background: var(--soft); border-radius: 1.25rem; padding: 1.1rem 1.4rem; margin-top: 1rem; }
+.sheet-notes h3 { margin: 0 0 0.4rem; font-size: 1rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.sheet-notes p { margin: 0.2rem 0; font-size: 1.25rem; overflow-wrap: anywhere; }

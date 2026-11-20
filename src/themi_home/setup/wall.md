@@ -18,4 +18,8 @@ off at night. If Themi restarts or the Wi-Fi drops, the frame keeps its last scr
 
 **Bedtime** (below) is when the night view starts; 11 pm unless you change it.
 
+**Deliveries** (below, on unless you turn it off): Themi's note on the wall mentions parcels
+due or delivered today, from the shipping emails in watched inboxes. It names only the shop,
+never what's inside, but around birthdays you may still want it off.
+
 A frame stays signed in. **Sign this frame out** on Wall frames stops it at once.
