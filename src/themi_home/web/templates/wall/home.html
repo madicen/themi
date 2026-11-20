@@ -1,11 +1,16 @@
 <!doctype html>
-<html lang="en" class="wall-root">
+<html lang="en" class="wall-root{% if screen.look == 'dark' %} dark{% endif %}" data-look="{{ screen.look }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
   <title>Wall · Themi</title>
-  <meta name="theme-color" content="#e8ece6">
+  {% if screen.look == "auto" %}
+  <meta name="theme-color" content="{{ theme_color.light }}" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="{{ theme_color.dark }}" media="(prefers-color-scheme: dark)">
+  {% else %}
+  <meta name="theme-color" content="{{ theme_color[screen.look] }}">
+  {% endif %}
   <link rel="manifest" href="/wall/manifest.webmanifest">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="{{ asset('home/icons/apple-touch-icon.png') }}">

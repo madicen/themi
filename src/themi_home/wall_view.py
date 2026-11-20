@@ -18,10 +18,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from themi import clock
 from themi.accounts import Member
@@ -43,6 +43,12 @@ IMPORTANCE = {"high": 0, "normal": 1, "low": 2}
 TOGETHER = "together"
 COOKING = re.compile(r"\bcook", re.IGNORECASE)  # a list of dishes ("Things to cook")
 DAY_STARTS = 8  # the timeline's earliest start, unless an event is earlier
+EVENING_STARTS = time(17)  # F52b: when nobody has an evening routine, as routines' default
+
+# F52b: the wall's look, as the Wall module's page offers it, and what the page is told:
+# "light", "dark", or "auto" (the frame's own dark theme decides, in wall.js).
+Look = Literal["Follow the frame", "Light", "Dark", "Dark in the evening"]
+THEME_COLOR = {"light": "#e8ece6", "dark": "#111317"}
 MIN_BLOCK = 1.5  # % of the hours: the narrowest event drawn (a 5-minute one is still seen)
 WEEK_EVENTS = 3
 TOMORROW_SHOWN = 4
@@ -203,11 +209,17 @@ class WeekDay:
 
 class WallSettings(HouseholdSettings):
     """WL6: when the wall goes quiet for the night. It wakes at the first morning routine.
-    WL8: whether Themi's note mentions parcels due today (off for present season)."""
+    WL8: whether Themi's note mentions parcels due today (off for present season).
+    F52b: light or dark, or as the frame is set, or dark from the evening routine."""
 
     module: ClassVar[str] = "wall"
     bedtime: str = "23:00"
     deliveries: bool = True
+    look: Look = Field(
+        "Follow the frame",
+        description="Follow the frame uses the frame's own dark theme. Dark in the evening "
+        "goes dark when the evening routine starts and light again at the first morning one.",
+    )
 
     @field_validator("bedtime")
     @classmethod
@@ -243,6 +255,7 @@ class WallScreen:
     week: tuple[WeekDay, ...] = ()
     people: tuple[WallPerson, ...] = ()  # WL4: "Who did it?"
     night: NightView | None = None  # WL6: None by day
+    look: str = "light"  # F52b: "light", "dark" or "auto"
 
 
 class WallView:
@@ -269,6 +282,7 @@ class WallView:
                 WallPerson(m.id, m.name, f"p{i % 4}") for i, m in enumerate(self.people())
             ),
             night=self.night(),
+            look=self.look(),
         )
 
     # ----- WL6: the night -------------------------------------------------------------
@@ -288,6 +302,31 @@ class WallView:
         if bed > wake:  # 11 pm to 8 am, across midnight
             return at >= bed or at < wake
         return bed <= at < wake  # a bedtime after midnight
+
+    # ----- F52b: the look ---------------------------------------------------------------
+
+    def evening(self) -> time:
+        """When the evening routine starts: the earliest anyone's is (5 pm by default)."""
+        routines = self.services.maybe(keys.routines)
+        starts = [
+            r.starts
+            for m in self.people()
+            for r in (routines.of(m) if routines else [])
+            if "evening" in r.name.lower()
+        ]
+        return min(starts, default=EVENING_STARTS)
+
+    def look(self) -> str:
+        chosen = self.services.store.household(WallSettings).look
+        if chosen == "Light":
+            return "light"
+        if chosen == "Dark":
+            return "dark"
+        if chosen == "Dark in the evening":
+            at = self.now().time()
+            dark = self.is_night() or at >= self.evening() or at < self.morning()
+            return "dark" if dark else "light"
+        return "auto"
 
     def night(self) -> NightView | None:
         if not self.is_night():

@@ -79,6 +79,26 @@
     var night = mode && mode.getAttribute("data-night") === "1";
     document.body.classList.toggle("night", !!night);
     if (!night) wake(false);
+    if (mode) applyLook(mode.getAttribute("data-look"));
+  }
+
+  // F52b: the look. The server says "light", "dark" or "auto" (on <html>, and again with
+  // the night part every minute, so "Dark in the evening" turns at its time); "auto" follows
+  // the frame's own dark theme, and changes with it.
+  var frameDark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function applyLook(look) {
+    var root = document.documentElement;
+    if (look) root.setAttribute("data-look", look);
+    look = root.getAttribute("data-look") || "light";
+    var dark = look === "dark" || (look === "auto" && !!frameDark && frameDark.matches);
+    root.classList.toggle("dark", dark);
+    var colors = { light: "#e8ece6", dark: "#111317" };
+    document.querySelectorAll('meta[name="theme-color"]:not([media])').forEach(function (m) {
+      m.setAttribute("content", dark ? colors.dark : colors.light);
+    });
+  }
+  if (frameDark && frameDark.addEventListener) {
+    frameDark.addEventListener("change", function () { applyLook(null); });
   }
   function wake(on) {
     if (awake) { clearTimeout(awake); awake = null; }
@@ -87,6 +107,31 @@
   }
   document.addEventListener("pointerdown", function () {
     if (document.body.classList.contains("night")) wake(true);
+  });
+
+  // F52a: full screen on the first touch. Chrome allows it only from a touch, so a frame
+  // that opens the wall as a plain shortcut or a tab gets there on its first one, and again
+  // after Back or a swipe has left it. The touch still does what it was for. The root
+  // element, not body, so the page's scaling and background hold.
+  function shownAs() {
+    if (document.fullscreenElement) return "fullscreen-api";
+    var modes = ["fullscreen", "standalone"];
+    for (var i = 0; i < modes.length; i++) {
+      if (window.matchMedia && window.matchMedia("(display-mode: " + modes[i] + ")").matches) {
+        return modes[i];
+      }
+    }
+    return "browser";
+  }
+  function fullScreen() {
+    var root = document.documentElement;
+    if (shownAs() === "fullscreen" || document.fullscreenElement || !root.requestFullscreen) return;
+    root.requestFullscreen({ navigationUI: "hide" }).catch(function () {});
+  }
+  document.addEventListener("pointerdown", fullScreen);
+  // Each poll says how the frame shows the wall, for Wall frames.
+  document.addEventListener("htmx:configRequest", function (event) {
+    event.detail.headers["Themi-Wall-Display"] = shownAs();
   });
 
   // WL6: keep the screen on while the wall is open, and ask again when it's seen again.

@@ -1,5 +1,5 @@
 {% set n = screen.night %}
-<div class="wall-night-mode" data-night="{{ '1' if n else '0' }}" hidden></div>
+<div class="wall-night-mode" data-night="{{ '1' if n else '0' }}" data-look="{{ screen.look }}" hidden></div>
 {% if n %}
 <section class="wall-night" aria-label="Night">
   <p class="night-time">{{ screen.time }}<span>{{ screen.meridiem }}</span></p>

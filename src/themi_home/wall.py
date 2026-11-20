@@ -38,7 +38,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
-from themi_home.wall_view import WallItem, WallSettings, WallView
+from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
 from themi_home.wall_views import WallViews, _recipe, dish_view, list_view, note_view
 
 if TYPE_CHECKING:
@@ -72,6 +72,18 @@ class WallDevice:
     csrf_token: str
     paired_at: datetime
     last_seen_at: datetime
+    display: str | None = None
+
+
+# F52a: how a frame's page says it's shown (the Themi-Wall-Display header), and what Wall
+# frames says about it.
+DISPLAY_HEADER = "Themi-Wall-Display"
+DISPLAYS = {
+    "fullscreen": "Full screen app",
+    "fullscreen-api": "Full screen after a touch",
+    "standalone": "In its own window, with Android's bars",
+    "browser": "In a Chrome tab: see the guide",
+}
 
 
 class WallDevices:
@@ -143,9 +155,9 @@ class WallDevices:
 
     # ----- frames ------------------------------------------------------------------------
 
-    def device(self, token: str | None) -> WallDevice | None:
+    def device(self, token: str | None, display: str | None = None) -> WallDevice | None:
         """The frame this cookie belongs to, marked as seen now; None when it's unknown or
-        revoked."""
+        revoked. A known `display` (F52a) is kept with it; anything else leaves it be."""
         if not token:
             return None
         row = self.db.one(
@@ -155,10 +167,12 @@ class WallDevices:
         if row is None:
             return None
         now = clock.now()
+        shown = display if display in DISPLAYS else row["display"]
         self.db.execute(
-            "UPDATE wall_devices SET last_seen_at = ? WHERE id = ?", (to_utc_iso(now), row["id"])
+            "UPDATE wall_devices SET last_seen_at = ?, display = ? WHERE id = ?",
+            (to_utc_iso(now), shown, row["id"]),
         )
-        return _device({**row, "last_seen_at": to_utc_iso(now)})
+        return _device({**row, "last_seen_at": to_utc_iso(now), "display": shown})
 
     def all(self) -> list[WallDevice]:
         rows = self.db.query(
@@ -187,6 +201,7 @@ def _device(row: dict) -> WallDevice:
         row["csrf_token"],
         datetime.fromisoformat(row["paired_at"]),
         datetime.fromisoformat(row["last_seen_at"]),
+        row["display"],
     )
 
 
@@ -283,7 +298,7 @@ def routes(kit: Kit) -> APIRouter:
     devices: WallDevices = kit.app.services.get(WallDevices)
 
     def frame(request: Request) -> WallDevice | None:
-        return devices.device(request.cookies.get(WALL_COOKIE))
+        return devices.device(request.cookies.get(WALL_COOKIE), request.headers.get(DISPLAY_HEADER))
 
     def pair_page(request: Request, status: int = 200, error: str = "") -> HTMLResponse:
         return kit.page(request, "wall/pair.html", status, error=error)
@@ -309,7 +324,9 @@ def routes(kit: Kit) -> APIRouter:
         if csrf is None:
             return RedirectResponse("/wall/pair", status_code=303)
         screen = WallView(kit.app.services).screen()
-        return kit.page(request, "wall/home.html", screen=screen, csrf=csrf)
+        return kit.page(
+            request, "wall/home.html", screen=screen, csrf=csrf, theme_color=THEME_COLOR
+        )
 
     @router.get("/wall/part/{part}", response_class=HTMLResponse)
     def wall_part(request: Request, part: str) -> Response:
@@ -689,7 +706,9 @@ def routes(kit: Kit) -> APIRouter:
     @router.get("/wall/frames", response_class=HTMLResponse)
     def frames(request: Request) -> HTMLResponse:
         session = kit.admin(request)
-        return kit.with_flash(request, "wall/frames.html", session, frames=devices.all())
+        return kit.with_flash(
+            request, "wall/frames.html", session, frames=devices.all(), displays=DISPLAYS
+        )
 
     @router.post("/wall/frames/code", response_class=HTMLResponse)
     async def new_code(request: Request) -> HTMLResponse:
@@ -700,6 +719,7 @@ def routes(kit: Kit) -> APIRouter:
             "wall/frames.html",
             session,
             frames=devices.all(),
+            displays=DISPLAYS,
             code=f"{code[:3]} {code[3:]}",
             minutes=int(CODE_TTL.total_seconds() // 60),
         )
