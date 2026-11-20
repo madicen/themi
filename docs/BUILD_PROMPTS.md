@@ -329,6 +329,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F51a | Feedback: Unlink Spotify on the Accounts page unlinks it instead of showing an error | Feedback | [x] 2026-11-19 |
 | F52a | Idea: the wall goes full screen on the frame, whichever way it's opened | Feedback | [x] 2026-11-20 |
 | F52b | Idea: the wall has a dark look | Feedback | [x] 2026-11-20 |
+| F53 | Idea: choose each person's colour and the columns' order on the wall | Feedback | [x] 2026-11-20 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16178,6 +16179,62 @@ Notes:
   token sets match, contrast, hues within 25 degrees, the night's colours);
   `tests/integration/test_wall_look.py`. Not looked at on the frame.
 - **Setup:** none; choose the look on the Wall module's page. Mark #237 reviewed once live.
+
+### F53 · Idea (2026-11-20): choose each person's colour and the columns' order on the wall
+Status: [x] 2026-11-20
+Depends on: F52b
+Read first: `themi_home/wall_view.py` (`columns`, `people`, the tones); `themi_home/wall_views.py`
+(Day, Person and List views' tones); `themi_home/web/static/wall.css` (the tone tokens);
+`themi_home/web/templates/wall/frames.html`; `tests/unit/test_wall_look.py`.
+From Michael in a Claude session (2026-11-20): "create some way to change the colors of the
+family members and the order they appear in the columns".
+
+What the code does now: a person's colour is their place in `list_members()` (`p{index % 4}`:
+green, rose, blue, amber), Together is always purple (`family`), and Together sits in the
+middle of the people. Nothing can change either.
+
+Build:
+- **People on the wall**, a card on Wall frames (admins only, as the rest of that page): one
+  row per column in the wall's order (each person and Together), each with a colour choice
+  and Up / Down buttons. Save keeps the colours; Up and Down move a column at once and keep
+  the colours on the form. **Put them back** clears the choices, back to the defaults above.
+  No script: plain forms, as the rest of the page.
+- The colours: the five the wall has (Green, Rose, Blue, Amber, Purple) and three more
+  (Teal `p4`, Plum `p5`, Slate `p6`), each with its light and dark tokens keeping F52b's
+  contrast pairs and hue rule. Two columns may share a colour (it's the family's choice).
+- Kept in a wall table, `wall_columns` (`key` "m3" or "together", `position`, `tone`). A person
+  added later goes at the end with their default colour; a person removed is ignored.
+- Everything that colours a person follows the choice: their column, the "Who did it?"
+  buttons, the timeline rows and blocks, week chips, the night plan, and the Day, Person and
+  List views. Everything that lists people follows the order (the timeline's rows, the
+  Day view's, the "Who did it?" buttons); the timeline's Family row stays last.
+- The defaults with nothing chosen are the screen as it is today (tests hold that).
+
+Tests: the defaults unchanged; a chosen order and colour show on the wall's columns,
+timeline and Person view; Up / Down move a column and keep colours; Put them back; an
+unknown colour or key is refused; a person added later goes last; only admins can change it;
+every tone in `TONES` has light and dark tokens and a `.tone-` rule, and keeps the contrast
+pairs and hue rule.
+Scenario: none (nobody gets a message); Michael checks it on the frame.
+
+Data/Setup: a migration adds `wall_columns`. None for the family; choose on Wall frames.
+
+Notes:
+- `themi_home/wall_columns.py`: `TONES` (tone class -> the name on the form), `WallColumns`
+  (`layout(members)`, `save`, `reset`), `default_layout`, `moved`. Migration
+  `wall_schema/0005_wall_columns.sql`. Together's key is `together` (its column's), its
+  default tone `family`.
+- `WallView.places()` (cached per view; a view is per request) is the one source:
+  `people()` is now in the wall's order, `tone_of(member)`, `together_tone()` and
+  `timeline_rows()` replace every `p{index % 4}` in `wall_view.py` and `wall_views.py`. The
+  Groceries and Family to-do views take Together's colour.
+- Wall frames: the card `#columns`, one form posting to `/wall/frames/columns` (Up / Down are
+  submit buttons named `move`, so a colour changed on the form is kept by a move).
+- New colours: Teal `p4`, Plum `p5`, Slate `p6`, light and dark. Their light rings are about
+  2:1, as the five the wall had (F52b's deviation); everything else passes F52b's checks.
+  `test_wall_look.py` now checks every tone in `TONES`, and that each has a `.tone-` rule.
+- Tests: `tests/integration/test_wall_columns.py`. Not looked at on the frame.
+- **Setup:** none; Wall frames, People on the wall.
 
 ## Conversation mode
 
