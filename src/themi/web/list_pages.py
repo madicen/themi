@@ -63,7 +63,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect("/lists", f"{str(exc).capitalize()}.")
         return back(nl, f"Made the list {nl.name}.")
 
-    @router.post("/lists/{list_id}/add")
+    @router.post("/lists/{list_id:int}/add")
     async def add_item(request: Request, list_id: int) -> Response:
         session, form = await kit.checked(request)
         nl = mine(session.member, list_id)
@@ -75,7 +75,7 @@ def routes(kit: Kit) -> APIRouter:
             return back(nl, f"{str(exc).capitalize()}.")
         return back(nl, f"Added to {nl.name}." if added else "That's on it already.")
 
-    @router.post("/lists/{list_id}/items/{item_id}/tick")
+    @router.post("/lists/{list_id:int}/items/{item_id:int}/tick")
     async def tick_item(request: Request, list_id: int, item_id: int) -> Response:
         session, form = await kit.checked(request)
         nl = mine(session.member, list_id)
@@ -85,7 +85,7 @@ def routes(kit: Kit) -> APIRouter:
         lists().tick(item, form.get("done") == "1", session.member)
         return back(nl)
 
-    @router.post("/lists/{list_id}/items/{item_id}/remove")
+    @router.post("/lists/{list_id:int}/items/{item_id:int}/remove")
     async def remove_item(request: Request, list_id: int, item_id: int) -> Response:
         session, _ = await kit.checked(request)
         nl = mine(session.member, list_id)
@@ -95,7 +95,7 @@ def routes(kit: Kit) -> APIRouter:
         lists().remove(item)
         return back(nl, f"Took {item.name} off.")
 
-    @router.post("/lists/{list_id}/items/{item_id}/store")
+    @router.post("/lists/{list_id:int}/items/{item_id:int}/store")
     async def set_store(request: Request, list_id: int, item_id: int) -> Response:
         """Where a thing to buy usually comes from (L2a)."""
         session, form = await kit.checked(request)
@@ -111,7 +111,7 @@ def routes(kit: Kit) -> APIRouter:
         buying.forget_store(item.name)
         return back(nl, f"Forgot where {item.name} comes from.")
 
-    @router.post("/lists/{list_id}/items/{item_id}/someday")
+    @router.post("/lists/{list_id:int}/items/{item_id:int}/someday")
     async def set_someday(request: Request, list_id: int, item_id: int) -> Response:
         """F36b: a thing to buy for someday (research included), or an ordinary one again."""
         session, form = await kit.checked(request)
@@ -123,7 +123,7 @@ def routes(kit: Kit) -> APIRouter:
         lists().set_someday(item, on)
         return back(nl, f"{item.name}: for someday." if on else f"{item.name}: to buy as usual.")
 
-    @router.post("/lists/{list_id}/clear")
+    @router.post("/lists/{list_id:int}/clear")
     async def clear_ticked(request: Request, list_id: int) -> Response:
         session, _ = await kit.checked(request)
         nl = mine(session.member, list_id)
@@ -132,7 +132,7 @@ def routes(kit: Kit) -> APIRouter:
         cleared = lists().clear_ticked(nl)
         return back(nl, f"Cleared {cleared} ticked from {nl.name}.")
 
-    @router.post("/lists/{list_id}/delete")
+    @router.post("/lists/{list_id:int}/delete")
     async def delete_list(request: Request, list_id: int) -> Response:
         session, _ = await kit.checked(request)
         nl = mine(session.member, list_id)

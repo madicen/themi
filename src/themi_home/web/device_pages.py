@@ -225,7 +225,7 @@ def thinq_routes(kit: Kit) -> APIRouter:
             back("thinq"), "Unlinked LG ThinQ. Deleting the token on LG's site finishes it."
         )
 
-    @router.post("/family/thinq/devices/{device_id}")
+    @router.post("/family/thinq/devices/{device_id:int}")
     async def map_thinq_device(request: Request, device_id: int) -> Response:
         session, form = await kit.checked(request, admin=True)
         watcher = app.services.maybe(keys.thinq)
@@ -356,7 +356,7 @@ def tuya_routes(kit: Kit) -> APIRouter:
             back("tuya"), "Unlinked Tuya. Deleting the cloud project on Tuya's site finishes it."
         )
 
-    @router.post("/family/tuya/devices/{device_id}")
+    @router.post("/family/tuya/devices/{device_id:int}")
     async def map_tuya_device(request: Request, device_id: int) -> Response:
         session, form = await kit.checked(request, admin=True)
         watcher = app.services.maybe(keys.tuya)
@@ -417,7 +417,7 @@ def catgenie_routes(kit: Kit) -> APIRouter:
         names = ", ".join(d.name for d in added)
         return kit.redirect(to, f"Linked CatGenie. Found {names}." if names else "Linked CatGenie.")
 
-    @router.post("/family/catgenie/granules/{device_id}")
+    @router.post("/family/catgenie/granules/{device_id:int}")
     async def catgenie_granules(request: Request, device_id: int) -> Response:
         """CG1b: every how many cleans the granules want topping up (blank: never asked)."""
         _session, form = await kit.checked(request, admin=True)

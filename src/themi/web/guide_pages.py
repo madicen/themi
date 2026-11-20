@@ -30,7 +30,7 @@ def routes(kit: Kit) -> APIRouter:
             request, "guides.html", session, guides=shown, notes=notes, originals=originals
         )
 
-    @router.get("/guides/{guide_id}/original/{n}")
+    @router.get("/guides/{guide_id:int}/original/{n:int}")
     def guide_original(request: Request, guide_id: int, n: int) -> Response:
         """F29hb: the photo or PDF a guide was read from, decrypted only for this answer."""
         session = kit.current(request)
@@ -58,7 +58,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect("/guides", str(exc))
         return kit.redirect("/guides", f'Saved "{guide.name}".')
 
-    @router.post("/guides/{guide_id}/delete")
+    @router.post("/guides/{guide_id:int}/delete")
     async def delete_guide(request: Request, guide_id: int) -> Response:
         session, _ = await kit.checked(request)
         if not guides().delete(session.member, guide_id):

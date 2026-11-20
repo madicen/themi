@@ -107,7 +107,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect("/family", str(exc))
         return kit.redirect("/family", pairing_instructions(member, code))
 
-    @router.post("/family/members/{member_id}/invite")
+    @router.post("/family/members/{member_id:int}/invite")
     async def new_invite(request: Request, member_id: int) -> Response:
         session, _ = await kit.checked(request, admin=True)
         member = store.get_member(member_id)
@@ -116,7 +116,7 @@ def routes(kit: Kit) -> APIRouter:
         code = store.create_invite(session.member, member.id)
         return kit.redirect("/family", pairing_instructions(member, code))
 
-    @router.post("/family/members/{member_id}/email")
+    @router.post("/family/members/{member_id:int}/email")
     async def set_email(request: Request, member_id: int) -> Response:
         session, form = await kit.checked(request, admin=True)
         try:
@@ -129,7 +129,7 @@ def routes(kit: Kit) -> APIRouter:
             )
         return kit.redirect("/family", f"{member.name} no longer signs in with Google.")
 
-    @router.post("/family/members/{member_id}/role")
+    @router.post("/family/members/{member_id:int}/role")
     async def change_role(request: Request, member_id: int) -> Response:
         session, form = await kit.checked(request, admin=True)
         role = Role.ADMIN if form.get("role") == "admin" else Role.MEMBER
@@ -141,7 +141,7 @@ def routes(kit: Kit) -> APIRouter:
             "/family", f"{member.name} is now {'an admin' if member.is_admin else 'a member'}."
         )
 
-    @router.post("/family/members/{member_id}/remove")
+    @router.post("/family/members/{member_id:int}/remove")
     async def remove_member(request: Request, member_id: int) -> Response:
         session, form = await kit.checked(request, admin=True)
         member = store.get_member(member_id)

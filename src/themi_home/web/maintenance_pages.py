@@ -106,7 +106,7 @@ def routes(kit: Kit) -> APIRouter:
             return back(None, f"{str(exc).capitalize()}.")
         return back(item.id, f"Added {item.name}.")
 
-    @router.post("/maintenance/{item_id}")
+    @router.post("/maintenance/{item_id:int}")
     async def edit_item(request: Request, item_id: int) -> Response:
         session, form = await kit.checked(request)
         item = maintenance().get(item_id)
@@ -127,7 +127,7 @@ def routes(kit: Kit) -> APIRouter:
             return back(item.id, f"{str(exc).capitalize()}.")
         return back(item.id, f"Saved {item.name}.")
 
-    @router.post("/maintenance/{item_id}/done")
+    @router.post("/maintenance/{item_id:int}/done")
     async def mark_done(request: Request, item_id: int) -> Response:
         session, form = await kit.checked(request)
         item = maintenance().get(item_id)
@@ -138,7 +138,7 @@ def routes(kit: Kit) -> APIRouter:
         )
         return back(item.id, said)
 
-    @router.post("/maintenance/{item_id}/delete")
+    @router.post("/maintenance/{item_id:int}/delete")
     async def delete_item(request: Request, item_id: int) -> Response:
         session, _ = await kit.checked(request)
         item = maintenance().get(item_id)

@@ -133,7 +133,7 @@ def routes(kit: Kit) -> APIRouter:
             )
         return kit.redirect("/ai", "Added. Pick where to use it below.")
 
-    @router.post("/ai/backends/{backend_id}")
+    @router.post("/ai/backends/{backend_id:int}")
     async def update_backend(request: Request, backend_id: int) -> Response:
         session, form = await kit.checked(request)
         member = session.member
@@ -158,7 +158,7 @@ def routes(kit: Kit) -> APIRouter:
             )
         return kit.redirect("/ai", "Saved.")
 
-    @router.post("/ai/backends/{backend_id}/remove")
+    @router.post("/ai/backends/{backend_id:int}/remove")
     async def remove_backend(request: Request, backend_id: int) -> Response:
         session, _ = await kit.checked(request)
         try:

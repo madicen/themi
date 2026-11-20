@@ -41,7 +41,7 @@ def routes(kit: Kit) -> APIRouter:
         )  # fmt: skip
         return kit.redirect(to, outcome.message)
 
-    @router.post("/groceries/{item_id}/bought")  # CR17a: from the dashboard and Lists
+    @router.post("/groceries/{item_id:int}/bought")  # CR17a: from the dashboard and Lists
     async def grocery_bought(request: Request, item_id: int) -> Response:
         _, form = await kit.checked(request)
         back = GROCERIES_ON_LISTS if form.get("back") == "lists" else "/"

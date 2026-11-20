@@ -78,7 +78,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect("/takeout", f"Not saved: {exc}.")
         return kit.redirect("/takeout", "Saved.")
 
-    @router.post("/takeout/{favourite_id}")
+    @router.post("/takeout/{favourite_id:int}")
     async def edit_favourite(request: Request, favourite_id: int) -> Response:
         session, form = await kit.checked(request)
         if takeout().favourite(favourite_id) is None:
@@ -89,7 +89,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect("/takeout", f"Not saved: {exc}.")
         return kit.redirect("/takeout", f"Saved {saved.name}.")
 
-    @router.post("/takeout/{favourite_id}/remove")
+    @router.post("/takeout/{favourite_id:int}/remove")
     async def remove_favourite(request: Request, favourite_id: int) -> Response:
         await kit.checked(request)
         favourite = takeout().favourite(favourite_id)

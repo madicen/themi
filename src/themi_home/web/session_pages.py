@@ -210,7 +210,7 @@ def routes(kit: Kit) -> APIRouter:
             return Response(status_code=400)
         return JSONResponse(current_state(member), headers={"Cache-Control": "no-store"})
 
-    @router.post("/session/cook/{session_id}/say")
+    @router.post("/session/cook/{session_id:int}/say")
     async def cook_say(request: Request, session_id: int) -> Response:
         """CK8: one phrase from the cook screen's mic, as a typed line would go (RC3's
         handlers), else to Ask Themi. Only once they've turned voice on in Settings."""
@@ -262,7 +262,7 @@ def routes(kit: Kit) -> APIRouter:
             return Response(status_code=400)
         return Response(status_code=204)
 
-    @router.post("/session/cook/{session_id}/act")
+    @router.post("/session/cook/{session_id:int}/act")
     async def cook_act(request: Request, session_id: int) -> Response:
         signed, form = await kit.checked(request)
         found = cooking().get(session_id) if cooking() is not None else None
@@ -377,7 +377,7 @@ def routes(kit: Kit) -> APIRouter:
             return session_state(request)
         return kit.redirect("/session")
 
-    @router.get("/session/pictures/{session_id}/{index}")
+    @router.get("/session/pictures/{session_id:int}/{index:int}")
     def step_picture(request: Request, session_id: int, index: int) -> Response:
         """BD4b: a step's picture, only ever to the session's owner."""
         signed = kit.current(request)
@@ -407,7 +407,7 @@ def routes(kit: Kit) -> APIRouter:
             return session_state(request)
         return kit.redirect("/session")
 
-    @router.post("/session/{session_id}/act")
+    @router.post("/session/{session_id:int}/act")
     async def session_act(request: Request, session_id: int) -> Response:
         signed, form = await kit.checked(request)
         bd = body_double()

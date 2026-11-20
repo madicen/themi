@@ -57,7 +57,7 @@ def routes(kit: Kit) -> APIRouter:
         token = safeway().connect(session.member)
         return page(request, new_token=token)
 
-    @router.post("/safeway/helpers/{helper_id}/revoke")
+    @router.post("/safeway/helpers/{helper_id:int}/revoke")
     async def revoke(request: Request, helper_id: int) -> Response:
         await kit.checked(request)
         if safeway().revoke(helper_id):
@@ -115,7 +115,7 @@ def routes(kit: Kit) -> APIRouter:
             return Response(status_code=204)
         return JSONResponse({"job": job})
 
-    @router.post("/api/safeway/jobs/{job_id}/results")
+    @router.post("/api/safeway/jobs/{job_id:int}/results")
     async def results(request: Request, job_id: int) -> Response:
         found = helper(request)
         if found is None:

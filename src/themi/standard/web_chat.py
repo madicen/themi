@@ -357,7 +357,7 @@ def routes(kit: Kit) -> APIRouter:
             return the_log(request, session)
         return kit.redirect("/chat#latest", "")
 
-    @router.post("/chat/{message_id}/react")
+    @router.post("/chat/{message_id:int}/react")
     async def react(request: Request, message_id: int) -> Response:
         session, form = await kit.checked(request)
         if not await chat.react_as(session.member, message_id, str(form.get("emoji", ""))):
@@ -367,7 +367,7 @@ def routes(kit: Kit) -> APIRouter:
             return the_log(request, session)
         return kit.redirect(f"/chat#m{message_id}", "")
 
-    @router.post("/chat/{message_id}/{index}")
+    @router.post("/chat/{message_id:int}/{index:int}")
     async def tap(request: Request, message_id: int, index: int) -> Response:
         session, _ = await kit.checked(request)
         if not await chat.press(session.member, message_id, index, wait=not htmx(request)):

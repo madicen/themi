@@ -382,7 +382,7 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         welcome.dismiss(app)
         return kit.redirect("/", "The rest of setting up is on Home, and on Modules.")
 
-    @router.post("/actions/{action_id}/{decision}")
+    @router.post("/actions/{action_id:int}/{decision}")
     async def decide(request: Request, action_id: int, decision: str) -> Response:
         session, _ = await kit.checked(request)
         try:
@@ -541,7 +541,7 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
             )
         return kit.redirect("/settings", f"Busy time added: {busy.label()}.")
 
-    @router.post("/settings/busy/{index}/remove")
+    @router.post("/settings/busy/{index:int}/remove")
     async def remove_busy_time(request: Request, index: int) -> Response:
         session, _ = await kit.checked(request)
         member = app.store.get_member(session.member.id)

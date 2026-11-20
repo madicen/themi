@@ -196,7 +196,7 @@ def routes(kit: Kit) -> APIRouter:
         )
         return kit.redirect("/tasks")
 
-    @router.post("/tasks/{task_id}/done")
+    @router.post("/tasks/{task_id:int}/done")
     async def done(request: Request, task_id: int) -> Response:
         session, form = await kit.checked(request)
         member = session.member
@@ -214,7 +214,7 @@ def routes(kit: Kit) -> APIRouter:
             return kit.page(request, "_task_done.html", title=task.title if task else "", said=said)
         return kit.redirect(back, said)
 
-    @router.post("/tasks/{task_id}/edit")
+    @router.post("/tasks/{task_id:int}/edit")
     async def edit_task(request: Request, task_id: int) -> Response:
         session, form = await kit.checked(request)
         steps = str(form.get("steps", "")).splitlines()
