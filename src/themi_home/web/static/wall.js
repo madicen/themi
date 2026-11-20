@@ -89,6 +89,31 @@
     if (document.body.classList.contains("night")) wake(true);
   });
 
+  // F52a: full screen on the first touch. Chrome allows it only from a touch, so a frame
+  // that opens the wall as a plain shortcut or a tab gets there on its first one, and again
+  // after Back or a swipe has left it. The touch still does what it was for. The root
+  // element, not body, so the page's scaling and background hold.
+  function shownAs() {
+    if (document.fullscreenElement) return "fullscreen-api";
+    var modes = ["fullscreen", "standalone"];
+    for (var i = 0; i < modes.length; i++) {
+      if (window.matchMedia && window.matchMedia("(display-mode: " + modes[i] + ")").matches) {
+        return modes[i];
+      }
+    }
+    return "browser";
+  }
+  function fullScreen() {
+    var root = document.documentElement;
+    if (shownAs() === "fullscreen" || document.fullscreenElement || !root.requestFullscreen) return;
+    root.requestFullscreen({ navigationUI: "hide" }).catch(function () {});
+  }
+  document.addEventListener("pointerdown", fullScreen);
+  // Each poll says how the frame shows the wall, for Wall frames.
+  document.addEventListener("htmx:configRequest", function (event) {
+    event.detail.headers["Themi-Wall-Display"] = shownAs();
+  });
+
   // WL6: keep the screen on while the wall is open, and ask again when it's seen again.
   function hold() {
     if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;

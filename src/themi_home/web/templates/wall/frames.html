@@ -27,6 +27,7 @@ wall, never the rest of the website.</p>
 {% call(part) row(f.name, meta="Last seen " ~ (f.last_seen_at | local_time), id="frame-" ~ f.id) %}
 {% if part == "body" %}
   <p class="muted">Paired {{ f.paired_at | local_time }}.</p>
+  {% if f.display %}<p class="wall-frame-display">{{ displays[f.display] }}</p>{% endif %}
   <form method="post" action="/wall/frames/{{ f.id }}/revoke">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <button>Sign this frame out</button>

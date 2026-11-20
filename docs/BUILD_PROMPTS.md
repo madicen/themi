@@ -327,7 +327,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [x] 2026-11-19 |
 | F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [x] 2026-11-19 |
 | F51a | Feedback: Unlink Spotify on the Accounts page unlinks it instead of showing an error | Feedback | [x] 2026-11-19 |
-| F52a | Idea: the wall goes full screen on the frame, whichever way it's opened | Feedback | [ ] |
+| F52a | Idea: the wall goes full screen on the frame, whichever way it's opened | Feedback | [x] 2026-11-20 |
 | F52b | Idea: the wall has a dark look | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -16039,7 +16039,7 @@ Notes:
   reviewed once live.
 
 ### F52a · Idea (2026-11-20): the wall goes full screen on the frame, whichever way it's opened
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL6
 Read first: the Wall plan's "Setting up the frame"; `themi_home/wall.py` (`manifest`,
 `service_worker`); `themi_home/web/static/wall.js` and `wall-sw.js`;
@@ -16098,8 +16098,22 @@ Data/Setup: a migration adds `wall_devices.display` (nullable). After it's live,
 opens the wall on the frame, uses Chrome's Install app, and checks Wall frames; if it says
 "In a Chrome tab", he decides about a kiosk browser. Mark #236 reviewed once live.
 
+Notes:
+- `wall.js`: the first `pointerdown` asks for full screen on `document.documentElement`
+  when neither the display mode nor `document.fullscreenElement` says it already is;
+  a refusal is swallowed. Each htmx request carries `Themi-Wall-Display` (`shownAs()`).
+- `WallDevices.device(token, display)` keeps a known value on `wall_devices.display`
+  (migration `wall_schema/0004_wall_display.sql`) and leaves it be for none or an unknown
+  one; `DISPLAYS` in `wall.py` has the four values and Wall frames' wording.
+- The sheets already had `overflow: auto` (`.wall-sheet`); a test holds that, and that the
+  root doesn't hide overflow.
+- Tests: `tests/integration/test_wall_fullscreen.py` (script text, as WL6's touch was
+  tested; the touch itself isn't run). Not tried on the frame.
+- **Setup:** after the update, open the wall on the frame, Chrome's menu, Install app; then
+  look at Wall frames. Mark #236 reviewed once live.
+
 ### F52b · Idea (2026-11-20): the wall has a dark look
-Status: [ ]
+Status: [~]
 Depends on: WL6
 Read first: the Wall plan's "What the family sees" (colours and the person tones) and "By
 time of day"; `themi_home/web/static/wall.css`; `themi_home/web/templates/wall/home.html`;
