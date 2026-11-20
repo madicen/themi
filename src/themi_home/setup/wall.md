@@ -28,6 +28,11 @@ off at night. If Themi restarts or the Wi-Fi drops, the frame keeps its last scr
 
 **Bedtime** (below) is when the night view starts; 11 pm unless you change it.
 
+**Look** (below): light or dark. **Follow the frame** (the default) uses the frame's own
+dark theme from its Android settings; **Dark in the evening** goes dark when the evening
+routine starts and light again at the first morning routine. A touch at night always
+shows the dark look.
+
 **Deliveries** (below, on unless you turn it off): Themi's note on the wall mentions parcels
 due or delivered today, from the shipping emails in watched inboxes. It names only the shop,
 never what's inside, but around birthdays you may still want it off.

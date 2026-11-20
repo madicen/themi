@@ -38,7 +38,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
-from themi_home.wall_view import WallItem, WallSettings, WallView
+from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
 from themi_home.wall_views import WallViews, _recipe, dish_view, list_view, note_view
 
 if TYPE_CHECKING:
@@ -324,7 +324,9 @@ def routes(kit: Kit) -> APIRouter:
         if csrf is None:
             return RedirectResponse("/wall/pair", status_code=303)
         screen = WallView(kit.app.services).screen()
-        return kit.page(request, "wall/home.html", screen=screen, csrf=csrf)
+        return kit.page(
+            request, "wall/home.html", screen=screen, csrf=csrf, theme_color=THEME_COLOR
+        )
 
     @router.get("/wall/part/{part}", response_class=HTMLResponse)
     def wall_part(request: Request, part: str) -> Response:

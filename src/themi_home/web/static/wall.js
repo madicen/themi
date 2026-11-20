@@ -79,6 +79,26 @@
     var night = mode && mode.getAttribute("data-night") === "1";
     document.body.classList.toggle("night", !!night);
     if (!night) wake(false);
+    if (mode) applyLook(mode.getAttribute("data-look"));
+  }
+
+  // F52b: the look. The server says "light", "dark" or "auto" (on <html>, and again with
+  // the night part every minute, so "Dark in the evening" turns at its time); "auto" follows
+  // the frame's own dark theme, and changes with it.
+  var frameDark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function applyLook(look) {
+    var root = document.documentElement;
+    if (look) root.setAttribute("data-look", look);
+    look = root.getAttribute("data-look") || "light";
+    var dark = look === "dark" || (look === "auto" && !!frameDark && frameDark.matches);
+    root.classList.toggle("dark", dark);
+    var colors = { light: "#e8ece6", dark: "#111317" };
+    document.querySelectorAll('meta[name="theme-color"]:not([media])').forEach(function (m) {
+      m.setAttribute("content", dark ? colors.dark : colors.light);
+    });
+  }
+  if (frameDark && frameDark.addEventListener) {
+    frameDark.addEventListener("change", function () { applyLook(null); });
   }
   function wake(on) {
     if (awake) { clearTimeout(awake); awake = null; }

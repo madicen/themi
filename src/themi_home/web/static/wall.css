@@ -4,12 +4,41 @@
 html.wall-root { font-size: calc(100vw / 67.5); }
 :root {
   --bg: #e8ece6; --card: #ffffff; --fg: #23262b; --muted: #545961; --soft: #f3f5f1;
-  --line: #d6dad3; --stale: #8a2e08;
+  --line: #d6dad3; --stale: #8a2e08; --stale-bg: #fbede6;
+  --sub: #62666d; --quiet: #4a4e55; --faint: #6a6e75; --edge: #c9ccd1;
+  --field: #ffffff; --ring-fill: #ffffff; --done-bg: #ffffff;
+  --on-fg: #ffffff; --on-tone: #ffffff; --now: #c2410c; --on-now: #ffffff;
+  --past: #e6e9e3; --focus: #2f6fdb; --day-bg: #f7f8f5; --chance: #2f5f8a;
+  --backdrop: rgba(20, 22, 27, 0.5);
   --p0: #3f6a2c; --p0-tint: #e4eedd; --p0-bg: #f1f6ee; --p0-ring: #9dbb8c;
   --p1: #96384f; --p1-tint: #f5e2e7; --p1-bg: #faf0f3; --p1-ring: #d49aaa;
   --p2: #2f5f8a; --p2-tint: #e0eaf4; --p2-bg: #eff4f9; --p2-ring: #93b2cf;
   --p3: #8a5a12; --p3-tint: #f4ead9; --p3-bg: #faf4ea; --p3-ring: #d1b07c;
   --family: #54409a; --family-tint: #eae5f7; --family-bg: #f4f1fb; --family-ring: #afa2da;
+}
+/* F52b: the dark look. Every token above, redrawn for a dark room: the people keep their
+   hues, lighter on dark tints, with dark text on their blocks. On <html> when the look is
+   dark (the server, or wall.js for "follow the frame"), and while the night is touched
+   awake. Text pairs keep 4.5:1, rings 3:1 (tests/unit/test_wall_look.py). */
+html.dark, body.night {
+  --bg: #111317; --card: #1c1f24; --fg: #eceef0; --muted: #a9aeb6; --soft: #262a30;
+  --line: #353a41; --stale: #f4a57f; --stale-bg: #3a2117;
+  --sub: #9ca1a9; --quiet: #b8bcc3; --faint: #8f949c; --edge: #4a5059;
+  --field: #262a30; --ring-fill: #1c1f24; --done-bg: #1c1f24;
+  --on-fg: #111317; --on-tone: #111317; --now: #f08a52; --on-now: #111317;
+  --past: #1a1d21; --focus: #7fb0ff; --day-bg: #22262b; --chance: #8fbbe6;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --p0: #93c47d; --p0-tint: #26331f; --p0-bg: #1f281b; --p0-ring: #6f9a5c;
+  --p1: #ee9ab0; --p1-tint: #3d2229; --p1-bg: #2f1d22; --p1-ring: #b56d80;
+  --p2: #8fbbe6; --p2-tint: #1f2e3d; --p2-bg: #1a2530; --p2-ring: #5f8ab2;
+  --p3: #e0b26a; --p3-tint: #3a2e1b; --p3-bg: #2e2518; --p3-ring: #a8834a;
+  --family: #b9a8f0; --family-tint: #2d2645; --family-bg: #241f36; --family-ring: #8a78c9;
+  color-scheme: dark;
+}
+/* The night view keeps its own colours, whatever the look. */
+:root {
+  --night-bg: #14161b; --night-fg: #e9e6e0; --night-soft: #a9a6a0; --night-faint: #8e8b86;
+  --night-line: #bdb9b2;
 }
 * { box-sizing: border-box; }
 body.wall {
@@ -37,7 +66,7 @@ body.wall {
 /* Themi's note */
 .wall-note { display: flex; gap: 1.1rem; align-items: center; }
 .wall-t {
-  flex: none; width: 3.25rem; height: 3.25rem; border-radius: 1rem; background: var(--fg); color: #fff;
+  flex: none; width: 3.25rem; height: 3.25rem; border-radius: 1rem; background: var(--fg); color: var(--on-fg);
   display: grid; place-items: center; font-weight: 800; font-size: 1.5rem;
 }
 .wall-note { width: 100%; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
@@ -50,12 +79,12 @@ body.wall {
 .wall-col-head { width: 100%; border: 0; font: inherit; color: inherit; text-align: left; }
 button.wall-col-head { cursor: pointer; }
 .wall-col-name { display: block; font-size: 1.65rem; font-weight: 800; color: var(--tone); }
-.wall-col-sum { display: block; font-size: 1.1rem; color: #4a4e55; }
+.wall-col-sum { display: block; font-size: 1.1rem; color: var(--quiet); }
 .wall-avatar {
-  flex: none; width: 3.1rem; height: 3.1rem; border-radius: 50%; background: var(--tone); color: #fff;
+  flex: none; width: 3.1rem; height: 3.1rem; border-radius: 50%; background: var(--tone); color: var(--on-tone);
   display: grid; place-items: center; font-weight: 800; font-size: 1.4rem;
 }
-.wall-avatar svg { width: 1.6rem; height: 1.6rem; fill: #fff; }
+.wall-avatar svg { width: 1.6rem; height: 1.6rem; fill: var(--on-tone); }
 .wall-col-body { padding: 0.25rem 0.75rem 1rem; display: flex; flex-direction: column; gap: 0.25rem; }
 .wall-col h3 {
   margin: 0.9rem 0.5rem 0.25rem; font-size: 0.9rem; letter-spacing: 0.1em; text-transform: uppercase;
@@ -67,15 +96,15 @@ button.wall-col-head { cursor: pointer; }
   border-radius: 1rem; background: var(--item-bg);
 }
 .wall-item .ring {
-  flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; border: 0.2rem solid var(--ring); background: #fff;
+  flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; border: 0.2rem solid var(--ring); background: var(--ring-fill);
 }
-.wall-item.done { background: #fff; }
+.wall-item.done { background: var(--done-bg); }
 .wall-item.done .ring { background: var(--tone); border-color: var(--tone); }
-.wall-item.done .wall-title { color: #6a6e75; text-decoration: line-through; }
+.wall-item.done .wall-title { color: var(--faint); text-decoration: line-through; }
 .wall-words { display: flex; flex-direction: column; min-width: 0; }
 .wall-title { font-size: 1.3rem; line-height: 1.25; font-weight: 500; }
-.wall-sub { font-size: 1rem; color: #62666d; }
-.wall-empty { margin: 0 0.5rem 0.4rem; font-size: 1.2rem; color: #6a6e75; }
+.wall-sub { font-size: 1rem; color: var(--sub); }
+.wall-empty { margin: 0 0.5rem 0.4rem; font-size: 1.2rem; color: var(--faint); }
 .wall-more {
   align-self: flex-start; min-height: 2.75rem; margin: 0.2rem 0.25rem; padding: 0 0.75rem; border: 0; border-radius: 1.4rem;
   background: none; font: inherit; font-size: 1.05rem; font-weight: 700; color: var(--tone); cursor: pointer;
@@ -93,7 +122,7 @@ button.wall-col-head { cursor: pointer; }
 
 /* when Themi couldn't be reached: the last good screen stays, marked */
 .wall-stale { position: fixed; right: 1.5rem; bottom: 1.25rem; font-size: 1.2rem; color: var(--stale);
-  background: #fbede6; border-radius: 999px; padding: 0.4rem 1rem; }
+  background: var(--stale-bg); border-radius: 999px; padding: 0.4rem 1rem; }
 
 /* WL3: today's timeline and the week ahead */
 .wall-card-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.6rem; }
@@ -105,52 +134,52 @@ button.wall-col-head { cursor: pointer; }
 .pill { font-size: 1.05rem; padding: 0.3rem 0.9rem; border-radius: 999px; background: var(--tint); color: var(--tone); font-weight: 600; }
 .tl { --name-w: 5.6rem; position: relative; }
 .tl-ticks { position: relative; height: 1.6rem; margin-left: var(--name-w); }
-.tl-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.95rem; color: #62666d; white-space: nowrap; }
+.tl-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.95rem; color: var(--sub); white-space: nowrap; }
 .tl-row { position: relative; height: 3.1rem; margin-top: 0.5rem; display: flex; }
 .tl-name { flex: none; width: var(--name-w); display: flex; align-items: center; font-size: 1.05rem; font-weight: 700; color: var(--tone); }
 .tl-track { position: relative; flex: 1; border-radius: 0.75rem; background: var(--soft); overflow: hidden; }
-.tl-past { position: absolute; top: 0; bottom: 0; left: 0; background: #e6e9e3; }
+.tl-past { position: absolute; top: 0; bottom: 0; left: 0; background: var(--past); }
 .tl-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
 .tl-block {
   border: 0; font: inherit; text-align: left; cursor: pointer;
-  position: absolute; top: 0.2rem; height: 2.7rem; border-radius: 0.6rem; background: var(--tone); color: #fff;
+  position: absolute; top: 0.2rem; height: 2.7rem; border-radius: 0.6rem; background: var(--tone); color: var(--on-tone);
   padding: 0 0.6rem; display: flex; flex-direction: column; justify-content: center; overflow: hidden; white-space: nowrap;
 }
 .tl-block.past { opacity: 0.45; }
 .tl-title { font-size: 1.05rem; font-weight: 700; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
 .tl-when { font-size: 0.8rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; }
 .tl-over { position: absolute; left: var(--name-w); right: 0; top: 0; bottom: -0.25rem; pointer-events: none; }
-.tl-now { position: absolute; top: 1.4rem; bottom: 0; width: 0.2rem; margin-left: -0.1rem; border-radius: 0.1rem; background: #c2410c; }
+.tl-now { position: absolute; top: 1.4rem; bottom: 0; width: 0.2rem; margin-left: -0.1rem; border-radius: 0.1rem; background: var(--now); }
 .tl-now span {
   position: absolute; top: -1.4rem; left: 50%; transform: translateX(-50%); font-size: 0.85rem; font-weight: 700;
-  color: #fff; background: #c2410c; padding: 0.1rem 0.5rem; border-radius: 999px;
+  color: var(--on-now); background: var(--now); padding: 0.1rem 0.5rem; border-radius: 999px;
 }
 .wall-tomorrow { display: flex; gap: 1.1rem; align-items: center; flex-wrap: wrap; padding-top: 0.6rem; font-size: 1.2rem; }
 .dot-chip { display: inline-flex; gap: 0.5rem; align-items: center; }
 .dot-chip::before { content: ""; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--tone); }
 .wk { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.5rem; }
 .wk-day { border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; background: var(--soft); border-radius: 1rem; padding: 0.6rem 0.5rem; min-height: 9rem; display: flex; flex-direction: column; gap: 0.35rem; }
-.wk-head { font-size: 1rem; color: #62666d; padding: 0 0.15rem; }
+.wk-head { font-size: 1rem; color: var(--sub); padding: 0 0.15rem; }
 .wk-head b { color: var(--fg); font-size: 1.05rem; }
 .wk-ev {
-  font-size: 0.95rem; line-height: 1.2; padding: 0.3rem 0.45rem; border-radius: 0.5rem; background: var(--tone); color: #fff;
+  font-size: 0.95rem; line-height: 1.2; padding: 0.3rem 0.45rem; border-radius: 0.5rem; background: var(--tone); color: var(--on-tone);
   font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* WL4: tapping things off */
 .wall-entry { display: flex; flex-direction: column; }
 button.wall-item { width: 100%; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
-button.wall-item:focus-visible { outline: 0.2rem solid #2f6fdb; outline-offset: 0.15rem; }
+button.wall-item:focus-visible { outline: 0.2rem solid var(--focus); outline-offset: 0.15rem; }
 .wall-who { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; padding: 0.4rem 0.4rem 0.6rem 3.6rem; }
-.wall-who span { width: 100%; font-size: 1.05rem; color: #4a4e55; }
+.wall-who span { width: 100%; font-size: 1.05rem; color: var(--quiet); }
 .wall-who button {
-  min-height: 3rem; padding: 0 1.1rem; border-radius: 1.5rem; border: 0; background: var(--tone); color: #fff;
+  min-height: 3rem; padding: 0 1.1rem; border-radius: 1.5rem; border: 0; background: var(--tone); color: var(--on-tone);
   font: inherit; font-size: 1.1rem; font-weight: 600; cursor: pointer;
 }
-.wall-who .wall-not-yet { background: #fff; color: #4a4e55; border: 0.12rem solid #c9ccd1; }
+.wall-who .wall-not-yet { background: var(--field); color: var(--quiet); border: 0.12rem solid var(--edge); }
 
 /* WL5a: the views that slide up over the home screen */
-.wall-backdrop { position: fixed; inset: 0; background: rgba(20, 22, 27, 0.5); }
+.wall-backdrop { position: fixed; inset: 0; background: var(--backdrop); }
 .wall-sheet {
   position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow: auto;
   background: var(--card); border-radius: 2.5rem 2.5rem 0 0; padding: 1.25rem 3rem 3rem;
@@ -159,25 +188,25 @@ button.wall-item:focus-visible { outline: 0.2rem solid #2f6fdb; outline-offset: 
 .wall-grip { align-self: center; width: 5rem; height: 0.4rem; border-radius: 0.2rem; background: var(--line); }
 .sheet-kicker { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .sheet-title { font-size: 3rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
-.sheet-when { font-size: 1.75rem; color: #4a4e55; }
-.sheet-status { font-size: 1.6rem; font-weight: 600; color: #8a2e08; background: #fbede6; border-radius: 1.5rem; padding: 1.1rem 1.6rem; }
+.sheet-when { font-size: 1.75rem; color: var(--quiet); }
+.sheet-status { font-size: 1.6rem; font-weight: 600; color: var(--stale); background: var(--stale-bg); border-radius: 1.5rem; padding: 1.1rem 1.6rem; }
 .sheet-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 0; }
 .sheet-facts div { background: var(--soft); border-radius: 1.25rem; padding: 1.1rem 1.4rem; }
 .sheet-facts dt { font-size: 1rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .sheet-facts dd { margin: 0.2rem 0 0; font-size: 1.5rem; }
 .sheet-done { font-size: 1.4rem; font-weight: 600; color: var(--p0); }
-.sheet-note { font-size: 1.15rem; color: #62666d; }
+.sheet-note { font-size: 1.15rem; color: var(--sub); }
 .sheet-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
 .sheet-end { margin-top: 0.5rem; }
 .sheet-button {
-  min-height: 4.5rem; padding: 0 2rem; border-radius: 2.25rem; border: 0.12rem solid #c9ccd1; background: #fff;
+  min-height: 4.5rem; padding: 0 2rem; border-radius: 2.25rem; border: 0.12rem solid var(--edge); background: var(--field);
   color: var(--fg); font: inherit; font-size: 1.5rem; font-weight: 600; cursor: pointer;
 }
-.sheet-button.primary { background: var(--fg); border-color: var(--fg); color: #fff; }
+.sheet-button.primary { background: var(--fg); border-color: var(--fg); color: var(--on-fg); }
 .sheet-nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; text-align: center; }
 .sheet-arrow, .sheet-arrow-gap { flex: none; width: 4.5rem; height: 4.5rem; }
-.sheet-arrow { border-radius: 50%; border: 0.12rem solid #c9ccd1; background: #fff; font-size: 2.5rem; line-height: 1; cursor: pointer; }
-.wall-day { background: #f7f8f5; border-radius: 1.75rem; padding: 1.4rem 1.6rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.sheet-arrow { border-radius: 50%; border: 0.12rem solid var(--edge); background: var(--field); color: var(--fg); font-size: 2.5rem; line-height: 1; cursor: pointer; }
+.wall-day { background: var(--day-bg); border-radius: 1.75rem; padding: 1.4rem 1.6rem; display: flex; flex-direction: column; gap: 0.6rem; }
 .sheet-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .sheet-box { background: var(--soft); border-radius: 1.5rem; padding: 1.4rem 1.6rem; }
 .sheet-box h3, .sheet-sections h3 {
@@ -187,9 +216,9 @@ button.wall-item:focus-visible { outline: 0.2rem solid #2f6fdb; outline-offset: 
 .sheet-weather { display: flex; align-items: center; gap: 0.75rem; font-size: 1.4rem; }
 .hours { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 0.75rem; }
 .hours li { background: var(--soft); border-radius: 1.25rem; padding: 0.9rem; display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
-.hour-at { font-size: 1.1rem; color: #62666d; }
+.hour-at { font-size: 1.1rem; color: var(--sub); }
 .hour-temp { font-size: 1.6rem; font-weight: 700; }
-.hour-chance { font-size: 1rem; color: #2f5f8a; min-height: 1.2rem; }
+.hour-chance { font-size: 1rem; color: var(--chance); min-height: 1.2rem; }
 .sheet-person { display: flex; flex-direction: column; gap: 1rem; }
 .sheet-person .sheet-title { color: var(--tone); }
 .sheet-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.5rem; }
@@ -200,8 +229,8 @@ button.wall-item:focus-visible { outline: 0.2rem solid #2f6fdb; outline-offset: 
 .sheet-list { display: flex; flex-direction: column; gap: 1rem; }
 .sheet-add, .sheet-words { display: flex; gap: 0.75rem; }
 .sheet-add input, .sheet-words input {
-  flex: 1; min-width: 0; height: 4.5rem; border-radius: 1.25rem; border: 0.12rem solid #c9ccd1; padding: 0 1.5rem;
-  font: inherit; font-size: 1.5rem; color: var(--fg); background: #fff;
+  flex: 1; min-width: 0; height: 4.5rem; border-radius: 1.25rem; border: 0.12rem solid var(--edge); padding: 0 1.5rem;
+  font: inherit; font-size: 1.5rem; color: var(--fg); background: var(--field);
 }
 .sheet-rows { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .sheet-row { border-radius: 1.25rem; }
@@ -212,7 +241,7 @@ button.wall-item:focus-visible { outline: 0.2rem solid #2f6fdb; outline-offset: 
 .sheet-menu .sheet-button { min-height: 3.5rem; font-size: 1.25rem; padding: 0 1.4rem; }
 .sheet-words { width: 100%; }
 .sheet-lately summary { font-size: 1.25rem; font-weight: 700; color: var(--tone); min-height: 3rem; cursor: pointer; }
-.sheet-lately ul { font-size: 1.3rem; color: #62666d; }
+.sheet-lately ul { font-size: 1.3rem; color: var(--sub); }
 .sheet-checks { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
 .sheet-checks label { display: flex; align-items: center; gap: 0.9rem; min-height: 4rem; padding: 0 1rem; border-radius: 1rem; background: var(--soft); font-size: 1.4rem; }
 .sheet-checks input { width: 2rem; height: 2rem; }
@@ -226,16 +255,16 @@ button.wall-item:focus-visible { outline: 0.2rem solid #2f6fdb; outline-offset: 
 #wall-night { display: none; }
 body.night:not(.awake) #wall-night { display: block; }
 body.night:not(.awake) .wall-screen { display: none; }
-body.night:not(.awake) { background: #14161b; }
-.wall-night { min-height: 100vh; padding: 7.5rem 6rem; color: #e9e6e0; display: flex; flex-direction: column; gap: 2.5rem; }
+body.night:not(.awake) { background: var(--night-bg); }
+.wall-night { min-height: 100vh; padding: 7.5rem 6rem; color: var(--night-fg); display: flex; flex-direction: column; gap: 2.5rem; }
 .night-time { font-size: 10rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
-.night-time span { font-size: 3rem; margin-left: 0.8rem; color: #a9a6a0; }
-.night-date { font-size: 2.25rem; color: #a9a6a0; }
-.night-heading { font-size: 1.4rem; letter-spacing: 0.1em; text-transform: uppercase; color: #8e8b86; font-weight: 600; margin-top: 2rem; }
+.night-time span { font-size: 3rem; margin-left: 0.8rem; color: var(--night-soft); }
+.night-date { font-size: 2.25rem; color: var(--night-soft); }
+.night-heading { font-size: 1.4rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--night-faint); font-weight: 600; margin-top: 2rem; }
 .night-plan { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.9rem; font-size: 2.1rem; }
 .night-plan .dot-chip::before { width: 0.9rem; height: 0.9rem; }
-.night-line { font-size: 1.9rem; line-height: 1.4; color: #bdb9b2; max-width: 48rem; }
-.night-hint { margin-top: auto; font-size: 1.3rem; color: #8e8b86; }
+.night-line { font-size: 1.9rem; line-height: 1.4; color: var(--night-line); max-width: 48rem; }
+.night-hint { margin-top: auto; font-size: 1.3rem; color: var(--night-faint); }
 
 /* WL7: an event's notes in its view */
 .sheet-notes { background: var(--soft); border-radius: 1.25rem; padding: 1.1rem 1.4rem; margin-top: 1rem; }
