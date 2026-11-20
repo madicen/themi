@@ -327,6 +327,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F50c | Idea: email notices get Open in Gmail, Not important, Mark read, Make it a task | Feedback | [x] 2026-11-19 |
 | F50d | Feedback: every recipe's steps get real short titles, not their first words | Feedback | [x] 2026-11-19 |
 | F51a | Feedback: Unlink Spotify on the Accounts page unlinks it instead of showing an error | Feedback | [x] 2026-11-19 |
+| F52a | Idea: the wall goes full screen on the frame, whichever way it's opened | Feedback | [ ] |
+| F52b | Idea: the wall has a dark look | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16035,6 +16037,104 @@ Notes:
   must use `:int`; no fixed path is matched by an earlier route with a parameter). Golden:
   `routes.json` (`{x}` -> `{x:int}`, 60 lines), as the prompt says. **Setup:** none. Mark #235
   reviewed once live.
+
+### F52a · Idea (2026-11-20): the wall goes full screen on the frame, whichever way it's opened
+Status: [ ]
+Depends on: WL6
+Read first: the Wall plan's "Setting up the frame"; `themi_home/wall.py` (`manifest`,
+`service_worker`); `themi_home/web/static/wall.js` and `wall-sw.js`;
+`themi_home/web/templates/wall/home.html` and `frames.html`; `themi_home/setup/wall.md`.
+From Michael's idea #236 (2026-11-20, 12:48 pm, "use info here or elsewhere online to get the
+wall frame view fullscreen", linking android.stackexchange.com question 175329, "Force
+fullscreen mode in Chrome for Android").
+
+What the Pi shows: the frame was paired at 12:43 pm (`wall_devices` 1, "Wall", last seen
+12:50 pm) and the idea came five minutes later, so the wall was showing with Chrome's address
+bar and Android's bars. `THEMI_PUBLIC_URL` is HTTPS (Tailscale Funnel), so the page is a secure
+context, and WL6's manifest already says `display: fullscreen` with a service worker that has a
+fetch handler. Full screen then depends on how Chrome opens it: an installed app (a WebAPK,
+which needs Google Play services on the frame) opens full screen; a plain Add to Home screen
+shortcut or a Chrome tab doesn't. Cozyla frames may not have Google Play. (The linked page
+couldn't be read automatically. Its usual answers are the manifest, the Fullscreen API on a
+touch, a kiosk browser, or `adb shell settings put global policy_control immersive.full=...`,
+which Android 11 and later ignore.)
+
+Build:
+- Full screen on the first touch: when the wall isn't already full screen (`matchMedia(
+  "(display-mode: fullscreen)")` false and `document.fullscreenElement` empty), the first
+  `pointerdown` calls `document.documentElement.requestFullscreen({navigationUI: "hide"})`.
+  If it's left (Back, a swipe), the next touch asks again. The touch still does what it was
+  for (opening a view, ticking), and nothing is drawn to prompt for it. At night a touch
+  still wakes the screen as before.
+- The frame says how it's shown: each part poll sends a `Themi-Wall-Display` header
+  (`fullscreen`, `standalone`, `browser`, or `fullscreen-api` while the Fullscreen API holds
+  it). It's kept on `wall_devices.display` with `last_seen_at`. Wall frames shows it ("Full
+  screen app", "Full screen after a touch", "In a Chrome tab: see the guide"), so Michael can
+  see whether the install took without going to the frame.
+- The guide (`setup/wall.md`): step 4 becomes Chrome's menu **Install app** (or **Add to Home
+  screen**, then **Install** if it offers both). If Wall frames shows "In a Chrome tab" or
+  "Full screen after a touch", the frame has no Google Play and Chrome made a shortcut; that
+  still works, it goes full screen on its first touch, and it's back to Chrome's bars after a
+  restart until it's touched again. For no bars at all after a restart: a kiosk browser (for
+  example Fully Kiosk Browser) with `/wall/pair` as its start page and the frame paired again
+  in it (its cookies are its own). Not adb: Android 11 and later ignore immersive mode.
+- Not in scope: a native Android app, and controlling Cozyla's own launcher or sleep.
+
+Tests: the home page loads `wall.js` with the full-screen request (markup and script text, as
+WL6 did for the night touch; the touch itself isn't run); a part poll with
+`Themi-Wall-Display: browser` stores it and Wall frames shows "In a Chrome tab"; an unknown
+value is stored as nothing; a request with no header leaves the stored value as it was; the
+manifest is unchanged (`display`, `display_override`, `id`, `scope`). The header carries
+nothing private (the WL rule's check).
+Scenario: none (nobody gets a message); the frames page test covers what Michael sees.
+
+Data/Setup: a migration adds `wall_devices.display` (nullable). After it's live, Michael
+opens the wall on the frame, uses Chrome's Install app, and checks Wall frames; if it says
+"In a Chrome tab", he decides about a kiosk browser. Mark #236 reviewed once live.
+
+### F52b · Idea (2026-11-20): the wall has a dark look
+Status: [ ]
+Depends on: WL6
+Read first: the Wall plan's "What the family sees" (colours and the person tones) and "By
+time of day"; `themi_home/web/static/wall.css`; `themi_home/web/templates/wall/home.html`;
+`themi_home/wall_view.py` (`WallSettings`); the Wall canvas's tones. From Michael's idea #237
+(2026-11-20, 12:48 pm, "support dark mode for the wall calendar view").
+
+What the Pi shows: the wall is light only. `wall.css` has its colours as tokens on `:root`,
+but 49 colours are written out in the rules (`#fff` 14 times, greys like `#62666d`,
+`#4a4e55`, `#6a6e75`, the stale line's `#8a2e08`), and the night view has its own dark
+colours. A touch at night shows the light screen, bright in a dark room, for two minutes.
+`home.html` and the manifest have `theme-color` `#e8ece6`.
+
+Build:
+- Every colour in `wall.css` becomes a token on `:root`, including the white of cards, rings
+  and done items, the greys, the text on a tone (`--on-tone`) and the stale line. Nothing
+  outside the token blocks names a colour.
+- A dark set of the same tokens: a near-black background, dark cards, light text, and each
+  person's tone, tint, item background and ring redrawn for a dark background so names,
+  timeline blocks and week chips keep at least 4.5:1 contrast (text) and 3:1 (rings). The
+  people keep their hues, so Michael, Together and Erin still read as themselves.
+- A household setting on the Wall module's page, `look`: **Follow the frame** (default, the
+  frame's own dark theme through `prefers-color-scheme`), **Light**, **Dark**, and **Dark in
+  the evening** (dark from the evening routine's start, by the routine times WL6 already
+  uses, until the first morning routine). The page renders it as `data-look` on `<html>`;
+  the evening switch comes with the part polls, like the night view.
+- A touch at night shows the full screen in the dark look, whatever the setting.
+- `theme-color` follows the look (a second `meta name="theme-color"` with
+  `media="(prefers-color-scheme: dark)"` for Follow the frame).
+- The views (sheets) use the same tokens (they are in `home.html`). The night view
+  stays as it is.
+
+Tests: a guard that `wall.css` names no colour outside the `:root` token blocks, and that
+every light token has a dark one; `look` Light, Dark and Follow the frame render the right
+`data-look` and `theme-color`; Dark in the evening at frozen times (afternoon light, evening
+dark, after the first morning routine light again); the night touch is dark (the `night`
+part's markup); the person tones' contrast pairs computed in the test (text 4.5:1, rings 3:1)
+for both looks; the setting is on the module's page (MP5's settings test).
+Scenario: none (nobody gets a message); Michael checks it on the frame.
+
+Data/Setup: none (a household setting with a default). Michael may want to choose the
+default look; Follow the frame is the guess. Mark #237 reviewed once live.
 
 ## Conversation mode
 
