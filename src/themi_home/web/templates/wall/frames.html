@@ -39,4 +39,36 @@ wall, never the rest of the website.</p>
 {% else %}
 <p class="muted">No frames yet.</p>
 {% endif %}
+
+<section class="card" id="columns">
+  <h2>People on the wall</h2>
+  <p class="muted">The wall's columns: top to bottom here is left to right on the wall. Each
+  colour follows its person everywhere on the wall: their timeline row, events and
+  views.</p>
+  <form method="post" action="/wall/frames/columns">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="order" value="{{ columns | map(attribute='key') | join(',') }}">
+    <ol class="wall-columns-order">
+    {% for c in columns %}
+      <li class="inline-field" id="column-{{ c.key }}">
+        <label>{{ c.name }}
+          <select name="tone_{{ c.key }}">
+            {% for tone, words in tones.items() %}
+            <option value="{{ tone }}" {% if tone == c.tone %}selected{% endif %}>{{ words }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <span class="buttons">
+          <button name="move" value="{{ c.key }}:up" aria-label="Move {{ c.name }} left"{% if loop.first %} disabled{% endif %}>Up</button>
+          <button name="move" value="{{ c.key }}:down" aria-label="Move {{ c.name }} right"{% if loop.last %} disabled{% endif %}>Down</button>
+        </span>
+      </li>
+    {% endfor %}
+    </ol>
+    <div class="actions">
+      <button class="primary">Save colours</button>
+      {% if chosen %}<button name="reset" value="1">Put them back</button>{% endif %}
+    </div>
+  </form>
+</section>
 {% endblock %}
