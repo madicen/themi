@@ -1,0 +1,22 @@
+{% from "wall/_sheet.html" import sheet with context %}
+{% call sheet(event.title) %}
+<p class="sheet-kicker">{{ event.whose }}</p>
+<h2 class="sheet-title">{{ event.title }}</h2>
+<p class="sheet-when">{{ event.when }}</p>
+{% if event.status %}<p class="sheet-status">{{ event.status }}</p>{% endif %}
+{% if event.place or event.video or event.leave_by %}
+<dl class="sheet-facts">
+  {% if event.place %}<div><dt>Where</dt><dd>{{ event.place }}</dd></div>{% endif %}
+  {% if event.video %}<div><dt>Where</dt><dd>A video call</dd></div>{% endif %}
+  {% if event.leave_by %}<div><dt>Leaving</dt><dd>{{ event.leave_by }}</dd></div>{% endif %}
+</dl>
+{% endif %}
+{% if event.notes %}<div class="sheet-notes"><h3>Notes</h3>{% for line in event.notes.splitlines() %}<p>{{ line }}</p>{% endfor %}</div>{% endif %}
+{% if event.sent %}<p class="sheet-done" role="status">{{ event.sent }}</p>{% endif %}
+<div class="sheet-actions">
+  {% for id, name in event.send_to %}
+  <button type="button" class="sheet-button primary" hx-post="/wall/view/event/send?{{ event.ref }}" hx-vals='{"to": "{{ id }}"}' hx-target="#wall-view" hx-swap="innerHTML">Send to {{ name }}'s phone</button>
+  {% endfor %}
+</div>
+<p class="sheet-note">Events are changed from your phones. The wall only shows them.</p>
+{% endcall %}

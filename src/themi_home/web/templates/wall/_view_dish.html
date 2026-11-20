@@ -1,0 +1,27 @@
+{% from "wall/_sheet.html" import sheet with context %}
+{% call sheet(view.name) %}
+<p class="sheet-kicker">Things to cook</p>
+<h2 class="sheet-title">{{ view.name }}</h2>
+{% if view.said %}<p class="sheet-done" role="status">{{ view.said }}</p>{% endif %}
+{% if view.ingredients %}
+<form class="sheet-dish" hx-post="/wall/view/dish/{{ view.item_id }}/add" hx-target="#wall-view" hx-swap="innerHTML">
+  <p class="sheet-note">Tick what's in the house; the rest can go on the grocery list.</p>
+  <ul class="sheet-checks">
+    {% for name in view.ingredients %}
+    <li><label><input type="checkbox" name="have" value="{{ name }}"> {{ name }}</label></li>
+    {% endfor %}
+  </ul>
+  <div class="sheet-actions"><button class="sheet-button primary">Add the rest to Groceries</button></div>
+</form>
+{% else %}
+<p class="sheet-note">There's no recipe for this in the cookbook.</p>
+{% endif %}
+{% if view.recipe %}
+<div class="sheet-actions" role="group" aria-label="Start cooking">
+  <span class="sheet-note">Start cooking:</span>
+  {% for id, name in view.people %}
+  <button type="button" class="sheet-button" hx-post="/wall/view/dish/{{ view.item_id }}/cook" hx-vals='{"by": "{{ id }}"}' hx-target="#wall-view" hx-swap="innerHTML">{{ name }} is cooking</button>
+  {% endfor %}
+</div>
+{% endif %}
+{% endcall %}

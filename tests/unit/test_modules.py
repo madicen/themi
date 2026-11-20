@@ -258,8 +258,8 @@ def test_every_key_names_a_class_the_full_app_provides() -> None:
 
     found = {name: k for name, k in vars(keys).items() if isinstance(k, Key)}
     # 35a: takeout; F26c: task_parts; EX1a-EX4a: expense sheets; WX1; DC1; OV2/OV3: the oven;
-    # F50b: currency
-    assert len(found) == 76
+    # F50b: currency; WL8: deliveries
+    assert len(found) == 77
     source = inspect.getsource(keys)
     for attr, key in found.items():
         assert f"import {key.name}\n" in source, f"keys.{attr} names {key.name}, never imported"

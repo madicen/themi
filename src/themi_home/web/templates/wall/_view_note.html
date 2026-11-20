@@ -1,0 +1,24 @@
+{% from "wall/_sheet.html" import sheet with context %}
+{% call sheet("Themi's note") %}
+<div class="sheet-note-head"><span class="wall-t" aria-hidden="true">T</span><h2 class="sheet-note-text">{{ view.text }}</h2></div>
+{% if view.said %}
+<p class="sheet-done" role="status">{{ view.said }}</p>
+{% elif view.asking %}
+<p class="sheet-when">Who did it?</p>
+<div class="sheet-actions">
+  {% for id, name in view.people %}
+  <button type="button" class="sheet-button primary" hx-post="/wall/view/note" hx-vals='{"answer": "done", "by": "{{ id }}"}' hx-target="#wall-view" hx-swap="innerHTML">{{ name }}</button>
+  {% endfor %}
+  <button type="button" class="sheet-button primary" hx-post="/wall/view/note" hx-vals='{"answer": "done", "by": "both"}' hx-target="#wall-view" hx-swap="innerHTML">Both of us</button>
+</div>
+{% elif view.chore %}
+<div class="sheet-actions">
+  <button type="button" class="sheet-button primary" hx-post="/wall/view/note" hx-vals='{"answer": "done"}' hx-target="#wall-view" hx-swap="innerHTML">It's done</button>
+  <button type="button" class="sheet-button" hx-post="/wall/view/note" hx-vals='{"answer": "later"}' hx-target="#wall-view" hx-swap="innerHTML">Later tonight</button>
+  <button type="button" class="sheet-button" hx-post="/wall/view/note" hx-vals='{"answer": "morning"}' hx-target="#wall-view" hx-swap="innerHTML">In the morning</button>
+</div>
+{% else %}
+<div class="sheet-actions"><button type="button" class="sheet-button primary" hx-post="/wall/view/note" hx-vals='{"answer": "ok"}' hx-target="#wall-view" hx-swap="innerHTML">Got it</button></div>
+{% endif %}
+<p class="sheet-note">Why this note: {{ view.why }}</p>
+{% endcall %}

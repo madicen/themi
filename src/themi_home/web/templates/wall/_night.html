@@ -1,0 +1,16 @@
+{% set n = screen.night %}
+<div class="wall-night-mode" data-night="{{ '1' if n else '0' }}" hidden></div>
+{% if n %}
+<section class="wall-night" aria-label="Night">
+  <p class="night-time">{{ screen.time }}<span>{{ screen.meridiem }}</span></p>
+  <p class="night-date">{{ screen.weekday }}{% if n.low %} · {{ n.low }}{% endif %}</p>
+  <h2 class="night-heading">{{ n.heading }}</h2>
+  {% if n.plan %}
+  <ul class="night-plan">{% for c in n.plan %}<li class="dot-chip tone-{{ c.tone }}">{{ c.title }}</li>{% endfor %}</ul>
+  {% else %}
+  <p class="night-line">Nothing on the calendar yet.</p>
+  {% endif %}
+  <p class="night-line">{{ n.line }}</p>
+  <p class="night-hint">Touch the screen to see everything.</p>
+</section>
+{% endif %}

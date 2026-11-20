@@ -1,0 +1,6 @@
+{% if screen.note %}
+<button type="button" class="wall-card wall-note" hx-get="/wall/view/note" hx-target="#wall-view" hx-swap="innerHTML">
+  <span class="wall-t" aria-hidden="true">T</span>
+  <span class="wall-note-text">{{ screen.note.text }}</span>
+</button>
+{% endif %}

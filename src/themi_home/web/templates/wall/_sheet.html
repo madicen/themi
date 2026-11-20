@@ -1,0 +1,10 @@
+{#- WL5a: a view sliding up over the dimmed home screen. One at a time; Close, a tap on the
+    dimmed screen, or `close_after` seconds without a touch closes it (wall.js). -#}
+{% macro sheet(label) %}
+<div class="wall-backdrop" data-close></div>
+<section class="wall-sheet" role="dialog" aria-label="{{ label }}" data-close-after="{{ close_after }}">
+  <div class="wall-grip" aria-hidden="true"></div>
+  {{ caller() }}
+  <div class="sheet-actions sheet-end"><button type="button" class="sheet-button" data-close>Close</button></div>
+</section>
+{% endmacro %}

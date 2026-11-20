@@ -1,0 +1,22 @@
+{#- A day's timeline (WL3), shared by the home screen and the Day view (WL5a). -#}
+{% macro timeline(t) %}
+<div class="tl">
+  <div class="tl-ticks">{% for k in t.ticks %}<span class="tl-tick" data-x="{{ k.x }}">{{ k.label }}</span>{% endfor %}</div>
+  {% for r in t.rows %}
+  <div class="tl-row tone-{{ r.tone }}" id="tl-{{ r.key }}">
+    <span class="tl-name">{{ r.name }}</span>
+    <div class="tl-track">
+      {% if t.live %}<span class="tl-past" data-w="{{ t.now }}"></span>{% endif %}
+      {% for k in t.ticks %}<span class="tl-grid" data-x="{{ k.x }}"></span>{% endfor %}
+      {% for b in r.blocks %}
+      <button type="button" class="tl-block{% if b.past %} past{% endif %}" data-x="{{ b.x }}" data-w="{{ b.width }}" data-lane="{{ b.lane }}" data-lanes="{{ b.lanes }}"
+        hx-get="/wall/view/event?{{ b.ref }}" hx-target="#wall-view" hx-swap="innerHTML">
+        <span class="tl-title">{{ b.title }}</span><span class="tl-when">{{ b.when }}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% if t.live %}<div class="tl-over" aria-hidden="true"><span class="tl-now" data-x="{{ t.now }}"><span>now</span></span></div>{% endif %}
+</div>
+{% endmacro %}

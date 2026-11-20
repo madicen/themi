@@ -11,6 +11,9 @@ Categories and what follows:
 | receipt      | announce `ReceiptFound` (the pantry and budget, prompt 25)    |
 | routine      | nothing                                                       |
 
+Any of them can also be about a parcel on its way (WL8): its `delivery` (the shop, the day,
+how far along) goes to the verdict listeners, and `Deliveries` keeps it for the wall.
+
 The email audit's answers about a sender (E2, E2b) change that: urgent right away, its
 alerts are always `urgent` priority; important, its noise isn't offered for archiving;
 very important, its confirmations aren't marked as read either.
@@ -58,6 +61,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi_google.connectors.gmail import GmailSync
 from themi_google.connectors.gmail.parse import in_primary
+from themi_google.deliveries import parse as parse_delivery
 from themi_google.email_buttons import EmailNoticeButtons, notice_buttons
 from themi_google.events import title_matches
 
@@ -121,6 +125,12 @@ short title ("Vet: Biscuit's checkup"), the date (YYYY-MM-DD), start and end
 (HH:MM, 24-hour; both empty for an all-day event) and the place, as written.
 Otherwise leave every event field empty.
 
+For an email about a parcel coming to the family (shipped, on its way, out for delivery,
+delivered, a new delivery date), fill delivery: shop is who it's from in a word or two,
+the shop's or sender's name ("Amazon", "Chewy"), never what's in it; date is the day it's
+expected or came (YYYY-MM-DD; empty if the email gives none); status is on_the_way,
+out_for_delivery or delivered. Otherwise leave every delivery field empty.
+
 For a confirmation or receipt, give amount_paid: what the reader paid, was charged,
 pledged or owes, exactly as the email writes it ("$179.00"). Leave it empty when the
 email isn't about the reader's own money: a project's total pledged or its goal, a
@@ -166,6 +176,19 @@ SCHEMA: dict[str, Any] = {
                         "required": ["title", "date", "start", "end", "location"],
                         "additionalProperties": False,
                     },
+                    "delivery": {
+                        "type": "object",
+                        "properties": {
+                            "shop": {"type": "string"},
+                            "date": {"type": "string"},
+                            "status": {
+                                "type": "string",
+                                "enum": ["", "on_the_way", "out_for_delivery", "delivered"],
+                            },
+                        },
+                        "required": ["shop", "date", "status"],
+                        "additionalProperties": False,
+                    },
                 },
                 "required": [
                     "email_id",
@@ -177,6 +200,7 @@ SCHEMA: dict[str, Any] = {
                     "reply_draft",
                     "amount_paid",
                     "event",
+                    "delivery",
                 ],
                 "additionalProperties": False,
             },
@@ -215,6 +239,8 @@ class Verdict:
     # F28b: what the reader paid, as the email writes it; "" for none, None when the
     # model didn't say (then the email's labelled amount is used).
     amount_paid: str | None = None
+    # WL8: the parcel it's about (shop, date, status), for the wall's note; None for none.
+    delivery: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -587,6 +613,7 @@ def _verdicts(data: dict[str, Any], batch_ids: set[int]) -> dict[int, Verdict]:
             _event(item.get("event")) if category == "confirmation" else None,
             bool(item.get("unsure")),
             None if paid is None else " ".join(str(paid).split())[:40],
+            parse_delivery(item.get("delivery")),
         )
     return verdicts
 

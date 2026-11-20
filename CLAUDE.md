@@ -37,6 +37,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Modules page (groups, turning groups on, every setting on a module's page): Themi Modules
   Page Rework Plan, https://claude.ai/artifact/Ja9RuEn7ce5CUnM6WQqE7W. Read it the same way.
   It is the design source for the MP prompts.
+- Wall (the `/wall` page on the Cozyla frame): Themi Wall Plan,
+  https://claude.ai/artifact/Rrt4bF7u69oPFetsw6BW4y. Read it the same way. It is the design
+  source for the WL prompts.
 
 ## "Implement the next prompt"
 

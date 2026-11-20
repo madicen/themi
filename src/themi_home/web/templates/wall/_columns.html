@@ -1,0 +1,45 @@
+{% for c in screen.columns %}
+<section class="wall-col tone-{{ c.tone }}" aria-label="{{ c.name }}" id="col-{{ c.key }}">
+  {% if c.member_id %}<button type="button" class="wall-col-head" hx-get="/wall/view/person/{{ c.member_id }}" hx-target="#wall-view" hx-swap="innerHTML">{% else %}<header class="wall-col-head">{% endif %}
+    <span class="wall-avatar" aria-hidden="true">{% if c.initial %}{{ c.initial }}{% else %}<svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4z"/></svg>{% endif %}</span>
+    <span>
+      <span class="wall-col-name">{{ c.name }}</span>
+      <span class="wall-col-sum">{{ c.summary }}</span>
+    </span>
+  {% if c.member_id %}</button>{% else %}</header>{% endif %}
+  <div class="wall-col-body">
+  {% for sec in c.sections %}{% if sec.items or sec.empty %}
+    <h3>{{ sec.title }}</h3>
+    {% if sec.items %}
+    <ul>
+      {% for i in sec.items %}
+      <li class="wall-entry">
+        {% if i.tappable %}
+        <button type="button" class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}" aria-pressed="{{ 'true' if i.done else 'false' }}"
+          hx-post="/wall/tap" hx-vals='{"key": "{{ i.key }}"}' hx-target="#wall-columns" hx-swap="innerHTML">
+        {% else %}
+        <div class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}">
+        {% endif %}
+          <span class="ring" aria-hidden="true"></span>
+          <span class="wall-words"><span class="wall-title">{{ i.title }}</span>{% if i.sub %}<span class="wall-sub">{{ i.sub }}</span>{% endif %}</span>
+        {% if i.tappable %}</button>{% else %}</div>{% endif %}
+        {% if i.asking %}
+        <div class="wall-who" role="group" aria-label="Who did it?">
+          <span>Who did it?</span>
+          {% for p in screen.people %}
+          <button type="button" class="tone-{{ p.tone }}" hx-post="/wall/tap" hx-vals='{"key": "{{ i.key }}", "by": "{{ p.id }}"}' hx-target="#wall-columns" hx-swap="innerHTML">{{ p.name }}</button>
+          {% endfor %}
+          <button type="button" class="wall-not-yet" hx-post="/wall/tap" hx-vals='{"cancel": "1"}' hx-target="#wall-columns" hx-swap="innerHTML">Not yet</button>
+        </div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="wall-empty">{{ sec.empty }}</p>
+    {% endif %}
+    {% if sec.more %}<button type="button" class="wall-more" hx-get="/wall/view/list/todo/{{ c.member_id or 'family' }}" hx-target="#wall-view" hx-swap="innerHTML">More on the list</button>{% endif %}
+  {% endif %}{% endfor %}
+  </div>
+</section>
+{% endfor %}

@@ -141,6 +141,7 @@ travel = "themi_google.connector_modules:TravelModule"
 tuya = "themi_home.home_modules:TuyaModule"
 urgent_senders = "themi_google.google_modules:UrgentSendersModule"
 voice_notes = "themi.standard.capabilities:VoiceNotesModule"
+wall = "themi_home.wall:WallModule"
 weather = "themi.standard.weather:WeatherModule"
 web_chat = "themi.standard.web_chat:WebChatModule"
 web_recipes = "themi_home.web_recipes:WebRecipesModule"
@@ -173,6 +174,7 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "takeout_schema/*.sql",  # 35a: takeout favourites and rescues
     "spending_schema/*.sql",  # EX1a: expense sheets (left out until 2026-11-13)
     "expense_sync_schema/*.sql",
+    "wall_schema/*.sql",  # WL1: the wall's frames
     "web/templates/*.html",
     "web/templates/*/*.html",
     "web/static/*",

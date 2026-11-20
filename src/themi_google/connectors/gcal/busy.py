@@ -5,9 +5,11 @@ person chose (the primary one if they haven't) are read for the next two weeks, 
 the week before from its start (F19a, bug #105: "what happened yesterday?" had no
 events, and the morning's were gone from today).
 What's kept, per event: its title, place, start and end, whether it's all day and
-whether it's a video call, and which of Themi's own events it is. Never
-descriptions or attendees: what others write into an invitation is the riskiest
-text there is. Cancelled events and invitations the person declined are left out.
+whether it's a video call, and which of Themi's own events it is. Never attendees.
+Since WL7 its description is kept too, as plain text cut to `MAX_NOTES`, for the
+wall's Event view; it never reaches the model (`context` and `event_line` leave it
+out), since what others write into an invitation is the riskiest text there is.
+Cancelled events and invitations the person declined are left out.
 
 - Busy blocks: timed events that aren't shown as free. Themi's blocks of time for
   a task (K5, `TASK_BLOCK`) aren't busy time, or they'd hold back that task's own
@@ -28,6 +30,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime, time, timedelta
+from html import unescape
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -51,6 +54,9 @@ LOOK_BACK = timedelta(days=7)  # from midnight: today's earlier events, and the 
 CONTEXT_DAYS = 2  # today and tomorrow, for the model
 TASK_BLOCK = "task-block:"  # K5: time Themi blocked for a task; never busy
 MAX_TEXT = 200
+MAX_NOTES = 600  # WL7: an event's notes, kept for the wall (which shortens them again)
+BREAK = re.compile(r"<br\s*/?>|</p>|</div>|</li>", re.I)
+TAG = re.compile(r"<[^>]+>")
 VIDEO = re.compile(r"https?://\S*(?:zoom\.us|meet\.google\.com|teams\.microsoft\.com)", re.I)
 
 
@@ -69,6 +75,14 @@ def _whole_days(begins: datetime, ends: datetime, tz: ZoneInfo) -> bool:
     time, and said as all day."""
     first, last = begins.astimezone(tz), ends.astimezone(tz)
     return first.time() == last.time() == time(0) and last.date() > first.date()
+
+
+def _notes(description: str) -> str:
+    """WL7: an event's description as plain text. Google keeps it as light HTML; links
+    keep their words, tags go, and the lines stay lines."""
+    text = unescape(TAG.sub("", BREAK.sub("\n", description)))
+    lines = (" ".join(line.split()) for line in text.splitlines())
+    return "\n".join(line for line in lines if line)[:MAX_NOTES]
 
 
 def _entry(event: dict[str, Any], tz: ZoneInfo) -> dict[str, Any] | None:
@@ -103,6 +117,7 @@ def _entry(event: dict[str, Any], tz: ZoneInfo) -> dict[str, Any] | None:
             1 for a in event.get("attendees", []) if not a.get("self") and not a.get("resource")
         ),
         "recurring": bool(event.get("recurringEventId") or event.get("recurrence")),
+        "notes": _notes(str(event.get("description") or "")),
     }
 
 
@@ -181,13 +196,13 @@ class CalendarBusy:
                 self.db.execute(
                     "INSERT INTO calendar_entries (member_id, account_id, calendar_id, event_id, "
                     "title, location, starts_at, ends_at, all_day, video, busy, source, "
-                    "fetched_at, guests, recurring) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "fetched_at, guests, recurring, notes) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         member.id, account_id, calendar_id, e["event_id"], e["title"],
                         e["location"], to_utc_iso(e["starts_at"]), to_utc_iso(e["ends_at"]),
                         int(e["all_day"]), int(e["video"]), int(e["busy"]), e["source"], stamp,
-                        e["guests"], int(e["recurring"]),
+                        e["guests"], int(e["recurring"]), e["notes"],
                     ),
                 )  # fmt: skip
                 if e["busy"]:
@@ -260,6 +275,7 @@ class CalendarBusy:
                 r["source"],
                 r["calendar_id"],
                 r["event_id"],
+                r["notes"],
             )
             for r in rows
         ]

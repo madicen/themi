@@ -1,0 +1,14 @@
+<div class="wall-when">
+  <p class="wall-date">{{ screen.weekday }}</p>
+  <p class="wall-time">{{ screen.time }}<span>{{ screen.meridiem }}</span></p>
+</div>
+{% if screen.weather %}
+<button type="button" class="wall-weather" hx-get="/wall/view/weather" hx-target="#wall-view" hx-swap="innerHTML">
+  <img src="{{ screen.weather.icon }}" alt="" width="72" height="72">
+  <span>
+    <span class="wall-high">{{ screen.weather.high }}</span>
+    <span class="wall-low">low {{ screen.weather.low }} tonight</span>
+  </span>
+</button>
+{% endif %}
+<span class="wall-stamp" data-at="{{ screen.time }} {{ screen.meridiem }}" hidden></span>
