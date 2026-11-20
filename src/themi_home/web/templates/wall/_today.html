@@ -1,0 +1,30 @@
+{% set t = screen.today %}
+{% if t %}
+<section class="wall-card wall-today" aria-label="Today" data-start="{{ t.start.isoformat() }}" data-end="{{ t.end.isoformat() }}">
+  <div class="wall-card-head">
+    <h2>Today</h2>
+    {% if t.all_day %}<div class="wall-chips"><span class="wall-label">All day</span>{% for c in t.all_day %}<span class="pill tone-{{ c.tone }}">{{ c.title }}</span>{% endfor %}</div>{% endif %}
+  </div>
+  <div class="tl">
+    <div class="tl-ticks">{% for k in t.ticks %}<span class="tl-tick" data-x="{{ k.x }}">{{ k.label }}</span>{% endfor %}</div>
+    {% for r in t.rows %}
+    <div class="tl-row tone-{{ r.tone }}" id="tl-{{ r.key }}">
+      <span class="tl-name">{{ r.name }}</span>
+      <div class="tl-track">
+        <span class="tl-past" data-w="{{ t.now }}"></span>
+        {% for k in t.ticks %}<span class="tl-grid" data-x="{{ k.x }}"></span>{% endfor %}
+        {% for b in r.blocks %}
+        <div class="tl-block{% if b.past %} past{% endif %}" data-x="{{ b.x }}" data-w="{{ b.width }}" data-lane="{{ b.lane }}" data-lanes="{{ b.lanes }}">
+          <span class="tl-title">{{ b.title }}</span><span class="tl-when">{{ b.when }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    <div class="tl-over" aria-hidden="true"><span class="tl-now" data-x="{{ t.now }}"><span>now</span></span></div>
+  </div>
+  {% if t.tomorrow %}
+  <p class="wall-tomorrow"><span class="wall-label">Tomorrow</span>{% for c in t.tomorrow %}<span class="dot-chip tone-{{ c.tone }}">{{ c.title }}</span>{% endfor %}</p>
+  {% endif %}
+</section>
+{% endif %}

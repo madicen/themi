@@ -1,0 +1,15 @@
+{% if screen.week %}
+<section class="wall-card wall-week" aria-label="The week ahead">
+  <div class="wall-card-head"><h2>The week ahead</h2></div>
+  <div class="wk">
+    {% for d in screen.week %}
+    <div class="wk-day">
+      <p class="wk-head"><b>{{ d.weekday }}</b> {{ d.date }}</p>
+      {% for c in d.events %}<span class="wk-ev tone-{{ c.tone }}">{{ c.title }}</span>{% endfor %}
+      {% if d.more %}<span class="wall-sub">+{{ d.more }} more</span>{% endif %}
+      {% if not d.events %}<span class="wall-empty">Free</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}

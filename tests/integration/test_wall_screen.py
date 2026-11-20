@@ -9,24 +9,31 @@ from __future__ import annotations
 
 import re
 from collections.abc import AsyncIterator
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
 
+from tests.fakes.gcal_api import FakeGcal
+from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fakes.weather import FakeWeather
 from tests.fakes.wiring import connector_options
 from tests.fixtures.family import SeededFamily
 from tests.fixtures.web import sign_in, web_client
 from tests.scenarios.harness import Scenario
+from tests.scenarios.test_day_summary import local
+from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.app import family_modules
 from themi.core import keys
+from themi.core.calendar_view import CalendarPreferences
+from themi.drawing.layout import Span, window
 from themi.standard.tasks import Task
 from themi_home.wall import WALL_COOKIE, WallDevices, WallModule
-from themi_home.wall_view import WallView, since
+from themi_home.wall_view import WallEvent, WallView, lay_out_today, since
 
 EVENING = timedelta(hours=10, minutes=42)  # 9:00 am to 7:42 pm
 
@@ -318,3 +325,140 @@ async def test_the_header_reads_like_the_mock_up(wall: Scenario) -> None:
     clock.advance(EVENING)
     shown = WallView(wall.app.services).screen()
     assert (shown.weekday, shown.time, shown.meridiem) == ("Wednesday, October 21", "7:42", "PM")
+
+
+# ----- WL3: today's timeline and the week ahead ----------------------------------------------
+
+PACIFIC = ZoneInfo("America/Los_Angeles")
+ROWS = [("m1", "Erin", "p0"), ("m2", "Husband", "p1"), ("family", "Family", "family")]
+
+
+def at(hour: int, minute: int = 0, day: int = 21) -> datetime:
+    return datetime(2026, 10, day, hour, minute, tzinfo=PACIFIC)
+
+
+def event(row: str, title: str, start: datetime, end: datetime, **more: Any) -> WallEvent:
+    tone = {"m1": "p0", "m2": "p1"}.get(row, "family")
+    return WallEvent(row, tone, title, start, end, **more)
+
+
+def test_the_window_and_stacking_are_the_day_cards() -> None:
+    events = [
+        event("m2", "Visit Erin", at(18, 30), at(20, 30)),
+        event("m1", "Dentist", at(10), at(11)),
+        event("m1", "Call", at(10, 30), at(11, 30)),
+        event("family", "Late film", at(21), at(22, 30)),
+    ]
+    line = lay_out_today(at(19, 42), ROWS, events, [])
+    spans = [Span(str(i), e.start, e.end) for i, e in enumerate(events)]
+    assert (line.start, line.end) == window(at(8), spans) == (at(8), at(23))
+    erin = next(r for r in line.rows if r.key == "m1")
+    assert [(b.title, b.lane, b.lanes) for b in erin.blocks] == [
+        ("Dentist", 0, 2),
+        ("Call", 1, 2),
+    ]
+    assert [r.key for r in line.rows] == ["m1", "m2", "family"]
+
+
+def test_an_early_event_stretches_the_morning() -> None:
+    line = lay_out_today(at(9), ROWS, [event("m1", "Flight", at(6, 15), at(7))], [])
+    assert line.start == at(6) and line.end == at(21)
+
+
+def test_labels_every_two_hours_and_the_now_line() -> None:
+    line = lay_out_today(at(19, 42), ROWS, [], [])
+    assert [t.label for t in line.ticks] == [
+        "8 am",
+        "10 am",
+        "noon",
+        "2 pm",
+        "4 pm",
+        "6 pm",
+        "8 pm",
+    ]
+    assert line.now == 90.0  # 11 h 42 of 13
+    assert lay_out_today(at(22), ROWS, [], []).now == 100.0  # held inside the hours
+
+
+def test_finished_events_fade_and_the_rest_dont() -> None:
+    events = [event("m1", "Dentist", at(10), at(11)), event("m2", "Visit", at(18, 30), at(20, 30))]
+    line = lay_out_today(at(19, 42), ROWS, events, [])
+    assert [(b.title, b.past) for r in line.rows for b in r.blocks] == [
+        ("Dentist", True),
+        ("Visit", False),
+    ]
+    visit = line.rows[1].blocks[0]
+    assert visit.when == "6:30\u20138:30 pm" and visit.x == 80.77 and visit.width == 15.38
+
+
+def test_all_day_events_are_pills_and_tomorrow_is_a_line() -> None:
+    today = [event("family", "17 weeks", at(0), at(0, day=22), all_day=True)]
+    tomorrow = [
+        event("m2", "Busy", at(9, day=22), at(10, day=22)),
+        event("family", "Julie Ethiopia", at(0, day=22), at(0, day=23), all_day=True),
+    ]
+    line = lay_out_today(at(19, 42), ROWS, today, tomorrow)
+    assert [(c.title, c.tone) for c in line.all_day] == [("17 weeks", "family")]
+    assert all(not r.blocks for r in line.rows)
+    assert [c.title for c in line.tomorrow] == ["Julie Ethiopia", "Busy"]
+
+
+async def test_no_calendar_no_timeline_or_week(wall: Scenario) -> None:
+    page = await screen(wall)
+    assert "wall-today" not in page.replace('id="wall-today"', "")
+    assert "The week ahead" not in page
+
+
+def share(s: Scenario) -> None:
+    erin = s.member("Erin")
+    s.app.store.save_preferences(erin, erin.id, CalendarPreferences, calendar_details="partner")
+
+
+@pytest.fixture
+async def calendar(
+    family: SeededFamily,
+    fake_telegram: FakeTelegram,
+    fake_google: FakeGoogle,
+    fake_gcal: FakeGcal,
+) -> AsyncIterator[Scenario]:
+    """The wall with Erin's Google calendar linked."""
+    s = with_wall(family, fake_telegram, google=fake_google, gcal=fake_gcal)
+    await s.start()
+    try:
+        async with web_client(s) as site:
+            await link(s, site, fake_google, "Erin", ERIN)
+        yield s
+    finally:
+        await s.stop()
+
+
+async def test_events_are_busy_unless_their_owner_shares_the_details(
+    calendar: Scenario, fake_gcal: FakeGcal
+) -> None:
+    fake_gcal.add_event(ERIN, local(10), local(11), summary="Dentist", location="Smile Dental")
+    fake_gcal.add_event(ERIN, local(12), local(13), summary="Lunch with Sam")
+    await calendar.run_periodic("calendar.busy")
+    clock.advance(EVENING)
+    page = await screen(calendar)
+    erin = page[page.index(f'id="tl-m{calendar.member("Erin").id}"') :]
+    erin = erin[: erin.index("</div>\n    </div>")]
+    assert re.findall(r'<span class="tl-title">([^<]+)</span>', erin) == ["Busy", "Busy"]
+    assert "Dentist" not in page and "Smile Dental" not in page and "Sam" not in page
+    share(calendar)
+    page = await screen(calendar)
+    assert "Dentist" in page and "Smile Dental" not in page  # the place: only in its view
+
+
+async def test_the_week_ahead_free_days_and_more(calendar: Scenario, fake_gcal: FakeGcal) -> None:
+    share(calendar)
+    for hour, title in ((9, "One"), (11, "Two"), (13, "Three"), (15, "Four")):
+        fake_gcal.add_event(ERIN, local(hour, day=23), local(hour + 1, day=23), summary=title)
+    fake_gcal.add_event(ERIN, local(10, day=22), local(11, day=22), summary="Tomorrow's thing")
+    await calendar.run_periodic("calendar.busy")
+    page = await screen(calendar)
+    week = words(page[page.index("<h2>The week ahead") :])
+    assert week.startswith(
+        "The week ahead Thu 22 Tomorrow&#39;s thing Fri 23 One Two Three +1 more"
+    )
+    assert "Sat 24 Free" in week and week.count(" Free") == 5
+    assert "Tomorrow Tomorrow&#39;s thing" in words(page[page.index("wall-tomorrow") - 30 :])

@@ -47,7 +47,7 @@ LOCKED_FOR = timedelta(minutes=10)
 WALL_COOKIE = "themi_wall"
 COOKIE_AGE = timedelta(days=400)  # the longest a browser keeps a cookie
 DEFAULT_NAME = "Wall"
-PARTS = ("top", "note", "columns", "smalls")  # what the page refreshes on its own
+PARTS = ("top", "note", "today", "columns", "week", "smalls")  # what the page refreshes on its own
 
 
 def _hash(value: str) -> str:

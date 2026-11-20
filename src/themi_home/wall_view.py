@@ -35,6 +35,10 @@ SMALL_ITEMS = 4
 EVENING_BEFORE_QUIET = timedelta(hours=1)  # as routines' own evening (R1a)
 IMPORTANCE = {"high": 0, "normal": 1, "low": 2}
 TOGETHER = "together"
+DAY_STARTS = 8  # the timeline's earliest start, unless an event is earlier
+MIN_BLOCK = 1.5  # % of the hours: the narrowest event drawn (a 5-minute one is still seen)
+WEEK_EVENTS = 3
+TOMORROW_SHOWN = 4
 
 
 @dataclass(frozen=True)
@@ -80,6 +84,71 @@ class SmallList:
 
 
 @dataclass(frozen=True)
+class WallEvent:
+    """One event as the wall shows it: its row ("m3", or "family"), its colour's class, and
+    its title ("Busy" for someone who keeps their calendar's details to themselves)."""
+
+    row: str
+    tone: str
+    title: str
+    start: datetime  # local
+    end: datetime
+    all_day: bool = False
+
+
+@dataclass(frozen=True)
+class Block:
+    title: str
+    when: str  # "6:30-8:30 pm", with an en dash
+    x: float  # % along the hours
+    width: float
+    lane: int  # stacked in its row: this lane of `lanes`
+    lanes: int
+    past: bool
+
+
+@dataclass(frozen=True)
+class TimelineRow:
+    key: str
+    name: str
+    tone: str
+    blocks: tuple[Block, ...]
+
+
+@dataclass(frozen=True)
+class Tick:
+    label: str
+    x: float
+
+
+@dataclass(frozen=True)
+class Chip:
+    title: str
+    tone: str
+
+
+@dataclass(frozen=True)
+class TodayLine:
+    """Today's timeline (WL3): the day card's rules laid sideways."""
+
+    start: datetime
+    end: datetime
+    ticks: tuple[Tick, ...]
+    rows: tuple[TimelineRow, ...]
+    all_day: tuple[Chip, ...]
+    now: float  # % along the hours, held inside them
+    tomorrow: tuple[Chip, ...]
+
+
+@dataclass(frozen=True)
+class WeekDay:
+    weekday: str  # "Fri"
+    date: str  # "20"
+    events: tuple[Chip, ...]
+    more: int = 0
+
+
+@dataclass(frozen=True)
 class WallScreen:
     now: datetime  # local
     weekday: str  # "Thursday, November 19"
@@ -89,6 +158,8 @@ class WallScreen:
     note: str | None
     columns: tuple[WallColumn, ...]
     smalls: tuple[SmallList, ...] = field(default=())
+    today: TodayLine | None = None  # WL3: None when there's no calendar
+    week: tuple[WeekDay, ...] = ()
 
 
 class WallView:
@@ -108,6 +179,8 @@ class WallView:
             note=self.note(),
             columns=self.columns(),
             smalls=self.smalls(),
+            today=self.today_line(),
+            week=self.week(),
         )
 
     def tz(self) -> ZoneInfo:
@@ -300,6 +373,76 @@ class WallView:
             return f"{task.title} is still waiting from {when}. Whoever has a moment could do it."
         return f"{task.title} is still waiting from {when}, whenever there's a moment."
 
+    # ----- the calendar: today's timeline and the week ahead (WL3) --------------------------
+
+    def has_calendar(self) -> bool:
+        return (
+            self.services.maybe(keys.calendars) is not None
+            and self.services.maybe(keys.day_summary) is not None
+        )
+
+    def events(self, day: date) -> list[WallEvent]:
+        """A day's events, each once: a person's own in their row, the family calendar's in
+        Family's. Titles only from someone who shares their calendar's details with their
+        partner (K1's "partner"); anyone else's events are "Busy". Themi's copies of tasks
+        are left out: those are tasks, not plans."""
+        from themi.core.calendar_view import CalendarPreferences
+
+        summary = self.services.maybe(keys.day_summary)
+        if summary is None or not self.has_calendar():
+            return []
+        tz = self.tz()
+        out: list[WallEvent] = []
+        seen: set[tuple[str, str]] = set()
+        for index, member in enumerate(self.people()):
+            prefs = self.services.store.preferences(member.id, CalendarPreferences)
+            shares = prefs.calendar_details == "partner"
+            for entry, whose in summary.events(member, day, tasks=False, scope="mine"):
+                if entry.event_id and (entry.calendar_id, entry.event_id) in seen:
+                    continue
+                seen.add((entry.calendar_id, entry.event_id))
+                family = bool(whose)  # " (on the Madicen Family calendar)"
+                out.append(
+                    WallEvent(
+                        row="family" if family else f"m{member.id}",
+                        tone="family" if family else f"p{index % 4}",
+                        title=entry.title if family or shares else "Busy",
+                        start=entry.starts_at.astimezone(tz),
+                        end=entry.ends_at.astimezone(tz),
+                        all_day=entry.all_day,
+                    )
+                )
+        return out
+
+    def today_line(self) -> TodayLine | None:
+        if not self.has_calendar():
+            return None
+        now = self.now()
+        rows = [(f"m{m.id}", m.name, f"p{i % 4}") for i, m in enumerate(self.people())]
+        rows.append(("family", "Family", "family"))
+        tomorrow = self.events(now.date() + timedelta(days=1))
+        return lay_out_today(now, rows, self.events(now.date()), tomorrow)
+
+    def week(self) -> tuple[WeekDay, ...]:
+        """Seven days from tomorrow, up to three events each."""
+        if not self.has_calendar():
+            return ()
+        first = self.now().date() + timedelta(days=1)
+        days = []
+        for offset in range(7):
+            day = first + timedelta(days=offset)
+            events = sorted(self.events(day), key=lambda e: (not e.all_day, e.start))
+            chips = tuple(Chip(e.title, e.tone) for e in events)
+            days.append(
+                WeekDay(
+                    f"{day:%a}",
+                    str(day.day),
+                    chips[:WEEK_EVENTS],
+                    max(0, len(chips) - WEEK_EVENTS),
+                )
+            )
+        return tuple(days)
+
     # ----- the small lists ------------------------------------------------------------
 
     def smalls(self) -> tuple[SmallList, ...]:
@@ -373,3 +516,54 @@ def _clock(at: datetime) -> str:
 
 def _small(name: str, items: list[str]) -> SmallList:
     return SmallList(name, tuple(items[:SMALL_ITEMS]), max(0, len(items) - SMALL_ITEMS))
+
+
+def lay_out_today(
+    now: datetime,
+    rows: list[tuple[str, str, str]],
+    events: list[WallEvent],
+    tomorrow: list[WallEvent],
+) -> TodayLine:
+    """Today's events on hours laid sideways, by the day card's rules (`themi.drawing.
+    layout`): 8 am to 9 pm, stretched to take in an earlier or later event; a label every
+    two hours on a long day; events that overlap stacked in their row."""
+    from themi.drawing.layout import Span, Timeline, columns, window
+    from themi.standard.day_card import span_words
+
+    timed = [e for e in events if not e.all_day]
+    spans = [Span(f"{e.row}:{i}", e.start, e.end) for i, e in enumerate(timed)]
+    morning = now.replace(hour=DAY_STARTS, minute=0, second=0, microsecond=0)
+    start, end = window(morning, spans)
+    line = Timeline(start, end, 0.0, 100.0)
+    placed: list[TimelineRow] = []
+    for key, name, tone in rows:
+        mine = [(span, e) for span, e in zip(spans, timed, strict=True) if e.row == key]
+        lanes = columns([span for span, _ in mine])
+        blocks = []
+        for span, e in sorted(mine, key=lambda pair: pair[1].start):
+            x = line.y(e.start)
+            lane, count = lanes[span.key]
+            blocks.append(
+                Block(
+                    title=e.title,
+                    when=span_words(e.start, e.end),
+                    x=round(x, 2),
+                    width=round(max(line.y(e.end) - x, MIN_BLOCK), 2),
+                    lane=lane,
+                    lanes=count,
+                    past=e.end <= now,
+                )
+            )
+        placed.append(TimelineRow(key, name, tone, tuple(blocks)))
+    return TodayLine(
+        start=start,
+        end=end,
+        ticks=tuple(Tick(t.label, round(t.y, 2)) for t in line.ticks()),
+        rows=tuple(placed),
+        all_day=tuple(Chip(e.title, e.tone) for e in events if e.all_day),
+        now=round(line.y(now), 2),
+        tomorrow=tuple(
+            Chip(e.title, e.tone)
+            for e in sorted(tomorrow, key=lambda e: (not e.all_day, e.start))[:TOMORROW_SHOWN]
+        ),
+    )

@@ -498,7 +498,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MP7 | Modules page: a module's page, quicker to use | Modules page | [x] 2026-11-19 |
 | WL1 | Wall: the module and the frame's sign-in | Wall | [x] 2026-11-20 |
 | WL2 | Wall: the home screen, read-only | Wall | [x] 2026-11-20 |
-| WL3 | Wall: today's timeline and the week ahead | Wall | [ ] |
+| WL3 | Wall: today's timeline and the week ahead | Wall | [x] 2026-11-20 |
 | WL4 | Wall: ticking things off | Wall | [ ] |
 | WL5 | Wall: the views | Wall | [ ] |
 | WL6 | Wall: time of day, night, and the frame | Wall | [ ] |
@@ -22663,7 +22663,7 @@ Notes:
   any fakes; WL3 onwards can reuse it.
 
 ### WL3 · Wall: today's timeline and the week ahead
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL2
 Read first: the plan's "What the family sees" (parts 3 and 5); `themi/drawing/layout.py`;
 `themi/standard/day_card.py` (which events it takes); the canvas's timeline.
@@ -22682,6 +22682,21 @@ stretches the window; a private event is "Busy" with no place or notes in the pa
 line's position at a frozen time; an empty day is "Free"; "+N" past three.
 
 Notes:
+- `WallView.events(day)`: each member's own events (`DaySummary.events(scope="mine",
+  tasks=False)`, so Themi's task copies stay off), each once; the family calendar's go in
+  the Family row. A person's titles show only when they share their calendar's details
+  with their partner (`CalendarPreferences.calendar_details == "partner"`, K1); anyone
+  else's are "Busy". That's the plan's "a private event shows as Busy", read through the
+  setting Themi already has. Places and notes never show on the home screen.
+- `lay_out_today()` is pure: `layout.window` from 8 am (stretched for an earlier or later
+  event), a `Timeline` from 0 to 100 for positions in %, `layout.columns` per row for
+  stacking. Ticks are the day card's labels ("noon").
+- No calendar module (no `keys.calendars`): no timeline and no week; the slots stay empty.
+- Positions are `data-x`/`data-w`/`data-lane(s)`, placed by `wall.js`: the site's policy
+  allows no inline styles. The script also moves the now line and the shaded past every
+  minute by the frame's clock, between the 30 s refreshes. Parts `today` (30 s) and `week`
+  (10 min).
+- The week: seven days from tomorrow, all-day events first, three each and "+N more".
 
 ### WL4 · Wall: ticking things off
 Status: [ ]

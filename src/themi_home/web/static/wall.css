@@ -88,3 +88,44 @@ body.wall {
 /* when Themi couldn't be reached: the last good screen stays, marked */
 .wall-stale { position: fixed; right: 1.5rem; bottom: 1.25rem; font-size: 1.2rem; color: var(--stale);
   background: #fbede6; border-radius: 999px; padding: 0.4rem 1rem; }
+
+/* WL3: today's timeline and the week ahead */
+.wall-card-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.6rem; }
+.wall-card-head h2, .wall-label {
+  font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700;
+}
+.wall-chips { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.wall-label { font-size: 0.9rem; letter-spacing: 0.06em; }
+.pill { font-size: 1.05rem; padding: 0.3rem 0.9rem; border-radius: 999px; background: var(--tint); color: var(--tone); font-weight: 600; }
+.tl { --name-w: 5.6rem; position: relative; }
+.tl-ticks { position: relative; height: 1.6rem; margin-left: var(--name-w); }
+.tl-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.95rem; color: #62666d; white-space: nowrap; }
+.tl-row { position: relative; height: 3.1rem; margin-top: 0.5rem; display: flex; }
+.tl-name { flex: none; width: var(--name-w); display: flex; align-items: center; font-size: 1.05rem; font-weight: 700; color: var(--tone); }
+.tl-track { position: relative; flex: 1; border-radius: 0.75rem; background: var(--soft); overflow: hidden; }
+.tl-past { position: absolute; top: 0; bottom: 0; left: 0; background: #e6e9e3; }
+.tl-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.tl-block {
+  position: absolute; top: 0.2rem; height: 2.7rem; border-radius: 0.6rem; background: var(--tone); color: #fff;
+  padding: 0 0.6rem; display: flex; flex-direction: column; justify-content: center; overflow: hidden; white-space: nowrap;
+}
+.tl-block.past { opacity: 0.45; }
+.tl-title { font-size: 1.05rem; font-weight: 700; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+.tl-when { font-size: 0.8rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; }
+.tl-over { position: absolute; left: var(--name-w); right: 0; top: 0; bottom: -0.25rem; pointer-events: none; }
+.tl-now { position: absolute; top: 1.4rem; bottom: 0; width: 0.2rem; margin-left: -0.1rem; border-radius: 0.1rem; background: #c2410c; }
+.tl-now span {
+  position: absolute; top: -1.4rem; left: 50%; transform: translateX(-50%); font-size: 0.85rem; font-weight: 700;
+  color: #fff; background: #c2410c; padding: 0.1rem 0.5rem; border-radius: 999px;
+}
+.wall-tomorrow { display: flex; gap: 1.1rem; align-items: center; flex-wrap: wrap; padding-top: 0.6rem; font-size: 1.2rem; }
+.dot-chip { display: inline-flex; gap: 0.5rem; align-items: center; }
+.dot-chip::before { content: ""; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--tone); }
+.wk { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.5rem; }
+.wk-day { background: var(--soft); border-radius: 1rem; padding: 0.6rem 0.5rem; min-height: 9rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.wk-head { font-size: 1rem; color: #62666d; padding: 0 0.15rem; }
+.wk-head b { color: var(--fg); font-size: 1.05rem; }
+.wk-ev {
+  font-size: 0.95rem; line-height: 1.2; padding: 0.3rem 0.45rem; border-radius: 0.5rem; background: var(--tone); color: #fff;
+  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
