@@ -497,7 +497,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MP6 | Modules page: the list, quicker to use | Modules page | [x] 2026-11-19 |
 | MP7 | Modules page: a module's page, quicker to use | Modules page | [x] 2026-11-19 |
 | WL1 | Wall: the module and the frame's sign-in | Wall | [x] 2026-11-20 |
-| WL2 | Wall: the home screen, read-only | Wall | [ ] |
+| WL2 | Wall: the home screen, read-only | Wall | [x] 2026-11-20 |
 | WL3 | Wall: today's timeline and the week ahead | Wall | [ ] |
 | WL4 | Wall: ticking things off | Wall | [ ] |
 | WL5 | Wall: the views | Wall | [ ] |
@@ -22613,7 +22613,7 @@ Notes:
 - The module is off unless turned on (not in the family template).
 
 ### WL2 · Wall: the home screen, read-only
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL1
 Read first: the plan's "What the family sees" (parts 1, 2, 4 and 6) and "How it fits
 Themi" (Where each part comes from, Staying current); the canvas's home screen.
@@ -22636,6 +22636,31 @@ kinds and its absence; a stale fragment shows "Updated"; a scenario: Michael and
 evening as on the mock-up (routine steps, chores, to-dos in order).
 
 Notes:
+- `themi_home/wall_view.py`: `WallView.screen()` gathers the whole screen (`WallScreen`:
+  header, weather, note, columns, small lists); the routes render it whole at `/wall` and
+  one part at `/wall/part/{top,note,columns,smalls}` for htmx polls (30 s; small lists
+  10 min). A signed-out frame's poll gets 401 with `HX-Redirect: /wall/pair`.
+- A standalone page (`wall/home.html`, `home/wall.css`, `home/wall.js`), drawn for
+  1080 x 1920: `font-size: calc(100vw / 67.5)` makes 1rem 16 px at that width. Member
+  colours are classes `tone-p0`..`tone-p3` by member order; Together is `tone-family`.
+- Columns: one per member in id order, Together in the middle. A person's routine is the
+  one whose window holds now (`current_routine`: the latest started, evening running to an
+  hour before quiet hours); chores are repeating tasks assigned to them, due by today;
+  to-dos are their one-off tasks, three shown in F18d's order (the rank is copied into
+  `wall_view._rank`, since the home pack can't import Cozyla's). Together: chores with
+  `either`/`shared`, and shared one-off tasks (five shown). Snoozed and `off_displays`
+  tasks are left off. The header's count is tasks done and steps ticked today.
+- Themi's note: a weather alert in force, else the oldest chore from before today (one
+  either of you can do first). Not deliveries: Themi has no deliveries-today source; the
+  plan's line should drop them unless one is added.
+- Small lists: Groceries (needed items; bought ones leave the list, so there's no "ticked"
+  count to show) and up to two household lists with open items. The Cozyla note isn't in
+  Themi, so it isn't shown.
+- "Updated 7:40 PM" is client-side (`wall.js` on htmx's send or response errors), from the
+  top part's `data-at`; only the markup is tested, not the script.
+- Tests: `tests/integration/test_wall_screen.py`, `tests/scenarios/test_wall_evening.py`
+  (the mock-up's evening). `with_wall()` there builds the family's app plus the wall and
+  any fakes; WL3 onwards can reuse it.
 
 ### WL3 · Wall: today's timeline and the week ahead
 Status: [ ]

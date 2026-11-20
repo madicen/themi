@@ -35,6 +35,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
+from themi_home.wall_view import WallView
 
 if TYPE_CHECKING:
     from themi.web.kit import Kit
@@ -46,6 +47,7 @@ LOCKED_FOR = timedelta(minutes=10)
 WALL_COOKIE = "themi_wall"
 COOKIE_AGE = timedelta(days=400)  # the longest a browser keeps a cookie
 DEFAULT_NAME = "Wall"
+PARTS = ("top", "note", "columns", "smalls")  # what the page refreshes on its own
 
 
 def _hash(value: str) -> str:
@@ -192,16 +194,38 @@ def routes(kit: Kit) -> APIRouter:
     def pair_page(request: Request, status: int = 200, error: str = "") -> HTMLResponse:
         return kit.page(request, "wall/pair.html", status, error=error)
 
-    @router.get("/wall", response_class=HTMLResponse)
-    def wall(request: Request) -> Response:
+    def viewer(request: Request) -> str | None:
+        """The CSRF token of whoever is looking (a paired frame, or a member signed in on
+        their phone), or None when nobody is."""
         device = frame(request)
         if device is not None:
-            return kit.page(request, "wall/home.html", device=device, csrf=device.csrf_token)
+            return device.csrf_token
         try:
-            session = kit.current(request)
+            return kit.current(request).csrf_token
         except NotSignedIn:
+            return None
+
+    def gone() -> Response:
+        """A part asked for by a frame that's been signed out: back to pairing."""
+        return Response(status_code=401, headers={"HX-Redirect": "/wall/pair"})
+
+    @router.get("/wall", response_class=HTMLResponse)
+    def wall(request: Request) -> Response:
+        csrf = viewer(request)
+        if csrf is None:
             return RedirectResponse("/wall/pair", status_code=303)
-        return kit.page(request, "wall/home.html", device=None, csrf=session.csrf_token)
+        screen = WallView(kit.app.services).screen()
+        return kit.page(request, "wall/home.html", screen=screen, csrf=csrf)
+
+    @router.get("/wall/part/{part}", response_class=HTMLResponse)
+    def wall_part(request: Request, part: str) -> Response:
+        """One part of the screen, for the page's poll (WL2)."""
+        if part not in PARTS:
+            return Response(status_code=404)
+        if viewer(request) is None:
+            return gone()
+        screen = WallView(kit.app.services).screen()
+        return kit.page(request, f"wall/_{part}.html", screen=screen)
 
     @router.get("/wall/pair", response_class=HTMLResponse)
     def pair_form(request: Request) -> Response:

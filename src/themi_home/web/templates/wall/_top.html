@@ -1,0 +1,14 @@
+<div class="wall-when">
+  <p class="wall-date">{{ screen.weekday }}</p>
+  <p class="wall-time">{{ screen.time }}<span>{{ screen.meridiem }}</span></p>
+</div>
+{% if screen.weather %}
+<div class="wall-weather">
+  <img src="{{ screen.weather.icon }}" alt="" width="72" height="72">
+  <div>
+    <p class="wall-high">{{ screen.weather.high }}</p>
+    <p class="wall-low">low {{ screen.weather.low }} tonight</p>
+  </div>
+</div>
+{% endif %}
+<span class="wall-stamp" data-at="{{ screen.time }} {{ screen.meridiem }}" hidden></span>

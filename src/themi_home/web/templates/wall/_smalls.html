@@ -1,0 +1,10 @@
+{% for small in screen.smalls %}
+<section class="wall-card wall-small" aria-label="{{ small.name }}">
+  <h2>{{ small.name }}</h2>
+  {% if small.items %}
+  <p>{{ small.items | join(" · ") }}{% if small.more %} <span class="wall-sub">+{{ small.more }} more</span>{% endif %}</p>
+  {% else %}
+  <p class="wall-empty">Nothing needed</p>
+  {% endif %}
+</section>
+{% endfor %}

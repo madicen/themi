@@ -1,0 +1,90 @@
+/* The wall (WL2): one portrait screen for the frame, drawn for 1080 x 1920 and scaled to
+   whatever it's shown on. 1rem is 16px at 1080 wide. Read from across the room: text at
+   least 20px, touch targets at least 64px. */
+html.wall-root { font-size: calc(100vw / 67.5); }
+:root {
+  --bg: #e8ece6; --card: #ffffff; --fg: #23262b; --muted: #545961; --soft: #f3f5f1;
+  --line: #d6dad3; --stale: #8a2e08;
+  --p0: #3f6a2c; --p0-tint: #e4eedd; --p0-bg: #f1f6ee; --p0-ring: #9dbb8c;
+  --p1: #96384f; --p1-tint: #f5e2e7; --p1-bg: #faf0f3; --p1-ring: #d49aaa;
+  --p2: #2f5f8a; --p2-tint: #e0eaf4; --p2-bg: #eff4f9; --p2-ring: #93b2cf;
+  --p3: #8a5a12; --p3-tint: #f4ead9; --p3-bg: #faf4ea; --p3-ring: #d1b07c;
+  --family: #54409a; --family-tint: #eae5f7; --family-bg: #f4f1fb; --family-ring: #afa2da;
+}
+* { box-sizing: border-box; }
+body.wall {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wall p, .wall h2, .wall h3, .wall ul { margin: 0; }
+.wall-screen {
+  min-height: 100vh; padding: 2.75rem 2.5rem 2.5rem;
+  display: flex; flex-direction: column; gap: 1.5rem;
+}
+.wall-card { background: var(--card); border-radius: 1.75rem; padding: 1.4rem 1.75rem; }
+.wall-slot:empty { display: none; }
+
+/* the top: date, time, weather */
+.wall-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; padding: 0 0.5rem; }
+.wall-date { font-size: 1.65rem; color: var(--muted); font-weight: 500; }
+.wall-time { font-size: 5.75rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+.wall-time span { font-size: 2.5rem; font-weight: 600; margin-left: 0.6rem; color: var(--muted); }
+.wall-weather { display: flex; align-items: center; gap: 1rem; }
+.wall-weather img { width: 4.5rem; height: 4.5rem; }
+.wall-high { font-size: 3.25rem; font-weight: 700; line-height: 1; text-align: right; }
+.wall-low { font-size: 1.4rem; color: var(--muted); }
+
+/* Themi's note */
+.wall-note { display: flex; gap: 1.1rem; align-items: center; }
+.wall-t {
+  flex: none; width: 3.25rem; height: 3.25rem; border-radius: 1rem; background: var(--fg); color: #fff;
+  display: grid; place-items: center; font-weight: 800; font-size: 1.5rem;
+}
+.wall-note p { font-size: 1.6rem; line-height: 1.35; }
+
+/* the columns */
+.wall-columns { display: flex; gap: 1.25rem; flex: 1; min-height: 0; }
+.wall-col { flex: 1 1 0; min-width: 0; background: var(--card); border-radius: 1.75rem; overflow: hidden; display: flex; flex-direction: column; }
+.wall-col-head { display: flex; align-items: center; gap: 0.9rem; padding: 1.1rem 1.25rem; background: var(--tint); }
+.wall-col-head h2 { font-size: 1.65rem; font-weight: 800; color: var(--tone); }
+.wall-col-head p { font-size: 1.1rem; color: #4a4e55; }
+.wall-avatar {
+  flex: none; width: 3.1rem; height: 3.1rem; border-radius: 50%; background: var(--tone); color: #fff;
+  display: grid; place-items: center; font-weight: 800; font-size: 1.4rem;
+}
+.wall-avatar svg { width: 1.6rem; height: 1.6rem; fill: #fff; }
+.wall-col-body { padding: 0.25rem 0.75rem 1rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.wall-col h3 {
+  margin: 0.9rem 0.5rem 0.25rem; font-size: 0.9rem; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.wall-col ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.wall-item {
+  display: flex; gap: 0.9rem; align-items: center; min-height: 4rem; padding: 0.5rem 0.65rem;
+  border-radius: 1rem; background: var(--item-bg);
+}
+.wall-item .ring {
+  flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; border: 0.2rem solid var(--ring); background: #fff;
+}
+.wall-item.done { background: #fff; }
+.wall-item.done .ring { background: var(--tone); border-color: var(--tone); }
+.wall-item.done .wall-title { color: #6a6e75; text-decoration: line-through; }
+.wall-words { display: flex; flex-direction: column; min-width: 0; }
+.wall-title { font-size: 1.3rem; line-height: 1.25; font-weight: 500; }
+.wall-sub { font-size: 1rem; color: #62666d; }
+.wall-empty { margin: 0 0.5rem 0.4rem; font-size: 1.2rem; color: #6a6e75; }
+.wall-more { margin: 0.2rem 0.5rem; font-size: 1.05rem; font-weight: 700; color: var(--tone); }
+.tone-p0 { --tone: var(--p0); --tint: var(--p0-tint); --item-bg: var(--p0-bg); --ring: var(--p0-ring); }
+.tone-p1 { --tone: var(--p1); --tint: var(--p1-tint); --item-bg: var(--p1-bg); --ring: var(--p1-ring); }
+.tone-p2 { --tone: var(--p2); --tint: var(--p2-tint); --item-bg: var(--p2-bg); --ring: var(--p2-ring); }
+.tone-p3 { --tone: var(--p3); --tint: var(--p3-tint); --item-bg: var(--p3-bg); --ring: var(--p3-ring); }
+.tone-family { --tone: var(--family); --tint: var(--family-tint); --item-bg: var(--family-bg); --ring: var(--family-ring); }
+
+/* the small lists */
+.wall-smalls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+.wall-small h2 { font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: 0.35rem; }
+.wall-small p { font-size: 1.3rem; line-height: 1.35; }
+
+/* when Themi couldn't be reached: the last good screen stays, marked */
+.wall-stale { position: fixed; right: 1.5rem; bottom: 1.25rem; font-size: 1.2rem; color: var(--stale);
+  background: #fbede6; border-radius: 999px; padding: 0.4rem 1rem; }

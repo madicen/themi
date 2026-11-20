@@ -51,7 +51,7 @@ async def test_an_admin_gets_a_code_and_the_frame_pairs_with_it(wall: Scenario) 
         response = await frame.post("/wall/pair", data={"code": match[1] + match[2]})
         assert response.status_code == 303
         shown = await frame.get("/wall")
-        assert shown.status_code == 200 and "paired as Wall" in shown.text
+        assert shown.status_code == 200 and 'class="wall-screen"' in shown.text
         listed = await phone.get("/wall/frames")
     assert "Last seen" in listed.text and 'id="frame-' in listed.text
 
@@ -129,7 +129,7 @@ async def test_a_member_can_look_at_the_wall_from_their_phone(wall: Scenario) ->
     async with web_client(wall) as phone:
         await sign_in(wall, phone, "Husband")
         page = await phone.get("/wall")
-    assert page.status_code == 200 and "<h1>The wall</h1>" in page.text
+    assert page.status_code == 200 and 'class="wall-screen"' in page.text
 
 
 async def test_the_token_and_code_are_never_kept_or_logged_in_clear(

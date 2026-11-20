@@ -1,0 +1,29 @@
+{% for c in screen.columns %}
+<section class="wall-col tone-{{ c.tone }}" aria-label="{{ c.name }}" id="col-{{ c.key }}">
+  <header class="wall-col-head">
+    <span class="wall-avatar" aria-hidden="true">{% if c.initial %}{{ c.initial }}{% else %}<svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4z"/></svg>{% endif %}</span>
+    <div>
+      <h2>{{ c.name }}</h2>
+      <p>{{ c.summary }}</p>
+    </div>
+  </header>
+  <div class="wall-col-body">
+  {% for sec in c.sections %}{% if sec.items or sec.empty %}
+    <h3>{{ sec.title }}</h3>
+    {% if sec.items %}
+    <ul>
+      {% for i in sec.items %}
+      <li class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}">
+        <span class="ring" aria-hidden="true"></span>
+        <span class="wall-words"><span class="wall-title">{{ i.title }}</span>{% if i.sub %}<span class="wall-sub">{{ i.sub }}</span>{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="wall-empty">{{ sec.empty }}</p>
+    {% endif %}
+    {% if sec.more %}<p class="wall-more">More on the list</p>{% endif %}
+  {% endif %}{% endfor %}
+  </div>
+</section>
+{% endfor %}
