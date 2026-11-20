@@ -40,6 +40,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Wall (the `/wall` page on the Cozyla frame): Themi Wall Plan,
   https://claude.ai/artifact/Rrt4bF7u69oPFetsw6BW4y. Read it the same way. It is the design
   source for the WL prompts.
+- Package tracking (parcels by tracking number, carrier alert emails, UPS and USPS lookups):
+  Themi Package Tracking Plan, https://claude.ai/artifact/1LNv3ZfV3MMuZvc3GgAuVk. Read it
+  the same way. It is the design source for the PT prompts.
 
 ## "Implement the next prompt"
 
