@@ -139,6 +139,7 @@ class ParcelChecks:
             window_end=tracking.window_end,
             delivered_at=tracking.delivered_at,
             left_at=tracking.left_at,
+            signature=tracking.signature,
         )
         if _same(parcel, fact):
             if parcel.carrier != carrier:  # settled: it was "fedex usps"
@@ -155,4 +156,5 @@ def _same(parcel: Parcel, fact: Fact) -> bool:
         and (parcel.window_start, parcel.window_end) == (fact.window_start, fact.window_end)
         and parcel.problem == (fact.problem if fact.status == "problem" else "")
         and (not fact.left_at or parcel.left_at == fact.left_at)
+        and (parcel.signature or not fact.signature)
     )

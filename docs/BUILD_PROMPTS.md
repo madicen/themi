@@ -524,7 +524,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | PT3 | Package tracking: the carriers' alert emails | Package tracking | [x] 2026-11-21 |
 | PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [x] 2026-11-21 |
 | PT5 | Package tracking: asking on a schedule | Package tracking | [x] 2026-11-21 |
-| PT6 | Package tracking: what the family sees | Package tracking | [ ] |
+| PT6a | Package tracking: what the family reads (wall, morning line, chat) | Package tracking | [~] |
+| PT6b | Package tracking: what Telegram tells them (problems, delivered) | Package tracking | [ ] |
 | PT7 | Package tracking: the FedEx lookup | Package tracking | deferred |
 
 ## Fixed technical choices
@@ -23909,7 +23910,9 @@ Notes:
   it; that one becomes its carrier.
 
 ### PT6 · Package tracking: what the family sees
-Status: [ ]
+Status: split (2026-11-21) into PT6a (the wall's notes, the morning line, chat) and PT6b
+(the problem nudge with its reminder offer, "Tell me when it's delivered"). Both keep
+the last bullet: their wording is checked with Michael before they're marked done.
 Depends on: PT2 (PT5 for windows and problems)
 Read first: the plan's "What the family sees"; `themi_home/wall_view.py` (`note`,
 `_deliveries`); `themi/standard/morning.py` (`weather_line`); `themi_google/expected.py`
@@ -23938,6 +23941,59 @@ the chat answers; that no line shows contents or a tracking number.
 Scenarios: a Chewy "shipped" email then a UPS My Choice "out for delivery" shows one Chewy
 parcel with its window; a UPS lookup's "delivery attempted" sends Michael one nudge and
 shows on the wall, and the next day's "delivered" replaces it.
+
+### PT6a · Package tracking: what the family reads (wall, morning line, chat)
+Status: [~]
+Depends on: PT2, PT5
+Read first: PT6 above; the plan's "What the family sees" (The wall's note, The morning
+message, Asking in chat).
+- One set of sentences (`themi_google/parcel_words.py`) for the wall, the morning message
+  and chat, with the plan's wording table.
+- The wall's note: weather alert, a parcel with a problem, parcels that came today, one
+  moved to a later day, chores from yesterday, parcels due today.
+- The morning message: one line about the person's own parcels due that day or with a
+  problem, after the weather line; a line alone is reason to send it.
+- Chat: `parcel_status` (email group) answers "where's the Chewy order?".
+Tests: each wall wording; the order; the morning line (own parcels only, alone sends);
+chat answers; no line shows contents or a tracking number.
+
+Notes:
+- Built and green (2026-11-21). **Blocked:** the wording waits for Michael (PT6's last
+  bullet). The sentences are all in `parcel_words.py`; the ones to look at:
+  - "A delivery from Chewy is due between 2:15 and 4:15 pm." / "... is due today and needs
+    someone to sign for it."
+  - "A delivery from Chewy came at 1:40 pm. It was left at the front door." (a time and
+    place only when the carrier said; from email it stays "came today. It may be at the
+    door.")
+  - "UPS couldn't deliver the parcel from Chewy. It's now due tomorrow." / "The delivery
+    from Etsy has a hitch (Held at Post Office)." (the carrier's words, cut to 80)
+  - "The delivery from Chewy is now due Friday."
+  - Morning: "Two deliveries today, from Amazon and Chewy (Chewy between 2 and 4 pm)."
+  - Chat: "I haven't seen a shipping email from Zappos lately."
+- Decided here, for Michael to confirm: the morning line and chat use only the person's
+  own parcels (found in their email), since a parcel can be a present for the other; the
+  wall, shared, shows everyone's as before.
+- Parcels gained `signature` and `moved_from` (migration 0180); lookups set them.
+- Golden `tools.json` changes as it should: `parcel_status` in the email group, and
+  `more_tools` with the email group's new description ("parcels on their way"). The email
+  group's words now include parcel, package, deliver, shipp, tracking, "my order".
+
+### PT6b · Package tracking: what Telegram tells them (problems, delivered)
+Status: [ ]
+Depends on: PT6a
+Read first: PT6 above; the plan's "A nudge for problems"; `themi/channels/outbox.py`;
+`themi.autonomy.stage`.
+- The problem nudge: one Telegram message through the outbox to the member whose email
+  found the parcel, once per parcel per problem, normal urgency; a signature needed today
+  goes at once. Its offer to add a reminder makes a task through `themi.autonomy.stage`.
+  "Tell me about problems" (on), per member, on the Parcels module.
+- "Tell me when it's delivered", per member, off by default: on, one message when the
+  parcel comes, under quiet hours and the daily limit.
+- Sentences from `parcel_words.py`, worded with Michael before it's marked done.
+Tests: the nudge once per problem, quiet hours, the signature exception, the setting; the
+reminder offer staged; the delivered message on and off.
+Scenario: a UPS lookup's "delivery attempted" sends Michael one nudge and shows on the
+wall, and the next day's "delivered" replaces it.
 
 ### PT7 · Package tracking: the FedEx lookup (deferred)
 Status: deferred

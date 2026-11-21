@@ -89,6 +89,8 @@ class Parcel:
     left_at: str
     source: str  # "email" or "lookup"
     updated_at: datetime
+    signature: bool = False  # PT6a: someone has to sign for it
+    moved_from: date | None = None  # PT6a: the day it was due before it was moved later
 
     @property
     def carriers(self) -> list[str]:
@@ -111,6 +113,7 @@ class Fact:
     window_end: str = ""
     delivered_at: datetime | None = None
     left_at: str = ""
+    signature: bool = False
 
 
 def is_carrier_name(shop: str) -> bool:
@@ -197,6 +200,8 @@ def _parcel(r: dict[str, Any]) -> Parcel:
         r["left_at"],
         r["source"],
         datetime.fromisoformat(r["updated_at"]),
+        bool(r["signature"]),
+        _day(r["moved_from"]),
     )
 
 
@@ -309,7 +314,8 @@ class Deliveries:
         return self.db.execute(
             "INSERT INTO parcels (member_id, carrier, number, shop, shop_key, status, "
             "expected_day, window_start, window_end, problem, delivered_at, left_at, source, "
-            "updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "updated_at, created_at, signature) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 member_id,
                 " ".join(fact.carriers),
@@ -326,12 +332,15 @@ class Deliveries:
                 fact.source,
                 to_utc_iso(fact.at),
                 to_utc_iso(clock.now()),
+                int(fact.signature),
             ),
         )
 
     def _apply(self, parcel: Parcel, fact: Fact) -> int:
         """Bring a parcel up to date with a fact. An older fact only fills what's blank."""
         changes: dict[str, Any] = {}
+        if fact.signature and not parcel.signature:
+            changes["signature"] = 1
         if is_carrier_name(parcel.shop) and not is_carrier_name(fact.shop):
             changes["shop"], changes["shop_key"] = fact.shop, _key(fact.shop)
         if fact.carriers and (
@@ -348,6 +357,9 @@ class Deliveries:
             )
             if fact.day is not None:
                 changes["expected_day"] = fact.day.isoformat()
+                was = parcel.expected_day
+                if was is not None and fact.day > was and fact.status != "delivered":
+                    changes["moved_from"] = was.isoformat()  # PT6a: "now due Friday"
             if fact.window_start or fact.status in ("delivered", "problem"):
                 changes["window_start"] = fact.window_start
                 changes["window_end"] = fact.window_end
@@ -410,6 +422,27 @@ class Deliveries:
         wanted = set(ids) if ids is not None else None
         rows = self.db.query("SELECT * FROM parcels ORDER BY id")
         return [_parcel(r) for r in rows if wanted is None or r["id"] in wanted]
+
+    def news(self, day: date) -> list[Parcel]:
+        """PT6a: the parcels with something to say on a day: due or delivered that day,
+        moved off it to a later one, or with a problem heard of that day."""
+        tz = self.tz()
+        found = [
+            p
+            for p in self.parcels()
+            if p.expected_day == day
+            or p.moved_from == day
+            or (p.status == "problem" and p.updated_at.astimezone(tz).date() == day)
+        ]
+        return sorted(found, key=lambda p: (_key(p.shop), p.id))
+
+    def morning_line(self, member_id: int, day: date) -> str | None:
+        """PT6a: the morning message's line about this person's own parcels (found in their
+        email): what's due that day and any problem; None for nothing."""
+        from themi_google import parcel_words  # its sentences use Parcel
+
+        own = [p for p in self.news(day) if p.member_id == member_id]
+        return parcel_words.morning(own, day)
 
     def on(self, day: date) -> list[Delivery]:
         """What's due or came on a day: a line per parcel, by shop."""

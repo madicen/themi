@@ -63,7 +63,7 @@ async def test_ups_my_choice_joins_chewys_parcel_with_its_window(mail: Scenario)
         "ups",
     )
     assert (kept.window_start, kept.window_end) == ("14:15", "16:15")
-    assert "A delivery from Chewy is due today." in await note(mail)
+    assert "A delivery from Chewy is due between 2:15 and 4:15 pm." in await note(mail)  # PT6a
 
 
 async def test_informed_deliverys_digest_is_a_parcel_each(mail: Scenario) -> None:  # noqa: F811
