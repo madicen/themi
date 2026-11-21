@@ -1,16 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="636" viewBox="0 0 960 636" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="800" viewBox="0 0 960 800" role="img" aria-labelledby="title desc">
   <title id="title">Themi's integrations</title>
-  <desc id="desc">The services Themi connects to, grouped: Telegram for chat; Google (Gmail, Calendar, Tasks, Keep); home devices (Home Connect, LG ThinQ, Roborock, Cozyla); AI models (Claude, Gemini, OpenAI and OpenRouter, local models); groceries and shopping (OurGroceries, Safeway); maps and travel (TomTom, OpenStreetMap); backups (Cloudflare R2, Backblaze B2).</desc>
+  <desc id="desc">The services Themi connects to, grouped: chat (Telegram, Slack, the website); Google (Gmail, Calendar, Tasks, Docs and Sheets, Keep); home devices (Home Connect, LG ThinQ, Roborock, SmartHQ, Cozyla); AI models (Claude, Gemini, OpenAI and OpenRouter, local models, Cloudflare Workers AI); pets (SmartLife and Tuya feeders, CatGenie); groceries and shopping (OurGroceries, Safeway); backups (Cloudflare R2, Backblaze B2); out in the world (TomTom and OpenStreetMap, Open-Meteo and the National Weather Service, UPS and USPS, Tavily, Spotify).</desc>
   <style>
     svg { --bg: #ffffff; --card: #f6f7f9; --line: #e2e5ea; --ink: #1d2330; --muted: #5f6878;
-          --pill: #fff3d6; --pill-ink: #8a5a00;
+          --pill: #fff3d6; --pill-ink: #8a5a00; --pill2: #fde4e4; --pill2-ink: #9b2c2c;
           --google: #2f6fdb; --devices: #1f9461; --ai: #7a4fd6; --grocery: #d9711c;
-          --maps: #138a95; --backup: #6b7486; --chat: #2a9fd6; }
+          --maps: #138a95; --backup: #6b7486; --chat: #2a9fd6; --pets: #c2417a; }
     @media (prefers-color-scheme: dark) {
       svg { --bg: #0d1117; --card: #161b22; --line: #2b323c; --ink: #e6e9ee; --muted: #9aa4b2;
-            --pill: #3a2e10; --pill-ink: #f0c060;
+            --pill: #3a2e10; --pill-ink: #f0c060; --pill2: #3d1a1d; --pill2-ink: #f39a9a;
             --google: #6f9ef0; --devices: #4cc08b; --ai: #a989ef; --grocery: #f0974d;
-            --maps: #4cbfca; --backup: #9aa3b4; --chat: #5bbbe8; }
+            --maps: #4cbfca; --backup: #9aa3b4; --chat: #5bbbe8; --pets: #ec7fb0; }
     }
     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
     .bg { fill: var(--bg); }
@@ -20,50 +20,57 @@
     .cat { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; }
     .name { font-size: 15px; font-weight: 600; }
     .what { font-size: 12.5px; fill: var(--muted); }
-    .pill { fill: var(--pill); }
+    .pill { fill: var(--pill); } .pill2 { fill: var(--pill2); }
     .pill-t { font-size: 10.5px; font-weight: 700; fill: var(--pill-ink); letter-spacing: 0.04em; }
+    .pill2-t { font-size: 10.5px; font-weight: 700; fill: var(--pill2-ink); letter-spacing: 0.04em; }
     .google { fill: var(--google); } .devices { fill: var(--devices); } .ai { fill: var(--ai); }
     .grocery { fill: var(--grocery); } .maps { fill: var(--maps); } .backup { fill: var(--backup); }
-    .chat { fill: var(--chat); }
+    .chat { fill: var(--chat); } .pets { fill: var(--pets); }
   </style>
 
   <defs>
-    <clipPath id="tall"><rect width="292" height="244" rx="12"/></clipPath>
+    <clipPath id="tall"><rect width="292" height="290" rx="12"/></clipPath>
     <clipPath id="short"><rect width="292" height="148" rx="12"/></clipPath>
+    <clipPath id="wide"><rect width="912" height="110" rx="12"/></clipPath>
     <clipPath id="strip"><rect x="24" y="88" width="912" height="60" rx="12"/></clipPath>
   </defs>
 
-  <rect class="bg" width="960" height="636" rx="16"/>
+  <rect class="bg" width="960" height="800" rx="16"/>
 
   <text class="h1" x="24" y="46">What Themi connects to</text>
-  <text class="sub" x="24" y="70">Grouped by kind. How to set up each one is further down this README.</text>
+  <text class="sub" x="24" y="70">Turn on what your household uses, from the Modules page. Everything else stays off.</text>
 
-  <!-- Chat: the one channel everyone uses -->
+  <!-- Chat -->
   <rect class="card" x="24" y="88" width="912" height="60" rx="12"/>
   <rect class="chat" x="24" y="88" width="6" height="60" clip-path="url(#strip)"/>
   <text class="cat chat" x="48" y="114">CHAT</text>
   <text class="name" x="48" y="135">Telegram</text>
-  <text class="what" x="190" y="135">Where each person in the family talks with Themi, and where its messages arrive</text>
+  <text class="what" x="122" y="135">the family's phones</text>
+  <text class="name" x="300" y="135">Slack</text>
+  <text class="what" x="346" y="135">a work Themi, in DMs</text>
+  <text class="name" x="530" y="135">The website</text>
+  <text class="what" x="624" y="135">chat, settings, the wall and the cook screen</text>
 
   <!-- Row 1 -->
   <g transform="translate(24 166)">
-    <rect class="card" width="292" height="244" rx="12"/>
+    <rect class="card" width="292" height="290" rx="12"/>
     <rect class="google" width="292" height="6" clip-path="url(#tall)"/>
     <text class="cat google" x="20" y="36">GOOGLE</text>
     <text class="name" x="20" y="68">Gmail</text>
     <text class="what" x="20" y="86">Triage, receipts and follow-ups</text>
     <text class="name" x="20" y="116">Calendar</text>
-    <text class="what" x="20" y="134">Busy times and events</text>
+    <text class="what" x="20" y="134">Events, busy times, the family calendar</text>
     <text class="name" x="20" y="164">Tasks</text>
-    <text class="what" x="20" y="182">Task lists kept in sync</text>
-    <text class="name" x="20" y="212">Keep</text>
-    <rect class="pill" x="62" y="200" width="40" height="16" rx="8"/>
-    <text class="pill-t" x="82" y="211.5" text-anchor="middle">TRIAL</text>
-    <text class="what" x="20" y="230">Groceries said to Google Home</text>
+    <text class="what" x="20" y="182">"Hey Google, add a task..." lands in Themi</text>
+    <text class="name" x="20" y="212">Docs and Sheets</text>
+    <text class="what" x="20" y="230">The family cookbook, expense sheets</text>
+    <text class="name" x="20" y="260">Keep</text>
+    <rect class="pill" x="62" y="248" width="40" height="16" rx="8"/>
+    <text class="pill-t" x="82" y="259.5" text-anchor="middle">TRIAL</text>
+    <text class="what" x="20" y="278">Groceries said to Google Home</text>
   </g>
-
   <g transform="translate(334 166)">
-    <rect class="card" width="292" height="244" rx="12"/>
+    <rect class="card" width="292" height="290" rx="12"/>
     <rect class="devices" width="292" height="6" clip-path="url(#tall)"/>
     <text class="cat devices" x="20" y="36">HOME DEVICES</text>
     <text class="name" x="20" y="68">Home Connect</text>
@@ -71,59 +78,86 @@
     <text class="name" x="20" y="116">LG ThinQ</text>
     <text class="what" x="20" y="134">The washer and dryer</text>
     <text class="name" x="20" y="164">Roborock</text>
+    <rect class="pill2" x="94" y="152" width="82" height="16" rx="8"/>
+    <text class="pill2-t" x="135" y="163.5" text-anchor="middle">UNOFFICIAL</text>
     <text class="what" x="20" y="182">The robot vacuum</text>
-    <text class="name" x="20" y="212">Cozyla</text>
-    <rect class="pill" x="76" y="200" width="40" height="16" rx="8"/>
-    <text class="pill-t" x="96" y="211.5" text-anchor="middle">TRIAL</text>
-    <text class="what" x="20" y="230">The family display's chores and lists</text>
+    <text class="name" x="20" y="212">SmartHQ</text>
+    <rect class="pill2" x="90" y="200" width="82" height="16" rx="8"/>
+    <text class="pill2-t" x="131" y="211.5" text-anchor="middle">UNOFFICIAL</text>
+    <text class="what" x="20" y="230">The oven: preheat and off, from the recipe</text>
+    <text class="name" x="20" y="260">Cozyla</text>
+    <rect class="pill" x="76" y="248" width="40" height="16" rx="8"/>
+    <text class="pill-t" x="96" y="259.5" text-anchor="middle">TRIAL</text>
+    <text class="what" x="20" y="278">The wall frame's chores, lists and routines</text>
   </g>
-
   <g transform="translate(644 166)">
-    <rect class="card" width="292" height="244" rx="12"/>
+    <rect class="card" width="292" height="290" rx="12"/>
     <rect class="ai" width="292" height="6" clip-path="url(#tall)"/>
     <text class="cat ai" x="20" y="36">AI MODELS</text>
     <text class="name" x="20" y="68">Claude</text>
     <text class="what" x="20" y="86">Anthropic</text>
     <text class="name" x="20" y="116">Gemini</text>
-    <text class="what" x="20" y="134">Google</text>
+    <text class="what" x="20" y="134">Google (the free tier is enough to start)</text>
     <text class="name" x="20" y="164">OpenAI and OpenRouter</text>
     <text class="what" x="20" y="182">Or any OpenAI-compatible service</text>
     <text class="name" x="20" y="212">Local models</text>
     <text class="what" x="20" y="230">Ollama, LM Studio, vLLM, llama.cpp</text>
+    <text class="name" x="20" y="260">Cloudflare Workers AI</text>
+    <text class="what" x="20" y="278">Free pictures for step-by-step help</text>
   </g>
 
   <!-- Row 2 -->
-  <g transform="translate(24 428)">
+  <g transform="translate(24 474)">
+    <rect class="card" width="292" height="148" rx="12"/>
+    <rect class="pets" width="292" height="6" clip-path="url(#short)"/>
+    <text class="cat pets" x="20" y="36">PETS</text>
+    <text class="name" x="20" y="68">SmartLife / Tuya</text>
+    <text class="what" x="20" y="86">Pet feeders: food low, jams, "feed Juneau"</text>
+    <text class="name" x="20" y="116">CatGenie</text>
+    <rect class="pill2" x="92" y="104" width="82" height="16" rx="8"/>
+    <text class="pill2-t" x="133" y="115.5" text-anchor="middle">UNOFFICIAL</text>
+    <text class="what" x="20" y="134">The self-cleaning litter box</text>
+  </g>
+  <g transform="translate(334 474)">
     <rect class="card" width="292" height="148" rx="12"/>
     <rect class="grocery" width="292" height="6" clip-path="url(#short)"/>
     <text class="cat grocery" x="20" y="36">GROCERIES AND SHOPPING</text>
     <text class="name" x="20" y="68">OurGroceries</text>
-    <text class="what" x="20" y="86">The shared grocery list</text>
+    <text class="what" x="20" y="86">The shared grocery list, both ways</text>
     <text class="name" x="20" y="116">Safeway</text>
     <text class="what" x="20" y="134">Fills the cart through a Chrome helper</text>
   </g>
-
-  <g transform="translate(334 428)">
-    <rect class="card" width="292" height="148" rx="12"/>
-    <rect class="maps" width="292" height="6" clip-path="url(#short)"/>
-    <text class="cat maps" x="20" y="36">MAPS AND TRAVEL</text>
-    <text class="name" x="20" y="68">TomTom</text>
-    <text class="what" x="20" y="86">Drive times with live traffic</text>
-    <text class="name" x="20" y="116">OpenStreetMap</text>
-    <text class="what" x="20" y="134">The free fallback, without a TomTom key</text>
-  </g>
-
-  <g transform="translate(644 428)">
+  <g transform="translate(644 474)">
     <rect class="card" width="292" height="148" rx="12"/>
     <rect class="backup" width="292" height="6" clip-path="url(#short)"/>
     <text class="cat backup" x="20" y="36">BACKUPS</text>
     <text class="name" x="20" y="68">Cloudflare R2</text>
-    <text class="what" x="20" y="86">Off-site snapshots</text>
+    <text class="what" x="20" y="86">Encrypted nightly snapshots</text>
     <text class="name" x="20" y="116">Backblaze B2</text>
-    <text class="what" x="20" y="134">Off-site snapshots</text>
+    <text class="what" x="20" y="134">Encrypted nightly snapshots</text>
   </g>
 
-  <rect class="pill" x="24" y="598" width="40" height="16" rx="8"/>
-  <text class="pill-t" x="44" y="609.5" text-anchor="middle">TRIAL</text>
-  <text class="what" x="74" y="610">Early support that may change.</text>
+  <!-- Row 3 -->
+  <g transform="translate(24 640)">
+    <rect class="card" width="912" height="110" rx="12"/>
+    <rect class="maps" width="912" height="6" clip-path="url(#wide)"/>
+    <text class="cat maps" x="20" y="36">OUT IN THE WORLD</text>
+    <text class="name" x="20" y="68">TomTom, OpenStreetMap</text>
+    <text class="what" x="20" y="86">When to leave, with traffic</text>
+    <text class="name" x="250" y="68">Open-Meteo, NWS</text>
+    <text class="what" x="250" y="86">Weather and warnings</text>
+    <text class="name" x="440" y="68">UPS, USPS</text>
+    <text class="what" x="440" y="86">Parcels by tracking number</text>
+    <text class="name" x="630" y="68">Tavily</text>
+    <text class="what" x="630" y="86">Looking things up online</text>
+    <text class="name" x="790" y="68">Spotify</text>
+    <text class="what" x="790" y="86">Music for a task</text>
+  </g>
+
+  <rect class="pill" x="24" y="768" width="40" height="16" rx="8"/>
+  <text class="pill-t" x="44" y="779.5" text-anchor="middle">TRIAL</text>
+  <text class="what" x="74" y="780">Early support that may change.</text>
+  <rect class="pill2" x="290" y="768" width="82" height="16" rx="8"/>
+  <text class="pill2-t" x="331" y="779.5" text-anchor="middle">UNOFFICIAL</text>
+  <text class="what" x="382" y="780">No public API: it may stop working when the maker changes things.</text>
 </svg>

@@ -1,392 +1,149 @@
 # Themi
 
-Themi is a household assistant that one family runs on its own server. Each person chats
-with it through Telegram, and it handles the background admin: laundry timing, groceries,
-email triage, maintenance and meals. It times every prompt to when each person has the
-energy for it, and phrases prompts so they never feel like demands.
-
-- Design: [Themi Build Plan (V1)](https://claude.ai/artifact/PWX3iYKmbKy1UmCQrVF2Z1)
-- Build order and progress: [docs/BUILD_PROMPTS.md](docs/BUILD_PROMPTS.md)
-
-![What Themi connects to: Telegram; Google; home devices; AI models; groceries and shopping; maps and travel; backups](docs/integrations.svg)
-
-## Development setup
-
-Needs Python 3.12+ and [jj](https://jj-vcs.github.io/jj/) (the repo is a colocated jj/git repo).
-
-```sh
-make venv        # create .venv (pin an interpreter with VENV_PYTHON=/path/to/python3.x)
-make install     # editable install with dev tools
-make test        # unit tests, the fast loop while coding
-make test-all    # unit + integration + scenarios (what CI runs on a pull request)
-make lint        # ruff, pyright, and the clock check
-```
-
-`make test-live` and `make evals` talk to real services and need test-account keys;
-they never run by default.
-
-CI splits the tests across runners, balanced by the times in `.test_durations`. After
-adding or speeding up a lot of tests, run `make durations` and commit the file. New tests
-still run before you do; the halves just get less even.
-
-### Trying Themi on this computer
-
-`make dev` runs Themi against a Telegram simulator, so you can chat with it without a bot
-token. Open <http://localhost:8090>, pick a person and type. You can tap buttons, react with
-✅ or 💤, and skip Themi's clock ahead to see scheduled nudges. The header's *Website* link
-opens the management site signed in as that person.
-
-- Dev data lives in `data/dev/`, with its own secret key, apart from the real database.
-  `make dev-reset` starts over. Its website is on port 8081 (`THEMI_DEV_HTTP_PORT`), so it
-  can run alongside a real `themi run` on 8080.
-- The first run seeds Erin and Husband, both paired, and puts `GEMINI_API_KEY` from `.env`
-  on their default AI backend. Without a key, Themi replies that setup is needed. You can also
-  add a key on the website's AI page.
-- To try pairing: `make dev-invite NAME=Sam`, then send the `/start` code as *Someone new*.
-- *Copy session* copies the conversations and Themi's log as text, to paste into a Claude
-  session. *New session* marks where the next copy starts.
-- Every outside service is played by its test fake: Gmail, Calendar and Tasks for
-  `erin@gmail.com` and `husband@gmail.com`, Keep, the wall, OurGroceries, an LG washer and
-  dryer, a Bosch dishwasher, a Roborock and two SmartLife pet feeders. They're linked on
-  the first run and kept in `data/dev/fakes.json`. `make dev FAKES=0` runs without them.
-  Replies use real Gemini.
-- The *Control panel* (<http://localhost:8090/control>, beside the chat on a wide screen)
-  makes things happen outside the chat: an email arrives, an event is added or moved, a
-  to-do is ticked on the wall, the washer finishes, the robot gets stuck, a feeder runs low
-  or jams. Themi looks at once, and each action shows in the chat and in *Copy session*.
-  Each section can also make its service fail (busy, offline, signed out), the Safeway helper answers cart jobs
-  as the extension would, and *Scenes* run a whole day of these with the clock skipped
-  between them (`tools/dev/scenes.py`).
-- `make dev-prod` runs the same way on a fresh copy of the Pi's data, in `data/dev-prod/`
-  (over ssh to `THEMI_PI`, default `themi@themi`). `make dev-prod BACKUP=latest` copies from
-  the encrypted backups instead, and `KEEP=1` reuses the last copy. The copy is cleaned
-  first: no tokens, keys or sign-ins, Gmail switched off, and member 1 and 2 are the
-  simulator's Erin and Husband. It holds the family's real messages and email, so
-  `make dev-reset` deletes it too.
-
-`make fresh` runs a brand-new Themi as someone installing it would meet it: a claim code in
-its log, the key page, an empty Modules page, at <http://localhost:8080>. Its data is in
-`data/fresh/` and it doesn't read `.env`. `make fresh-reset` (with it stopped) starts it over.
-
-### Rules worth knowing
-
-- Read time only through `themi.clock` (`tools/check_clock.py` enforces it), so tests can
-  freeze and advance it.
-- The default test run makes no real network calls; fakes live in `tests/fakes`.
-
-## Running Themi
-
-1. Run `themi run`. A new Themi makes its own secret key (next to its database) and prints a
-   claim code. It starts the scheduler and the website (`/health` on port 8080).
-2. Open the website (<http://localhost:8080>) and enter the claim code: you give it a
-   name (your family's, or your own for a work Themi) and become its first admin. Save the
-   secret key it shows you: without it, stored tokens, keys and backups can't be decrypted.
-3. On the **Modules** page, turn on what you want and fill in what each needs, with its
-   guide beside it: the Telegram bot's token, an AI provider, Google and the rest. Then
-   press **Restart** on the same page.
-4. Invite the family from the **Family** page. Each person pairs Telegram with their code
-   (`/start <code>`), and then gets a website link by sending `/site`.
-
-Settings can still come from `.env` or the environment instead (`docs/ENVIRONMENT.md`
-lists them); a value set there wins, and the Modules page offers to move it into Themi.
-`themi init` and `themi invite <name>` still work for scripted installs.
-
-### Bug reports and ideas from the chat
-
-Anyone in the family can send `/bug <what happened>` or `/idea <what they'd like>`, or just
-say "that's a bug..." or "it'd be nice if...". Using Telegram's Reply on the message that went
-wrong marks it. Each report keeps the recent conversation, what was waiting on the person,
-their settings, their AI backend and Themi's recent log lines.
-
-```sh
-themi feedback              # new reports as Markdown, to paste into a Claude session
-themi feedback --done 3 4   # mark reports reviewed
-themi feedback --all        # include reviewed ones
-```
-
-### Connecting services
-
-Each service's steps are also its guide on the Modules page, where its values go (and
-are kept encrypted when they're secrets). The page lists modules by what they're for
-(Cooking, Email, Home and devices), turns a whole group on at once, and keeps everything a
-module has (server keys, the household's settings, your own, who can use it) on its own page. The sections below name the `.env` variables,
-for setting them on the server instead.
-
-### Google sign-in and Gmail (Google Cloud setup)
-
-Each family uses its own Google Cloud project. It's free, and takes about 15 minutes.
-
-1. **Project.** At <https://console.cloud.google.com>, create a project (for example
-   "Themi Household").
-2. **APIs.** Under *APIs & Services → Library*, enable the **Gmail API**, the
-   **Google Calendar API**, the **Google Tasks API**, for the cookbook (RC1a) the
-   **Google Docs API**, the **Google Drive API** and the **Google Picker API**, and for
-   expense sheets (EX4a) the **Google Sheets API**.
-3. **Consent screen.** Under *Google Auth Platform → Branding*, give the app a name
-   ("Themi") and a support email. Under *Audience*, choose **External**.
-4. **Scopes.** Under *Data Access*, add `openid`, `.../auth/userinfo.email`,
-   `https://www.googleapis.com/auth/gmail.modify`,
-   `https://www.googleapis.com/auth/calendar.events`,
-   `https://www.googleapis.com/auth/calendar.calendarlist.readonly` (to find the "Themi"
-   calendar), `https://www.googleapis.com/auth/calendar.app.created` (to make it if
-   it's missing), `https://www.googleapis.com/auth/tasks` (the Google Tasks inbox) and
-   `https://www.googleapis.com/auth/drive.file` (only the files someone picks for Themi,
-   such as the cookbook, or that it makes).
-5. **Publish, unverified.** Under *Audience*, press **Publish app** and don't submit it
-   for verification. Google shows an "unverified app" warning at sign-in ("Advanced", then
-   "Go to Themi" continues). `gmail.modify` is a restricted scope, so an unverified app can
-   be used by at most 100 accounts over the project's life. That's far more than one family
-   needs. Leaving the app in **Testing** instead works too, but then Google expires the
-   Gmail tokens every 7 days, and everyone has to link again.
-6. **Client.** Under *Clients*, create an OAuth client of type **Web application**. Add the
-   authorized redirect URI `<THEMI_PUBLIC_URL>/auth/google/callback`. When testing on your
-   own machine, set `THEMI_PUBLIC_URL=http://localhost:8080` and use
-   `http://localhost:8080/auth/google/callback`. Google only accepts plain `http` for
-   `localhost`, not for `127.0.0.1` or other addresses.
-7. **Keys.** Put the client id and secret on the Modules page, under **Google
-   accounts**, then press **Restart** there. (`GOOGLE_CLIENT_ID` and
-   `GOOGLE_CLIENT_SECRET` in `.env` work too.)
-8. **Sign-in addresses.** On the website's *Family* page, an admin enters each person's Google
-   address. Only those addresses can use "Sign in with Google". A person's first linked
-   Gmail becomes their sign-in address if they don't have one yet.
-9. **Linking.** Each person sends `/link gmail` to the bot, or uses *My accounts → Link a Gmail
-   account* on the website. They can link as many accounts as they like. *Unlink* revokes
-   Themi's access at Google too.
-10. **Family calendar.** Dated tasks go on a calendar called "Themi" on an admin's linked
-   account, after a yes. On the *Family* page an admin can pick the account and the
-   calendar's name. Themi uses an existing calendar with that name, or makes one; either
-   way, add it to Cozyla once so the events show there. An account linked before the
-   calendar scopes existed needs linking again; the *Family* page says so.
-11. **Google Tasks inbox.** What someone adds by voice ("Hey Google, add a task...") lands in
-   their Google Tasks. Each minute Themi takes new items from their default list ("My
-   Tasks") as if they'd sent them, answers in Telegram, and deletes them there: the list is
-   a queue. An account linked before this needs linking again; *My accounts* says so.
-12. **The family cookbook (RC1a).** Themi reads the family's recipe doc and can add to it,
-   but with `drive.file` it can open only a doc someone picks in Google's file picker. For
-   the picker: under *APIs & Services → Credentials*, create an **API key** restricted to
-   the Google Picker API (and to the site's address under *Website restrictions*); copy the
-   project **number** from the project's *Dashboard*; in the OAuth client add
-   `<THEMI_PUBLIC_URL>` (the Funnel address, no path) as an **Authorized JavaScript origin**.
-   Put them in `.env` as `GOOGLE_PICKER_API_KEY` and `GOOGLE_PROJECT_NUMBER`, restart, then
-   on *Accounts* open the account's *Choose the family cookbook* and pick the doc. An
-   account linked before this needs linking again (with Google Drive ticked).
-13. **Expense sheets in Google Sheets (EX4a).** With the Google Sheets API on, Themi makes
-   each expense spreadsheet in the linked account a person chooses and keeps it up to date.
-   It uses the same `drive.file` scope, so it can open only the spreadsheets it made. An
-   account without Google Drive allowed shows *Link again for expense sheets* on *Accounts*;
-   nothing else changes for it.
-
-To try the flow without a Google project, run the fake Google with
-`.venv/bin/python -m tests.fakes.google_oauth` and copy the settings it prints into `.env`.
-Its sign-in page asks which address to pretend to be.
-
-### OurGroceries (optional)
-
-Themi keeps its own grocery list, and the website's dashboard shows it. To see it in the
-OurGroceries app as well, put the account's login in `.env` as `OURGROCERIES_USERNAME` and
-`OURGROCERIES_PASSWORD`, and the shared list's name as `OURGROCERIES_LIST` (default
-"Groceries"), then restart. Outside Docker, install the library first with
-`pip install -e '.[ourgroceries]'`. It's unofficial, so if OurGroceries changes, the mirror
-logs the problem and keeps retrying while Themi's own list carries on.
-
-### Cozyla to-do lists (optional, a trial)
-
-Themi can keep the Cozyla wall calendar's to-do lists in step with its one-off tasks, both
-ways: added, ticked off or back, deleted, renamed, reassigned or given a new date on either
-side. Repeating chores stay off them. Cozyla has no official API; this uses the one its
-tablet apps use, which may change or break, and may conflict with Cozyla's terms, so use the
-family's own account.
-
-1. Put the family's Cozyla ID in `.env` as `COZYLA_EMAIL` and `COZYLA_PASSWORD`.
-2. Run `themi cozyla check`. It signs in, changes nothing, and lists the to-do lists and
-   members (add `--titles` to see the open to-dos on the chosen list).
-3. Set `COZYLA_TODO_LIST` to the main list, and restart. Themi's tasks go there unless
-   someone names another list ("put it on Things to Cook").
-
-What becomes a Themi task: everything on the main list, and anything on another list that's
-assigned to someone. A to-do assigned to the family member (for example "Madicen Family") is
-shared: on both lists, and either of you can tick it off. Unassigned items on other lists
-stay lists; "add lasagna to Things to Cook" just adds it there. The first sync links to-dos
-that match open tasks by title, and nudges the assigned ones gently, a few at a time.
-
-Members are matched by first name. Leave `COZYLA_TODO_LIST` empty to stop syncing.
-
-With `COZYLA_CHORES=yes`, Themi also runs the wall's chore chart. Its chores are written
-there and kept that way (an edit on the wall is put back, so change chores in Themi), chores
-only on the wall come into Themi first, and a tick on either side counts on both. It reads
-the wall's routines too: after the morning, and an hour before quiet hours, anyone whose
-routines for that part of the day aren't all done gets one message with a button for each.
-Themi's check-ins (like a run on set days) show on the wall as that person's routine.
-
-### The dishwasher, through Home Connect (optional)
-
-A Bosch (or Siemens, or another Home Connect) dishwasher can tell Themi when it runs. Themi
-only reads whether it's running; it never controls it.
-
-1. At [developer.home-connect.com](https://developer.home-connect.com), register an
-   application with the Authorization Code Grant Flow and the redirect URI
-   `<THEMI_PUBLIC_URL>/auth/home-connect/callback`.
-2. Put its client id and secret in `.env` as `HOME_CONNECT_CLIENT_ID` and
-   `HOME_CONNECT_CLIENT_SECRET`, and restart.
-3. As an admin, open the Family page and press **Link Home Connect**. The dishwasher shows
-   under Appliances.
-
-When a cycle starts, Themi offers to check off the dishwasher on the wall's routines, and
-any open Themi task about the dishwasher, to whoever's item it is. Turning on "Check off the
-dishwasher routine when the dishwasher starts" on the website's "What Themi does alone" page
-makes that automatic. Each evening, a week with fewer runs than usual feeds the energy model
-as device activity, as words, never a score.
-
-### The washer and dryer, through LG ThinQ (optional)
-
-An LG washer and dryer on the ThinQ app can tell Themi when they run and finish, through
-LG's official ThinQ Connect API. Themi only reads them, and a token with just the two "view"
-permissions below couldn't control them anyway.
-
-1. At [connect-pat.lgthinq.com](https://connect-pat.lgthinq.com), signed in with the LG
-   account the appliances are on, add a personal access token with "View all devices" and
-   "View all device statuses".
-2. As an admin, open the Family page, paste it under **Washer and dryer** with the country
-   it was made for, and press **Link LG ThinQ**. Themi lists what it found; set each one to
-   Washer, Dryer or Not used.
-3. For updates as they happen, install the MQTT library (`pip install -e '.[thinq]'`) and
-   restart (the Docker image includes it). Without it Themi reads the appliances every 5
-   minutes, which works too.
-
-When the washer finishes, whoever has more room gets a nudge half an hour later to move the
-load (Later asks again in an hour); the dryer starting settles it, and takes back a nudge not
-yet sent. A load left longer than the fresh hours on the Family page (8 by default) gets a
-rewash suggestion instead, timed to finish when that person has room.
-"/pause laundry" holds these nudges for a while.
-
-### The robot vacuum, through Roborock (optional)
-
-A Roborock vacuum (built for the S8 MaxV Ultra) can tell Themi when it needs a person.
-Roborock has no official API, so Themi uses the unofficial `python-roborock` library, the
-one Home Assistant's Roborock integration uses. It signs in with the Roborock app account
-and talks to the robot over the home network when it can, through Roborock's cloud
-otherwise. The library may break when Roborock changes things; Themi then logs it and the
-vacuum goes quiet until it's fixed.
-
-1. Install the library: `pip install -e '.[roborock]'`, and restart. (The Docker image
-   includes it.)
-2. As an admin, open the Family page, enter the Roborock app's email under **Robot
-   vacuum**, press **Send code**, then enter the code Roborock emails and press **Link
-   Roborock**. The login it returns is kept encrypted.
-
-When it gets stuck, jammed, runs the dock's clean water out, fills the dirty-water tank,
-loses its dustbin or doesn't make it back to its dock, whoever has more room gets a chore and
-a nudge 5 minutes later (half an hour for "not back on its dock"), naming the room when its
-map says. If the robot sorts itself out first, nothing is sent. Once it's sorted, Themi asks
-to clear its alert in the app and send it back to its dock; turn on "Clear the vacuum's alert
-and send it back to its dock" under "What Themi does alone" to skip asking. A part nearly worn
-out (filter, brushes, the dock's filter) becomes a chore too. "/pause vacuum" holds these
-nudges for a while. If the sign-in stops working, the admin hears once; link it again.
-
-### The pet feeders, through SmartLife / Tuya (optional)
-
-Feeders on the SmartLife (or Tuya Smart) app can tell Themi when their food runs low or out,
-or something's stuck, through a cloud project on Tuya's developer platform. Themi only reads
-them; it never feeds.
-
-1. Sign up at [platform.tuya.com](https://platform.tuya.com) and create a cloud project
-   (Cloud, Development): development method "Smart Home", and the data centre the app
-   account lives in ("Western America" for an account made in the US). Keep the API
-   services it offers (IoT Core and Authorization Token Management are the ones Themi uses).
-2. In the project's **Devices** tab, **Link App Account**, and scan the QR code it shows
-   from the SmartLife app (Me, then the scan icon). The feeders appear in the project.
-3. Still under Devices, set the feeders' **control instruction mode** to "DP Instruction"
-   if it offers it, so their own data points (a fault code, say) reach Themi too.
-4. From the project's Overview, copy the **Access ID** and **Access Secret**. As an admin,
-   open the Accounts page, paste them under **Pet feeders** with the same data centre, and
-   press **Link Tuya**. Feeders map themselves; anything else (a water fountain) is "Not
-   used" until set. The secret is kept encrypted.
-5. Tuya's free IoT Core plan lasts a month at a time and has to be extended on Tuya's site
-   (it's free to extend). When it lapses, the admin hears once; extend it, then link again.
-
-Each feeder is read every 10 minutes. Food running low (20% or under, when the feeder says
-how much is left) or out, food stuck, or another fault becomes a chore for whoever has more
-room, with a nudge 10 minutes later; one sorted in the meantime sends nothing, and the feeder
-showing it's sorted closes the chore. Out of food or stuck can't wait for tomorrow, so those
-nudges aren't held by the daily limit. "/pause feeders" holds them for a while. Asked "has
-the cat been fed?", Themi reads the feeder and its last feeding.
-
-Feeders name their data points differently from model to model, so the mapping was written
-from Tuya's standard feeder and common shapes, not from these feeders. The Accounts page
-lists each feeder's data points; to send them for a proper mapping, run
-`themi tuya capture --out tuya-captures` (in Docker: `docker compose exec themi themi tuya
-capture --out /data/tuya-captures`). The files leave out the devices' ids, keys and names.
-
-### The litter box, through CatGenie (optional)
-
-A CatGenie A.I. can tell Themi how it's doing: cleaning or not, its sani-solution and any
-error. CatGenie has no official API, so Themi talks to the CatGenie app's own cloud
-(PetNovations) the way the community client
-[kclif9/catgenie-api](https://github.com/kclif9/catgenie-api) found it works. It may stop
-working when they change things; the admin then hears once, and the litter box goes quiet.
-Themi only reads it; it never starts, stops or changes a clean.
-
-1. As an admin, open the Accounts page, enter the phone number the CatGenie app signs in
-   with under **Litter box**, and press **Send code**.
-2. Enter the code that's texted to it and press **Link CatGenie**. Themi keeps the sign-in
-   (encrypted), not the number.
-
-The litter box is read every 10 minutes. An error (on the box, or an alert the app was sent),
-or the sani-solution running low (20% or under) or out, becomes a chore for whoever has more
-room, with a nudge 10 minutes later; one sorted in the meantime sends nothing, and the box
-showing it's sorted (the error gone, a clean after the alert, a new cartridge) closes the
-chore. An error or no sani-solution stops it cleaning, so those nudges aren't held by the
-daily limit. "/pause litter" holds them for a while. If the sign-in stops working, the admin
-hears once; link it again. Asked "is the litter box ok?" or "how much sani-solution is
-left?", Themi reads it.
-
-The CatGenie can't tell how many granules are left, so Themi counts its cleans instead: set
-**Top up the granules every _ cleans** under the litter box on the Accounts page, and a
-chore comes round each time that many have gone by. Marking it done starts the count again.
-Leave it blank for none.
-
-Nobody has published what the CatGenie's error codes mean, so for now each one is shown in
-plain words from the code itself. To send real ones for a proper mapping, run
-`themi catgenie capture --out catgenie-captures` (in Docker: `docker compose exec themi
-themi catgenie capture --out /data/catgenie-captures`), ideally a few times as the box shows
-different things: cleaning, the cartridge low, the dome off, an error. The files leave out
-the box's ids and names and the account's number.
-
-### Groceries said to Google Home, through Google Keep (optional, a trial)
-
-"Hey Google, add tomatoes to my shopping list" puts them in Google Keep. Google's Keep API
-isn't open to personal accounts, so Themi reads Keep with the unofficial `gkeepapi` library
-and a master token per person. That token can do nearly anything to its Google account and
-doesn't expire: Themi keeps it encrypted and uses it only for Keep. The library may break if
-Google changes Keep; Themi then logs it and retries, and the grocery list carries on.
-
-1. Install the library: `pip install -e '.[keep]'`. (The Docker image doesn't include it;
-   add `keep` to the `pip install` line in the Dockerfile.)
-2. For each person, run `themi keep link <name>` (add `--list "<name>"` if their list isn't
-   called "Shopping list") and follow its steps: sign in at Google's EmbeddedSetup page and
-   paste the `oauth_token` cookie. Themi needn't be restarted.
-
-Every 2 minutes, each linked person's Keep list and the grocery list are kept in step, both
-ways. What the speaker (or anyone) adds in Keep joins the grocery list as theirs; checking
-an item off in Keep means bought, deleting it means removed. Themi's own changes show in
-Keep the same way. When both sides changed an item, Themi's change wins. The first sync
-puts the whole grocery list into Keep. `themi keep unlink <name>` stops it; removing the
-"Android" sign-in on the Google account's security page revokes the token.
-
-### In the cloud
-
-`docs/DEPLOY.md` covers a small cloud server, Tailscale Funnel for the website, nightly
-encrypted backups (`themi backup`, `themi restore`), upgrades and a restore drill.
-
-### With Docker
-
-```sh
-docker compose run --rm themi init     # first time only
-docker compose up --build -d           # start
-docker compose run --rm themi invite <name>
-```
-
-The database lives in the `themi-data` volume. `docker compose down` stops Themi gracefully:
-the message or job in progress finishes first. `tools/smoke_container.sh` builds the image and
-checks it starts, reports healthy, and stops cleanly. CI runs it on every pull request and
-before every release.
+**A household assistant that takes the admin off your plate, and knows when to ask.**
+
+Themi is a helper your family runs on its own server. Everyone chats with it in Telegram.
+In the background it keeps the calendar, the chores, the email, the groceries and the house
+in order, and it times every nudge to when each person actually has room for it. Its
+messages are suggestions, never demands.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/wall-dark.png">
+  <img alt="The wall page on a family frame: the time, today's timeline for each person, and each person's to-dos side by side" src="docs/images/wall.png">
+</picture>
+
+<p align="center">
+  <a href="docs/INSTALL.md"><b>Install</b></a> ·
+  <a href="docs/FEATURES.md"><b>Everything it does</b></a> ·
+  <a href="docs/SERVICES.md"><b>Connecting services</b></a> ·
+  <a href="docs/DEVELOPMENT.md"><b>Developing</b></a>
+</p>
+
+## Just talk to it
+
+Plain words, a voice note or a photo. Themi turns them into tasks, reminders, events and
+grocery items, and speaks up when the house needs a hand.
+
+<picture>
+  <img alt="Three Telegram chats with Themi: the morning message with today's calendar and four buttons; the washer finished, the vacuum stuck in the kitchen, and when to leave for the dentist; and groceries, a reminder and a partner's day asked about in plain words" src="docs/images/chat.svg">
+</picture>
+
+- **One message in the morning.** Today's calendar, with everything else waiting behind a
+  button. Tap "Just one thing" on a hard day.
+- **Timed to your energy.** Themi learns when each person tends to have room, and holds
+  the non-urgent until then. Urgent things always come through.
+- **Gentle by design.** Every message is checked for pressure before it's sent, and there's
+  a daily limit on what Themi brings up unasked.
+
+## Your day, drawn
+
+Themi draws the day as a picture: the weather, your calendar, time it's holding for a task,
+and what's waiting. The week ahead, your tasks and the family's chores are a message away.
+
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/day-card-dark.png">
+    <img width="49%" alt="A day card: Wednesday, 58 degrees with rain from 2 pm, a timeline of six events, one held for a task, and dots for tasks, email and everything else" src="docs/images/day-card.png">
+  </picture>
+  <img width="49%" alt="Everyone's chores and tasks: Erin's and Sam's chores on the chart, overdue and any-time tasks, and chores either of them can take" src="docs/images/chores.png">
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/week-dark.png">
+  <img alt="The week ahead: seven days with each day's weather and events laid out by hour" src="docs/images/week.png">
+</picture>
+
+## A wall for the whole family
+
+Put the **wall** page on a frame in the kitchen: the time, today's timeline for each person,
+everyone's to-dos, routines and chores side by side, the week ahead, parcels and the shared
+lists. Tick things off right there. It goes dim at bedtime and shows tomorrow's plan.
+
+## The house looks after itself
+
+<img align="right" width="300" alt="Themi's website on a phone: Erin's list with Done buttons, the house's status (washer finished, the robot vacuum stopped, the feeders and litter box fine) and the grocery list" src="docs/images/phone-home.png">
+
+The washer, the dishwasher, the robot vacuum, the pet feeders and the litter box all tell
+Themi how they're doing. When one needs a person, it becomes a chore for **whoever has more
+room**, with a nudge a little later. If it sorts itself out first, nobody hears a thing.
+
+- *"The washer finished at 11:02 am. Into the dryer now, or later?"*
+- *"The vacuum's stuck in the kitchen. Free it and pop it back on the dock?"*
+- *"Has the cat been fed?"* Themi checks the feeder.
+
+Email works the same way. Themi reads each person's inbox, raises what's urgent, drafts
+replies for a yes, gathers the noise into one message, and notices when an expected bill
+doesn't arrive. Nothing is sent, moved or archived without the say-so you've given it.
+
+Every Themi has its own website too, for each person's settings, tasks, lists and recipes.
+It works on a phone.
+
+<br clear="right">
+
+## In the kitchen
+
+<img align="left" width="320" alt="A recipe card for pancakes: ingredients in cups with grams beside them, and five numbered steps with short titles" src="docs/images/recipe.png">
+
+The family cookbook lives in a Google Doc; Themi reads it, adds to it, and finds new
+recipes from a link, a web search or a photo of a page.
+
+Start cooking (from chat, the website or the wall) and a phone or kitchen tablet becomes the
+**cook screen**:
+
+- gather and prep, then one step at a time
+- this step's amounts, in cups *and* grams
+- timers on a rail, and questions by push-to-talk
+- the oven preheated when the recipe says so (GE Café through SmartHQ)
+- music for the mood, and Themi the chameleon for company
+
+Ingredients go onto the grocery list, which stays in step with OurGroceries and Google
+Keep ("Hey Google, add milk"), and a Chrome helper can fill the Safeway cart.
+
+<br clear="left">
+
+## You stay in charge
+
+- **Trust tiers.** Anything that changes something (an event, an archived email, a ticked
+  chore) starts as "ask first". Each person decides what Themi may do on its own, and
+  Themi always says what it did.
+- **Private by default.** It runs on your own machine. Tokens and keys are encrypted, each
+  person's calendar is theirs unless they share it, and backups are encrypted too.
+- **Your choice of AI.** Claude, Gemini (the free tier is plenty to start), OpenAI,
+  OpenRouter, or a local model that never leaves the house. Each person can have their own.
+- **Kind when it's hard.** "Today's too much" gets a few things and spreads out the rest.
+  Burnout mode holds everything and quietly passes urgent things to a partner.
+
+## What it connects to
+
+![What Themi connects to: chat (Telegram, Slack, the website); Google; home devices; AI models; pets; groceries and shopping; backups; maps, weather, parcels, web search and music](docs/integrations.svg)
+
+Turn on only what your household uses. Not a family? The `work` template makes a Themi for
+one person's working day, in Slack.
+
+## Get started
+
+You need a small Linux computer (a Raspberry Pi is plenty), a Telegram bot token from
+@BotFather and a free Gemini key. Then:
+
+1. Run `deploy/install.sh` on that computer. It prints the website's address and a claim
+   code.
+2. Open the address, enter the code, and save the secret key it shows you.
+3. On the **Modules** page, paste the bot token and the AI key, and press **Restart**.
+4. Invite the family from the **Family** page. Each person sends `/start <code>` to the bot.
+
+The [installation guide](docs/INSTALL.md) has the details, and other ways to run it
+(Docker by hand, without Docker, in the cloud).
+
+## Documentation
+
+| Page | What's in it |
+| --- | --- |
+| [INSTALL.md](docs/INSTALL.md) | Installing Themi, claiming it, inviting the family |
+| [FEATURES.md](docs/FEATURES.md) | Everything Themi does, area by area |
+| [SERVICES.md](docs/SERVICES.md) | Setting up Google and each device |
+| [MORNING_MESSAGE.md](docs/MORNING_MESSAGE.md) | How the morning message works |
+| [DEPLOY.md](docs/DEPLOY.md) | A cloud server, HTTPS with Tailscale Funnel, backups, upgrades |
+| [RASPBERRY_PI.md](docs/RASPBERRY_PI.md) | Painless deploys on a Raspberry Pi |
+| [ENVIRONMENT.md](docs/ENVIRONMENT.md) | Every setting, for `.env` and scripted installs |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Working on the code: tests, the simulator, the rules |
+| [BUILD_PROMPTS.md](docs/BUILD_PROMPTS.md) | The build order and progress |
