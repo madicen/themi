@@ -141,13 +141,28 @@ def parse(raw: Any, numbers: Collection[str] = ()) -> dict[str, str] | None:
         day = ""
     tracking = re.sub(r"\s+", "", str(raw.get("tracking") or "")).upper()
     problem = _clean(raw.get("problem"), MAX_PROBLEM) if status == "problem" else ""
+    start, end = _window(raw.get("window"))
     return {
         "shop": shop,
         "tracking": tracking if tracking in numbers else "",
         "date": day,
         "status": status,
         "problem": problem,
+        "window_start": start,
+        "window_end": end,
     }
+
+
+def _window(raw: Any) -> tuple[str, str]:
+    """PT3: "14:15-16:15" (a carrier's delivery window), as two times; ("", "") for none
+    or anything else."""
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*", str(raw or ""))
+    if not m:
+        return "", ""
+    h1, m1, h2, m2 = (int(x) for x in m.groups())
+    if not (h1 < 24 and h2 < 24 and m1 < 60 and m2 < 60 and (h1, m1) < (h2, m2)):
+        return "", ""
+    return f"{h1:02d}:{m1:02d}", f"{h2:02d}:{m2:02d}"
 
 
 def parse_all(raw: Any, numbers: Collection[str] = ()) -> tuple[dict[str, str], ...]:
@@ -228,6 +243,8 @@ class Deliveries:
                     carriers=tuple(sorted(carriers.get(number, []))),
                     day=_day(p["date"]),
                     problem=p["problem"],
+                    window_start=p.get("window_start", ""),
+                    window_end=p.get("window_end", ""),
                 ),
             )
 

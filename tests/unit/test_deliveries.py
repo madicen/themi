@@ -15,6 +15,8 @@ def test_a_parcel_needs_a_shop_and_a_known_status() -> None:
         "date": "2026-10-21",
         "status": "delivered",
         "problem": "",
+        "window_start": "",
+        "window_end": "",
     }
     assert parse({"shop": "", "date": "2026-10-21", "status": "delivered"}) is None
     assert parse({"shop": "Chewy", "date": "", "status": ""}) is None
@@ -64,6 +66,16 @@ def test_triage_asks_for_the_shop_never_whats_inside() -> None:
         "date",
         "status",
         "problem",
+        "window",
     }
     words = " ".join(SYSTEM.split())
     assert "never what's in it" in words and "tracking numbers block" in words
+
+
+def test_a_delivery_window_is_two_times_or_none() -> None:
+    raw = {"shop": "UPS", "date": "", "status": "out_for_delivery"}
+    window = lambda w: [parse({**raw, "window": w})[k] for k in ("window_start", "window_end")]  # type: ignore[index]  # noqa: E731
+    assert window("14:15-16:15") == ["14:15", "16:15"]
+    assert window(" 9:00 - 13:00 ") == ["09:00", "13:00"]
+    for bad in ("", "2-4 pm", "16:15-14:15", "25:00-26:00", None):
+        assert window(bad) == ["", ""]

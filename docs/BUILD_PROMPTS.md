@@ -521,7 +521,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL9d | Wall: the Person and Together pages | Wall | [x] 2026-11-21 |
 | PT1 | Package tracking: tracking numbers from email | Package tracking | [x] 2026-11-21 |
 | PT2 | Package tracking: one parcel per tracking number | Package tracking | [x] 2026-11-21 |
-| PT3 | Package tracking: the carriers' alert emails | Package tracking | [ ] |
+| PT3 | Package tracking: the carriers' alert emails | Package tracking | [x] 2026-11-21 |
 | PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [ ] |
 | PT5 | Package tracking: asking on a schedule | Package tracking | [ ] |
 | PT6 | Package tracking: what the family sees | Package tracking | [ ] |
@@ -23804,7 +23804,7 @@ Notes:
   `test_wall_deliveries` (verdicts send `parcels`; the count is from `parcels`).
 
 ### PT3 · Package tracking: the carriers' alert emails
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: PT2
 Read first: the plan's "Part 2: Carrier alert emails".
 - Fixtures in `tests/fixtures/parcels/` (anonymised, each saying where its shape came
@@ -23818,6 +23818,20 @@ Read first: the plan's "Part 2: Carrier alert emails".
   Themi reads. Never asks for the carriers' passwords. Check each link still resolves.
 Tests: each fixture's parcels, shops and statuses; a carrier email joining a shop's parcel
 by number; the guide on the module's page.
+
+Notes:
+- Fixtures in `tests/fixtures/parcels/` are written for Themi in the shape of each sender's
+  public examples (its README says so); their tracking numbers are the data set's own
+  test numbers, so the check digits hold.
+- Triage also takes a `window` per parcel ("14:15-16:15", 24-hour), so UPS My Choice's
+  window reaches the parcel from email (the plan's Part 2 table); anything else is no
+  window.
+- `parcels` (`themi_google/parcels.py`, Email group, requires email_triage) is only an
+  entry point, not in any template or `app.py`'s list: off until turned on, like weather.
+  An installed Themi needs its package reinstalled (`make install`, or the deploy's
+  install) to see the new entry point. Its page shows `setup/parcels.md`; the three links
+  answered 200 on 2026-11-21.
+- Parcels from email keep working without the module: `Deliveries` stays in email triage.
 
 ### PT4 · Package tracking: the UPS and USPS lookup
 Status: [ ]

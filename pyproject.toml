@@ -116,6 +116,7 @@ noise_digest = "themi_google.google_modules:NoiseDigestModule"
 openai_compatible = "themi.standard.ai_providers:OpenAICompatibleModule"
 ourgroceries = "themi_home.home_modules:OurGroceriesModule"
 pantry = "themi_home.pantry:PantryModule"
+parcels = "themi_google.parcels:ParcelsModule"  # PT3
 pictures = "themi.standard.capabilities:PicturesModule"
 reactions = "themi.standard.reactions:ReactionsModule"
 recipe_groceries = "themi_home.recipe_groceries:RecipeGroceriesModule"

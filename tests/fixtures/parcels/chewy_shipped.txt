@@ -1,0 +1,14 @@
+Hi there,
+
+Good news! Your order has shipped.
+
+Order #1234567890
+Carrier: UPS
+Tracking #
+1Z879E930346834440
+
+Estimated delivery: Friday, Oct 23
+
+Track your package: https://www.chewy.com/app/account/orderhistory
+
+Thanks for shopping with Chewy!

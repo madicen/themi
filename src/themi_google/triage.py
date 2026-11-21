@@ -137,7 +137,11 @@ block, exactly as written there (empty if none of them is that parcel's); date i
 it's expected or came (YYYY-MM-DD; empty if the email gives none); status is on_the_way,
 out_for_delivery, problem (a missed delivery, held, delayed, needs a signature) or
 delivered; problem is a few plain words for a problem ("Delivery attempted", "Held at the
-post office"), otherwise empty. Otherwise leave parcels empty.
+post office"), otherwise empty; window is the delivery window the email gives, as 24-hour
+HH:MM-HH:MM ("14:15-16:15"), otherwise empty. A carrier's own email (USPS Informed
+Delivery's digest, UPS My Choice, FedEx Delivery Manager) is about parcels even when it
+lists several: list each package it names, with shop the shop or sender it names for that
+package ("Chewy"), or the carrier ("USPS") when it names none. Otherwise leave parcels empty.
 
 For a confirmation or receipt, give amount_paid: what the reader paid, was charged,
 pledged or owes, exactly as the email writes it ("$179.00"). Leave it empty when the
@@ -194,8 +198,16 @@ SCHEMA: dict[str, Any] = {
                                 "date": {"type": "string"},
                                 "status": {"type": "string", "enum": list(PARCEL_STATUSES)},
                                 "problem": {"type": "string"},
+                                "window": {"type": "string"},
                             },
-                            "required": ["shop", "tracking", "date", "status", "problem"],
+                            "required": [
+                                "shop",
+                                "tracking",
+                                "date",
+                                "status",
+                                "problem",
+                                "window",
+                            ],
                             "additionalProperties": False,
                         },
                     },
