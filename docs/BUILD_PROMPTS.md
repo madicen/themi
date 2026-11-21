@@ -515,6 +515,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL6 | Wall: time of day, night, and the frame | Wall | [x] 2026-11-20 |
 | WL7 | Wall: event notes in the Event view | Wall | [x] 2026-11-20 |
 | WL8 | Wall: deliveries from email in Themi's note | Wall | [x] 2026-11-20 |
+| WL9a | Wall: the views' new card | Wall | [ ] |
+| WL9b | Wall: the small lists' cards and Things to cook | Wall | [ ] |
+| WL9c | Wall: the columns say where a tap goes | Wall | [ ] |
+| WL9d | Wall: the Person and Together pages | Wall | [ ] |
 | PT1 | Package tracking: tracking numbers from email | Package tracking | [ ] |
 | PT2 | Package tracking: one parcel per tracking number | Package tracking | [ ] |
 | PT3 | Package tracking: the carriers' alert emails | Package tracking | [ ] |
@@ -23477,6 +23481,124 @@ Notes:
 - Verdict listeners run before the first-sync check, so a parcel in mail found by a first
   sync still counts (it's data, not an action).
 - Nothing tells the person on Telegram; the wall's note is the only place it shows.
+
+### WL9a · Wall: the views' new card
+Status: [ ]
+Depends on: WL5b, F55f (both change `wall.css`; start after F55f is `[x]`)
+Read first: the plan's "A second look (WL9)" (its table's first row); `_sheet.html`, every
+`_view_*.html`, `wall.css` (the WL5a/WL5b blocks, light and dark), `wall.js` (`data-close`, the
+2-minute close). From Michael's mock-ups of 2026-11-20 (the Groceries and Things to cook
+pictures): a centred card over the dimmed home screen, not a sheet from the bottom.
+- `sheet()` takes a kicker, a title, a kind line and a foot line, and draws a centred card:
+  rounded, at most ~85% of the screen's height and scrolling inside, an ✕ in the corner (64 px
+  target), the kicker small and in the view's colour, the title large, the kind line under it,
+  the view's body, the foot line, and a full-width **Back to the wall** button filled with the
+  view's colour (its text keeps 4.5:1 in both looks). The grip and the plain Close go.
+- Each view's words. Kickers: Event and Day "Plan together" (or the person's name for one
+  person's event), Weather "Today", List and Dish "Household", Note "From Themi". Kind lines,
+  for example: Groceries "A short list for your next shop."; a to-do list "In Themi's order.
+  Tap the words for more." (it replaces `sheet-note`). Foot lines: Groceries "2 items to pick
+  up" and "Shared with Michael and Erin" (the household's members, by name); a to-do list
+  "8 open"; others none. Plain, no scores, nothing that hurries.
+- Groceries' rows grow to the mock-up's size (about 5.5rem, 1.6rem words, a large ring).
+- Everything else about the views stays: one level deep, tapping outside closes, the 2-minute
+  close, the Add box, the item menu, Send to my phone.
+Tests: each view has its kicker, title and Back to the wall, and no grip; Back and ✕ carry
+`data-close`; the Groceries foot counts the open items and names both people; a to-do list's
+foot counts its rows; `test_wall_look.py`'s contrast check covers the filled Back button in
+light and dark; the existing view tests pass unchanged except where they read the old Close.
+Scenario: none (the wall is looked at).
+
+Notes:
+
+### WL9b · Wall: the small lists' cards and Things to cook
+Status: [ ]
+Depends on: WL9a
+Read first: the plan's "A second look (WL9)" (rows two and three); `WallView.smalls` and
+`SmallList` (`wall_view.py`), `_smalls.html`, `dish_view` and `_view_dish.html`, the dish
+routes in `wall.py`. From the mock-ups: "GROCERIES · Pound plus bar · Saltines · 2 items ·
+Open list →" and "THINGS TO COOK · … · 4 ideas · Open ideas →".
+- Groceries and Things to cook are two cards side by side at the foot of the wall: the name
+  small and in caps in its colour, up to four items run together with " · " over two lines at
+  most, then a foot row: the count on the left ("2 items", "1 item", "4 ideas"; empty:
+  "Nothing needed" / "No ideas yet") and **Open list →** / **Open ideas →** on the right. The
+  whole card is one button (at least 64 px tall). The Cozyla note keeps its own card, after
+  them, only when there is one.
+- **Open ideas** opens a Things to cook view (WL9a's card, kicker "Household", kind line
+  "Ideas for whenever you're ready.", foot "4 ideas saved"): the dishes numbered 01, 02 …
+  in big rows. Tapping a dish unfolds it in place, like the list view's item menu: its
+  ingredients to tick and **Add the rest to Groceries**, and **<name> is cooking** when it
+  has a recipe; tapping it again folds it. A dish with no recipe says so in one line. That
+  replaces opening the Dish view from the home screen; `/wall/view/dish/{id}` stays for links
+  and tests, drawn inside the new view with that dish unfolded.
+- Groceries' card opens the Groceries List view as now.
+Tests: the counts match the lists, singular and plural; the whole card is the button; the
+note's card only when there's a note; Open ideas lists the dishes numbered in order; a dish
+unfolds and folds; Add the rest to Groceries from an unfolded dish adds only the unticked
+ingredients, once each, and the view stays open on that dish; Start cooking works from it.
+Scenario: none.
+
+Notes:
+
+### WL9c · Wall: the columns say where a tap goes
+Status: [ ]
+Depends on: WL9a
+Read first: the plan's "A second look (WL9)" (rows four and five); `WallView._person`,
+`_together`, `_done_item`, `TODOS_SHOWN`, `FAMILY_TODOS_SHOWN` (`wall_view.py`);
+`_columns.html`; where `done` comes from (the time each task was ticked).
+- Each column's header gets a small ↗ at its right; the Together header becomes a button too
+  (until WL9d, it opens the family to-do List view).
+- Each column ends with a foot button in its colour: **View full day →** for a person (the
+  Person view), **View shared list →** for Together. It sits at the bottom of the column, so
+  the three line up.
+- A ticked item stays in place, struck through, for 10 minutes after it was ticked, so a
+  wrong tap can be undone there. After that it folds into one quiet line at the end of its
+  section, "✓ 3 done" (Together: the same, never who did more). The header's "3 done tonight"
+  is unchanged. A chore's round that can't be unticked folds at once.
+- Past the items shown, one line "+2 more" (it replaces "More on the list"); a tap opens
+  what the foot button opens.
+Tests: a tick at 22:00 is struck through at 22:09 and folded into "✓ 1 done" at 22:11 (frozen
+clock); the fold counts each section's own; "+N more" counts what isn't shown; each foot
+button's target; the Together header is a button; `test_wall_evening.py`'s screen text
+changes only by the folds and the new buttons (say which lines in the commit).
+Scenario: `test_wall_evening.py` — Erin ticks "Clean the bird cage", it stays struck through,
+and ten minutes later it's in "✓ 1 done".
+
+Notes:
+
+### WL9d · Wall: the Person and Together pages
+Status: [ ]
+Depends on: WL9c
+Read first: the plan's "A second look (WL9)" (rows six and seven) and "Tapping things";
+`WallViews.person`, `_routines`, `_tasks`, `PersonView` (`wall_views.py`); `_view_person.html`;
+`WallView._together`; the timeline's events for today (`WallEvent`, "Busy" for private ones).
+From the mock-ups "Michael's day", "Erin's day" and "Better together".
+- The Person view becomes a whole page over the home screen, in the person's colour, with a
+  "← The wall" button at the top (it closes like any view: the 2-minute close stays).
+  Top: the date, "<Name>'s day" large in their colour, then a banner: "3 done tonight" (or
+  the part of the day's word when nothing is done yet) and "4 chores and 3 to-dos on your
+  list". Then two columns. Left, **Schedule**: today's events top to bottom with their times
+  ("All day", "Noon", "6:30–8:30 pm"), a private one as "Busy", past ones faded; under them,
+  when nothing else is on before bedtime, a quiet box "Room to breathe · Nothing else this
+  evening" (morning/afternoon by the part of the day). Right: this part of the day's routine
+  with "3 to do", then Chores, then the whole To-do list under "Work through these at your own
+  pace." The other parts of the day's routines fold to one line each ("Morning routine · 4
+  steps"), which unfold in place. Everything ticks in place, as now.
+- A new Together view, the same page in the family colour: "Together", a banner "This
+  evening" · "4 open · 3 done", then Family to-do and Either of you on the left and **Done
+  today** on the right, each with who did it in grey; tapping a done one unticks it. Ticking
+  an open one still asks "Who did it?". `/wall/view/together`; the Together column's header
+  and foot open it (WL9c's stand-in goes).
+- At the foot of both: "The whole family, at a glance →", back to the wall.
+- Still nothing private, no email, no scores, no comparison between people.
+Tests: the schedule's order and time words at a frozen time; a private event is "Busy"; Room
+to breathe shows only when nothing else is on before bedtime; this part of the day comes
+first and the others fold; ticks in place on the page; Together's Done today lists who did it
+and unticks; ticking in Together asks who; the 2-minute close; nothing private on either page.
+Scenario: `test_wall_evening.py` — tapping Erin's "View full day" shows her chores and
+to-dos with "3 done tonight"; tapping Together's shows the family list and what's done.
+
+Notes:
 
 ## Package tracking
 
