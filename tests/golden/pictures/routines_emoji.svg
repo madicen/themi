@@ -14,5 +14,6 @@
 <text x="56" y="186" font-size="16">💊</text>
 <text x="82" y="186" font-size="15" fill="#6B6F76">Take meds</text>
 <rect x="28" y="202" width="16" height="16" rx="4" fill="#FBFAF7" stroke="#4A88C7" stroke-width="1.5"/>
-<text x="56" y="216" font-size="15" fill="#1F2328">Cover the birdcage</text>
+<text x="56" y="216" font-size="16">🦜</text>
+<text x="82" y="216" font-size="15" fill="#1F2328">Cover the birdcage</text>
 </svg>

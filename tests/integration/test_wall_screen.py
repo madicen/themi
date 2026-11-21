@@ -183,8 +183,8 @@ async def test_together_has_either_chores_and_the_family_to_dos(wall: Scenario) 
     await task(wall, "Erin", "Erin's own errand")
     page = await screen(wall)
     together = words(column(page, "together"))
-    assert "Either of you Bring bins in from yesterday" in together
-    assert "Family to-do Unjam the vacuum" in together
+    assert "Either of you 🗑️ Bring bins in from yesterday" in together
+    assert "Family to-do 🧹 Unjam the vacuum" in together
     assert "Erin's own errand" not in together
     for key in (f"m{wall.member('Erin').id}", f"m{wall.member('Husband').id}"):
         assert "Bring bins in" not in column(page, key)  # once, in Together
@@ -514,3 +514,48 @@ async def test_a_morning_routine_stays_until_the_next_starts(wall: Scenario) -> 
     husband = column(await screen(wall), f"m{wall.member('Husband').id}")
     assert "Afternoon routine" in headings(husband)
     assert "Walk the dog" not in husband
+
+
+# ----- F55d (idea #245): each item's emoji -----------------------------------------------
+
+
+def emoji_before(html: str, title: str) -> str:
+    """The emoji drawn just before `title` in an item, or ''."""
+    found = re.search(
+        rf'<span class="wall-emoji" aria-hidden="true">([^<]+)</span>\s*'
+        rf'<span class="wall-words"><span class="wall-title">{re.escape(title)}<',
+        html,
+    )
+    return found.group(1) if found else ""
+
+
+async def test_a_chore_has_its_emoji_in_the_column_and_the_person_view(wall: Scenario) -> None:
+    from tests.integration.test_wall_views import get
+
+    await task(wall, "Erin", "Clean the bird cage", due=today(wall), chore=True)
+    erin = wall.member("Erin").id
+    assert emoji_before(column(await screen(wall), f"m{erin}"), "Clean the bird cage") == "🦜"
+    person = (await get(wall, f"/wall/view/person/{erin}")).text
+    assert emoji_before(person, "Clean the bird cage") == "🦜"
+
+
+async def test_an_item_with_no_fit_has_none(wall: Scenario) -> None:
+    await task(wall, "Erin", "Text Susan")
+    erin = column(await screen(wall), f"m{wall.member('Erin').id}")
+    assert "Text Susan" in erin
+    assert "wall-emoji" not in erin
+
+
+async def test_a_family_chosen_icon_wins(wall: Scenario) -> None:
+    made = await task(wall, "Erin", "Clean the bird cage", due=today(wall), chore=True)
+    board = wall.app.services.get(keys.taskboard)
+    board.icon_sources.append(lambda t: "czl_chores_emoji#_#star#_#⭐" if t.id == made.id else None)
+    erin = column(await screen(wall), f"m{wall.member('Erin').id}")
+    assert emoji_before(erin, "Clean the bird cage") == "⭐"
+
+
+async def test_a_routine_step_has_its_titles_emoji(wall: Scenario) -> None:
+    step(wall, "Husband", "Evening", "Take meds")
+    clock.advance(EVENING)
+    husband = column(await screen(wall), f"m{wall.member('Husband').id}")
+    assert emoji_before(husband, "Take meds") == "💊"

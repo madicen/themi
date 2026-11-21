@@ -30,6 +30,7 @@ from themi_home.wall_view import (
     _rank,
     lay_out_today,
     since,
+    step_emoji,
 )
 
 if TYPE_CHECKING:
@@ -304,6 +305,7 @@ class WallViews:
                         f"step-{item.id}-{day.isoformat()}",
                         item.title,
                         done=routines.ticked(item, day),
+                        emoji=step_emoji(item.title),
                     )
                     for item in routines.today_items(routine, day)
                 ),
@@ -333,14 +335,16 @@ class WallViews:
         return [
             WallSection(
                 "Chores",
-                tuple(WallItem(f"task-{t.id}", t.title, since(t.due_on, today)) for t in chores)
-                + tuple(_done_item(t) for t in finished if t.repeats),
+                tuple(self.view._task_item(t, today) for t in chores)
+                + tuple(_done_item(t, emoji=self.view.emoji_of(t)) for t in finished if t.repeats),
                 empty="Nothing due",
             ),
             WallSection(
                 "To-do",
-                tuple(WallItem(f"task-{t.id}", t.title, since(t.due_on, today)) for t in todos)
-                + tuple(_done_item(t) for t in finished if not t.repeats),
+                tuple(self.view._task_item(t, today) for t in todos)
+                + tuple(
+                    _done_item(t, emoji=self.view.emoji_of(t)) for t in finished if not t.repeats
+                ),
                 empty="Nothing on the list",
             ),
         ]

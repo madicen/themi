@@ -16,7 +16,8 @@
         <button type="button" class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}" aria-pressed="{{ 'true' if i.done else 'false' }}"
           hx-post="/wall/tap" hx-vals='{"key": "{{ i.key }}", "view": "person/{{ person.member_id }}"}' hx-target="#wall-view" hx-swap="innerHTML">
         {% else %}<div class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}">{% endif %}
-          <span class="ring" aria-hidden="true"></span>
+          <span class="ring" aria-hidden="true"></span>{% if i.emoji %}
+          <span class="wall-emoji" aria-hidden="true">{{ i.emoji }}</span>{% endif %}
           <span class="wall-words"><span class="wall-title">{{ i.title }}</span>{% if i.sub %}<span class="wall-sub">{{ i.sub }}</span>{% endif %}</span>
         {% if i.tappable %}</button>{% else %}</div>{% endif %}
       </li>

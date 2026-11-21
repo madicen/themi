@@ -49,19 +49,19 @@ async def test_michael_and_erins_evening_on_one_screen(wall: Scenario) -> None:
 
     husband = words(column(page, f"m{wall.member('Husband').id}"))
     assert husband == (
-        "H Husband This evening Evening routine Cycle the dishwasher Take meds "
-        "Cover the birdcage Chores Declutter the kitchen from yesterday Refill pet feeders "
-        "To-do Vacuum upstairs"
+        "H Husband This evening Evening routine 🍽️ Cycle the dishwasher 💊 Take meds "
+        "🦜 Cover the birdcage Chores Declutter the kitchen from yesterday 🥣 Refill pet feeders "
+        "To-do 🧹 Vacuum upstairs"
     )
     erin = words(column(page, f"m{wall.member('Erin').id}"))
     assert erin == (
         "E Erin This evening Evening routine Nothing set for this evening "
-        "Chores Clean the upstairs bathroom To-do Process the mail"
+        "Chores 🚽 Clean the upstairs bathroom To-do ✉️ Process the mail"
     )
     together = words(column(page, "together"))
     assert together == (
-        "Together This evening Either of you Bring bins in from yesterday "
-        "Family to-do Move Mimi&#39;s box upstairs Unjam the vacuum"
+        "Together This evening Either of you 🗑️ Bring bins in from yesterday "
+        "Family to-do Move Mimi&#39;s box upstairs 🧹 Unjam the vacuum"
     )
     assert "Bring bins in is still waiting from yesterday." in page
     assert "Walk dog" not in page  # a morning step, not shown in the evening

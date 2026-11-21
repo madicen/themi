@@ -334,7 +334,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F55a | Feedback: "arrive at 6:20" is 6:20 pm, kept with the event; a changed plan gets its own heads-up | Feedback | [x] 2026-11-20 |
 | F55b | Feedback: a held email notice has its buttons when it goes | Feedback | [x] 2026-11-20 |
 | F55c | Feedback: the wall keeps a routine with open steps after its window | Feedback | [x] 2026-11-20 |
-| F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [ ] |
+| F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [x] 2026-11-20 |
 | F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [ ] |
 | F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -16472,7 +16472,7 @@ Notes:
 - **Setup:** none. Mark #244 reviewed once live.
 
 ### F55d · Idea (2026-11-20): chores, to-dos and routine steps on the wall have their emoji
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL2, F43b
 Read first: `themi/drawing/emoji.py` (`item_emoji`); `TaskBoard.icon_of`
 (`themi/standard/tasks.py`); `themi_home/wall_view.py` (`WallItem`, `_task_item`,
@@ -16498,6 +16498,18 @@ Scenario: none (the wall is looked at).
 Data/Setup: none. Mark #245 reviewed once live.
 
 Notes:
+- `WallItem.emoji`: tasks get `WallView.emoji_of(task)` (`item_emoji(title,
+  board.icon_of(task))`), done ones too; routine steps `step_emoji(title)` (the title's fit).
+  Drawn as `<span class="wall-emoji">` between the ring and the words in `_columns.html` and
+  `_view_person.html`, 1.5rem, dimmed when ticked. No fit: no span.
+- Found on the way: "Cover the birdcage" (Michael's step) had no emoji; "birdcage" joined the
+  parrot's words in `themi/drawing/emoji.py`. Golden `pictures/routines_emoji.svg` changed for
+  it (🦜 beside that step).
+- Changed tests (the columns' text now has the emoji): `test_wall_evening.py`,
+  `test_wall_screen.py` (two), `test_wall_views.py`, `test_wall_night.py`. New: four at the
+  end of `tests/integration/test_wall_screen.py`.
+- Not checked: how the Cozyla frame's Chrome draws them (its own emoji font). **Setup:**
+  none. Mark #245 reviewed once live.
 
 ### F55e · Idea (2026-11-20): Themi's note on the wall wears Themi, not a "T"
 Status: [ ]

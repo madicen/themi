@@ -108,6 +108,9 @@ button.wall-col-head { cursor: pointer; }
 .wall-item.done .ring { background: var(--tone); border-color: var(--tone); }
 .wall-item.done .wall-title { color: var(--faint); text-decoration: line-through; }
 .wall-words { display: flex; flex-direction: column; min-width: 0; }
+/* F55d (idea #245): the item's emoji, between the ring and the words, at the title's size */
+.wall-emoji { flex: none; font-size: 1.5rem; line-height: 1; }
+.wall-item.done .wall-emoji { opacity: 0.45; }
 .wall-title { font-size: 1.3rem; line-height: 1.25; font-weight: 500; }
 .wall-sub { font-size: 1rem; color: var(--sub); }
 .wall-empty { margin: 0 0.5rem 0.4rem; font-size: 1.2rem; color: var(--faint); }

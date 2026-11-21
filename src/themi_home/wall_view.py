@@ -63,6 +63,7 @@ class WallItem:
     # WL4: a tap ticks it (or unticks it). A chore's round, once done, can't be undone.
     tappable: bool = True
     asking: bool = False  # "Who did it?" is showing under it
+    emoji: str = ""  # F55d (idea #245): the item's emoji, as the tasks picture has it
 
 
 @dataclass(frozen=True)
@@ -475,14 +476,14 @@ class WallView:
             WallSection(
                 "Chores",
                 tuple(self._task_item(t, today) for t in chores)
-                + tuple(_done_item(t) for t in finished if t.repeats),
+                + tuple(_done_item(t, emoji=self.emoji_of(t)) for t in finished if t.repeats),
             )
         )
         sections.append(
             WallSection(
                 "To-do",
                 tuple(self._task_item(t, today) for t in todos[:TODOS_SHOWN])
-                + tuple(_done_item(t) for t in finished if not t.repeats),
+                + tuple(_done_item(t, emoji=self.emoji_of(t)) for t in finished if not t.repeats),
                 empty="Nothing on the list",
                 more=len(todos) > TODOS_SHOWN,
             )
@@ -513,7 +514,10 @@ class WallView:
         family = sorted((t for t in both if not t.repeats), key=lambda t: _rank(t, today))
         shown = {t.id for t in either} | {t.id for t in family[:FAMILY_TODOS_SHOWN]}
         finished = [
-            (t, _done_item(t, f"{names[by]} did it" if by in names else ""))
+            (
+                t,
+                _done_item(t, f"{names[by]} did it" if by in names else "", emoji=self.emoji_of(t)),
+            )
             for t, by in done
             if _for_both(t) and t.id not in shown
         ]
@@ -540,7 +544,17 @@ class WallView:
         )
 
     def _task_item(self, task: Task, today: date) -> WallItem:
-        return WallItem(f"task-{task.id}", task.title, since(task.due_on, today))
+        return WallItem(
+            f"task-{task.id}", task.title, since(task.due_on, today), emoji=self.emoji_of(task)
+        )
+
+    def emoji_of(self, task: Task) -> str:
+        """F55d (idea #245): a family-chosen icon's emoji, else the title's fit, as the tasks
+        picture (F43b), or none."""
+        from themi.drawing.emoji import item_emoji
+
+        board = self.services.maybe(keys.taskboard)
+        return item_emoji(task.title, board.icon_of(task) if board is not None else "")
 
     def _done_today(self, member: Member) -> int:
         board = self.services.maybe(keys.taskboard)
@@ -578,7 +592,10 @@ class WallView:
             heading = f"{routine.name} routine, still open"
         items = tuple(
             WallItem(
-                f"step-{item.id}-{day.isoformat()}", item.title, done=routines.ticked(item, day)
+                f"step-{item.id}-{day.isoformat()}",
+                item.title,
+                done=routines.ticked(item, day),
+                emoji=step_emoji(item.title),
             )
             for item in routines.today_items(routine, day)
         )
@@ -937,9 +954,19 @@ def lay_out_today(
     )
 
 
-def _done_item(task: Task, sub: str = "") -> WallItem:
+def _done_item(task: Task, sub: str = "", *, emoji: str = "") -> WallItem:
     """Ticked today: struck through. A one-off can be unticked; a chore's round can't."""
-    return WallItem(f"task-{task.id}", task.title, sub, done=True, tappable=not task.repeats)
+    return WallItem(
+        f"task-{task.id}", task.title, sub, done=True, tappable=not task.repeats, emoji=emoji
+    )
+
+
+def step_emoji(title: str) -> str:
+    """F55d: a routine step's emoji, from its title only (F43b: the wall keeps an icon per
+    routine, not per step)."""
+    from themi.drawing.emoji import item_emoji
+
+    return item_emoji(title)
 
 
 def _asking(column: WallColumn, key: str) -> WallColumn:
