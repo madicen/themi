@@ -34,16 +34,16 @@ backups, secrets and upgrades.
 ## 1. Before you start
 
 With the Modules page, the keys below can be added after Themi is running. You need
-them sooner or later, most of them from the local setup in the README:
+them sooner or later; [SERVICES.md](SERVICES.md) says where each comes from:
 
 - The **Telegram bot token**. The family bot is not the test bot.
 - **`THEMI_SECRET_KEY`** (`themi keygen` makes one). This key encrypts every stored token
   and every backup. **Without it, the backups can't be read.** Keep a copy in a password
   manager, away from the server.
-- The **Google OAuth client** id and secret (README: "Google Cloud setup"). Its redirect
+- The **Google OAuth client** id and secret ([SERVICES.md](SERVICES.md#google-sign-in-and-gmail-google-cloud-setup)). Its redirect
   address changes in step 6. For expense sheets in Google Sheets (EX4a), the project also
   needs the **Google Sheets API** turned on and the `drive.file` scope on the consent
-  screen's *Data Access* (README steps 2, 4 and 13).
+  screen's *Data Access* (SERVICES.md, Google steps 2, 4 and 13).
 - A **Gemini API key**, or another AI backend, for each person.
 - Optionally, the OurGroceries login.
 

@@ -51,7 +51,7 @@ PAUSE_HELP = (
 )
 LINK_NOT_SET_UP = (
     "Linking Gmail isn't set up on this server yet. An admin adds the Google keys first "
-    "(the README's Google Cloud setup)."
+    "(the Google accounts guide on the Modules page)."
 )
 LINK_ONLY_GMAIL = "Gmail is the one kind of account that can be linked for now: /link gmail."
 

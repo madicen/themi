@@ -48,11 +48,11 @@ THEMI_HTTP_PORT=8080
 # Set to 1 to run without polling Telegram (smoke tests, diagnostics).
 # THEMI_DISABLE_TELEGRAM=1
 
-# Google sign-in and Gmail linking (see "Google Cloud setup" in the README).
+# Google sign-in and Gmail linking (see "Google Cloud setup" in docs/SERVICES.md).
 # The OAuth client's redirect address must be <THEMI_PUBLIC_URL>/auth/google/callback.
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-# RC1a: Google's file picker, for choosing the family cookbook doc on Accounts (README:
+# RC1a: Google's file picker, for choosing the family cookbook doc on Accounts (docs/SERVICES.md:
 # "The family cookbook"). A browser API key limited to the Picker API, and the project number.
 # GOOGLE_PICKER_API_KEY=
 # GOOGLE_PROJECT_NUMBER=

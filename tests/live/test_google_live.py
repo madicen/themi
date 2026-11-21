@@ -3,7 +3,7 @@
 Needs a Gmail account used only for testing, linked once by hand:
 - THEMI_LIVE_GOOGLE_CLIENT_ID, THEMI_LIVE_GOOGLE_CLIENT_SECRET   the OAuth client
 - THEMI_LIVE_GOOGLE_REFRESH_TOKEN    a refresh token for the test account, with the
-                                     gmail.modify and calendar scopes (README: Google setup)
+                                     gmail.modify and calendar scopes (docs/SERVICES.md: Google)
 """
 
 from __future__ import annotations
