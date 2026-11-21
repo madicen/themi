@@ -168,6 +168,13 @@ button.wall-col-head { cursor: pointer; }
 .wall-tomorrow { display: flex; gap: 1.1rem; align-items: center; flex-wrap: wrap; padding-top: 0.6rem; font-size: 1.2rem; }
 .dot-chip { display: inline-flex; gap: 0.5rem; align-items: center; }
 .dot-chip::before { content: ""; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--tone); }
+/* F55f (idea #239): a chip per calendar; a tap turns it off in the week ahead */
+.wk-cals { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: flex-end; }
+.wk-cal {
+  border: 0.15rem solid var(--tone); background: var(--tone); color: var(--on-tone); font: inherit;
+  font-size: 0.95rem; font-weight: 600; padding: 0.25rem 0.8rem; border-radius: 999px; cursor: pointer;
+}
+.wk-cal.off { background: transparent; color: var(--sub); text-decoration: line-through; opacity: 0.7; }
 .wk { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.5rem; }
 .wk-day { border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; background: var(--soft); border-radius: 1rem; padding: 0.6rem 0.5rem; min-height: 9rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .wk-head { font-size: 1rem; color: var(--sub); padding: 0 0.15rem; }

@@ -336,7 +336,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F55c | Feedback: the wall keeps a routine with open steps after its window | Feedback | [x] 2026-11-20 |
 | F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [x] 2026-11-20 |
 | F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [x] 2026-11-20 |
-| F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [ ] |
+| F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [x] 2026-11-20 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16540,7 +16540,7 @@ Notes:
   `tests/integration/test_wall_screen.py`. **Setup:** none. Mark #243 reviewed once live.
 
 ### F55f · Idea (2026-11-20): the week ahead has a chip per calendar, and a tap hides that calendar there
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL3, F53
 Read first: `themi_home/wall_view.py` (`week`, `events`, `Chip`, `WeekDay`, where each event's
 calendar and tone come from); `themi_home/web/templates/wall/_week.html`; `wall.js` (taps);
@@ -16577,6 +16577,27 @@ Scenario: none (the wall is looked at).
 Data/Setup: possibly a wall schema migration for the setting. Mark #239 reviewed once live.
 
 Notes:
+- On the Pi, all ten "(no title)" events next week are Michael's work calendar, which
+  `member_calendars` names by its address (`m…@stackadapt.com`); his own is
+  "Michael (Personal)", Erin's is named by her address, and both read "Madicen Family".
+- `themi_home/wall_calendars.py`: `WallCalendars` (`hidden`, `toggle`, `save`, `known`) over
+  the wall migration `0006_wall_calendars.sql` (`wall_hidden_calendars`), and `label`: a
+  shared calendar keeps its name; a primary or own-address one is the person ("Erin"); one
+  named by another address is theirs by its domain ("Michael's Stackadapt"); another is
+  "Erin's Work" unless its name already has theirs ("Michael (Personal)").
+- `WallView.week_calendars()` (`WeekCalendar`: key, name, tone, off): each calendar with an
+  event in the shown week, people in the wall's order then shared ones; none with fewer than
+  two. `week()` leaves out the hidden ones, so "+N more" counts only what's shown; the
+  week's events are read once per screen (`_week_events`). Events with no calendar id are
+  never hidden. The timeline, Day and Event views and messages are unchanged.
+- A chip posts to `/wall/week/calendar` (frame CSRF) and the week redraws. It's a setting
+  for the wall, not an action: no trust tiers, as F53's layout.
+- **Deviation:** the checklist is on the Wall frames page (`/wall/frames#calendars`, beside
+  F53's People on the wall), where the wall's own settings are, not the module settings
+  form; Save keeps the unticked ones off.
+- Tests: `tests/integration/test_wall_calendars.py` (6), `tests/unit/test_wall_calendar_names.py`
+  (3). Goldens unchanged (the golden scenario has no wall).
+- **Setup:** restart Themi (migration). Mark #239 reviewed once live.
 
 ## Conversation mode
 

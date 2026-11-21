@@ -200,6 +200,17 @@ class TodayLine:
 
 
 @dataclass(frozen=True)
+class WeekCalendar:
+    """F55f (idea #239): a calendar with an event in the week ahead, as a chip a tap turns
+    off there (`off`) and on again."""
+
+    key: str  # its calendar id
+    name: str  # "Erin's Work"
+    tone: str
+    off: bool = False
+
+
+@dataclass(frozen=True)
 class WeekDay:
     weekday: str  # "Fri"
     date: str  # "20"
@@ -254,6 +265,7 @@ class WallScreen:
     smalls: tuple[SmallList, ...] = field(default=())
     today: TodayLine | None = None  # WL3: None when there's no calendar
     week: tuple[WeekDay, ...] = ()
+    week_calendars: tuple[WeekCalendar, ...] = ()  # F55f: none with fewer than two
     people: tuple[WallPerson, ...] = ()  # WL4: "Who did it?"
     night: NightView | None = None  # WL6: None by day
     look: str = "light"  # F52b: "light", "dark" or "auto"
@@ -263,6 +275,7 @@ class WallView:
     def __init__(self, services: Services) -> None:
         self.services = services
         self._places: list[Place] | None = None
+        self._week: list[tuple[date, list[WallEvent]]] | None = None
 
     # ----- the whole screen -------------------------------------------------------------
 
@@ -280,6 +293,7 @@ class WallView:
             smalls=self.smalls(),
             today=self.today_line(),
             week=self.week(),
+            week_calendars=self.week_calendars(),
             people=tuple(WallPerson(m.id, m.name, self.tone_of(m)) for m in self.people()),
             night=self.night(),
             look=self.look(),
@@ -792,15 +806,26 @@ class WallView:
         tomorrow = self.events(now.date() + timedelta(days=1))
         return lay_out_today(now, rows, self.events(now.date()), tomorrow)
 
+    def _week_events(self) -> list[tuple[date, list[WallEvent]]]:
+        """The seven days from tomorrow and each one's events, read once per screen."""
+        if self._week is None:
+            first = self.now().date() + timedelta(days=1)
+            days = [first + timedelta(days=offset) for offset in range(7)]
+            self._week = [(day, self.events(day)) for day in days]
+        return self._week
+
     def week(self) -> tuple[WeekDay, ...]:
-        """Seven days from tomorrow, up to three events each."""
+        """Seven days from tomorrow, up to three events each. F55f: without the calendars
+        turned off for the week ahead."""
         if not self.has_calendar():
             return ()
-        first = self.now().date() + timedelta(days=1)
+        from themi_home.wall_calendars import WallCalendars
+
+        hidden = WallCalendars(self.services.store.db).hidden()
         days = []
-        for offset in range(7):
-            day = first + timedelta(days=offset)
-            events = sorted(self.events(day), key=lambda e: (not e.all_day, e.start))
+        for day, found in self._week_events():
+            shown = [e for e in found if not e.calendar_id or e.calendar_id not in hidden]
+            events = sorted(shown, key=lambda e: (not e.all_day, e.start))
             chips = tuple(Chip(e.title, e.tone) for e in events)
             days.append(
                 WeekDay(
@@ -812,6 +837,41 @@ class WallView:
                 )
             )
         return tuple(days)
+
+    def week_calendars(self) -> tuple[WeekCalendar, ...]:
+        """F55f (idea #239): each calendar with an event in the week ahead, turned off or
+        not, in the wall's order of people, then the shared ones. None with fewer than two."""
+        if not self.has_calendar():
+            return ()
+        from themi_home.wall_calendars import WallCalendars, label
+
+        calendars = WallCalendars(self.services.store.db)
+        known = calendars.known(self.people())
+        hidden = calendars.hidden()
+        people = {m.id: m for m in self.people()}
+        order = {m.id: i for i, m in enumerate(self.people())}
+        found: dict[str, tuple[tuple[int, str], WeekCalendar]] = {}
+        for _, events in self._week_events():
+            for event in events:
+                key = event.calendar_id
+                if not key or key in found:
+                    continue
+                family = event.row == "family"
+                this = known.get(key)
+                person = people.get(event.member_id)
+                name = (
+                    this.name
+                    if this is not None
+                    else label(person.name, "", "")
+                    if person is not None
+                    else "Family"
+                )
+                tone = self.together_tone() if family or person is None else self.tone_of(person)
+                rank = (len(order) if family else order.get(event.member_id, len(order)), name)
+                found[key] = (rank, WeekCalendar(key, name, tone, key in hidden))
+        if len(found) < 2:
+            return ()
+        return tuple(chip for _, chip in sorted(found.values(), key=lambda pair: pair[0]))
 
     # ----- the small lists ------------------------------------------------------------
 
