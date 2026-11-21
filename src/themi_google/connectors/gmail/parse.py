@@ -6,6 +6,8 @@
   of Gmail's snippet in it than the plain part, the HTML is the text: it's what the
   reader saw (bug #134: SoFi's plain part was another template's, "You've cancelled").
 - Attachments: listed (name, type, size) but never downloaded.
+- Tracking numbers (PT1): searched for in the whole text, before the cap, and in the HTML's
+  link addresses (`themi_google.tracking`). Only the numbers are kept, never the links.
 
 Everything here is external text. It's stored and later shown to models only
 inside a data block (see themi.core.prompts).
@@ -23,6 +25,8 @@ from email.utils import getaddresses, parseaddr
 from html import unescape
 from html.parser import HTMLParser
 from typing import Any
+
+from themi_google.tracking import Found, find
 
 MAX_BODY = 20_000
 # Gmail's tabs other than Primary. Mail there is already out of the way: only Primary
@@ -65,6 +69,7 @@ class GmailMessage:
     received_at: datetime
     message_id_header: str = ""
     references: str = ""
+    tracking: tuple[Found, ...] = ()  # PT1
 
 
 def _headers(payload: dict[str, Any]) -> dict[str, str]:
@@ -104,9 +109,14 @@ class _TextOnly(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.out: list[str] = []
+        self.links: list[str] = []  # PT1: hrefs, searched for tracking numbers
         self._skipping = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "a":
+            href = dict(attrs).get("href")
+            if href:
+                self.links.append(href)
         if tag in self.SKIP:
             self._skipping += 1
         elif tag in self.BLOCKS:
@@ -128,6 +138,14 @@ def html_to_text(html: str) -> str:
     parser.feed(html)
     parser.close()
     return tidy("".join(parser.out))
+
+
+def html_links(html: str) -> list[str]:
+    """PT1: the HTML's link addresses, in order."""
+    parser = _TextOnly()
+    parser.feed(html)
+    parser.close()
+    return parser.links
 
 
 def tidy(text: str) -> str:
@@ -165,6 +183,8 @@ def parse_message(message: dict[str, Any]) -> GmailMessage:
         snippet, from_html = message.get("snippet", ""), html_to_text(html)
         if _snippet_words(snippet, from_html) > _snippet_words(snippet, text):
             text = from_html
+    links = html_links(html) if html else []
+    tracking = tuple(find(text, links, address.lower()))
     internal = int(message.get("internalDate", "0") or 0)
     return GmailMessage(
         id=message["id"],
@@ -180,4 +200,5 @@ def parse_message(message: dict[str, Any]) -> GmailMessage:
         received_at=datetime.fromtimestamp(internal / 1000, UTC),
         message_id_header=headers.get("message-id", ""),
         references=headers.get("references", ""),
+        tracking=tracking,
     )

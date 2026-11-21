@@ -38,6 +38,7 @@ from themi_google.connectors.gmail.client import (
 )
 from themi_google.connectors.gmail.parse import TABS, GmailMessage, parse_message
 from themi_google.connectors.google import GoogleAccounts, TokenRevoked
+from themi_google.tracking import as_json
 
 log = logging.getLogger(__name__)
 
@@ -324,8 +325,8 @@ class GmailSync:
         email_id = self.db.execute(
             "INSERT OR IGNORE INTO emails (account_id, gmail_id, thread_id, message_id_header, "
             "from_address, from_name, to_addresses, subject, snippet, body_text, labels, "
-            "attachments, received_at, created_at, initial) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "attachments, received_at, created_at, initial, tracking) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 account.id,
                 m.id,
@@ -347,6 +348,7 @@ class GmailSync:
                 to_utc_iso(m.received_at),
                 to_utc_iso(clock.now()),
                 int(initial),
+                as_json(m.tracking),  # PT1: the numbers only, never the links
             ),
         )
         if self.db.scalar("SELECT total_changes()") == before:

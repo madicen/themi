@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 
@@ -297,3 +298,28 @@ async def test_executors_only_touch_the_members_own_mail(
     with pytest.raises(PermissionError):
         await run(registry, "gmail.archive", {"email_id": email_id}, ctx(rig.family.husband))
     assert "INBOX" in fake_gmail.mailbox("erin@gmail.com").messages[gid].labels
+
+
+# ----- PT1: tracking numbers -------------------------------------------------------------
+
+
+async def test_an_emails_tracking_numbers_are_stored_without_its_links(
+    rig: Rig, fake_gmail: FakeGmail
+) -> None:
+    await rig.link(rig.family.erin, "erin@gmail.com")
+    link = "https://click.chewy.example/r?u=https%3A%2F%2Fwww.ups.com%2Ftrack%3Ftracknum%3D1Z5R89390357567127"
+    fake_gmail.deliver(
+        "erin@gmail.com",
+        sender="Chewy <orders@chewy.example>",
+        subject="Your order shipped",
+        html=f'<p>It\'s on its way.</p><a href="{link}">Track your package</a>',
+    )
+    fake_gmail.deliver("erin@gmail.com", sender=BANK, subject="Statement", text="Ready")
+    await rig.sync.poll_all()
+    rows = rig.family.db.query("SELECT subject, tracking, body_text FROM emails ORDER BY id")
+    stored = {r["subject"]: r for r in rows}
+    assert json.loads(stored["Your order shipped"]["tracking"]) == [
+        {"carrier": "ups", "number": "1Z5R89390357567127"}
+    ]
+    assert "click.chewy.example" not in stored["Your order shipped"]["body_text"]
+    assert json.loads(stored["Statement"]["tracking"]) == []

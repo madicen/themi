@@ -519,7 +519,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL9b | Wall: the small lists' cards and Things to cook | Wall | [x] 2026-11-20 |
 | WL9c | Wall: the columns say where a tap goes | Wall | [x] 2026-11-20 |
 | WL9d | Wall: the Person and Together pages | Wall | [x] 2026-11-21 |
-| PT1 | Package tracking: tracking numbers from email | Package tracking | [ ] |
+| PT1 | Package tracking: tracking numbers from email | Package tracking | [x] 2026-11-21 |
 | PT2 | Package tracking: one parcel per tracking number | Package tracking | [ ] |
 | PT3 | Package tracking: the carriers' alert emails | Package tracking | [ ] |
 | PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [ ] |
@@ -23710,7 +23710,7 @@ in the morning message and in chat. The prefix is PT. Rules every PT prompt keep
   faked in `tests/fakes/carriers.py`.
 
 ### PT1 · Package tracking: tracking numbers from email
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: WL8
 Read first: the plan's "Part 1: Parcel identity" ("Finding numbers");
 `themi_google/connectors/gmail/parse.py` (`_TextOnly`, `html_to_text`);
@@ -23734,6 +23734,29 @@ package was credited).
 Tests: each carrier's valid numbers; bad check digits; order and phone numbers; spaced
 numbers; a number only in a link; one inside a redirect link; the FedEx/USPS clash both
 ways; an email with none; that links aren't stored; the vetting's match tests.
+
+Notes:
+- Vetted and vendored: `tracking_number_data` v2.0.0 (commit fec2d02d), MIT, the UPS, USPS,
+  FedEx and Amazon files unchanged in `themi_google/tracking_data/` with `LICENSE` and
+  `SOURCE.md` (release, what was checked, how to update). Themi reads only the patterns,
+  check digits and test numbers; the files' `tracking_url`s are never used. Every valid
+  and invalid test number in the four files is a test.
+- Left out: UPS freight waybills and Amazon International (a letter and ten digits, too
+  common in ordinary text), and the S10 international format (`s10.json`, mostly a country
+  table). The plan's "2 letters + 9 digits + US" isn't found; add it if a USPS
+  international parcel ever matters.
+- Kinds with a fixed prefix (UPS `1Z`, `TBA`, USPS `92`-`95`, FedEx `96`) count on their
+  own; bare digit runs (FedEx 12/15/18/32/34, USPS 20) need "track", a carrier's name,
+  "postal", "shipment" or "waybill" on their line or the lines next to them, or in their
+  link. In a clash a fixed-prefix kind wins: a USPS `420`+ZIP+`92...` number also passes
+  FedEx's 34-digit check. Then the sender or a nearby carrier name; else both are kept.
+- A match inside a longer one is dropped (a 22-digit USPS number holds a valid FedEx 12
+  with its spaces). Text is searched line by line, so spaces never join two lines' digits.
+- `GmailMessage.tracking` and `emails.tracking` (JSON, migration 0177). The whole text is
+  searched up to 60,000 characters (`MAX_TEXT`), past the 20,000 stored; at most 12
+  numbers an email.
+- Work is in the jj workspace `parcels` (`../themi-parcels`) because another session was
+  working in the main checkout; it's a separate line of commits on `main`.
 
 ### PT2 · Package tracking: one parcel per tracking number
 Status: [ ]
