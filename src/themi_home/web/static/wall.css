@@ -340,3 +340,55 @@ body.night:not(.awake) { background: var(--night-bg); }
 .sheet-notes { background: var(--soft); border-radius: 1.25rem; padding: 1.1rem 1.4rem; margin-top: 1rem; }
 .sheet-notes h3 { margin: 0 0 0.4rem; font-size: 1rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .sheet-notes p { margin: 0.2rem 0; font-size: 1.25rem; overflow-wrap: anywhere; }
+
+/* WL9d: a person's day and Together as whole pages over the wall */
+.wall-sheet.wall-page {
+  inset: 0; transform: none; max-height: none; border-radius: 0; background: var(--bg);
+  padding: 2.75rem 2.5rem 2.5rem; gap: 1.5rem;
+}
+.page-back {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 0.6rem; min-height: 4rem;
+  padding: 0 1.6rem 0 1.25rem; border: 0; border-radius: 2rem; background: var(--card); color: var(--fg);
+  font: inherit; font-size: 1.3rem; font-weight: 600; cursor: pointer;
+}
+.page-back svg, .page-home svg, .page-fold svg { width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sheet-person, .sheet-together { display: flex; flex-direction: column; gap: 1.5rem; flex: 1; min-height: 0; }
+.page-title { display: flex; flex-direction: column; gap: 0.4rem; }
+.page-title .sheet-title { font-size: 4.5rem; color: var(--tone); }
+.page-date { font-size: 1.2rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.page-banner { background: var(--tint); border-radius: 1.75rem; padding: 1.5rem 2rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.page-banner p { font-size: 1.4rem; color: var(--quiet); }
+.page-banner .page-headline { font-size: 2rem; font-weight: 700; color: var(--tone); }
+.page-cols { display: grid; grid-template-columns: 21rem minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.page-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; align-items: start; }
+.page-main { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+.page-schedule, .page-box { background: var(--card); border-radius: 2rem; padding: 1.75rem 1.6rem; display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.page-schedule h3, .page-box h3 { margin: 0; font-size: 1.75rem; font-weight: 700; }
+.page-count { font-size: 1.2rem; color: var(--muted); margin-top: -0.4rem; }
+.page-ev { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.4rem 0 0.4rem 1.2rem; border-left: 0.2rem solid var(--line); }
+.page-ev.now { border-left-color: var(--tone); }
+.page-ev.past { opacity: 0.55; }
+.page-when { font-size: 1.1rem; font-weight: 600; color: var(--tone); }
+.page-what { font-size: 1.5rem; font-weight: 500; }
+.page-breathe { margin-top: 0.5rem; background: var(--item-bg); border-radius: 1.4rem; padding: 1.25rem 1.4rem; }
+.page-breathe p { font-size: 1.2rem; color: var(--fg); line-height: 1.35; }
+.page-breathe .page-breathe-head { font-size: 1.3rem; font-weight: 700; color: var(--tone); }
+.page-box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.page-box-head span { font-size: 1.2rem; font-weight: 600; color: var(--tone); }
+.page-lead { font-size: 1.2rem; color: var(--muted); margin-top: -0.3rem; }
+.page-box ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.page-box .wall-item { min-height: 4.5rem; }
+.page-sub-head { margin: 0.75rem 0 0; font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.page-fold, .page-fold-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem; width: 100%; border: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.page-fold { min-height: 4.5rem; padding: 0 1.5rem; border-radius: 1.4rem; background: var(--card); font-size: 1.3rem; color: var(--quiet); }
+.page-fold-head { background: none; padding: 0; }
+.page-home {
+  margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 1rem; min-height: 5.5rem;
+  padding: 0 2rem; border: 0; border-radius: 1.75rem; background: var(--card); color: var(--fg); font: inherit; text-align: left; cursor: pointer;
+}
+.page-home-title { display: block; font-size: 1.5rem; font-weight: 600; }
+.page-home-sub { display: block; font-size: 1.15rem; color: var(--tone); margin-top: 0.2rem; }
+.page-home svg { color: var(--tone); }

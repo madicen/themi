@@ -233,9 +233,17 @@ async def test_the_person_view_is_their_whole_day(wall: Scenario) -> None:
     assert f'hx-get="/wall/view/person/{husband.id}"' in page
     shown = words((await get(wall, f"/wall/view/person/{husband.id}")).text)
     assert "Husband's day" in shown
-    assert "Morning 🐕 Walk dog" in shown and "Afternoon 🏃 Go for a run" in shown
-    assert "Evening 💊 Take meds" in shown
-    assert "To-do 🧹 Vacuum upstairs" in shown and "Later errand" not in shown
+    # WL9d: this part of the day's routine is open; the others fold and unfold in place
+    assert "Morning routine 1 to do 🐕 Walk dog" in shown
+    routines = wall.app.services.get(keys.routines)
+    for name, step_words in (("Afternoon", "🏃 Go for a run"), ("Evening", "💊 Take meds")):
+        assert f"{name} routine · 1 step" in shown and step_words not in shown
+        found = routines.find(husband, name)
+        assert found is not None
+        opened = await get(wall, f"/wall/view/person/{husband.id}?open={found.id}")
+        assert step_words in words(opened.text)
+    assert "To-do 1 open Work through these at your own pace. 🧹 Vacuum upstairs" in shown
+    assert "Later errand" not in shown
     assert (await get(wall, "/wall/view/person/999")).text == ""
 
 

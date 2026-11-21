@@ -90,4 +90,4 @@ async def test_each_column_ends_with_where_a_tap_goes(wall: Scenario) -> None:
     )
     assert foot and words(foot[2]) == "View shared list"
     head = re.search(r'<button type="button" class="wall-col-head"([^>]*)>', together)
-    assert head and 'hx-get="/wall/view/list/todo/family"' in head[1]
+    assert head and 'hx-get="/wall/view/together"' in head[1]  # WL9d's page

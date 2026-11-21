@@ -363,7 +363,8 @@ def routes(kit: Kit) -> APIRouter:
     async def tap(request: Request) -> Response:
         """WL4: tick or untick something showing on the wall. A Together item asks who did
         it first. Answers with the columns, already changed; a tap in a Person view (WL5a,
-        `view=person/<id>`) answers with that view and has the columns refresh."""
+        `view=person/<id>`, with its unfolded routine as `open`) or the Together view (WL9d,
+        `view=together`) answers with that view and has the columns refresh."""
         form = await posted(request)
         if form is None:
             return gone()
@@ -375,9 +376,14 @@ def routes(kit: Kit) -> APIRouter:
             by = next((m for m in view.people() if m.id == int(whose)), None)
             if item is not None and item.tappable and by is not None:
                 await stage(by, key, item)
-            response = person_view(request, view, int(whose))
+            opened = form.get("open", "")
+            response = person_view(
+                request, view, int(whose), int(opened) if opened.isdigit() else 0
+            )
             response.headers["HX-Trigger"] = "wall-refresh"
             return response
+        if whose == "together":
+            return await together_tap(request, view, form)
         found = view.find(key) if not form.get("cancel") else None
         if found is None or not found[1].tappable:
             return columns(request, view)
@@ -395,6 +401,34 @@ def routes(kit: Kit) -> APIRouter:
         if by is not None:
             await stage(by, key, item)
         return columns(request, view)
+
+    async def together_tap(request: Request, view: WallView, form: dict[str, str]) -> Response:
+        """WL9d: a tap on the Together page. An open one asks who did it (as the column does);
+        a done one is unticked."""
+        key = form.get("key", "")
+        item = WallViews(view).find_together(key) if not form.get("cancel") else None
+        people = {m.id: m for m in view.people()}
+        asking = ""
+        if item is not None and item.tappable:
+            raw = form.get("by", "")
+            by = (
+                next(iter(people.values()), None)
+                if item.done
+                else people.get(int(raw))
+                if raw.isdigit()
+                else None
+            )
+            if by is None and not item.done:
+                asking = key
+            elif by is not None:
+                await stage(by, key, item)
+        response = together_page(request, view, asking)
+        response.headers["HX-Trigger"] = "wall-refresh"
+        return response
+
+    def together_page(request: Request, view: WallView, asking: str = "") -> HTMLResponse:
+        found = WallViews(view).together(asking)
+        return sheet(request, "_view_together.html", view=found)
 
     async def stage(by: Member, key: str, item: WallItem) -> None:
         summary = f"{'Untick' if item.done else 'Tick off'} {item.title} {WHERE}"
@@ -423,8 +457,10 @@ def routes(kit: Kit) -> APIRouter:
     def sheet(request: Request, template: str, **values: Any) -> HTMLResponse:
         return kit.page(request, f"wall/{template}", close_after=CLOSE_AFTER, **values)
 
-    def person_view(request: Request, view: WallView, member_id: int) -> HTMLResponse:
-        found = WallViews(view).person(member_id)
+    def person_view(
+        request: Request, view: WallView, member_id: int, opened: int = 0
+    ) -> HTMLResponse:
+        found = WallViews(view).person(member_id, opened)
         if found is None:
             return HTMLResponse("")
         return sheet(request, "_view_person.html", person=found)
@@ -471,10 +507,16 @@ def routes(kit: Kit) -> APIRouter:
         return sheet(request, "_view_weather.html", view=found) if found else HTMLResponse("")
 
     @router.get("/wall/view/person/{member_id:int}", response_class=HTMLResponse)
-    def person(request: Request, member_id: int) -> Response:
+    def person(request: Request, member_id: int, open: int = 0) -> Response:
         if viewer(request) is None:
             return gone()
-        return person_view(request, WallView(kit.app.services), member_id)
+        return person_view(request, WallView(kit.app.services), member_id, open)
+
+    @router.get("/wall/view/together", response_class=HTMLResponse)
+    def together(request: Request) -> Response:
+        if viewer(request) is None:
+            return gone()
+        return together_page(request, WallView(kit.app.services))
 
     # ----- WL6: an app on the frame ----------------------------------------------------
 

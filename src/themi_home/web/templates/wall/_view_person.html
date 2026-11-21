@@ -1,31 +1,51 @@
-{% from "wall/_sheet.html" import sheet with context %}
-{% call sheet(person.name ~ "'s day", tone=person.tone) %}
+{#- WL5a, WL9d: a person's whole day, as a page: their schedule down the left, then this part
+    of the day's routine, their chores and their whole to-do list. Ticks work in place. -#}
+{% from "wall/_sheet.html" import page, item with context %}
+{% set vals = {"view": "person/" ~ person.member_id, "open": person.opened ~ ""} %}
+{% set here = "/wall/view/person/" ~ person.member_id %}
+{% macro box(sec, cls, count, lead="") %}
+<section class="page-box {{ cls }}">
+  <div class="page-box-head"><h3>{{ sec.title }}</h3>{% if count %}<span>{{ count }}</span>{% endif %}</div>
+  {% if lead %}<p class="page-lead">{{ lead }}</p>{% endif %}
+  {% if sec.items %}<ul>{% for i in sec.items %}{{ item(i, vals) }}{% endfor %}</ul>
+  {% else %}<p class="wall-empty">{{ sec.empty }}</p>{% endif %}
+</section>
+{% endmacro %}
+{% call page(person.name ~ "'s day", person.tone) %}
 <div class="tone-{{ person.tone }} sheet-person">
-  <p class="sheet-kicker">Today</p>
-  <h2 class="sheet-title">{{ person.name }}'s day</h2>
-  {% if person.events %}<p class="wall-tomorrow">{% for c in person.events %}<span class="dot-chip tone-{{ c.tone }}">{{ c.title }}</span>{% endfor %}</p>{% endif %}
-  <div class="sheet-sections">
-  {% for sec in person.sections %}
-  <section>
-    <h3>{{ sec.title }}</h3>
-    {% if sec.items %}
-    <ul>
-      {% for i in sec.items %}
-      <li class="wall-entry">
-        {% if i.tappable %}
-        <button type="button" class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}" aria-pressed="{{ 'true' if i.done else 'false' }}"
-          hx-post="/wall/tap" hx-vals='{"key": "{{ i.key }}", "view": "person/{{ person.member_id }}"}' hx-target="#wall-view" hx-swap="innerHTML">
-        {% else %}<div class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}">{% endif %}
-          <span class="ring" aria-hidden="true"></span>{% if i.emoji %}
-          <span class="wall-emoji" aria-hidden="true">{{ i.emoji }}</span>{% endif %}
-          <span class="wall-words"><span class="wall-title">{{ i.title }}</span>{% if i.sub %}<span class="wall-sub">{{ i.sub }}</span>{% endif %}</span>
-        {% if i.tappable %}</button>{% else %}</div>{% endif %}
-      </li>
+  <header class="page-title"><p class="page-date">{{ person.day }}</p><h2 class="sheet-title">{{ person.name }}'s day</h2></header>
+  <section class="page-banner"><p class="page-headline">{{ person.headline }}</p><p>{{ person.listed }}</p></section>
+  <div class="page-cols">
+    <section class="page-schedule">
+      <h3>Schedule</h3>
+      {% set n = person.schedule | length %}
+      {% if n %}<p class="page-count">{{ n }} thing{{ "" if n == 1 else "s" }} today</p>{% endif %}
+      {% for r in person.schedule %}
+      <div class="page-ev{% if r.past %} past{% endif %}{% if r.now %} now{% endif %}"><span class="page-when">{{ r.when }}</span><span class="page-what">{{ r.title }}</span></div>
+      {% else %}
+      <p class="wall-empty">Nothing on the calendar today</p>
       {% endfor %}
-    </ul>
-    {% else %}<p class="wall-empty">{{ sec.empty }}</p>{% endif %}
-  </section>
-  {% endfor %}
+      {% if person.breathe %}<div class="page-breathe"><p class="page-breathe-head">Room to breathe</p><p>{{ person.breathe }}</p></div>{% endif %}
+    </section>
+    <div class="page-main">
+      {% for r in person.routines %}
+      {% if r.open %}
+      <section class="page-box page-routine">
+        <div class="page-box-head">
+          {% if r.id == person.opened %}<button type="button" class="page-fold-head" aria-expanded="true" hx-get="{{ here }}" hx-target="#wall-view" hx-swap="innerHTML"><h3>{{ r.title }}</h3></button>{% else %}<h3>{{ r.title }}</h3>{% endif %}
+          <span>{{ r.left }} to do</span>
+        </div>
+        <ul>{% for i in r.section.items %}{{ item(i, vals) }}{% endfor %}</ul>
+      </section>
+      {% else %}
+      <button type="button" class="page-fold" aria-expanded="false" hx-get="{{ here }}?open={{ r.id }}" hx-target="#wall-view" hx-swap="innerHTML"><span>{{ r.title }} · {{ r.summary }}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      {% endif %}
+      {% endfor %}
+      {% set open_chores = person.chores.items | rejectattr("done") | list | length %}
+      {{ box(person.chores, "page-chores", (open_chores ~ " open") if open_chores else "") }}
+      {% set open_todos = person.todos.items | rejectattr("done") | list | length %}
+      {{ box(person.todos, "page-todo", (open_todos ~ " open") if open_todos else "", "Work through these at your own pace." if open_todos else "") }}
+    </div>
   </div>
 </div>
 {% endcall %}

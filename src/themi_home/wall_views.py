@@ -13,7 +13,7 @@ The Themi Wall Plan's "Tapping things". One view at a time, one level deep:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -24,11 +24,14 @@ from themi_home.wall_view import (
     TodayLine,
     WallEvent,
     WallItem,
+    WallPerson,
     WallSection,
     WallView,
     _done_item,
     _for_both,
     _rank,
+    current_routine,
+    last_routine,
     lay_out_today,
     since,
     step_emoji,
@@ -104,12 +107,74 @@ class WeatherView:
 
 
 @dataclass(frozen=True)
+class ScheduleRow:
+    """WL9d: one of today's events on a person's page."""
+
+    when: str  # "All day", "10-11 am", "6:30-8:30 pm", with an en dash
+    title: str  # "Busy" when their calendar's details aren't shared
+    past: bool = False
+    now: bool = False
+
+
+@dataclass(frozen=True)
+class RoutinePart:
+    """WL9d: a routine on a person's page: this part of the day's open, the rest folded."""
+
+    id: int
+    title: str  # "Morning routine"
+    section: WallSection
+    open: bool
+
+    @property
+    def left(self) -> int:
+        return sum(1 for i in self.section.items if not i.done)
+
+    @property
+    def summary(self) -> str:
+        """The folded line's words after the title: "4 steps, all done", "1 step"."""
+        steps = len(self.section.items)
+        said = f"{steps} step{'' if steps == 1 else 's'}"
+        done = steps - self.left
+        return (
+            f"{said}, all done"
+            if steps and not self.left
+            else f"{said}, {done} done"
+            if done
+            else said
+        )
+
+
+@dataclass(frozen=True)
 class PersonView:
     member_id: int
     name: str
     tone: str
     events: tuple[Chip, ...]  # with their times in the title
-    sections: tuple[WallSection, ...]
+    sections: tuple[WallSection, ...]  # everything tappable on it (a tap finds its item here)
+    # WL9d: the page
+    day: str = ""  # "Wednesday, October 21"
+    headline: str = ""  # "3 done tonight", or the part of the day
+    listed: str = ""  # "4 chores and 3 to-dos on your list"
+    schedule: tuple[ScheduleRow, ...] = ()
+    breathe: str = ""  # "Nothing else this evening", when nothing else is on
+    routines: tuple[RoutinePart, ...] = ()  # this part of the day's first
+    chores: WallSection | None = None
+    todos: WallSection | None = None
+    opened: int = 0  # a folded routine unfolded
+
+
+@dataclass(frozen=True)
+class TogetherView:
+    """WL9d: the Together page: the family's open things and what's done today."""
+
+    day: str
+    tone: str
+    headline: str  # "This evening"
+    line: str  # "4 open · 3 done"
+    either: WallSection
+    family: WallSection
+    done: tuple[WallItem, ...]  # with who did it; a tap unticks
+    people: tuple[WallPerson, ...] = ()  # for "Who did it?"
 
 
 class WallViews:
@@ -276,7 +341,7 @@ class WallViews:
 
     # ----- Person -----------------------------------------------------------------------
 
-    def person(self, member_id: int) -> PersonView | None:
+    def person(self, member_id: int, opened: int = 0) -> PersonView | None:
         people = self.view.people()
         index = next((i for i, m in enumerate(people) if m.id == member_id), None)
         if index is None:
@@ -284,42 +349,128 @@ class WallViews:
         member = people[index]
         now = self.view.now()
         today = now.date()
-        events = tuple(
-            Chip(f"{_clock(e.start)} {e.title}" if not e.all_day else e.title, e.tone)
-            for e in sorted(self.view.events(today), key=lambda e: (not e.all_day, e.start))
-            if e.row == f"m{member.id}"
+        mine = sorted(
+            (e for e in self.view.events(today) if e.row == f"m{member.id}"),
+            key=lambda e: (not e.all_day, e.start),
         )
+        events = tuple(
+            Chip(f"{_clock(e.start)} {e.title}" if not e.all_day else e.title, e.tone) for e in mine
+        )
+        schedule = tuple(_schedule_row(e, now) for e in mine)
+        ahead = any(not e.all_day and e.end > now for e in mine)
+        routines = self._routine_parts(member, opened)
+        chores, todos = self._tasks(member, today)
+        count = self.view._done_today(member)
         return PersonView(
             member_id=member.id,
             name=member.name,
             tone=self.view.tone_of(member),
             events=events,
-            sections=(*self._routines(member), *self._tasks(member, today)),
+            sections=(*(r.section for r in routines), chores, todos),
+            day=f"{now:%A}, {now:%B} {now.day}",
+            headline=f"{count} done {self.view._today_word()}" if count else self.view._part_word(),
+            listed=_listed(
+                sum(1 for i in chores.items if not i.done),
+                sum(1 for i in todos.items if not i.done),
+            ),
+            schedule=schedule,
+            breathe="" if ahead else f"Nothing else {self.view._part_word().lower()}",
+            routines=routines,
+            chores=chores,
+            todos=todos,
+            opened=opened,
         )
 
-    def _routines(self, member: Member) -> list[WallSection]:
+    def _routine_parts(self, member: Member, opened: int) -> tuple[RoutinePart, ...]:
+        """Each routine for today: the one for this part of the day (or the last one, while
+        a step is open: F55c) first and open, the rest folded unless `opened`."""
         routines = self.services.maybe(keys.routines)
         if routines is None:
-            return []
+            return ()
         day = routines.today(member)
-        return [
-            WallSection(
-                routine.name,
-                tuple(
-                    WallItem(
-                        f"step-{item.id}-{day.isoformat()}",
-                        item.title,
-                        done=routines.ticked(item, day),
-                        emoji=step_emoji(item.title),
-                    )
-                    for item in routines.today_items(routine, day)
-                ),
-                empty="Nothing set",
+        now = self.view.now()
+        live = current_routine(routines, member, now)
+        current = live or last_routine(routines, member, now)
+        parts = [
+            RoutinePart(
+                routine.id,
+                f"{routine.name} routine",
+                section,
+                open=routine.id == opened or (current is not None and routine.id == current.id),
             )
             for routine in routines.of(member)
+            if (section := self._routine_section(routines, routine, day)).items
         ]
+        if (
+            live is None
+            and current is not None
+            and all(i.done for p in parts if p.id == current.id for i in p.section.items)
+        ):
+            # F55c: the last one (its window over) only stays first while a step is open
+            parts = [replace(p, open=p.id == opened) if p.id == current.id else p for p in parts]
+        first = [p for p in parts if current is not None and p.id == current.id and p.open]
+        return (*first, *(p for p in parts if p not in first))
 
-    def _tasks(self, member: Member, today: date) -> list[WallSection]:
+    def _routine_section(self, routines: Any, routine: Any, day: date) -> WallSection:
+        return WallSection(
+            routine.name,
+            tuple(
+                WallItem(
+                    f"step-{item.id}-{day.isoformat()}",
+                    item.title,
+                    done=routines.ticked(item, day),
+                    emoji=step_emoji(item.title),
+                )
+                for item in routines.today_items(routine, day)
+            ),
+            empty="Nothing set",
+        )
+
+    # ----- Together ---------------------------------------------------------------------
+
+    def together(self, asking: str = "") -> TogetherView:
+        view = self.view
+        people = view.people()
+        names = {m.id: m.name for m in people}
+        now = view.now()
+        today = now.date()
+        both = [t for t in view._open_tasks(people) if _for_both(t)]
+        either = sorted(
+            (t for t in both if t.repeats and t.due_on is not None and t.due_on <= today),
+            key=lambda t: _rank(t, today),
+        )
+        family = sorted((t for t in both if not t.repeats), key=lambda t: _rank(t, today))
+        done = tuple(
+            _done_item(t, f"{names[by]} did it" if by in names else "", emoji=view.emoji_of(t))
+            for t, by, _ in view._done_tasks(people)
+            if _for_both(t)
+        )
+
+        def items(tasks: list[Any]) -> tuple[WallItem, ...]:
+            return tuple(
+                replace(i, asking=True) if i.key == asking else i
+                for i in (view._task_item(t, today) for t in tasks)
+            )
+
+        open_count = len(either) + len(family)
+        return TogetherView(
+            day=f"{now:%A}, {now:%B} {now.day}",
+            tone=view.together_tone(),
+            headline=view._part_word(),
+            line=f"{open_count} open · {len(done)} done",
+            either=WallSection("Either of you", items(either), empty="Nothing due"),
+            family=WallSection("Family to-do", items(family), empty="Nothing on the list"),
+            done=done,
+            people=tuple(WallPerson(m.id, m.name, view.tone_of(m)) for m in people),
+        )
+
+    def find_together(self, key: str) -> WallItem | None:
+        view = self.together()
+        return next(
+            (i for i in (*view.either.items, *view.family.items, *view.done) if i.key == key), None
+        )
+
+    def _tasks(self, member: Member, today: date) -> tuple[WallSection, WallSection]:
         tasks = self.view._open_tasks([member])
         mine = [t for t in tasks if t.assignee == member.id and not _for_both(t)]
         chores = sorted(
@@ -337,7 +488,7 @@ class WallViews:
         ]
         shown = {t.id for t in chores} | {t.id for t in todos}
         finished = [t for t in done if t.id not in shown]
-        return [
+        return (
             WallSection(
                 "Chores",
                 tuple(self.view._task_item(t, today) for t in chores)
@@ -352,7 +503,7 @@ class WallViews:
                 ),
                 empty="Nothing on the list",
             ),
-        ]
+        )
 
     def find(self, member_id: int, key: str) -> WallItem | None:
         """An item showing in someone's Person view, for a tap made there."""
@@ -363,6 +514,24 @@ class WallViews:
 
 
 # ----- words -----------------------------------------------------------------------------
+
+
+def _schedule_row(event: WallEvent, now: datetime) -> ScheduleRow:
+    from themi.standard.day_card import span_words
+
+    when = "All day" if event.all_day else span_words(event.start, event.end)
+    live = not event.all_day and event.start <= now < event.end
+    return ScheduleRow(when, event.title, past=event.end <= now, now=live)
+
+
+def _listed(chores: int, todos: int) -> str:
+    """ "4 chores and 3 to-dos on your list": never a score, just what's there."""
+    parts = [
+        f"{n} {word}{'' if n == 1 else 's'}"
+        for n, word in ((chores, "chore"), (todos, "to-do"))
+        if n
+    ]
+    return f"{' and '.join(parts)} on your list" if parts else "Nothing on your list"
 
 
 def _clock(at: datetime) -> str:

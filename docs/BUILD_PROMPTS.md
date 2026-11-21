@@ -518,7 +518,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL9a | Wall: the views' new card | Wall | [x] 2026-11-20 |
 | WL9b | Wall: the small lists' cards and Things to cook | Wall | [x] 2026-11-20 |
 | WL9c | Wall: the columns say where a tap goes | Wall | [x] 2026-11-20 |
-| WL9d | Wall: the Person and Together pages | Wall | [ ] |
+| WL9d | Wall: the Person and Together pages | Wall | [x] 2026-11-21 |
 | PT1 | Package tracking: tracking numbers from email | Package tracking | [ ] |
 | PT2 | Package tracking: one parcel per tracking number | Package tracking | [ ] |
 | PT3 | Package tracking: the carriers' alert emails | Package tracking | [ ] |
@@ -23624,7 +23624,7 @@ Notes:
   bathroom chore and sees it fold. New: `tests/integration/test_wall_fold.py` (5).
 
 ### WL9d · Wall: the Person and Together pages
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: WL9c
 Read first: the plan's "A second look (WL9)" (rows six and seven) and "Tapping things";
 `WallViews.person`, `_routines`, `_tasks`, `PersonView` (`wall_views.py`); `_view_person.html`;
@@ -23656,6 +23656,29 @@ Scenario: `test_wall_evening.py` — tapping Erin's "View full day" shows her ch
 to-dos with "3 done tonight"; tapping Together's shows the family list and what's done.
 
 Notes:
+- `_sheet.html`'s `page()` (a whole page: "← The wall", "The whole family, at a glance", both
+  `data-close`; the same 2-minute close) and `item()`. `_view_person.html` rewritten;
+  `_view_together.html` new, at `/wall/view/together`; the Together column's header and foot
+  open it.
+- `PersonView` gains the page's fields (`schedule`, `breathe`, `routines` as `RoutinePart`,
+  `chores`, `todos`, `opened`); `sections` still holds everything tappable, so a tap finds its
+  item as before. `?open=<routine id>` unfolds a folded part; a tap there carries `open`, so it
+  stays unfolded. A routine whose window is now stays open when all ticked; only the last one
+  (F55c, its window over) folds once done.
+- "Room to breathe": shown when no timed event of theirs ends after now ("Nothing else this
+  evening"), including a day with nothing on the calendar.
+- `TogetherView` and `/wall/tap` with `view=together`: an open one asks who (as the column);
+  a done one-off unticks; "tap to undo" only shows when something there can be.
+- **Follow-up:** a one-off task keeps no "who did it" (only a chore's round does, in
+  `task_runs`), so Done today names who only for chores, as the column always has. Storing it
+  needs a `completed_by` column and the tick paths to fill it.
+- Changed test: `test_wall_views.py::test_the_person_view_is_their_whole_day`, because the
+  page folds the other parts of the day: it now checks Morning is open at 9 am and that
+  Afternoon and Evening each unfold to their step. New: `tests/integration/test_wall_pages.py`
+  (11); `test_wall_evening.py` opens Erin's page and Together.
+- Looked at: the home screen, Groceries, Things to cook, a person's page and Together,
+  rendered from a test scenario and screenshotted at 1080 x 1920 in headless Chrome (dark).
+  Not yet on the frame itself.
 
 ## Package tracking
 

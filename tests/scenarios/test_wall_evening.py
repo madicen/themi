@@ -93,3 +93,17 @@ async def test_michael_and_erins_evening_on_one_screen(wall: Scenario) -> None:
     clock.advance(timedelta(minutes=11))
     erin = words(column(await screen(wall), f"m{wall.member('Erin').id}"))
     assert "Clean the upstairs bathroom" not in erin and "Chores ✓ 1 done" in erin
+
+    # WL9d: her column's "View full day" opens her whole day, and Together's its page.
+    erin_id = wall.member("Erin").id
+    assert f'hx-get="/wall/view/person/{erin_id}"' in column(await screen(wall), f"m{erin_id}")
+    async with web_client(wall) as client:
+        await frame(wall, client)
+        mine = words((await client.get(f"/wall/view/person/{erin_id}")).text)
+        ours = words((await client.get("/wall/view/together")).text)
+    assert "Erin's day 1 done tonight 1 to-do on your list" in mine
+    assert "To-do 1 open Work through these at your own pace. ✉️ Process the mail" in mine
+    assert "Chores 🚽 Clean the upstairs bathroom" in mine  # ticked, still there for the day
+    assert "Things either of you could pick up. This evening 3 open · 0 done" in ours
+    assert "Family to-do 2 open Move Mimi&#39;s box upstairs 🧹 Unjam the vacuum" in ours
+    assert "Either of you 🗑️ Bring bins in from yesterday" in ours
