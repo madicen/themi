@@ -23796,7 +23796,8 @@ Notes:
   parcel already on its day, else the nearest open one due within 3 days (a parcel that
   comes two days early); an undated one joins only when the shop has just one open parcel.
   A parcel known only by its carrier ("UPS") takes in the day's numberless parcel when
-  there's just one. Plan to be updated to match.
+  there's just one. The plan says so since 2026-11-21 (also: USPS Tracking v3r2,
+  and the morning line and chat use the person's own parcels).
 - The wall's note counts parcels from one shop: "Two deliveries from Amazon are due
   today." Its "Got it" key now has a name per parcel, so a second parcel from the same shop
   is a new note.
