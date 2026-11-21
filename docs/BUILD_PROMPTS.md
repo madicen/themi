@@ -517,7 +517,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL8 | Wall: deliveries from email in Themi's note | Wall | [x] 2026-11-20 |
 | WL9a | Wall: the views' new card | Wall | [x] 2026-11-20 |
 | WL9b | Wall: the small lists' cards and Things to cook | Wall | [x] 2026-11-20 |
-| WL9c | Wall: the columns say where a tap goes | Wall | [ ] |
+| WL9c | Wall: the columns say where a tap goes | Wall | [x] 2026-11-20 |
 | WL9d | Wall: the Person and Together pages | Wall | [ ] |
 | PT1 | Package tracking: tracking numbers from email | Package tracking | [ ] |
 | PT2 | Package tracking: one parcel per tracking number | Package tracking | [ ] |
@@ -23583,7 +23583,7 @@ Notes:
   New: `tests/integration/test_wall_dishes.py` (7); `test_wall_look.py` dish-number pairs.
 
 ### WL9c · Wall: the columns say where a tap goes
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL9a
 Read first: the plan's "A second look (WL9)" (rows four and five); `WallView._person`,
 `_together`, `_done_item`, `TODOS_SHOWN`, `FAMILY_TODOS_SHOWN` (`wall_view.py`);
@@ -23607,6 +23607,21 @@ Scenario: `test_wall_evening.py` — Erin ticks "Clean the bird cage", it stays 
 and ten minutes later it's in "✓ 1 done".
 
 Notes:
+- `FOLD_AFTER` (10 minutes) in `wall_view.py`; `_done_tasks` now carries when each was
+  ticked; `WallSection.folded` and `more` (now a count). The section stays while it has only
+  folded ticks ("Chores ✓ 2 done").
+- **Deviations** (both keep something the wall had):
+  - Routine steps don't fold: a routine is this part of the day's short checklist, so its
+    ticked steps stay struck through, as before. Only chores, to-dos and Together items fold.
+  - "+N more" still opens the person's (or family's) to-do List view, not the Person view:
+    the List view is the only place on the wall with an item's menu (Tomorrow, Next week,
+    Give to, Make it a family to-do, Change the words).
+  - A chore's round folds after ten minutes like the rest, not at once, so a tap always
+    shows (and `test_a_done_chore_stays_ticked_and_cant_be_unticked` is unchanged).
+- Together's header and foot open the family to-do List view until WL9d's Together view.
+- Changed tests: `test_wall_screen.py` ("+1 more" for "More on the list");
+  `test_wall_evening.py`'s column text gains the foot buttons, and the scenario ticks Erin's
+  bathroom chore and sees it fold. New: `tests/integration/test_wall_fold.py` (5).
 
 ### WL9d · Wall: the Person and Together pages
 Status: [ ]

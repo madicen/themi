@@ -332,7 +332,7 @@ class WallViews:
         )
         done = [
             t
-            for t, _ in self.view._done_tasks([member])
+            for t, _, _ in self.view._done_tasks([member])
             if t.assignee == member.id and not _for_both(t)
         ]
         shown = {t.id for t in chores} | {t.id for t in todos}

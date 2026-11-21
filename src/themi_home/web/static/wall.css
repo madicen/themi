@@ -116,6 +116,22 @@ button.wall-col-head { cursor: pointer; }
   align-self: flex-start; min-height: 2.75rem; margin: 0.2rem 0.25rem; padding: 0 0.75rem; border: 0; border-radius: 1.4rem;
   background: none; font: inherit; font-size: 1.05rem; font-weight: 700; color: var(--tone); cursor: pointer;
 }
+/* WL9c: where a tap goes. The header's ↗ and a foot button, lined up across the columns;
+   ticks over ten minutes old fold into one quiet line. */
+.wall-col-body { flex: 1; }
+.wall-col-go {
+  margin-left: auto; flex: none; width: 2.75rem; height: 2.75rem; border-radius: 50%;
+  display: grid; place-items: center; background: var(--card);
+}
+.wall-col-go svg, .wall-col-foot svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: var(--tone); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.wall-col-foot {
+  margin: 0 0.75rem 0.75rem; min-height: 4rem; padding: 0 1.25rem; border: 0; border-radius: 1.1rem;
+  display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+  background: var(--tint); color: var(--tone); font: inherit; font-size: 1.2rem; font-weight: 700;
+}
+.wall-col-foot:focus-visible, .wall-col-head:focus-visible { outline: 0.2rem solid var(--focus); outline-offset: -0.2rem; }
+.wall-fold { display: flex; align-items: center; gap: 0.5rem; min-height: 3rem; margin: 0 0.5rem; font-size: 1.1rem; color: var(--muted); }
+.wall-fold span { color: var(--tone); font-weight: 700; }
 .tone-p0 { --tone: var(--p0); --tint: var(--p0-tint); --item-bg: var(--p0-bg); --ring: var(--p0-ring); }
 .tone-p1 { --tone: var(--p1); --tint: var(--p1-tint); --item-bg: var(--p1-bg); --ring: var(--p1-ring); }
 .tone-p2 { --tone: var(--p2); --tint: var(--p2-tint); --item-bg: var(--p2-bg); --ring: var(--p2-ring); }

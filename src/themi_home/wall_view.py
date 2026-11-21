@@ -38,6 +38,9 @@ if TYPE_CHECKING:
 
 TODOS_SHOWN = 3
 FAMILY_TODOS_SHOWN = 5
+# WL9c: a tick stays in place, struck through, this long (so a wrong tap can be undone
+# there), then folds into its section's "✓ 3 done"
+FOLD_AFTER = timedelta(minutes=10)
 SMALL_ITEMS = 4
 EVENING_BEFORE_QUIET = timedelta(hours=1)  # as routines' own evening (R1a)
 IMPORTANCE = {"high": 0, "normal": 1, "low": 2}
@@ -80,7 +83,8 @@ class WallSection:
     title: str
     items: tuple[WallItem, ...] = ()
     empty: str = ""  # said when there's nothing ("Nothing set for this evening")
-    more: bool = False  # "More on the list"
+    more: int = 0  # WL9c: how many more past the top few ("+2 more")
+    folded: int = 0  # WL9c: ticked over FOLD_AFTER ago, folded into "✓ 3 done"
 
 
 @dataclass(frozen=True)
@@ -440,19 +444,19 @@ class WallView:
                         return column, item
         return None
 
-    def _done_tasks(self, people: list[Member]) -> list[tuple[Task, int | None]]:
-        """Tasks (or a chore's round) done today, each once, with who did it: they stay on
-        the wall, ticked, until the day ends."""
+    def _done_tasks(self, people: list[Member]) -> list[tuple[Task, int | None, datetime]]:
+        """Tasks (or a chore's round) done today, each once, with who did it and when: they
+        stay on the wall, ticked, until FOLD_AFTER and then folded, until the day ends."""
         board = self.services.maybe(keys.taskboard)
         if board is None:
             return []
         now = self.now()
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        seen: dict[int, tuple[Task, int | None]] = {}
+        seen: dict[int, tuple[Task, int | None, datetime]] = {}
         for member in people:
             for done in board.done_between(member, start, now + timedelta(seconds=1)):
                 if not done.task.off_displays:
-                    seen.setdefault(done.task.id, (done.task, done.by))
+                    seen.setdefault(done.task.id, (done.task, done.by, done.at))
         return list(seen.values())
 
     def _open_tasks(self, people: list[Member]) -> list[Task]:
@@ -471,7 +475,7 @@ class WallView:
         member: Member,
         tone: str,
         tasks: list[Task],
-        done: list[tuple[Task, int | None]],
+        done: list[tuple[Task, int | None, datetime]],
         today: date,
     ) -> WallColumn:
         sections: list[WallSection] = []
@@ -486,22 +490,27 @@ class WallView:
         todos = sorted((t for t in mine if not t.repeats), key=lambda t: _rank(t, today))
         shown = {t.id for t in chores} | {t.id for t in todos[:TODOS_SHOWN]}
         finished = [
-            t for t, _ in done if t.assignee == member.id and not _for_both(t) and t.id not in shown
+            (t, at)
+            for t, _, at in done
+            if t.assignee == member.id and not _for_both(t) and t.id not in shown
         ]
+        recent, folded = self._fold(finished)
         sections.append(
             WallSection(
                 "Chores",
                 tuple(self._task_item(t, today) for t in chores)
-                + tuple(_done_item(t, emoji=self.emoji_of(t)) for t in finished if t.repeats),
+                + tuple(_done_item(t, emoji=self.emoji_of(t)) for t in recent if t.repeats),
+                folded=sum(1 for t in folded if t.repeats),
             )
         )
         sections.append(
             WallSection(
                 "To-do",
                 tuple(self._task_item(t, today) for t in todos[:TODOS_SHOWN])
-                + tuple(_done_item(t, emoji=self.emoji_of(t)) for t in finished if not t.repeats),
+                + tuple(_done_item(t, emoji=self.emoji_of(t)) for t in recent if not t.repeats),
                 empty="Nothing on the list",
-                more=len(todos) > TODOS_SHOWN,
+                more=max(0, len(todos) - TODOS_SHOWN),
+                folded=sum(1 for t in folded if not t.repeats),
             )
         )
         count = self._done_today(member)
@@ -511,14 +520,21 @@ class WallView:
             initial=member.name[:1].upper(),
             tone=tone,
             summary=f"{count} done {self._today_word()}" if count else self._part_word(),
-            sections=tuple(s for s in sections if s.items or s.empty),
+            sections=tuple(s for s in sections if s.items or s.empty or s.folded),
             member_id=member.id,
         )
+
+    def _fold(self, finished: list[tuple[Task, datetime]]) -> tuple[list[Task], list[Task]]:
+        """WL9c: what was ticked in the last FOLD_AFTER (shown, struck through), and what
+        folds into its section's count."""
+        now = self.now()
+        recent = [t for t, at in finished if now - at < FOLD_AFTER]
+        return recent, [t for t, at in finished if now - at >= FOLD_AFTER]
 
     def _together(
         self,
         tasks: list[Task],
-        done: list[tuple[Task, int | None]],
+        done: list[tuple[Task, int | None, datetime]],
         today: date,
         names: dict[int, str],
     ) -> WallColumn:
@@ -529,13 +545,19 @@ class WallView:
         )
         family = sorted((t for t in both if not t.repeats), key=lambda t: _rank(t, today))
         shown = {t.id for t in either} | {t.id for t in family[:FAMILY_TODOS_SHOWN]}
+        ours = [(t, at) for t, _, at in done if _for_both(t) and t.id not in shown]
+        recent, folded = self._fold(ours)
+        who = {t.id: by for t, by, _ in done}
         finished = [
             (
                 t,
-                _done_item(t, f"{names[by]} did it" if by in names else "", emoji=self.emoji_of(t)),
+                _done_item(
+                    t,
+                    f"{names[by]} did it" if (by := who[t.id]) in names else "",
+                    emoji=self.emoji_of(t),
+                ),
             )
-            for t, by in done
-            if _for_both(t) and t.id not in shown
+            for t in recent
         ]
         return WallColumn(
             key=TOGETHER,
@@ -548,13 +570,15 @@ class WallView:
                     "Either of you",
                     tuple(self._task_item(t, today) for t in either)
                     + tuple(item for t, item in finished if t.repeats),
+                    folded=sum(1 for t in folded if t.repeats),
                 ),
                 WallSection(
                     "Family to-do",
                     tuple(self._task_item(t, today) for t in family[:FAMILY_TODOS_SHOWN])
                     + tuple(item for t, item in finished if not t.repeats),
                     empty="Nothing on the list",
-                    more=len(family) > FAMILY_TODOS_SHOWN,
+                    more=max(0, len(family) - FAMILY_TODOS_SHOWN),
+                    folded=sum(1 for t in folded if not t.repeats),
                 ),
             ),
         )
