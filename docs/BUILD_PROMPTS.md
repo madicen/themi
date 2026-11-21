@@ -520,7 +520,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL9c | Wall: the columns say where a tap goes | Wall | [x] 2026-11-20 |
 | WL9d | Wall: the Person and Together pages | Wall | [x] 2026-11-21 |
 | PT1 | Package tracking: tracking numbers from email | Package tracking | [x] 2026-11-21 |
-| PT2 | Package tracking: one parcel per tracking number | Package tracking | [ ] |
+| PT2 | Package tracking: one parcel per tracking number | Package tracking | [x] 2026-11-21 |
 | PT3 | Package tracking: the carriers' alert emails | Package tracking | [ ] |
 | PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [ ] |
 | PT5 | Package tracking: asking on a schedule | Package tracking | [ ] |
@@ -23759,7 +23759,7 @@ Notes:
   working in the main checkout; it's a separate line of commits on `main`.
 
 ### PT2 · Package tracking: one parcel per tracking number
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: PT1
 Read first: the plan's "Part 1: Parcel identity" ("Triage assigns numbers to parcels",
 "The parcel table", "Merging with WL8"); `themi_google/deliveries.py`;
@@ -23779,6 +23779,29 @@ Read first: the plan's "Part 1: Parcel identity" ("Triage assigns numbers to par
 Tests: shop email then carrier email make one parcel; an invented number is dropped; a
 digest's three parcels; the shop name kept; `delivered` stays; the fold; the migration;
 two parcels from one shop on the wall; nothing shows contents or a number.
+
+Notes:
+- `parcels` (migration 0178) replaces `deliveries`, which it copies (one numberless parcel
+  per shop and day, the furthest along) and drops. A number is unique across carriers;
+  `carrier` holds several space-separated while PT1 couldn't tell (PT5 settles it).
+  `window_start`/`window_end`, `left_at` and `checked_at` are there for PT5.
+- Triage's `delivery` is now `parcels` (shop, tracking, date, status, problem). The found
+  numbers go in a `<data source="email N tracking numbers">` block after the body; a
+  number the model gives that isn't one of them is dropped. When an email has one parcel
+  and one number and the model left the number out, they go together.
+- The model may also say `problem` (missed, held, delayed, needs a signature) with a few
+  words of its own ("Delivery attempted"), cut to 80 characters. PT6 words it on the wall.
+- Beyond the plan's "same shop on the same day": a numberless email joins the same shop's
+  parcel already on its day, else the nearest open one due within 3 days (a parcel that
+  comes two days early); an undated one joins only when the shop has just one open parcel.
+  A parcel known only by its carrier ("UPS") takes in the day's numberless parcel when
+  there's just one. Plan to be updated to match.
+- The wall's note counts parcels from one shop: "Two deliveries from Amazon are due
+  today." Its "Got it" key now has a name per parcel, so a second parcel from the same shop
+  is a new note.
+- Tests changed because they reached into moved wiring: `test_triage_parts`
+  (`_verdicts` takes each email's found numbers), `test_deliveries` (`parse`'s new shape),
+  `test_wall_deliveries` (verdicts send `parcels`; the count is from `parcels`).
 
 ### PT3 · Package tracking: the carriers' alert emails
 Status: [ ]

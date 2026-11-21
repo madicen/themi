@@ -1,4 +1,4 @@
-"""WL8: parcels from shipping emails, in Themi's note on the wall. Erin's inbox is linked
+"""WL8, PT2: parcels from shipping emails, in Themi's note on the wall. Erin's inbox is linked
 and watched; the day is Wednesday 21 October 2026, 9 am, Los Angeles."""
 
 from __future__ import annotations
@@ -22,8 +22,6 @@ from tests.scenarios.test_triage import ERIN, arrive, link, verdict
 from themi.core import keys
 from themi_home.wall_view import WallSettings
 
-NO_DELIVERY = {"shop": "", "date": "", "status": ""}
-
 
 @pytest.fixture
 async def mail(
@@ -45,7 +43,12 @@ async def mail(
 
 
 async def shipping(
-    s: Scenario, shop: str, status: str, day: str = "2026-10-21", category: str = "routine"
+    s: Scenario,
+    shop: str,
+    status: str,
+    day: str = "2026-10-21",
+    category: str = "routine",
+    tracking: str = "",
 ) -> None:
     """A shipping email from a shop about a parcel with a present in it, sorted."""
     inbox: FakeGmail = s.gmail  # type: ignore[assignment]
@@ -55,12 +58,13 @@ async def shipping(
         {
             "sender": f"{shop} <ship@{shop.lower()}.example>",
             "subject": "Your order is on its way",
-            "text": "Your Lego Millennium Falcon gift is on its way.",
+            "text": "Your Lego Millennium Falcon gift is on its way."
+            + (f"\nTracking number: {tracking}" if tracking else ""),
         },
     )
-    delivery = {"shop": shop, "date": day, "status": status}
+    parcel = {"shop": shop, "tracking": tracking, "date": day, "status": status, "problem": ""}
     s.primary.queue_structured(
-        {"results": [{**verdict(email, category, f"{shop} parcel"), "delivery": delivery}]}
+        {"results": [{**verdict(email, category, f"{shop} parcel"), "parcels": [parcel]}]}
     )
     await s.run_periodic("email.triage")
 
@@ -147,7 +151,17 @@ async def test_an_email_about_no_parcel_keeps_nothing(mail: Scenario) -> None:
     [email] = await arrive(
         mail, inbox, {"sender": "A <a@x.example>", "subject": "Hi", "text": "Hi"}
     )
-    item: dict[str, Any] = {**verdict(email, "routine"), "delivery": NO_DELIVERY}
+    item: dict[str, Any] = {**verdict(email, "routine"), "parcels": []}
     mail.primary.queue_structured({"results": [item]})
     await mail.run_periodic("email.triage")
-    assert mail.app.db.scalar("SELECT COUNT(*) FROM deliveries") == 0
+    assert mail.app.db.scalar("SELECT COUNT(*) FROM parcels") == 0
+
+
+async def test_two_parcels_from_one_shop_are_counted(mail: Scenario) -> None:
+    """PT2: a parcel each, by tracking number; the wall never shows the numbers."""
+    await shipping(mail, "Amazon", "out_for_delivery", tracking="TBA502887274000")
+    await shipping(mail, "Amazon", "on_the_way", tracking="TBA010000000000")
+    await shipping(mail, "Amazon", "out_for_delivery", tracking="TBA502887274000")  # again
+    assert "Two deliveries from Amazon are due today." in await note(mail)
+    page = (await get(mail, "/wall")).text + (await get(mail, "/wall/view/note")).text
+    assert "TBA" not in page and "Lego" not in page

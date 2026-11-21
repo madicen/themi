@@ -711,17 +711,21 @@ class WallView:
         deliveries = self.services.maybe(keys.deliveries)
         if deliveries is None or not self.services.store.household(WallSettings).deliveries:
             return None, None
-        found = deliveries.on(today)
+        found = deliveries.on(today)  # PT2: a line per parcel
         came = [d.shop for d in found if d.status == "delivered"]
         due = [d.shop for d in found if d.status != "delivered"]
         notes: list[WallNote | None] = []
-        for shops, kind in ((came, "came"), (due, "due")):
-            key = f"delivery-{kind}-{today.isoformat()}-{','.join(shops)}"
+        for parcels, kind in ((came, "came"), (due, "due")):
+            shops = list(dict.fromkeys(parcels))
+            key = f"delivery-{kind}-{today.isoformat()}-{','.join(parcels)}"
             if not shops or key in quiet:
                 notes.append(None)
                 continue
-            several = len(shops) > 1
-            what = f"{'Deliveries' if several else 'A delivery'} from {and_list(shops)}"
+            several = len(parcels) > 1
+            if len(shops) == 1 and several:  # "Two deliveries from Amazon"
+                what = f"{_count_word(len(parcels))} deliveries from {shops[0]}"
+            else:
+                what = f"{'Deliveries' if several else 'A delivery'} from {and_list(shops)}"
             if kind == "came":
                 text = f"{what} came today. {'They' if several else 'It'} may be at the door."
                 why = "A shipping email says it was delivered today."
@@ -1070,3 +1074,9 @@ def _asking(column: WallColumn, key: str) -> WallColumn:
         for section in column.sections
     )
     return replace(column, sections=sections)
+
+
+def _count_word(n: int) -> str:
+    """PT2: "Two deliveries from Amazon"."""
+    words = ("Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine")
+    return words[n - 2] if 2 <= n <= 9 else "Several"

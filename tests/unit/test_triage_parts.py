@@ -104,7 +104,7 @@ def test_only_well_formed_verdicts_for_this_batch_count() -> None:
             {"category": "noise"},
         ]
     }
-    verdicts = _verdicts(data, {1, 2, 3})
+    verdicts = _verdicts(data, {1: set(), 2: set(), 3: set()})  # PT2: with found numbers
     assert set(verdicts) == {1, 3}
     assert verdicts[1].category == "noise" and verdicts[1].summary == "A promo"
     assert verdicts[1].severe is False and verdicts[1].reply_draft == ""  # only for their kinds
@@ -192,3 +192,34 @@ def test_triage_texts_pass_the_strictest_pda_check() -> None:
     ]
     for text in texts:
         assert find_demands(text, 3) == [], text
+
+
+# ----- PT2: tracking numbers and parcels ---------------------------------------------------
+
+
+def test_found_tracking_numbers_reach_the_model_in_their_own_data_block(account) -> None:
+    tracking = json.dumps([{"carrier": "ups", "number": "1Z5R89390357567127"}])
+    prompt = email_prompt(
+        [row(7, account.id, "x" * 9000, tracking=tracking), row(8, account.id)],
+        {account.id: account},
+    )
+    block = prompt.split("email 7 tracking numbers", 1)[1]
+    assert block.split("</data>", 1)[0].strip(' ">\n').endswith("1Z5R89390357567127")
+    assert "email 8 tracking numbers" not in prompt  # none found, no block
+
+
+def test_a_tracking_number_the_model_made_up_is_dropped() -> None:
+    real, made_up = "1Z5R89390357567127", "1Z999AA10123456784"
+    parcel = {"shop": "Chewy", "date": "", "status": "on_the_way", "problem": ""}
+    data = {
+        "results": [
+            {
+                "email_id": 1,
+                "category": "routine",
+                "summary": "Shipped",
+                "parcels": [{**parcel, "tracking": real}, {**parcel, "tracking": made_up}],
+            }
+        ]
+    }
+    verdicts = _verdicts(data, {1: {real}})
+    assert [p["tracking"] for p in verdicts[1].parcels] == [real, ""]
