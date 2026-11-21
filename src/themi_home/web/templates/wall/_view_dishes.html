@@ -1,0 +1,45 @@
+{#- WL9b: Things to cook. The dishes numbered; a tap unfolds one in place (its ingredients to
+    tick, Add the rest to Groceries, Start cooking) and a tap again folds it, so the wall is
+    still one level deep. -#}
+{% from "wall/_sheet.html" import sheet, head with context %}
+{% set n = view.dishes | length %}
+{% call sheet(view.title, tone=view.tone, foot=["1 idea saved" if n == 1 else n ~ " ideas saved"]) %}
+<div class="tone-{{ view.tone }} sheet-list sheet-dishes">
+  {{ head("Household", view.title, "Ideas for whenever you're ready. Tap one to see what it needs.") }}
+  <ol class="sheet-rows">
+    {% for id, name in view.dishes %}
+    {% set d = view.open if view.open and view.open.item_id == id else none %}
+    <li class="sheet-row sheet-dish{% if d %} open{% endif %}">
+      <button type="button" class="wall-item" aria-expanded="{{ 'true' if d else 'false' }}" hx-get="{{ '/wall/view/dishes' if d else '/wall/view/dish/' ~ id }}" hx-target="#wall-view" hx-swap="innerHTML">
+        <span class="dish-num">{{ "%02d" % loop.index }}</span><span class="wall-words"><span class="wall-title">{{ name }}</span></span>
+      </button>
+      {% if d %}
+      <div class="sheet-dish-body">
+        {% if d.said %}<p class="sheet-done" role="status">{{ d.said }}</p>{% endif %}
+        {% if d.ingredients %}
+        <form class="sheet-dish-form" hx-post="/wall/view/dish/{{ d.item_id }}/add" hx-target="#wall-view" hx-swap="innerHTML">
+          <p class="sheet-note">Tick what's in the house; the rest can go on the grocery list.</p>
+          <ul class="sheet-checks">
+            {% for name in d.ingredients %}
+            <li><label><input type="checkbox" name="have" value="{{ name }}"> {{ name }}</label></li>
+            {% endfor %}
+          </ul>
+          <div class="sheet-actions"><button class="sheet-button primary">Add the rest to Groceries</button></div>
+        </form>
+        {% else %}
+        <p class="sheet-note">There's no recipe for this in the cookbook.</p>
+        {% endif %}
+        {% if d.recipe %}
+        <div class="sheet-actions" role="group" aria-label="Start cooking">
+          {% for pid, pname in d.people %}
+          <button type="button" class="sheet-button" hx-post="/wall/view/dish/{{ d.item_id }}/cook" hx-vals='{"by": "{{ pid }}"}' hx-target="#wall-view" hx-swap="innerHTML">{{ pname }} is cooking</button>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</div>
+{% endcall %}

@@ -172,7 +172,7 @@ def soup(s: Scenario) -> int:
 
 async def test_a_dish_shows_its_ingredients_to_tick(wall: Scenario) -> None:
     item = soup(wall)
-    page = (await get(wall, "/wall")).text
+    page = (await get(wall, "/wall/view/dishes")).text  # WL9b: the dishes are in their view
     assert f'hx-get="/wall/view/dish/{item}"' in page
     view = await get(wall, f"/wall/view/dish/{item}")
     names = re.findall(r'name="have" value="([^"]+)"', view.text)

@@ -91,6 +91,9 @@ def text_pairs(t: dict[str, str]) -> list[tuple[str, str, str]]:
             # WL9a: a view's kicker and foot line on its card, and its filled Back button
             (f"{p}'s view kicker", t[f"--{p}"], t["--card"]),
             (f"{p}'s Back button", t["--on-tone"], t[f"--{p}"]),
+            # WL9b: a dish's number on its row, folded and unfolded
+            (f"{p}'s dish number", t[f"--{p}"], t["--soft"]),
+            (f"{p}'s open dish number", t[f"--{p}"], t[f"--{p}-bg"]),
         ]
     return pairs
 

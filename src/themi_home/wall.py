@@ -41,7 +41,14 @@ from themi.storage.db import Database
 from themi_home.wall_calendars import WallCalendars
 from themi_home.wall_columns import TONES, BadLayout, WallColumns, moved
 from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
-from themi_home.wall_views import WallViews, _recipe, dish_view, list_view, note_view
+from themi_home.wall_views import (
+    WallViews,
+    _recipe,
+    dish_view,
+    dishes_view,
+    list_view,
+    note_view,
+)
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -586,12 +593,22 @@ def routes(kit: Kit) -> APIRouter:
         )
         return outcome.message
 
+    def dishes(request: Request, item_id: int = 0, said: str = "") -> HTMLResponse:
+        """WL9b: Things to cook, with `item_id` unfolded (its ingredients, Start cooking)."""
+        found = dishes_view(views(), item_id, said)
+        return sheet(request, "_view_dishes.html", view=found) if found else HTMLResponse("")
+
+    @router.get("/wall/view/dishes", response_class=HTMLResponse)
+    def dishes_page(request: Request) -> Response:
+        if viewer(request) is None:
+            return gone()
+        return dishes(request)
+
     @router.get("/wall/view/dish/{item_id:int}", response_class=HTMLResponse)
     def dish_page(request: Request, item_id: int) -> Response:
         if viewer(request) is None:
             return gone()
-        found = dish_view(views(), item_id)
-        return sheet(request, "_view_dish.html", view=found) if found else HTMLResponse("")
+        return dishes(request, item_id)
 
     @router.post("/wall/view/dish/{item_id:int}/add", response_class=HTMLResponse)
     async def dish_add(request: Request, item_id: int) -> Response:
@@ -613,7 +630,7 @@ def routes(kit: Kit) -> APIRouter:
         said = "Everything's in the house or on the list already."
         if rest and people:
             said = await stage_groceries(people[0], rest)
-        return sheet(request, "_view_dish.html", view=replace(found, said=said))
+        return dishes(request, item_id, said)
 
     @router.post("/wall/view/dish/{item_id:int}/cook", response_class=HTMLResponse)
     async def dish_cook(request: Request, item_id: int) -> Response:
@@ -631,7 +648,7 @@ def routes(kit: Kit) -> APIRouter:
             return HTMLResponse("")
         await cooking.start(cook, recipe)
         said = f"Started {recipe.name}. The cook screen is on {cook.name}'s phone."
-        return sheet(request, "_view_dish.html", view=replace(found, said=said))
+        return dishes(request, item_id, said)
 
     @router.get("/wall/view/note", response_class=HTMLResponse)
     def note_page(request: Request) -> Response:

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from themi.core import keys
 from themi_home.wall_view import (
+    COOKING,
     Chip,
     TodayLine,
     WallEvent,
@@ -528,6 +529,36 @@ def _lately(views: WallViews, people: list[Member], owner: Member | None) -> tup
             if (owner is None) == _for_both(task) and (owner is None or task.assignee == owner.id):
                 seen.setdefault(task.id, task.title)
     return tuple(seen.values())
+
+
+@dataclass(frozen=True)
+class DishesView:
+    """WL9b: the household's Things to cook, numbered; one dish unfolded at most."""
+
+    title: str  # the list's own name
+    tone: str
+    dishes: tuple[tuple[int, str], ...]
+    open: DishView | None = None
+
+
+def dishes_view(views: WallViews, opened: int = 0, said: str = "") -> DishesView | None:
+    lists = views.services.maybe(keys.lists)
+    people = views.view.people()
+    if lists is None or not people:
+        return None
+    found = next(
+        (
+            nl
+            for nl in lists.visible(people[0])
+            if not nl.personal and nl.purpose is None and COOKING.search(nl.name)
+        ),
+        None,
+    )
+    if found is None:
+        return None
+    dishes = tuple((i.id, i.name) for i in found.open_items)
+    dish = dish_view(views, opened, said) if opened in {i for i, _ in dishes} else None
+    return DishesView(found.name, views.view.together_tone(), dishes, dish)
 
 
 def dish_view(views: WallViews, item_id: int, said: str = "") -> DishView | None:

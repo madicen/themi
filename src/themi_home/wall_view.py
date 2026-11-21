@@ -111,6 +111,8 @@ class SmallList:
     # view, by `ids`), or "" (nothing)
     opens: str = ""
     ids: tuple[int, ...] = ()
+    count: int = 0  # WL9b: everything on it, for the card's "2 items" / "4 ideas"
+    tone: str = ""  # WL9b: the household's colour, on a card that opens something
 
 
 @dataclass(frozen=True)
@@ -880,7 +882,9 @@ class WallView:
         groceries = self.services.maybe(keys.groceries)
         if groceries is not None:
             names = [g.name[:1].upper() + g.name[1:] for g in groceries.needed()]
-            found.append(replace(_small("Groceries", names), opens="groceries"))
+            found.append(
+                replace(_small("Groceries", names), opens="groceries", tone=self.together_tone())
+            )
         lists = self.services.maybe(keys.lists)
         people = self.people()
         if lists is not None and people:
@@ -893,7 +897,7 @@ class WallView:
                 small = _small(nl.name, [i.name for i in nl.open_items])
                 if COOKING.search(nl.name):  # "Things to cook": each one a dish (WL5b)
                     ids = tuple(i.id for i in nl.open_items[:SMALL_ITEMS])
-                    small = replace(small, opens="dishes", ids=ids)
+                    small = replace(small, opens="dishes", ids=ids, tone=self.together_tone())
                 found.append(small)
         return tuple(found)
 
@@ -956,7 +960,9 @@ def _clock(at: datetime) -> str:
 
 
 def _small(name: str, items: list[str]) -> SmallList:
-    return SmallList(name, tuple(items[:SMALL_ITEMS]), max(0, len(items) - SMALL_ITEMS))
+    return SmallList(
+        name, tuple(items[:SMALL_ITEMS]), max(0, len(items) - SMALL_ITEMS), count=len(items)
+    )
 
 
 def lay_out_today(

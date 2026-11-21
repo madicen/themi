@@ -94,7 +94,7 @@ async def test_a_dish_is_a_household_card(wall: Scenario) -> None:
     item = soup(wall)
     view = (await get(wall, f"/wall/view/dish/{item}")).text
     assert_a_card(view, "family")
-    assert kicker(view) == "Things to cook"
+    assert kicker(view) == "Household"  # WL9b: the dish unfolds in Things to cook
 
 
 async def test_the_note_is_from_themi(wall: Scenario) -> None:

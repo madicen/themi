@@ -516,7 +516,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL7 | Wall: event notes in the Event view | Wall | [x] 2026-11-20 |
 | WL8 | Wall: deliveries from email in Themi's note | Wall | [x] 2026-11-20 |
 | WL9a | Wall: the views' new card | Wall | [x] 2026-11-20 |
-| WL9b | Wall: the small lists' cards and Things to cook | Wall | [ ] |
+| WL9b | Wall: the small lists' cards and Things to cook | Wall | [x] 2026-11-20 |
 | WL9c | Wall: the columns say where a tap goes | Wall | [ ] |
 | WL9d | Wall: the Person and Together pages | Wall | [ ] |
 | PT1 | Package tracking: tracking numbers from email | Package tracking | [ ] |
@@ -23541,7 +23541,7 @@ Notes:
 - Not looked at on the frame or in a browser.
 
 ### WL9b · Wall: the small lists' cards and Things to cook
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL9a
 Read first: the plan's "A second look (WL9)" (rows two and three); `WallView.smalls` and
 `SmallList` (`wall_view.py`), `_smalls.html`, `dish_view` and `_view_dish.html`, the dish
@@ -23568,6 +23568,19 @@ ingredients, once each, and the view stays open on that dish; Start cooking work
 Scenario: none.
 
 Notes:
+- `_smalls.html`: a card per list; Groceries and Things to cook are one `<button>` each
+  (`/wall/view/list/groceries`, `/wall/view/dishes`) in the household's colour
+  (`SmallList.tone`, `count`); another household list is a `<section>` with its count and no
+  link. The " · " between items is CSS (`::before`), so the page's words are unchanged.
+- No "No ideas yet" card in practice: the wall already leaves out a household list with
+  nothing open (WL2), so an empty Things to cook has no card. The wording is in the template.
+- `dishes_view` / `DishesView` and `_view_dishes.html` (replaces `_view_dish.html`):
+  `/wall/view/dish/{id}` is the same view with that dish unfolded, and its add and cook
+  POSTs come back to it with what they did.
+- Changed tests: `test_wall_list_views.py::test_a_dish_shows_its_ingredients_to_tick` finds the
+  dish's link in the Things to cook view, not on the home screen (the wiring moved);
+  `test_wall_card.py::test_a_dish_is_a_household_card` kicker "Household".
+  New: `tests/integration/test_wall_dishes.py` (7); `test_wall_look.py` dish-number pairs.
 
 ### WL9c · Wall: the columns say where a tap goes
 Status: [ ]

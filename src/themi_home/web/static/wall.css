@@ -127,9 +127,21 @@ button.wall-col-head { cursor: pointer; }
 .tone-p6 { --tone: var(--p6); --tint: var(--p6-tint); --item-bg: var(--p6-bg); --ring: var(--p6-ring); }
 
 /* the small lists */
-.wall-smalls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
-.wall-small h2 { font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: 0.35rem; }
-.wall-small p { font-size: 1.3rem; line-height: 1.35; }
+/* WL9b: a card per list: a few items, then the count and Open; the whole card is the tap */
+.wall-smalls { display: flex; gap: 1.25rem; }
+.wall-small {
+  flex: 1 1 0; min-width: 0; min-height: 11rem; display: flex; flex-direction: column; gap: 0.6rem;
+  border: 0; font: inherit; color: inherit; text-align: left;
+}
+button.wall-small { cursor: pointer; }
+button.wall-small:focus-visible { outline: 0.2rem solid var(--focus); outline-offset: 0.15rem; }
+.wall-small h2 { font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tone, var(--muted)); font-weight: 700; }
+.wall-small p { font-size: 1.4rem; line-height: 1.35; }
+.wall-small-items { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wall-small-item + .wall-small-item::before { content: " · "; color: var(--muted); }
+.wall-small-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: 1.15rem; color: var(--muted); }
+.wall-small-open { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; color: var(--tone, var(--fg)); }
+.wall-small-open svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* when Themi couldn't be reached: the last good screen stays, marked */
 .wall-stale { position: fixed; right: 1.5rem; bottom: 1.25rem; font-size: 1.2rem; color: var(--stale);
@@ -283,9 +295,15 @@ button.wall-item:focus-visible { outline: 0.2rem solid var(--focus); outline-off
 .sheet-checks input { width: 2rem; height: 2rem; }
 .sheet-note-head { display: flex; gap: 1.25rem; align-items: flex-start; }
 .sheet-note-text { font-size: 2rem; line-height: 1.35; font-weight: 500; }
-.wall-small-open { display: block; width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; padding: 0; cursor: pointer; }
-.wall-dishes { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
-.wall-dish { min-height: 3rem; padding: 0 0.9rem; border-radius: 1.5rem; border: 0.12rem solid var(--line); background: var(--soft); font: inherit; font-size: 1.15rem; cursor: pointer; }
+/* WL9b: Things to cook, numbered; an open dish unfolds under its row */
+.sheet-dish { background: var(--soft); }
+.sheet-dish.open { background: var(--item-bg); }
+.sheet-dish .wall-item { min-height: 5.5rem; padding: 0 1.6rem; gap: 1.5rem; }
+.sheet-dish .wall-title { font-size: 1.75rem; }
+.dish-num { flex: none; width: 2.5rem; font-size: 1.5rem; font-weight: 500; color: var(--tone); }
+.sheet-dish-body { display: flex; flex-direction: column; gap: 1rem; padding: 0 1.4rem 1.5rem; }
+.sheet-dish-form { display: flex; flex-direction: column; gap: 1rem; }
+.sheet-dish .sheet-checks label { background: var(--card); }
 
 /* WL6: the night. Dim, the time, tomorrow's plan; a touch shows everything (.awake). */
 #wall-night { display: none; }
