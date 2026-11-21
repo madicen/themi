@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="640" viewBox="0 0 320 640" role="img" aria-labelledby="title desc">
+  <title id="title">Asking Themi to body double</title>
+  <desc id="desc">A Telegram chat. Erin asks: can you body double me while I sort the mail and pay the water bill? Step by step please. Themi breaks it into nine steps, from gathering the mail to filing the receipt, with Go, Change them and No steps buttons, then sends step 1 of 9, gather the mail, with Next and Done.</desc>
+  <style>
+    svg { --bg: #ffffff; --phone: #e7ebf0; --screen: #dfe7ee; --bar: #f7f9fb; --ink: #1d2330; --muted: #5f6878;
+          --them: #ffffff; --me: #e1f7d0; --btn: #f3f6f9; --btn-ink: #2a7ab8; --accent: #2a9fd6; --edge: #d3d9e0; --quote: #2a9fd6; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg: #0d1117; --phone: #1f252d; --screen: #0f1720; --bar: #17212b; --ink: #e6e9ee; --muted: #9aa4b2;
+            --them: #182533; --me: #2b5278; --btn: #1e2c3a; --btn-ink: #7cc4f0; --accent: #5bbbe8; --edge: #2b323c; --quote: #5bbbe8; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .bg { fill: var(--bg); } .phone { fill: var(--phone); } .screen { fill: var(--screen); } .bar { fill: var(--bar); }
+    .them { fill: var(--them); } .me { fill: var(--me); }
+    .btn { fill: var(--btn); stroke: var(--edge); stroke-width: 1; }
+    .btn-t { font-size: 12.5px; font-weight: 600; fill: var(--btn-ink); }
+    .msg { font-size: 13px; } .b { font-weight: 700; }
+    .who { font-size: 14px; font-weight: 700; } .status { font-size: 11px; fill: var(--muted); }
+    .dot { fill: var(--accent); } .quote { fill: var(--quote); }
+  </style>
+  <defs><clipPath id="scr"><rect x="12" y="12" width="272" height="596" rx="22"/></clipPath></defs>
+
+  <rect class="bg" width="320" height="640" rx="16"/>
+  <g transform="translate(12 10)">
+    <rect class="phone" width="296" height="620" rx="32"/>
+    <g clip-path="url(#scr)">
+      <rect class="screen" x="12" y="12" width="272" height="596"/>
+      <rect class="bar" x="12" y="12" width="272" height="56"/>
+      <circle class="dot" cx="44" cy="40" r="15"/>
+      <text x="44" y="45" text-anchor="middle" style="font-size:14px;font-weight:700;fill:#fff">T</text>
+      <text class="who" x="68" y="37">Themi</text>
+      <text class="status" x="68" y="53">bot</text>
+
+      <rect class="me" x="44" y="80" width="228" height="78" rx="14"/>
+      <text class="msg" x="58" y="104">Can you body double me while I</text>
+      <text class="msg" x="58" y="124">sort the mail and pay the water</text>
+      <text class="msg" x="58" y="144">bill? Step by step please</text>
+
+      <rect class="them" x="24" y="168" width="240" height="232" rx="14"/>
+      <text class="msg" x="38" y="192">Here's how I'd break it up:</text>
+      <rect class="quote" x="38" y="202" width="3" height="186" rx="1.5"/>
+      <text class="msg" x="50" y="217">1. Gather the mail</text>
+      <text class="msg" x="50" y="237">2. Open the envelopes</text>
+      <text class="msg" x="50" y="257">3. Discard the junk mail</text>
+      <text class="msg" x="50" y="277">4. Find the water bill</text>
+      <text class="msg" x="50" y="297">5. Open the water bill</text>
+      <text class="msg" x="50" y="317">6. Open the banking app</text>
+      <text class="msg" x="50" y="337">7. Enter the bill details</text>
+      <text class="msg" x="50" y="357">8. Authorize the payment</text>
+      <text class="msg" x="50" y="377">9. File the receipt (Optional/Bonus)</text>
+
+      <rect class="btn" x="24" y="406" width="76" height="32" rx="9"/>
+      <text class="btn-t" x="62" y="427" text-anchor="middle">Go</text>
+      <rect class="btn" x="104" y="406" width="88" height="32" rx="9"/>
+      <text class="btn-t" x="148" y="427" text-anchor="middle">Change them</text>
+      <rect class="btn" x="196" y="406" width="68" height="32" rx="9"/>
+      <text class="btn-t" x="230" y="427" text-anchor="middle">No steps</text>
+
+      <rect class="me" x="208" y="452" width="64" height="34" rx="14"/>
+      <text class="msg" x="240" y="474" text-anchor="middle">Go</text>
+
+      <rect class="them" x="24" y="498" width="240" height="56" rx="14"/>
+      <text class="msg b" x="38" y="520">Step 1 of 9:</text>
+      <rect class="quote" x="38" y="528" width="3" height="18" rx="1.5"/>
+      <text class="msg" x="50" y="542">Gather the mail</text>
+      <rect class="btn" x="24" y="560" width="118" height="32" rx="9"/>
+      <text class="btn-t" x="83" y="581" text-anchor="middle">Next</text>
+      <rect class="btn" x="146" y="560" width="118" height="32" rx="9"/>
+      <text class="btn-t" x="205" y="581" text-anchor="middle">Done</text>
+    </g>
+  </g>
+</svg>

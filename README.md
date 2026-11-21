@@ -80,26 +80,62 @@ It works on a phone.
 
 <br clear="right">
 
-## In the kitchen
+## A cooking companion
 
-<img align="left" width="320" alt="A recipe card for pancakes: ingredients in cups with grams beside them, and five numbered steps with short titles" src="docs/images/recipe.png">
+Start cooking from chat, the website or the wall, and a phone or kitchen tablet becomes the
+**cook screen**: big type you can read from the stove, one step at a time, and Themi the
+chameleon on its stool for company.
 
-The family cookbook lives in a Google Doc; Themi reads it, adds to it, and finds new
-recipes from a link, a web search or a photo of a page.
+![The cook screen for lasagna on a tablet: the four steps across the top with step 3, simmer the sauce, in large type; a 15-minute timer counting down on the stove rail; this step's ingredients; and Themi the chameleon in an apron by a steaming pot, with lofi music ready to play](docs/images/cook-screen.png)
 
-Start cooking (from chat, the website or the wall) and a phone or kitchen tablet becomes the
-**cook screen**:
+- **Before anything else**: the jobs to start first, like preheating the oven (sent to a GE
+  Café range through SmartHQ) or soaking the cashews.
+- **Gather, then prep**: what it uses, then what to measure and chop, with the amounts.
+- **One step at a time**, with short titles, this step's amounts in cups *and* grams, and a
+  peek at what's next.
+- **Timers on a rail**, offered from the times in the recipe, several at once, with a
+  chime.
+- **Hands full?** Ask by push-to-talk: "how much garlic?", "what can I use instead of
+  cream?"
+- **Set the mood** with built-in lofi or soft piano (or your own Spotify), picked to suit
+  the dish.
+- **Scale it**: half, double, or "for 6".
 
-- gather and prep, then one step at a time
-- this step's amounts, in cups *and* grams
-- timers on a rail, and questions by push-to-talk
-- the oven preheated when the recipe says so (GE Café through SmartHQ)
-- music for the mood, and Themi the chameleon for company
+<img align="right" width="300" alt="A recipe card for pancakes: ingredients in cups with grams beside them, and five numbered steps with short titles" src="docs/images/recipe.png">
+
+The family cookbook lives in a Google Doc. Themi reads it, adds to it, and finds new
+recipes from a link, a web search or a photo of a page. Ask for a recipe in chat and it
+comes back as a card.
 
 Ingredients go onto the grocery list, which stays in step with OurGroceries and Google
 Keep ("Hey Google, add milk"), and a Chrome helper can fill the Safeway cart.
 
-<br clear="left">
+<br clear="right">
+
+## Company for the hard bits
+
+Some jobs are easier with someone beside you. Ask Themi to **body double** and it keeps you
+company until it's done:
+
+- **Step by step**: Themi breaks the job into small steps and walks you through them, with
+  a picture for each step if a picture model is set up.
+- **Sprint partner**: work and break blocks (25 and 5 minutes, or your own lengths).
+- **Silent anchor**: "I'm here. Going quiet until 3:40." Then nothing until it asks how it
+  went.
+
+While a session runs, other nudges wait. Themi picks the mode that suits the task and
+learns which ones work for you. It plays music
+that fits (built-in, or your Spotify), and the session follows you between Telegram and its
+page on your phone.
+
+<p>
+  <img width="34%" align="top" alt="Erin asks Themi to body double while she sorts the mail and pays the water bill; Themi breaks it into nine steps and sends step 1 of 9, gather the mail" src="docs/images/body-double-chat.svg">
+  &nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/body-double-dark.png">
+    <img width="47%" align="top" alt="The body double page on a phone: step 3 of 9, discard the junk mail, with Themi the chameleon on a branch, a timer, Back, Next and Done, and music" src="docs/images/body-double.png">
+  </picture>
+</p>
 
 ## You stay in charge
 
