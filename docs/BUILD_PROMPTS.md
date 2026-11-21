@@ -332,7 +332,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F53 | Idea: choose each person's colour and the columns' order on the wall | Feedback | [x] 2026-11-20 |
 | F54 | Feedback: a drawn recipe shows ⅓ and ⅔, not empty boxes | Feedback | [x] 2026-11-20 |
 | F55a | Feedback: "arrive at 6:20" is 6:20 pm, kept with the event; a changed plan gets its own heads-up | Feedback | [x] 2026-11-20 |
-| F55b | Feedback: a held email notice has its buttons when it goes | Feedback | [ ] |
+| F55b | Feedback: a held email notice has its buttons when it goes | Feedback | [x] 2026-11-20 |
 | F55c | Feedback: the wall keeps a routine with open steps after its window | Feedback | [ ] |
 | F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [ ] |
 | F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [ ] |
@@ -16396,7 +16396,7 @@ Notes:
 - **Setup:** none. Mark #241, #242 reviewed once live; `themi feedback --wrong-tool 521 none`.
 
 ### F55b · Feedback (2026-11-20): a held email notice has its buttons when it goes, however old
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: F50c
 Read first: `themi/channels/outbox.py` (`release`, `release_held`, how a queued row is sent);
 `themi_google/email_buttons.py` (`notice_buttons`); `themi_google/triage.py` (the urgent
@@ -16426,6 +16426,12 @@ Scenario: none beyond the test (Michael taps Email on the recap and gets the but
 Data/Setup: none. Mark #240 reviewed once live.
 
 Notes:
+- An outbox refresher for kind `email` (`EmailNoticeButtons._with_buttons`, installed with the
+  handlers): a row with `[]` buttons and a `email-urgent:<id>` key whose email is still there
+  gets `notice_buttons` as it goes. Refreshers run at both send points (the flush and a tray's
+  release), so Erin's ten parked notices get them too when they go. Others are untouched.
+- Tests: three at the end of `tests/scenarios/test_email_buttons.py`.
+- **Setup:** none. Mark #240 reviewed once live.
 
 ### F55c · Feedback (2026-11-20): the wall keeps a routine with steps still open after its window, until bedtime
 Status: [ ]

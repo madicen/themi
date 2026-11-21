@@ -22,6 +22,7 @@ from themi.core import keys
 from themi_google.connectors.gmail.parse import web_link
 
 if TYPE_CHECKING:
+    from themi.accounts import Member
     from themi.core.services import Services
 
 OPEN_LABEL = "Open in Gmail"
@@ -29,6 +30,8 @@ QUIET_LABEL = "Not important"
 READ_LABEL = "Mark read"
 TASK_LABEL = "Make it a task"
 UNDO_LABEL = "Undo"
+NOTICE_KIND = "email"  # the outbox kind of triage's alerts
+NOTICE_KEY = "email-urgent:"  # their dedupe key, before the email's id
 
 QUIET_TEXT = "Mail from {label} won't alert you again."
 QUIET_UNDONE_TEXT = "Mail from {label} alerts you as before."
@@ -103,6 +106,23 @@ class EmailNoticeButtons:
         handlers["email_read"] = self.on_read
         handlers["email_task"] = self.on_task
         handlers["email_undo"] = self.on_undo
+        self.services.outbox.refreshers[NOTICE_KIND] = self._with_buttons
+
+    def _with_buttons(self, member: Member, row: dict[str, Any]) -> str | tuple[str, list[Button]]:
+        """F55b (bug #240): a notice queued before F50c (or held since) gets its buttons when
+        it goes, as a new one would. One with buttons, or whose email is gone, is as it was."""
+        text = str(row["text"])
+        key = str(row.get("dedupe_key") or "")
+        if row["buttons"] not in ("[]", "") or not key.startswith(NOTICE_KEY):
+            return text
+        try:
+            email_id = int(key.removeprefix(NOTICE_KEY))
+        except ValueError:
+            return text
+        email = self.db.one("SELECT * FROM emails WHERE id = ?", (email_id,))
+        if email is None:  # an account unlinked takes its emails with it
+            return text
+        return text, notice_buttons(self.services, email, text)
 
     # ----- the taps ------------------------------------------------------------------
 
