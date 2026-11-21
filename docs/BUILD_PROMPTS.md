@@ -23482,6 +23482,22 @@ Notes:
   sync still counts (it's data, not an action).
 - Nothing tells the person on Telegram; the wall's note is the only place it shows.
 
+WL9a to WL9d restyle the wall from Michael's mock-ups of 2026-11-20 (the Wall plan's "A second
+look (WL9)"; the canvas "Themi Wall, second look", https://claude.ai/artifact/Jp23vHPueukDYKDKHcdsaZ,
+shows the result). Every WL9 prompt keeps what the F-prompts added to the wall, unchanged in
+behaviour, and its tests stay green without loosening:
+- F52a/F52b: full screen on the frame, and the dark look (every new colour is a token in both
+  looks, checked by `tests/unit/test_wall_look.py`).
+- F53: each person's chosen colour and the columns' order. The new views and pages take the
+  person's tone, never a fixed green or pink.
+- F55c: a routine with steps still open stays after its window.
+- F55d: the emoji beside chores, to-dos and routine steps, on the home screen and on the new
+  Person and Together pages and in Done today.
+- F55e: Themi's chameleon on the note.
+- F55f: the week ahead's calendar chips, a tap hiding that calendar there, and "+N more"
+  counting only what's shown. WL9 doesn't restyle the week ahead.
+- WL7/WL8: an event's notes in its view, and deliveries in Themi's note.
+
 ### WL9a · Wall: the views' new card
 Status: [ ]
 Depends on: WL5b, F55f (both change `wall.css`; start after F55f is `[x]`)
