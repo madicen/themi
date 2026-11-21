@@ -181,7 +181,12 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "web/static/*/*",
     "drawing_templates/*.svg",  # DC9: its pictures' templates
 ]
-themi_google = ["web/templates/*.html", "web/templates/*/*.html", "setup/*.md"]
+themi_google = [
+    "web/templates/*.html",
+    "web/templates/*/*.html",
+    "setup/*.md",
+    "tracking_data/*",  # PT1: the vendored tracking number patterns
+]
 themi_cozyla = [
     "cozyla_chores_schema/*.sql",  # CR21c
     "cozyla_todos_schema/*.sql",
