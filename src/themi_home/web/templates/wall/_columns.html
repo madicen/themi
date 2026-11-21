@@ -1,14 +1,18 @@
+{#- WL9c: the header (with its ↗) and the foot both open the column's whole view: a person's
+    day, or the family's shared list. -#}
 {% for c in screen.columns %}
+{% set opens = "/wall/view/person/" ~ c.member_id if c.member_id else "/wall/view/together" %}
 <section class="wall-col tone-{{ c.tone }}" aria-label="{{ c.name }}" id="col-{{ c.key }}">
-  {% if c.member_id %}<button type="button" class="wall-col-head" hx-get="/wall/view/person/{{ c.member_id }}" hx-target="#wall-view" hx-swap="innerHTML">{% else %}<header class="wall-col-head">{% endif %}
+  <button type="button" class="wall-col-head" hx-get="{{ opens }}" hx-target="#wall-view" hx-swap="innerHTML">
     <span class="wall-avatar" aria-hidden="true">{% if c.initial %}{{ c.initial }}{% else %}<svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4z"/></svg>{% endif %}</span>
     <span>
       <span class="wall-col-name">{{ c.name }}</span>
       <span class="wall-col-sum">{{ c.summary }}</span>
     </span>
-  {% if c.member_id %}</button>{% else %}</header>{% endif %}
+    <span class="wall-col-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8"/></svg></span>
+  </button>
   <div class="wall-col-body">
-  {% for sec in c.sections %}{% if sec.items or sec.empty %}
+  {% for sec in c.sections %}{% if sec.items or sec.empty or sec.folded %}
     <h3>{{ sec.title }}</h3>
     {% if sec.items %}
     <ul>
@@ -36,11 +40,13 @@
       </li>
       {% endfor %}
     </ul>
-    {% else %}
+    {% elif not sec.folded %}
     <p class="wall-empty">{{ sec.empty }}</p>
     {% endif %}
-    {% if sec.more %}<button type="button" class="wall-more" hx-get="/wall/view/list/todo/{{ c.member_id or 'family' }}" hx-target="#wall-view" hx-swap="innerHTML">More on the list</button>{% endif %}
+    {% if sec.more %}<button type="button" class="wall-more" hx-get="/wall/view/list/todo/{{ c.member_id or 'family' }}" hx-target="#wall-view" hx-swap="innerHTML">+{{ sec.more }} more</button>{% endif %}
+    {% if sec.folded %}<p class="wall-fold"><span aria-hidden="true">✓</span> {{ sec.folded }} done</p>{% endif %}
   {% endif %}{% endfor %}
   </div>
+  <button type="button" class="wall-col-foot" hx-get="{{ opens }}" hx-target="#wall-view" hx-swap="innerHTML">{{ "View full day" if c.member_id else "View shared list" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
 </section>
 {% endfor %}

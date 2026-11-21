@@ -1,7 +1,6 @@
-{% from "wall/_sheet.html" import sheet with context %}
-{% call sheet(event.title) %}
-<p class="sheet-kicker">{{ event.whose }}</p>
-<h2 class="sheet-title">{{ event.title }}</h2>
+{% from "wall/_sheet.html" import sheet, head with context %}
+{% call sheet(event.title, tone=event.tone) %}
+{{ head(event.whose, event.title) }}
 <p class="sheet-when">{{ event.when }}</p>
 {% if event.status %}<p class="sheet-status">{{ event.status }}</p>{% endif %}
 {% if event.place or event.video or event.leave_by %}

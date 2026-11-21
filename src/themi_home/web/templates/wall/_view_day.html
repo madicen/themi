@@ -1,9 +1,9 @@
-{% from "wall/_sheet.html" import sheet with context %}
+{% from "wall/_sheet.html" import sheet, head with context %}
 {% from "wall/_timeline.html" import timeline %}
-{% call sheet(view.heading) %}
+{% call sheet(view.heading, tone=view.tone) %}
 <div class="sheet-nav">
   {% if view.before %}<button type="button" class="sheet-arrow" aria-label="The day before" hx-get="/wall/view/day/{{ view.before }}" hx-target="#wall-view" hx-swap="innerHTML">&lsaquo;</button>{% else %}<span class="sheet-arrow-gap"></span>{% endif %}
-  <div><p class="sheet-kicker">{{ view.near }}</p><h2 class="sheet-title">{{ view.heading }}</h2></div>
+  <div>{{ head(view.near, view.heading) }}</div>
   {% if view.after %}<button type="button" class="sheet-arrow" aria-label="The day after" hx-get="/wall/view/day/{{ view.after }}" hx-target="#wall-view" hx-swap="innerHTML">&rsaquo;</button>{% else %}<span class="sheet-arrow-gap"></span>{% endif %}
 </div>
 <div class="wall-day">

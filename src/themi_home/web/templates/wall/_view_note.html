@@ -1,5 +1,6 @@
 {% from "wall/_sheet.html" import sheet with context %}
 {% call sheet("Themi's note") %}
+<p class="sheet-kicker">From Themi</p>
 <div class="sheet-note-head"><img class="wall-t" src="{{ asset('home/icons/icon.svg') }}" alt=""><h2 class="sheet-note-text">{{ view.text }}</h2></div>
 {% if view.said %}
 <p class="sheet-done" role="status">{{ view.said }}</p>

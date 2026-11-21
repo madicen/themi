@@ -14,9 +14,21 @@ import pytest
 
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
-from tests.integration.test_wall_screen import EVENING, column, screen, step, task, with_wall, words
+from tests.fixtures.web import web_client
+from tests.integration.test_wall_screen import (
+    EVENING,
+    column,
+    frame,
+    screen,
+    step,
+    task,
+    with_wall,
+    words,
+)
+from tests.integration.test_wall_taps import tap
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.core import keys
 
 
 @pytest.fixture
@@ -51,17 +63,47 @@ async def test_michael_and_erins_evening_on_one_screen(wall: Scenario) -> None:
     assert husband == (
         "H Husband This evening Evening routine 🍽️ Cycle the dishwasher 💊 Take meds "
         "🦜 Cover the birdcage Chores Declutter the kitchen from yesterday 🥣 Refill pet feeders "
-        "To-do 🧹 Vacuum upstairs"
+        "To-do 🧹 Vacuum upstairs View full day"  # WL9c: each column's foot
     )
     erin = words(column(page, f"m{wall.member('Erin').id}"))
     assert erin == (
         "E Erin This evening Evening routine Nothing set for this evening "
-        "Chores 🚽 Clean the upstairs bathroom To-do ✉️ Process the mail"
+        "Chores 🚽 Clean the upstairs bathroom To-do ✉️ Process the mail View full day"
     )
     together = words(column(page, "together"))
     assert together == (
         "Together This evening Either of you 🗑️ Bring bins in from yesterday "
-        "Family to-do Move Mimi&#39;s box upstairs 🧹 Unjam the vacuum"
+        "Family to-do Move Mimi&#39;s box upstairs 🧹 Unjam the vacuum View shared list"
     )
     assert "Bring bins in is still waiting from yesterday." in page
     assert "Walk dog" not in page  # a morning step, not shown in the evening
+
+    # WL9c: Erin ticks her chore. It stays, struck through, so a wrong tap can be undone
+    # there; ten minutes on it has folded into "✓ 1 done".
+    bathroom = next(
+        t
+        for t in wall.app.services.get(keys.taskboard).open_for(wall.member("Erin"))
+        if t.title == "Clean the upstairs bathroom"
+    )
+    async with web_client(wall) as client:
+        await frame(wall, client)
+        await tap(wall, client, f"task-{bathroom.id}")
+    erin = words(column(await screen(wall), f"m{wall.member('Erin').id}"))
+    assert erin.startswith("E Erin 1 done tonight") and "Clean the upstairs bathroom" in erin
+    clock.advance(timedelta(minutes=11))
+    erin = words(column(await screen(wall), f"m{wall.member('Erin').id}"))
+    assert "Clean the upstairs bathroom" not in erin and "Chores ✓ 1 done" in erin
+
+    # WL9d: her column's "View full day" opens her whole day, and Together's its page.
+    erin_id = wall.member("Erin").id
+    assert f'hx-get="/wall/view/person/{erin_id}"' in column(await screen(wall), f"m{erin_id}")
+    async with web_client(wall) as client:
+        await frame(wall, client)
+        mine = words((await client.get(f"/wall/view/person/{erin_id}")).text)
+        ours = words((await client.get("/wall/view/together")).text)
+    assert "Erin's day 1 done tonight 1 to-do on your list" in mine
+    assert "To-do 1 open Work through these at your own pace. ✉️ Process the mail" in mine
+    assert "Chores 🚽 Clean the upstairs bathroom" in mine  # ticked, still there for the day
+    assert "Things either of you could pick up. This evening 3 open · 0 done" in ours
+    assert "Family to-do 2 open Move Mimi&#39;s box upstairs 🧹 Unjam the vacuum" in ours
+    assert "Either of you 🗑️ Bring bins in from yesterday" in ours

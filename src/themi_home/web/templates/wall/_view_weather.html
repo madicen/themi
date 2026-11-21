@@ -1,7 +1,6 @@
-{% from "wall/_sheet.html" import sheet with context %}
+{% from "wall/_sheet.html" import sheet, head with context %}
 {% call sheet("The weather") %}
-<p class="sheet-kicker">{{ view.heading }}</p>
-<h2 class="sheet-title">High {{ view.high }}, low {{ view.low }}</h2>
+{{ head(view.heading, "High " ~ view.high ~ ", low " ~ view.low) }}
 {% if view.alert %}<p class="sheet-status">{{ view.alert }}</p>{% endif %}
 <ol class="hours">
   {% for h in view.hours %}

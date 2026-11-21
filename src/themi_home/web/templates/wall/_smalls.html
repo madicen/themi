@@ -1,17 +1,20 @@
+{#- WL9b: the small lists as cards. A few items, then the count and an Open link; the whole
+    card is the tap (Groceries its List view, Things to cook its dishes). Another household
+    list is a card with its count and nothing to open. -#}
 {% for small in screen.smalls %}
-<section class="wall-card wall-small" aria-label="{{ small.name }}">
-  {% if small.opens == "groceries" %}
-  <button type="button" class="wall-small-open" hx-get="/wall/view/list/groceries" hx-target="#wall-view" hx-swap="innerHTML"><h2>{{ small.name }}</h2>
-  {% else %}<h2>{{ small.name }}</h2>{% endif %}
+{% set opens = {"groceries": "/wall/view/list/groceries", "dishes": "/wall/view/dishes"}.get(small.opens, "") %}
+{% set ideas = small.opens == "dishes" %}
+{% if opens %}<button type="button" class="wall-card wall-small{% if small.tone %} tone-{{ small.tone }}{% endif %}" aria-label="{{ small.name }}" hx-get="{{ opens }}" hx-target="#wall-view" hx-swap="innerHTML">
+{% else %}<section class="wall-card wall-small" aria-label="{{ small.name }}">{% endif %}
+  <h2>{{ small.name }}</h2>
   {% if small.items %}
-  {% if small.opens == "dishes" %}
-  <p class="wall-dishes">{% for name in small.items %}<button type="button" class="wall-dish" hx-get="/wall/view/dish/{{ small.ids[loop.index0] }}" hx-target="#wall-view" hx-swap="innerHTML">{{ name }}</button>{% endfor %}{% if small.more %} <span class="wall-sub">+{{ small.more }} more</span>{% endif %}</p>
+  <p class="wall-small-items">{% for name in small.items %}<span class="wall-small-item">{{ name }}</span>{% endfor %}{% if small.more %} <span class="wall-sub">+{{ small.more }} more</span>{% endif %}</p>
   {% else %}
-  <p>{{ small.items | join(" · ") }}{% if small.more %} <span class="wall-sub">+{{ small.more }} more</span>{% endif %}</p>
+  <p class="wall-empty">{{ "No ideas yet" if ideas else "Nothing needed" }}</p>
   {% endif %}
-  {% else %}
-  <p class="wall-empty">Nothing needed</p>
-  {% endif %}
-  {% if small.opens == "groceries" %}</button>{% endif %}
-</section>
+  <span class="wall-small-foot">
+    {% if small.count %}<span>{{ small.count }} {{ ("idea" if ideas else "item") ~ ("" if small.count == 1 else "s") }}</span>{% else %}<span></span>{% endif %}
+    {% if opens %}<span class="wall-small-open">{{ "Open ideas" if ideas else "Open list" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>{% endif %}
+  </span>
+{% if opens %}</button>{% else %}</section>{% endif %}
 {% endfor %}

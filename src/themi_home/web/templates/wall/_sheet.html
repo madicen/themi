@@ -1,10 +1,49 @@
-{#- WL5a: a view sliding up over the dimmed home screen. One at a time; Close, a tap on the
-    dimmed screen, or `close_after` seconds without a touch closes it (wall.js). -#}
-{% macro sheet(label) %}
+{#- WL5a, WL9a: a view as a centred card over the dimmed home screen. One at a time; the ✕,
+    Back to the wall, a tap on the dimmed screen, or `close_after` seconds without a touch
+    close it (wall.js). `tone` colours its kicker and Back button; `foot` is its summary
+    lines ("2 items to pick up", "Shared with ..."). -#}
+{% macro sheet(label, tone="", foot=()) %}
 <div class="wall-backdrop" data-close></div>
-<section class="wall-sheet" role="dialog" aria-label="{{ label }}" data-close-after="{{ close_after }}">
-  <div class="wall-grip" aria-hidden="true"></div>
+<section class="wall-sheet{% if tone %} tone-{{ tone }}{% endif %}" role="dialog" aria-label="{{ label }}" data-close-after="{{ close_after }}">
+  <button type="button" class="sheet-x" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   {{ caller() }}
-  <div class="sheet-actions sheet-end"><button type="button" class="sheet-button" data-close>Close</button></div>
+  {% if foot %}<div class="sheet-foot">{% for line in foot %}<p>{{ line }}</p>{% endfor %}</div>{% endif %}
+  <button type="button" class="sheet-back" data-close>Back to the wall</button>
 </section>
+{% endmacro %}
+
+{#- The card's top: a small kicker in the view's colour, the title, one kind line. -#}
+{% macro head(kicker, title, lead="") %}
+<header class="sheet-head">
+  {% if kicker %}<p class="sheet-kicker">{{ kicker }}</p>{% endif %}
+  <h2 class="sheet-title">{{ title }}</h2>
+  {% if lead %}<p class="sheet-lead">{{ lead }}</p>{% endif %}
+</header>
+{% endmacro %}
+
+{#- WL9d: a whole page over the wall (a person's day, Together): "← The wall" at the top
+    and "The whole family, at a glance" at the foot, both closing it; the same 2-minute
+    close as a card. -#}
+{% macro page(label, tone="") %}
+<section class="wall-sheet wall-page{% if tone %} tone-{{ tone }}{% endif %}" role="dialog" aria-label="{{ label }}" data-close-after="{{ close_after }}">
+  <button type="button" class="page-back" data-close><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>The wall</button>
+  {{ caller() }}
+  <button type="button" class="page-home" data-close><span><span class="page-home-title">The whole family, at a glance</span><span class="page-home-sub">Back to the wall</span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+</section>
+{% endmacro %}
+
+{#- One tickable thing on a page: `vals` is the tap's extra fields (its view, an unfolded
+    routine). -#}
+{% macro item(i, vals) %}
+<li class="wall-entry">
+  {% if i.tappable %}
+  <button type="button" class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}" aria-pressed="{{ 'true' if i.done else 'false' }}"
+    hx-post="/wall/tap" hx-vals='{{ dict(vals, key=i.key) | tojson }}' hx-target="#wall-view" hx-swap="innerHTML">
+  {% else %}<div class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}">{% endif %}
+    <span class="ring" aria-hidden="true"></span>{% if i.emoji %}
+    <span class="wall-emoji" aria-hidden="true">{{ i.emoji }}</span>{% endif %}
+    <span class="wall-words"><span class="wall-title">{{ i.title }}</span>{% if i.sub %}<span class="wall-sub">{{ i.sub }}</span>{% endif %}</span>
+  {% if i.tappable %}</button>{% else %}</div>{% endif %}
+  {{ caller() if caller }}
+</li>
 {% endmacro %}

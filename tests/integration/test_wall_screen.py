@@ -171,7 +171,7 @@ async def test_chores_due_by_today_and_to_dos_in_the_walls_order(wall: Scenario)
     todo = erin[erin.index("To-do") :]
     # due or overdue first (important before the rest), then the soonest; three shown
     assert todo.index("Call the vet") < todo.index("Split the cat box") < todo.index("Vacuum")
-    assert "since Oct 9" in todo and "Someday shelf" not in todo and "More on the list" in todo
+    assert "since Oct 9" in todo and "Someday shelf" not in todo and "+1 more" in todo  # WL9c
 
 
 async def test_together_has_either_chores_and_the_family_to_dos(wall: Scenario) -> None:
