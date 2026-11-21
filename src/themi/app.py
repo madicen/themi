@@ -31,6 +31,7 @@ from themi.channels.channel_set import ChannelSet
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.config import Template, load_template
+from themi.connectors.carriers import Carrier
 from themi.connectors.rates import RateSource
 from themi.connectors.search import SearchBackend
 from themi.connectors.travel import TravelClient
@@ -100,6 +101,7 @@ from themi_google.google_modules import (
     TaskBlocksModule,
     UrgentSendersModule,
 )
+from themi_google.parcels import ParcelsModule
 from themi_home.appliances import AppliancesModule
 from themi_home.body_double import BodyDoubleModule
 from themi_home.body_double_guided import GuidedStepsModule
@@ -191,6 +193,7 @@ def family_modules(
     keep: KeepFactory | None = None,
     weather: WeatherSource | None = None,
     rates: RateSource | None = None,  # F50b: exchange rates (Frankfurter's when None)
+    carriers: dict[str, Carrier] | None = None,  # PT4: the parcels module, with these
 ) -> list[Module]:
     """The family's modules, with each connector's only when it's set up. In install order
     (see the module docstring); CR5 turns this into the family template."""
@@ -212,6 +215,7 @@ def family_modules(
                 UrgentSendersModule(),
                 ExpectedEmailsModule(rates),
                 NoiseDigestModule(),
+                *([ParcelsModule(carriers)] if carriers is not None else []),  # PT4: off unless on
             ]
             if google
             else []
@@ -317,6 +321,7 @@ def build_app(
     keep: KeepFactory | None = None,
     weather: WeatherSource | None = None,
     rates: RateSource | None = None,  # F50b: exchange rates (Frankfurter's when None)
+    carriers: dict[str, Carrier] | None = None,  # PT4
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
     conversation_mode: str = "trial",
@@ -350,6 +355,7 @@ def build_app(
             keep=keep,
             weather=weather,
             rates=rates,
+            carriers=carriers,
         )
     # ----- the core -------------------------------------------------------------------
     store = AccountStore(db, cipher)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from tests.fakes.carriers import FakeCarriers
 from tests.fakes.catgenie import FakeCatGenie
 from tests.fakes.cozyla import EMAIL as COZYLA_EMAIL
 from tests.fakes.cozyla import PASSWORD as COZYLA_PASSWORD
@@ -62,6 +63,7 @@ def connector_options(
     keep: FakeKeep | None = None,
     weather: FakeWeather | None = None,
     rates: FakeRates | None = None,
+    carriers: FakeCarriers | None = None,
     timezone: str = "America/Los_Angeles",
 ) -> dict[str, Any]:
     return {
@@ -80,6 +82,7 @@ def connector_options(
         "keep": keep.connect if keep else None,
         "weather": weather.client() if weather else None,  # WX1
         "rates": (rates or FakeRates()).client(),  # F50b: never the real Frankfurter
+        "carriers": carriers.clients() if carriers else None,  # PT4
     }
 
 

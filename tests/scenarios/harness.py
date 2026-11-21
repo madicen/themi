@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.fakes.carriers import FakeCarriers
 from tests.fakes.catgenie import FakeCatGenie
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
@@ -122,6 +123,7 @@ class Scenario:
         gsheets: FakeGsheets | None = None,
         weather: FakeWeather | None = None,
         rates: FakeRates | None = None,
+        carriers: FakeCarriers | None = None,  # PT4
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
@@ -179,6 +181,7 @@ class Scenario:
                 keep=keep,
                 weather=weather,
                 rates=rates,
+                carriers=carriers,
                 timezone=family.family.timezone,
             ),
         )
@@ -518,6 +521,7 @@ async def scenario(
         gsheets=optional("fake_gsheets"),
         weather=optional("fake_weather"),
         rates=optional("fake_rates"),
+        carriers=optional("fake_carriers"),
     )
     await s.start()
     yield s

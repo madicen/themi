@@ -1,0 +1,18 @@
+[
+  {
+    "trackingNumber": "NUMBER",
+    "statusCategory": "Delivery Attempt",
+    "status": "Notice Left (No Authorized Recipient Available)",
+    "statusSummary": "We attempted to deliver your item.",
+    "services": [
+      "Signature Confirmation"
+    ],
+    "trackingEvents": [
+      {
+        "eventType": "Notice Left (No Authorized Recipient Available)",
+        "eventCode": "02",
+        "GMTTimestamp": "2026-10-21T22:10:00Z"
+      }
+    ]
+  }
+]

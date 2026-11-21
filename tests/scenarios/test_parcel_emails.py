@@ -93,3 +93,11 @@ async def test_the_parcels_page_has_the_sign_up_guide(mail: Scenario) -> None:  
         page = (await site.get("/modules/parcels")).text
     assert "USPS Informed Delivery" in page and "UPS My Choice" in page
     assert "https://www.fedex.com/en-us/delivery-manager.html" in page
+    for field in (
+        "UPS client ID",
+        "UPS client secret",
+        "USPS consumer key",
+        "USPS consumer secret",
+    ):
+        assert field in page  # PT4: the carriers' keys
+    assert "Ask the carriers about parcels with a tracking number" in page

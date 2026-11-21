@@ -30,6 +30,7 @@ pytest_plugins = [
     "tests.fakes.travel",
     "tests.fakes.weather",
     "tests.fakes.rates",
+    "tests.fakes.carriers",  # PT4
     "tests.fakes.search",
     "tests.fakes.gdocs_api",
     "tests.fakes.gsheets_api",

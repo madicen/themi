@@ -522,7 +522,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | PT1 | Package tracking: tracking numbers from email | Package tracking | [x] 2026-11-21 |
 | PT2 | Package tracking: one parcel per tracking number | Package tracking | [x] 2026-11-21 |
 | PT3 | Package tracking: the carriers' alert emails | Package tracking | [x] 2026-11-21 |
-| PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [ ] |
+| PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [x] 2026-11-21 |
 | PT5 | Package tracking: asking on a schedule | Package tracking | [ ] |
 | PT6 | Package tracking: what the family sees | Package tracking | [ ] |
 | PT7 | Package tracking: the FedEx lookup | Package tracking | deferred |
@@ -23834,7 +23834,7 @@ Notes:
 - Parcels from email keep working without the module: `Deliveries` stays in email triage.
 
 ### PT4 · Package tracking: the UPS and USPS lookup
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: PT2
 Read first: the plan's "Part 3: Carrier lookup" ("The connector", "Settings");
 `themi/connectors/search.py` and `weather.py` (shape, `tls`, `Tally`); the Usage plan's
@@ -23855,6 +23855,30 @@ delivered with where it was left; a 401 then success; a 429; a timeout; an unkno
 secrets redacted from logs; the Test buttons.
 Setup Michael does: the UPS and USPS developer apps (the plan's "Setup and open
 questions"). Not needed to build or test.
+
+Notes:
+- USPS: Tracking **v3r2** (POST `/tracking/v3r2/tracking` with a list), not the plan's
+  Tracking 3: USPS's own spec says Tracking 3.0 retires on 31 July 2027. Same OAuth
+  (`/oauth2/v3/token`, the app's consumer key and secret). UPS: `/api/track/v1/details`,
+  client credentials as Basic auth. Shapes from the carriers' published OpenAPI files
+  (UPS-API/api-documentation `Tracking.yaml`; developers.usps.com `tracking-v3r2`).
+- Mapping, one table each: UPS `currentStatus.type` D delivered, X problem, "Out For
+  Delivery" in the words out for delivery; USPS `statusCategory`. UPS's spec doesn't list
+  its type letters beyond examples, so the words count too; an unknown type or category is
+  logged and counted as on its way. "Needs a signature" is read from the services
+  (`Tracking.signature`), best effort.
+- Settings (`ParcelsSettings`): `UPS_CLIENT_ID`/`UPS_CLIENT_SECRET`,
+  `USPS_CONSUMER_KEY`/`USPS_CONSUMER_SECRET` (each pair together), `PARCELS_ASK_CARRIERS`
+  (on), and `UPS_URL`/`USPS_URL` for a fake. One Test for the module (it asks each carrier
+  with keys for a token and names any that fail), not a button per carrier: the Modules
+  page has one Test per module.
+- Usage card: "UPS tracking" (no published limit) and "USPS tracking" (1,440 a day: the
+  reported 60 an hour). Tokens and lookups both count.
+- `app.py` builds the module only when it's handed carriers (tests, like weather);
+  otherwise it's the entry point, off until turned on. Fakes: `tests/fakes/carriers.py`
+  (`fake_carriers`), answers in `tests/fixtures/carriers/`.
+- Setup Michael does: a UPS developer app with the Tracking product, and a USPS developer
+  app (developers.usps.com), their keys on the Parcels page, then Test.
 
 ### PT5 · Package tracking: asking on a schedule
 Status: [ ]
