@@ -330,6 +330,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F52a | Idea: the wall goes full screen on the frame, whichever way it's opened | Feedback | [x] 2026-11-20 |
 | F52b | Idea: the wall has a dark look | Feedback | [x] 2026-11-20 |
 | F53 | Idea: choose each person's colour and the columns' order on the wall | Feedback | [x] 2026-11-20 |
+| F54 | Feedback: a drawn recipe shows ⅓ and ⅔, not empty boxes | Feedback | [x] 2026-11-20 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -508,6 +509,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL6 | Wall: time of day, night, and the frame | Wall | [x] 2026-11-20 |
 | WL7 | Wall: event notes in the Event view | Wall | [x] 2026-11-20 |
 | WL8 | Wall: deliveries from email in Themi's note | Wall | [x] 2026-11-20 |
+| PT1 | Package tracking: tracking numbers from email | Package tracking | [ ] |
+| PT2 | Package tracking: one parcel per tracking number | Package tracking | [ ] |
+| PT3 | Package tracking: the carriers' alert emails | Package tracking | [ ] |
+| PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [ ] |
+| PT5 | Package tracking: asking on a schedule | Package tracking | [ ] |
+| PT6 | Package tracking: what the family sees | Package tracking | [ ] |
+| PT7 | Package tracking: the FedEx lookup | Package tracking | deferred |
 
 ## Fixed technical choices
 
@@ -16236,6 +16244,73 @@ Notes:
 - Tests: `tests/integration/test_wall_columns.py`. Not looked at on the frame.
 - **Setup:** none; Wall frames, People on the wall.
 
+### F54 · Feedback (2026-11-20): a drawn recipe shows ⅓ and ⅔, not empty boxes
+Status: [x] 2026-11-20
+Depends on: DC1, DC10, DC12
+Read first: `themi/drawing/render.py` (`FONT_FILES`, resvg given only the bundled fonts);
+`themi/drawing/text.py` (`text_width`, the width table); `tools/dev/font_widths.py`;
+`themi_home/quantities.py` (`FRACTIONS`); `themi_home/recipe_card.py`.
+From Michael's bug #238 (2026-11-20, 4:02 pm, "looks like the font we use doesn't have a 1/3
+glyph"), with a picture of the Snowy Earthquake Cookie card (dark): "⅓ Cup (80 g) non dairy
+milk" and "⅓ Cup (70 g) canola oil" start with an empty box; "¾ Cup" and "½ Cup" are fine.
+
+What the Pi shows: the card is `/recipes/<id>/card.png` (DC10), drawn by resvg with
+`skip_system_fonts=True` and only `assets/fonts/*.ttf`: Atkinson Hyperlegible Regular and
+Bold, and Twemoji. Atkinson has ¼ ½ ¾ (Latin-1) but none of Number Forms (U+2150–215E: ⅓ ⅔
+⅛ ⅜ ⅝ ⅞ and the rest), nor the thin space U+2009; Twemoji has none of them either, so resvg
+draws .notdef. Atkinson Hyperlegible Next (checked 2026-11-20) lacks them too, and the
+font's `frac` feature has no numerator or denominator glyphs to build one from. Recipes
+write ⅓ and ⅔ often (`quantities.FRACTIONS`, and `pretty()` writes them when scaling), so
+every drawing that can show an amount is hit: the recipe card, and the day card's lines
+where a recipe or task title holds one. `text_width` also measures them at the table's
+`fallback` width, so the line was fitted to a box, not a fraction.
+
+Build:
+- A fallback font for what Atkinson lacks: a subset of Noto Sans (OFL) Regular and Bold,
+  holding only Number Forms U+2150–215E and U+2009, bundled as
+  `assets/fonts/ThemiFractions-Regular.ttf` / `-Bold.ttf` with its OFL notice beside them
+  (an `OFL-noto-sans.txt`). Make it with a dev tool (`tools/dev/fraction_font.py`, fontTools'
+  subsetter, from a Noto Sans file the tool downloads or is given a path to; the app never
+  downloads). Scale its glyphs, if needed, so a ⅓ sits at Atkinson's cap height and weight
+  as near as fontTools allows; it's a fallback, not a second family in any template.
+- resvg falls back per character to a loaded font that has the glyph; confirm that with the
+  subset loaded, ⅓ in Atkinson text draws from it in the matching weight (bold amounts stay
+  bold). If resvg's fallback doesn't pick it, name it in `font-family` after Atkinson in
+  `svg.py`'s base style instead.
+- `font_widths.py` reads those characters' widths from the fallback (regular and bold) into
+  `widths.json`, so fitting measures them truly. Regenerate the table.
+- Nothing else changes: the words are the recipe's own, and no ⅓ is rewritten as "1/3".
+
+Tests: every character in `quantities.FRACTIONS` and the width tool's `EXTRA` is in the
+cmap of some file in `FONT_FILES` (fontTools, a dev dependency, as the width tool's tests);
+`text_width("⅓", …)` is the fallback's width, not the table's `fallback`; a recipe card
+with "⅓ Cup" renders (real resvg, as DC1's render test) and the ⅓'s pixels differ from a
+.notdef box (render "⅓" and "￿" alone and compare); the recipe card golden SVGs are
+unchanged (only the PNG and the widths change, and any golden whose wrapping moves because
+a fraction is now measured truly, which the commit names).
+Scenario: none (nothing a message says changes); Michael looks at the cookie card.
+
+Data/Setup: none. The new font files ship in the image (check `MANIFEST`/package data picks
+up `assets/fonts/*.ttf`, as it does Atkinson's). Mark #238 reviewed once live.
+
+Notes:
+- **Deviation:** resvg's own per-character fallback found the glyphs but took the bold
+  weight in regular text too (whichever face it meets first), and naming "Themi Fractions"
+  after Atkinson in `font-family` didn't change that (resvg settles one family per run). So
+  `render.with_fallback` wraps each character in `FALLBACK_CHARS` in
+  `<tspan font-family="Themi Fractions">` in the text between tags, just before resvg; the
+  tspan inherits the weight. It's done in `to_png`, so no golden SVG changes.
+- `themi.drawing.FALLBACK_FAMILY` / `FALLBACK_CHARS` (U+2150–215E, U+2009).
+  `tools/dev/fraction_font.py` makes `ThemiFractions-{Regular,Bold}.ttf` from Noto Sans'
+  variable font (weights 400/700, width 100), subset, scaled (×0.936 / ×0.934) so ⅓ stands
+  as tall as Atkinson's ½, renamed; `OFL-noto-sans.txt` beside them. `font_widths.py` takes
+  those characters' widths from it (Atkinson's widths unchanged).
+- Found on the way: → (U+2192) is in the width table's `EXTRA` but in no bundled font, nor in
+  Noto Sans. No drawing writes it, so it's left; the test names it (`NO_GLYPH`).
+- Tests: `tests/unit/test_drawing_fractions.py`; `test_a_third_of_a_cup_draws_its_fraction`
+  in `tests/scenarios/test_recipe_card.py`. Goldens unchanged.
+- **Setup:** none. Mark #238 reviewed once live.
+
 ## Conversation mode
 
 From the spec "Themi AI Agent: Conversation Mode & Silent Sidecar State Engine" (shared
@@ -23114,3 +23189,172 @@ Notes:
 - Verdict listeners run before the first-sync check, so a parcel in mail found by a first
   sync still counts (it's data, not an action).
 - Nothing tells the person on Telegram; the wall's note is the only place it shows.
+
+## Package tracking
+
+Design source: the [Themi Package Tracking Plan](https://claude.ai/artifact/1LNv3ZfV3MMuZvc3GgAuVk).
+Read it with the Claude Docs tools, like the other plans. Michael asked on 2026-11-20 how
+realistic it is to get tracking numbers from email and look up how a delivery is going, and
+answered the plan's open questions the same day: a parcel nudges only the member whose
+email found it; "Tell me when it's delivered" is a per-member setting, off by default; chat
+answers "where's the Chewy order?" from parcels; the `tracking_number_data` set is vendored
+only after PT1 vets it, with hand-written patterns as the fallback.
+
+WL8 keeps a row per shipping email and combines them by shop name. These prompts give each
+parcel an identity (its carrier and tracking number), read the carriers' own alert emails,
+ask UPS and USPS through their free tracking APIs, and say more on the wall, in Telegram,
+in the morning message and in chat. The prefix is PT. Rules every PT prompt keeps:
+
+- Code finds tracking numbers; the model only matches found numbers to parcels. A number
+  the model returns that code didn't find is dropped.
+- Only a tracking number leaves the house, and only to the carrier that issued it. Themi
+  never follows a link from an email. Link addresses aren't stored.
+- Every line a person sees names the shop only: never what's in the parcel, never the
+  tracking number. The wall is a shared screen, and a parcel can be a present. A test in
+  each prompt that adds a line checks this.
+- Carrier answers are outside text: code parses them into fields, free text is cut to 80
+  characters and shown as plain text, never given to a model as instructions.
+- Time from `themi.clock`; messages through the outbox; offers that make something (a
+  reminder) through `themi.autonomy.stage`; carrier keys encrypted at rest and redacted.
+- The default test run makes no real calls: carrier clients take an `httpx` transport,
+  faked in `tests/fakes/carriers.py`.
+
+### PT1 · Package tracking: tracking numbers from email
+Status: [ ]
+Depends on: WL8
+Read first: the plan's "Part 1: Parcel identity" ("Finding numbers");
+`themi_google/connectors/gmail/parse.py` (`_TextOnly`, `html_to_text`);
+`themi_google/connectors/gmail/sync.py`; `themi/connectors/catgenie/` (how a reference
+package was credited).
+- Vet `tracking_number_data` (jkeen/tracking_number_data) before anything uses it: confirm
+  its licence allows vendoring and keep the licence text beside the file; pin one tagged
+  release and record it; read the data file for anything beyond patterns and check digits;
+  test it against real-shaped numbers from each carrier plus order and phone numbers that
+  must not match. If any check fails, write the UPS, FedEx, USPS and Amazon `TBA` patterns
+  and check digits by hand instead, and say so in Notes.
+- `themi_google/tracking.py`: `find(text, links, sender) -> list[Found]` (carrier, number).
+  Spaces inside a number are allowed; a number that fails its check digit is dropped. A
+  number that fits both FedEx and USPS is settled by the sender or a carrier name near it;
+  otherwise it's kept with both carriers.
+- `_TextOnly` collects `href`s. A redirect link's URL-encoded target in `url`, `u`,
+  `redirect` or `target` is decoded once and searched too; nothing is fetched.
+- Sync searches the whole body (not the 4,000 characters triage sees) and the links, and
+  stores what it found on the email row as `tracking` (JSON). A migration adds the column.
+  The links themselves aren't stored.
+Tests: each carrier's valid numbers; bad check digits; order and phone numbers; spaced
+numbers; a number only in a link; one inside a redirect link; the FedEx/USPS clash both
+ways; an email with none; that links aren't stored; the vetting's match tests.
+
+### PT2 · Package tracking: one parcel per tracking number
+Status: [ ]
+Depends on: PT1
+Read first: the plan's "Part 1: Parcel identity" ("Triage assigns numbers to parcels",
+"The parcel table", "Merging with WL8"); `themi_google/deliveries.py`;
+`themi_google/triage.py` (`SYSTEM`, `SCHEMA`, `parse_delivery`).
+- Triage's `delivery` becomes `parcels`, a list of `shop`, `tracking`, `date`, `status`.
+  The email's found numbers go to the model in their own data block after the body. `parse`
+  drops a `tracking` that isn't one of them. The shop rule stays word for word.
+- A migration adds `parcels` with the plan's columns (status adds `problem`), and copies
+  the last 14 days of `deliveries` in as numberless parcels.
+- `Deliveries.on_verdict` merges: numbers update their parcels; a numberless email joins an
+  open parcel from the same shop on the same day, or makes a numberless one; a numbered and
+  a numberless parcel with the same shop and day are folded together. A carrier's name never
+  overwrites a shop's. Newer facts win; `delivered` never goes back. Rows go 14 days after
+  delivery, or 30 days after the last change.
+- `Deliveries.on(day)` keeps its signature and gives one line per parcel; the wall's note
+  works unchanged ("Two deliveries from Amazon are due today.").
+Tests: shop email then carrier email make one parcel; an invented number is dropped; a
+digest's three parcels; the shop name kept; `delivered` stays; the fold; the migration;
+two parcels from one shop on the wall; nothing shows contents or a number.
+
+### PT3 · Package tracking: the carriers' alert emails
+Status: [ ]
+Depends on: PT2
+Read first: the plan's "Part 2: Carrier alert emails".
+- Fixtures in `tests/fixtures/parcels/` (anonymised, each saying where its shape came
+  from): a USPS Informed Delivery digest with three packages, UPS My Choice with a window,
+  FedEx Delivery Manager, plus Amazon, a Shopify shop and Chewy shipping emails.
+- Triage's prompt: a carrier's email is about parcels even when it lists several; `shop` is
+  the shop it names, or the carrier when it names none. The digest counts whatever its
+  category, as WL8 does.
+- The `parcels` module (Google pack; off until turned on) with its page, holding for now
+  the sign-up guide: what each service is, its link, and to sign up with the address
+  Themi reads. Never asks for the carriers' passwords. Check each link still resolves.
+Tests: each fixture's parcels, shops and statuses; a carrier email joining a shop's parcel
+by number; the guide on the module's page.
+
+### PT4 · Package tracking: the UPS and USPS lookup
+Status: [ ]
+Depends on: PT2
+Read first: the plan's "Part 3: Carrier lookup" ("The connector", "Settings");
+`themi/connectors/search.py` and `weather.py` (shape, `tls`, `Tally`); the Usage plan's
+UC3 notes.
+- `themi/connectors/carriers/`: the `Carrier` protocol and `Tracking` from the plan; UPS
+  (Tracking API, OAuth client credentials) and USPS (Tracking 3, OAuth) clients over
+  `httpx`. Each maps its status codes to the four statuses in one table; unknown codes are
+  `on_the_way` and logged. Tokens cached until expiry; a 401 refreshes once; a 429, a 5xx
+  or a timeout is a `CarrierError`.
+- Calls are counted on the usage card through a `Tally`, with each carrier's hourly limit.
+- The `parcels` module's page gets the UPS client ID and secret and the USPS consumer key
+  and secret (household secrets), each with a Test button that asks for a token and says
+  whether it worked, and "Ask the carriers" (on once keys are in).
+- Fakes in `tests/fakes/carriers.py`; fixtures in `tests/fixtures/carriers/` follow the
+  carriers' published response shapes and say so.
+Tests: each status from each carrier; a window; a problem line cut to 80 characters;
+delivered with where it was left; a 401 then success; a 429; a timeout; an unknown code;
+secrets redacted from logs; the Test buttons.
+Setup Michael does: the UPS and USPS developer apps (the plan's "Setup and open
+questions"). Not needed to build or test.
+
+### PT5 · Package tracking: asking on a schedule
+Status: [ ]
+Depends on: PT4
+Read first: the plan's "Part 3: Carrier lookup" ("When Themi asks"); `themi/scheduler.py`
+and how a module adds to `app.periodic`.
+- `parcels.check` every 15 minutes: the parcels due a look by the plan's cadence table,
+  7 am to 9 pm in the family's time zone, at most 20 a run. Amazon parcels and carriers
+  without keys are never asked. An email about a parcel brings its next look forward.
+- A lookup's answer merges into the parcel by PT2's rules, `source` "lookup". A
+  `CarrierError` leaves the parcel for its next turn.
+- "Ask the carriers" off stops the job's looks; email tracking goes on.
+Tests (frozen, advanced clock): each cadence row; the time window; the cap; a "shipped"
+email bringing a look forward; no looks without keys or with the setting off; a lookup's
+newer fact winning over an email's older one, and the other way round.
+
+### PT6 · Package tracking: what the family sees
+Status: [ ]
+Depends on: PT2 (PT5 for windows and problems)
+Read first: the plan's "What the family sees"; `themi_home/wall_view.py` (`note`,
+`_deliveries`); `themi/standard/morning.py` (`weather_line`); `themi_google/expected.py`
+(a chat tool registered with `services.tools`).
+- The wall's note: problems just after weather alerts; the plan's wording table (came with
+  time and where left, due with a window, a new day, attempted or held, needs a signature);
+  the "why" line names the source. "Got it" quiets as in WL5b; a later change to the
+  parcel is a new note.
+- The problem nudge: one Telegram message through the outbox to the member whose email
+  found the parcel, once per parcel per problem, normal urgency; a signature needed today
+  goes at once. Its offer to add a reminder makes a task through `themi.autonomy.stage`.
+  "Tell me about problems" (on) per member.
+- "Tell me when it's delivered", per member, off by default: on, one message when the
+  parcel comes ("The parcel from Chewy came at 1:40 pm. It was left at the front door."),
+  under quiet hours and the daily limit.
+- The morning message: one line when parcels are due today or have a problem, beside the
+  weather line; nothing when there's nothing. A line alone is reason to send the message,
+  like the weather line.
+- Chat: a tool answers "where's the Chewy order?" from parcels in the wall note's words;
+  several open parcels from one shop get a line each, soonest first; none gets "I haven't
+  seen a shipping email from Chewy lately."
+- Word the notes, the nudge and the delivered message with Michael before marking done.
+Tests: each wall row; Got it and a later change; the nudge once per problem, quiet hours,
+the signature exception, the setting; the delivered message on and off; the morning line;
+the chat answers; that no line shows contents or a tracking number.
+Scenarios: a Chewy "shipped" email then a UPS My Choice "out for delivery" shows one Chewy
+parcel with its window; a UPS lookup's "delivery attempted" sends Michael one nudge and
+shows on the wall, and the next day's "delivered" replaces it.
+
+### PT7 · Package tracking: the FedEx lookup (deferred)
+Status: deferred
+Depends on: PT4
+Read first: the plan's "Part 3: Carrier lookup" and "Aggregators and what's left out".
+- A FedEx Track API client behind `Carrier`, like PT4's. Until then FedEx parcels rely on
+  FedEx Delivery Manager emails (PT3).

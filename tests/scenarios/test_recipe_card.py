@@ -122,3 +122,15 @@ def test_the_label_names_the_family_and_stays_whole() -> None:
     long = label("Holiday baking for the whole extended family · Cookies and bars")
     assert long.endswith(" / MADICEN FAMILY RECIPE") and "…" in long
     assert spaced(long, 11) <= CONTENT
+
+
+async def test_a_third_of_a_cup_draws_its_fraction(scenario: Scenario) -> None:
+    """F54 (bug #238): "⅓ Cup" drew an empty box where the ⅓ goes."""
+    from themi.drawing.render import to_png
+
+    def card(amount: str) -> bytes:
+        recipe = replace(pancakes(scenario), ingredients=(Line(f"{amount} Cup (80 g) milk"),))
+        return to_png(card_svg(recipe, "dark"))
+
+    assert card("⅓") != card("ก")  # ก: in no bundled font, an empty box
+    assert card("⅓") != card("⅔")
