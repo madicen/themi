@@ -330,7 +330,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F52a | Idea: the wall goes full screen on the frame, whichever way it's opened | Feedback | [x] 2026-11-20 |
 | F52b | Idea: the wall has a dark look | Feedback | [x] 2026-11-20 |
 | F53 | Idea: choose each person's colour and the columns' order on the wall | Feedback | [x] 2026-11-20 |
-| F54 | Feedback: a drawn recipe shows ⅓ and ⅔, not empty boxes | Feedback | [ ] |
+| F54 | Feedback: a drawn recipe shows ⅓ and ⅔, not empty boxes | Feedback | [x] 2026-11-20 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16245,7 +16245,7 @@ Notes:
 - **Setup:** none; Wall frames, People on the wall.
 
 ### F54 · Feedback (2026-11-20): a drawn recipe shows ⅓ and ⅔, not empty boxes
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: DC1, DC10, DC12
 Read first: `themi/drawing/render.py` (`FONT_FILES`, resvg given only the bundled fonts);
 `themi/drawing/text.py` (`text_width`, the width table); `tools/dev/font_widths.py`;
@@ -16294,6 +16294,22 @@ Data/Setup: none. The new font files ship in the image (check `MANIFEST`/package
 up `assets/fonts/*.ttf`, as it does Atkinson's). Mark #238 reviewed once live.
 
 Notes:
+- **Deviation:** resvg's own per-character fallback found the glyphs but took the bold
+  weight in regular text too (whichever face it meets first), and naming "Themi Fractions"
+  after Atkinson in `font-family` didn't change that (resvg settles one family per run). So
+  `render.with_fallback` wraps each character in `FALLBACK_CHARS` in
+  `<tspan font-family="Themi Fractions">` in the text between tags, just before resvg; the
+  tspan inherits the weight. It's done in `to_png`, so no golden SVG changes.
+- `themi.drawing.FALLBACK_FAMILY` / `FALLBACK_CHARS` (U+2150–215E, U+2009).
+  `tools/dev/fraction_font.py` makes `ThemiFractions-{Regular,Bold}.ttf` from Noto Sans'
+  variable font (weights 400/700, width 100), subset, scaled (×0.936 / ×0.934) so ⅓ stands
+  as tall as Atkinson's ½, renamed; `OFL-noto-sans.txt` beside them. `font_widths.py` takes
+  those characters' widths from it (Atkinson's widths unchanged).
+- Found on the way: → (U+2192) is in the width table's `EXTRA` but in no bundled font, nor in
+  Noto Sans. No drawing writes it, so it's left; the test names it (`NO_GLYPH`).
+- Tests: `tests/unit/test_drawing_fractions.py`; `test_a_third_of_a_cup_draws_its_fraction`
+  in `tests/scenarios/test_recipe_card.py`. Goldens unchanged.
+- **Setup:** none. Mark #238 reviewed once live.
 
 ## Conversation mode
 

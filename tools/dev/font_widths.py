@@ -20,6 +20,12 @@ FONTS = {
     "regular": "AtkinsonHyperlegible-Regular.ttf",
     "bold": "AtkinsonHyperlegible-Bold.ttf",
 }
+# F54: what Atkinson lacks (⅓ ⅔ ⅛ …, the thin space), measured in the fallback font.
+FALLBACK = {
+    "regular": "ThemiFractions-Regular.ttf",
+    "bold": "ThemiFractions-Bold.ttf",
+}
+FALLBACK_CHARS = [chr(c) for c in (*range(0x2150, 0x215F), 0x2009)]
 EMOJI = "TwemojiMozilla.ttf"  # DC12: what resvg falls back to for emoji
 # Basic Latin, Latin-1, and the punctuation Themi writes: ellipsis, bullet, middle dot,
 # degree, en and em dash, curly quotes, times, arrow.
@@ -43,12 +49,20 @@ EXTRA = [
 CHARS = [chr(c) for c in range(0x20, 0x7F)] + [chr(c) for c in range(0xA0, 0x100)] + EXTRA
 
 
-def widths(path: Path) -> dict[str, object]:
+def _advances(path: Path, chars: list[str]) -> tuple[int, dict[str, int]]:
     font = TTFont(path)
-    units = font["head"].unitsPerEm  # type: ignore[attr-defined]
     cmap = font.getBestCmap() or {}
     metrics = font["hmtx"].metrics  # type: ignore[attr-defined]
-    table = {ch: metrics[cmap[ord(ch)]][0] for ch in CHARS if ord(ch) in cmap}
+    units = font["head"].unitsPerEm  # type: ignore[attr-defined]
+    return units, {ch: metrics[cmap[ord(ch)]][0] for ch in chars if ord(ch) in cmap}
+
+
+def widths(path: Path, fallback: Path | None = None) -> dict[str, object]:
+    units, table = _advances(path, CHARS)
+    if fallback is not None:
+        extra_units, extra = _advances(fallback, FALLBACK_CHARS)
+        assert extra_units == units, "the fallback font must share Atkinson's em"
+        table |= {ch: w for ch, w in extra.items() if ch not in table}
     lower = [table[c] for c in "abcdefghijklmnopqrstuvwxyz"]
     return {
         "units": units,
@@ -73,7 +87,8 @@ def emoji_ranges(path: Path) -> list[list[int]]:
 
 def main() -> None:
     table: dict[str, object] = {
-        weight: widths(ASSETS / "fonts" / name) for weight, name in FONTS.items()
+        weight: widths(ASSETS / "fonts" / name, ASSETS / "fonts" / FALLBACK[weight])
+        for weight, name in FONTS.items()
     }
     table["emoji"] = emoji_ranges(ASSETS / "fonts" / EMOJI)
     out = ASSETS / "widths.json"
