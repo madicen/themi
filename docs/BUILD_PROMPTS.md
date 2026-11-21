@@ -330,6 +330,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F52a | Idea: the wall goes full screen on the frame, whichever way it's opened | Feedback | [x] 2026-11-20 |
 | F52b | Idea: the wall has a dark look | Feedback | [x] 2026-11-20 |
 | F53 | Idea: choose each person's colour and the columns' order on the wall | Feedback | [x] 2026-11-20 |
+| F54 | Feedback: a drawn recipe shows ⅓ and ⅔, not empty boxes | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16242,6 +16243,57 @@ Notes:
   `test_wall_look.py` now checks every tone in `TONES`, and that each has a `.tone-` rule.
 - Tests: `tests/integration/test_wall_columns.py`. Not looked at on the frame.
 - **Setup:** none; Wall frames, People on the wall.
+
+### F54 · Feedback (2026-11-20): a drawn recipe shows ⅓ and ⅔, not empty boxes
+Status: [ ]
+Depends on: DC1, DC10, DC12
+Read first: `themi/drawing/render.py` (`FONT_FILES`, resvg given only the bundled fonts);
+`themi/drawing/text.py` (`text_width`, the width table); `tools/dev/font_widths.py`;
+`themi_home/quantities.py` (`FRACTIONS`); `themi_home/recipe_card.py`.
+From Michael's bug #238 (2026-11-20, 4:02 pm, "looks like the font we use doesn't have a 1/3
+glyph"), with a picture of the Snowy Earthquake Cookie card (dark): "⅓ Cup (80 g) non dairy
+milk" and "⅓ Cup (70 g) canola oil" start with an empty box; "¾ Cup" and "½ Cup" are fine.
+
+What the Pi shows: the card is `/recipes/<id>/card.png` (DC10), drawn by resvg with
+`skip_system_fonts=True` and only `assets/fonts/*.ttf`: Atkinson Hyperlegible Regular and
+Bold, and Twemoji. Atkinson has ¼ ½ ¾ (Latin-1) but none of Number Forms (U+2150–215E: ⅓ ⅔
+⅛ ⅜ ⅝ ⅞ and the rest), nor the thin space U+2009; Twemoji has none of them either, so resvg
+draws .notdef. Atkinson Hyperlegible Next (checked 2026-11-20) lacks them too, and the
+font's `frac` feature has no numerator or denominator glyphs to build one from. Recipes
+write ⅓ and ⅔ often (`quantities.FRACTIONS`, and `pretty()` writes them when scaling), so
+every drawing that can show an amount is hit: the recipe card, and the day card's lines
+where a recipe or task title holds one. `text_width` also measures them at the table's
+`fallback` width, so the line was fitted to a box, not a fraction.
+
+Build:
+- A fallback font for what Atkinson lacks: a subset of Noto Sans (OFL) Regular and Bold,
+  holding only Number Forms U+2150–215E and U+2009, bundled as
+  `assets/fonts/ThemiFractions-Regular.ttf` / `-Bold.ttf` with its OFL notice beside them
+  (an `OFL-noto-sans.txt`). Make it with a dev tool (`tools/dev/fraction_font.py`, fontTools'
+  subsetter, from a Noto Sans file the tool downloads or is given a path to; the app never
+  downloads). Scale its glyphs, if needed, so a ⅓ sits at Atkinson's cap height and weight
+  as near as fontTools allows; it's a fallback, not a second family in any template.
+- resvg falls back per character to a loaded font that has the glyph; confirm that with the
+  subset loaded, ⅓ in Atkinson text draws from it in the matching weight (bold amounts stay
+  bold). If resvg's fallback doesn't pick it, name it in `font-family` after Atkinson in
+  `svg.py`'s base style instead.
+- `font_widths.py` reads those characters' widths from the fallback (regular and bold) into
+  `widths.json`, so fitting measures them truly. Regenerate the table.
+- Nothing else changes: the words are the recipe's own, and no ⅓ is rewritten as "1/3".
+
+Tests: every character in `quantities.FRACTIONS` and the width tool's `EXTRA` is in the
+cmap of some file in `FONT_FILES` (fontTools, a dev dependency, as the width tool's tests);
+`text_width("⅓", …)` is the fallback's width, not the table's `fallback`; a recipe card
+with "⅓ Cup" renders (real resvg, as DC1's render test) and the ⅓'s pixels differ from a
+.notdef box (render "⅓" and "￿" alone and compare); the recipe card golden SVGs are
+unchanged (only the PNG and the widths change, and any golden whose wrapping moves because
+a fraction is now measured truly, which the commit names).
+Scenario: none (nothing a message says changes); Michael looks at the cookie card.
+
+Data/Setup: none. The new font files ship in the image (check `MANIFEST`/package data picks
+up `assets/fonts/*.ttf`, as it does Atkinson's). Mark #238 reviewed once live.
+
+Notes:
 
 ## Conversation mode
 
