@@ -76,6 +76,8 @@ LOOK_AHEAD_ON_REQUEST = timedelta(days=14)  # as far as calendars are read (K1)
 # drive from, not home.
 BACK_TO_BACK = timedelta(minutes=90)
 STOP = timedelta(minutes=15)  # F41d: a drop-off or pick-up, at the stop
+# F55a (reply 521): an arrive_by further before the start than this is a misreading.
+EARLIEST = timedelta(hours=4)
 
 
 @dataclass(frozen=True)
@@ -201,6 +203,8 @@ class TravelHeadsUps:
         if self._too_far(address or "", home, place) is not None:
             return False
         start, lost, arrive = await self._planned_start(member, entry, home)
+        if arrive <= now:
+            return False  # F55a: when they wanted to be there has gone; the reply said so
         rough = timedelta(minutes=estimate(start.place, place).minutes)
         if now < arrive - rough - ready - MARGIN:
             return False  # not close yet: no lookup
@@ -305,8 +309,17 @@ class TravelHeadsUps:
             priority=Priority.NORMAL,
             kind=TRAVEL_KIND,  # F38b: breaks through quiet hours, busy times, limits, pauses
             expires=entry.starts_at,  # still waiting at the start (an outage): of no use then
-            dedupe_key=f"travel-{member.id}-{self._event_key(entry)}-{to_utc_iso(entry.starts_at)}",
+            dedupe_key=self._dedupe_key(member, entry),
         )
+
+    def _dedupe_key(self, member: Member, entry: Entry) -> str:
+        """One heads-up per event, start time and plan (F55a: a changed plan's isn't a
+        duplicate of the one that went for the old plan)."""
+        key = f"travel-{member.id}-{self._event_key(entry)}-{to_utc_iso(entry.starts_at)}"
+        origin, early = self._plan(member, entry)
+        if origin or early:
+            key += f"-{early}-{name_key(origin)}"
+        return key[:300]
 
     def rough_drive(self, member: Member, entry: Entry) -> int | None:
         """DC3: about how many minutes' drive an event is from home, from places already
@@ -416,16 +429,22 @@ class TravelHeadsUps:
             ).getting_ready_minutes
         )
         now = clock.now()
-        if leave_by <= now:
+        if arrive <= now:  # F55a: no "leave now" for a time already gone
+            plan = (
+                f"to be there by {_clock(arrive.astimezone(tz))} they'd have needed to leave "
+                f"at {_clock(leave_by.astimezone(tz))}; leaving now gets them there about "
+                f"{_clock((now + timedelta(minutes=route.minutes)).astimezone(tz))}"
+            )
+        elif leave_by <= now:
             plan = "leave now"
         else:
             plan = f"leave around {_clock(leave_by.astimezone(tz))}"
             if ready > now:
                 plan += f", and start getting ready around {_clock(ready.astimezone(tz))}"
-        if early:
+        if early and arrive > now:
             plan = f"to be there by {_clock(arrive.astimezone(tz))}, {plan}"
         how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
-        heads_up = self._heads_up_words(viewer, owner, leave_by, now)
+        heads_up = self._heads_up_words(viewer, owner, entry, leave_by, arrive, now)
         if ctx is not None:
             said, leave = self._leave_line(
                 whose, entry, route, leave_by, ready, now, how, start, arrive
@@ -433,7 +452,9 @@ class TravelHeadsUps:
             ctx.done.append(said)
             ctx.done_keys.append(leave)
         if start.label:
-            plan = plan.replace("leave around", "leave there around")
+            plan = plan.replace("leave around", "leave there around").replace(
+                "to leave at", "to leave there at"
+            )
         return as_data("calendars", line) + (
             f"\nAbout {_duration(route.minutes)} {start.words} {how}: {plan}.{heads_up}{note}"
         )
@@ -481,18 +502,33 @@ class TravelHeadsUps:
             drive = f"about {_duration(route.minutes)} {start.words} {how}"
         there = " there" if start.label else ""
         key = _key(leave)
+        if arrive is not None and arrive <= now:  # F55a
+            by = _clock(arrive.astimezone(tz))
+            head = f"{whose}{entry.title} at {_clock(entry.starts_at.astimezone(tz))}"
+            reach = _clock((now + timedelta(minutes=route.minutes)).astimezone(tz))
+            return (
+                f"{head}: {drive}. To be there by {by} you'd have needed to leave{there} at "
+                f"{leave}; leaving now gets you there about {reach}.",
+                key,
+            )
         if leave_by <= now:
             return f"{head}: {drive}. Time to leave{there} now.", key
         begin = "now" if ready <= now else f"around {_clock(ready.astimezone(tz))}"
         return f"{head}: {drive}. Leave{there} around {leave}; start getting ready {begin}.", key
 
     def _heads_up_words(
-        self, viewer: Member, owner: Member, leave_by: datetime, now: datetime
-    ) -> str:
+        self, viewer: Member, owner: Member, entry: Entry, leave_by: datetime,
+        arrive: datetime, now: datetime,
+    ) -> str:  # fmt: skip
         """When the heads-up comes, and to whom: the person whose calendar it's on (bug #24:
-        Themi had said there were no advance reminders)."""
+        Themi had said there were no advance reminders). F55a (bug #242): never one the job
+        won't send."""
         if not self.services.store.preferences(owner.id, TravelPreferences).leave_heads_up:
             return f" {owner.name} has the heads-up switched off."
+        if arrive <= now:
+            return ""
+        if self._sent(owner, entry):
+            return " The heads-up to get ready already went."
         at = leave_by - timedelta(
             minutes=self.services.store.preferences(
                 owner.id, TravelPreferences
@@ -743,12 +779,16 @@ class TravelHeadsUps:
         """Where they said they'd leave from ('' home or unsaid), and how many minutes before
         the start they want to be there (F46d)."""
         key, day = self._plan_key(entry)
-        row = self.db.one(
-            "SELECT origin, arrive_early FROM travel_plans WHERE member_id = ? "
-            "AND event_key = ? AND day = ?",
-            (member.id, key, day),
-        )
-        return (str(row["origin"]), int(row["arrive_early"])) if row else ("", 0)
+        found = (key, name_key(entry.title)[:200]) if entry.event_id else (key,)
+        for each in found:  # F55a: an arrival given when it was added, kept by its title
+            row = self.db.one(
+                "SELECT origin, arrive_early FROM travel_plans WHERE member_id = ? "
+                "AND event_key = ? AND day = ?",
+                (member.id, each, day),
+            )
+            if row:
+                return str(row["origin"]), int(row["arrive_early"])
+        return "", 0
 
     def _save_plan(
         self, member: Member, entry: Entry, *, origin: str | None = None,
@@ -757,6 +797,16 @@ class TravelHeadsUps:
         """Only what's given changes (origin '': from home). Days gone by are dropped."""
         kept, was = self._plan(member, entry)
         key, day = self._plan_key(entry)
+        now_origin = " ".join((kept if origin is None else origin).split())
+        now_early = was if early is None else early
+        if (now_origin, now_early) != (" ".join(kept.split()), was):
+            # F55a (bug #242): the heads-up that went was for the old plan; the new one
+            # gets its own.
+            self.db.execute(
+                "DELETE FROM travel_headsups WHERE member_id = ? AND event_id = ? "
+                "AND starts_at = ?",
+                (member.id, self._event_key(entry), to_utc_iso(entry.starts_at)),
+            )
         today = clock.now().astimezone(self._tz()).date().isoformat()
         self.db.execute("DELETE FROM travel_plans WHERE day < ?", (today,))
         self.db.execute(
@@ -773,9 +823,14 @@ class TravelHeadsUps:
         )  # fmt: skip
 
     def _early(self, entry: Entry, arrive_by: str) -> int:
-        """Minutes before the start of `arrive_by` ("18:15") on the event's day."""
+        return self.early_for(entry.starts_at, arrive_by)
+
+    def early_for(self, starts_at: datetime, arrive_by: str) -> int:
+        """Minutes before the start of `arrive_by` ("18:15") on the event's day. F55a (reply
+        521): "06:30" for a 6:30 pm start is the evening, read on a 12-hour clock, not 12
+        hours early; one that's neither within `EARLIEST` of the start is asked about."""
         tz = self._tz()
-        start = entry.starts_at.astimezone(tz)
+        start = starts_at.astimezone(tz)
         try:
             at = time.fromisoformat(arrive_by.strip())
         except ValueError as exc:
@@ -786,7 +841,30 @@ class TravelHeadsUps:
                 f"Not timed: {_clock(there)} is after it starts ({_clock(start)}). Ask when "
                 "they want to be there."
             )
+        later = there + timedelta(hours=12)
+        if start - there > EARLIEST and at.hour < 12 and later <= start:
+            there = later
+        if start - there > EARLIEST:
+            gap = int((start - there).total_seconds() // 60)
+            raise ToolFailed(
+                f"Not timed: {_clock(there)} is {_duration(gap)} before it starts "
+                f"({_clock(start)}). Ask when they want to be there."
+            )
         return int((start - there).total_seconds() // 60)
+
+    def keep_arrival(self, member: Member, title: str, starts_at: datetime, arrive_by: str) -> int:
+        """F55a (bug #241): `add_calendar_event`'s arrive_by, kept under the new event's title
+        until it has an id (`_plan` looks there too). Returns the minutes early."""
+        early = self.early_for(starts_at, arrive_by)
+        key = name_key(title)[:200]
+        day = starts_at.astimezone(self._tz()).date().isoformat()
+        self.db.execute(
+            "INSERT INTO travel_plans (member_id, event_key, day, origin, arrive_early, "
+            "updated_at) VALUES (?, ?, ?, '', ?, ?) ON CONFLICT (member_id, event_key, day) "
+            "DO UPDATE SET arrive_early = excluded.arrive_early, updated_at = excluded.updated_at",
+            (member.id, key, day, early, to_utc_iso(clock.now())),
+        )
+        return early
 
     # ----- small things ---------------------------------------------------------------------
 
@@ -859,7 +937,7 @@ def _duration(minutes: int) -> str:
     "event of theirs ending just before is used then); 'home' when they'll leave from home "
     "after all. arrive_by: HH:MM, when they want to be there, if earlier than the start "
     "('arrive at 6:15' for a 6:30 visit: 18:15), '' for the start or what they said before; "
-    "don't move the event for it.",
+    "it's a 24-hour clock (6:20 in the evening is 18:20); don't move the event for it.",
     {
         "event": {"type": "string"},
         "address": {"type": "string"},

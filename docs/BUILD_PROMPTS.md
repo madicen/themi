@@ -331,7 +331,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F52b | Idea: the wall has a dark look | Feedback | [x] 2026-11-20 |
 | F53 | Idea: choose each person's colour and the columns' order on the wall | Feedback | [x] 2026-11-20 |
 | F54 | Feedback: a drawn recipe shows ⅓ and ⅔, not empty boxes | Feedback | [x] 2026-11-20 |
-| F55a | Feedback: "arrive at 6:20" is 6:20 pm, kept with the event; a changed plan gets its own heads-up | Feedback | [ ] |
+| F55a | Feedback: "arrive at 6:20" is 6:20 pm, kept with the event; a changed plan gets its own heads-up | Feedback | [x] 2026-11-20 |
 | F55b | Feedback: a held email notice has its buttons when it goes | Feedback | [ ] |
 | F55c | Feedback: the wall keeps a routine with open steps after its window | Feedback | [ ] |
 | F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [ ] |
@@ -16318,7 +16318,7 @@ Notes:
 - **Setup:** none. Mark #238 reviewed once live.
 
 ### F55a · Feedback (2026-11-20): "arrive at 6:20" is 6:20 pm for an evening visit, kept with the event, and a changed plan gets its own heads-up
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: F46c, F46d, F49b
 Read first: `themi_google/travel.py` (`_early`, `drive_to_event`, `_consider`, `_send`,
 `_sent`, `_save_plan`, `_heads_up_words`, the `drive_time` spec); `themi_google/events.py`
@@ -16377,6 +16377,23 @@ Data/Setup: golden `tools.json` (drive_time's and add_calendar_event's specs). M
 tool was right, its reading wasn't).
 
 Notes:
+- `TravelHeadsUps.early_for(starts_at, arrive_by)` (`EARLIEST` = 4 hours): a morning reading
+  more than 4 hours early whose evening reading is at or before the start is the evening;
+  otherwise more than 4 hours early is refused ("Not timed: 9 am is 9 hr 30 min before it
+  starts (6:30 pm)").
+- An arrive time gone by: the tool says "to be there by 5:20 pm they'd have needed to leave at
+  4:45 pm; leaving now gets them there about 6:05 pm", Themi's own line the same with "you",
+  no heads-up promised, and `_consider` sends none.
+- `_save_plan` clears the event's `travel_headsups` row when the origin or the minutes early
+  change; the heads-up's `dedupe_key` adds the plan (`-<early>-<origin>`) when there is one, so
+  the outbox doesn't drop the new one. `_heads_up_words` says "The heads-up to get ready
+  already went." when it has.
+- `add_calendar_event` takes `arrive_by` and keeps it at once (not on approval) under the
+  title's key for that day (`keep_arrival`); `_plan` looks under the event's id, then its
+  title. An add that's never approved leaves a row that's pruned with its day.
+- Golden: `tools.json` (drive_time's and add_calendar_event's specs). Tests: seven at the end
+  of `tests/scenarios/test_travel_plans.py`, the last the 20 Nov scenario.
+- **Setup:** none. Mark #241, #242 reviewed once live; `themi feedback --wrong-tool 521 none`.
 
 ### F55b · Feedback (2026-11-20): a held email notice has its buttons when it goes, however old
 Status: [ ]
