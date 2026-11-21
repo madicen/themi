@@ -71,10 +71,8 @@ body.wall {
 
 /* Themi's note */
 .wall-note { display: flex; gap: 1.1rem; align-items: center; }
-.wall-t {
-  flex: none; width: 3.25rem; height: 3.25rem; border-radius: 1rem; background: var(--fg); color: var(--on-fg);
-  display: grid; place-items: center; font-weight: 800; font-size: 1.5rem;
-}
+/* F55e (idea #243): Themi's chameleon, the app icon, on the tile where a "T" was */
+.wall-t { flex: none; width: 3.25rem; height: 3.25rem; border-radius: 1rem; display: block; object-fit: cover; }
 .wall-note { width: 100%; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .wall-note-text { font-size: 1.6rem; line-height: 1.35; }
 
@@ -108,6 +106,9 @@ button.wall-col-head { cursor: pointer; }
 .wall-item.done .ring { background: var(--tone); border-color: var(--tone); }
 .wall-item.done .wall-title { color: var(--faint); text-decoration: line-through; }
 .wall-words { display: flex; flex-direction: column; min-width: 0; }
+/* F55d (idea #245): the item's emoji, between the ring and the words, at the title's size */
+.wall-emoji { flex: none; font-size: 1.5rem; line-height: 1; }
+.wall-item.done .wall-emoji { opacity: 0.45; }
 .wall-title { font-size: 1.3rem; line-height: 1.25; font-weight: 500; }
 .wall-sub { font-size: 1rem; color: var(--sub); }
 .wall-empty { margin: 0 0.5rem 0.4rem; font-size: 1.2rem; color: var(--faint); }
@@ -167,6 +168,13 @@ button.wall-col-head { cursor: pointer; }
 .wall-tomorrow { display: flex; gap: 1.1rem; align-items: center; flex-wrap: wrap; padding-top: 0.6rem; font-size: 1.2rem; }
 .dot-chip { display: inline-flex; gap: 0.5rem; align-items: center; }
 .dot-chip::before { content: ""; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--tone); }
+/* F55f (idea #239): a chip per calendar; a tap turns it off in the week ahead */
+.wk-cals { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: flex-end; }
+.wk-cal {
+  border: 0.15rem solid var(--tone); background: var(--tone); color: var(--on-tone); font: inherit;
+  font-size: 0.95rem; font-weight: 600; padding: 0.25rem 0.8rem; border-radius: 999px; cursor: pointer;
+}
+.wk-cal.off { background: transparent; color: var(--sub); text-decoration: line-through; opacity: 0.7; }
 .wk { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.5rem; }
 .wk-day { border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; background: var(--soft); border-radius: 1rem; padding: 0.6rem 0.5rem; min-height: 9rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .wk-head { font-size: 1rem; color: var(--sub); padding: 0 0.15rem; }

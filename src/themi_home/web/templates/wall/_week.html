@@ -1,6 +1,10 @@
 {% if screen.week %}
 <section class="wall-card wall-week" aria-label="The week ahead">
-  <div class="wall-card-head"><h2>The week ahead</h2></div>
+  <div class="wall-card-head"><h2>The week ahead</h2>{% if screen.week_calendars %}
+    <div class="wk-cals" role="group" aria-label="Calendars in the week ahead">
+      {% for c in screen.week_calendars %}<button type="button" class="wk-cal tone-{{ c.tone }}{% if c.off %} off{% endif %}" aria-pressed="{{ 'false' if c.off else 'true' }}" hx-post="/wall/week/calendar" hx-vals='{"calendar": {{ c.key | tojson }}}' hx-target="#wall-week" hx-swap="innerHTML">{{ c.name }}</button>{% endfor %}
+    </div>{% endif %}
+  </div>
   <div class="wk">
     {% for d in screen.week %}
     <button type="button" class="wk-day" hx-get="/wall/view/day/{{ d.iso }}" hx-target="#wall-view" hx-swap="innerHTML">

@@ -40,14 +40,14 @@ async def test_each_part_of_the_day_shows_its_own_routine(wall: Scenario) -> Non
     routines(wall)
     erin = f"m{wall.member('Erin').id}"
     morning = words(column(await screen(wall), erin))
-    assert "Morning routine Walk dog" in morning and "Go for a run" not in morning
+    assert "Morning routine 🐕 Walk dog" in morning and "Go for a run" not in morning
     at(wall, 14)
     afternoon = words(column(await screen(wall), erin))
-    assert "Afternoon routine Go for a run" in afternoon and "Walk dog" not in afternoon
+    assert "Afternoon routine 🏃 Go for a run" in afternoon and "Walk dog" not in afternoon
     at(wall, 19, 42)
     evening = await screen(wall)
     assert "Nothing set for this evening" in words(column(evening, erin))
-    assert "Evening routine Take meds" in words(column(evening, f"m{wall.member('Husband').id}"))
+    assert "Evening routine 💊 Take meds" in words(column(evening, f"m{wall.member('Husband').id}"))
     assert 'class="wall night"' not in evening
 
 

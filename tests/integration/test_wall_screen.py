@@ -183,8 +183,8 @@ async def test_together_has_either_chores_and_the_family_to_dos(wall: Scenario) 
     await task(wall, "Erin", "Erin's own errand")
     page = await screen(wall)
     together = words(column(page, "together"))
-    assert "Either of you Bring bins in from yesterday" in together
-    assert "Family to-do Unjam the vacuum" in together
+    assert "Either of you 🗑️ Bring bins in from yesterday" in together
+    assert "Family to-do 🧹 Unjam the vacuum" in together
     assert "Erin's own errand" not in together
     for key in (f"m{wall.member('Erin').id}", f"m{wall.member('Husband').id}"):
         assert "Bring bins in" not in column(page, key)  # once, in Together
@@ -462,3 +462,120 @@ async def test_the_week_ahead_free_days_and_more(calendar: Scenario, fake_gcal: 
     )
     assert "Sat 24 Free" in week and week.count(" Free") == 5
     assert "Tomorrow Tomorrow&#39;s thing" in words(page[page.index("wall-tomorrow") - 30 :])
+
+
+# ----- F55c (bug #244): a routine with steps open after its window ------------------------
+
+
+def ends(s: Scenario, name: str, routine: str, starts: str, at: str) -> None:
+    from datetime import time as clock_time
+
+    s.app.services.get(keys.routines).set(
+        s.member(name), routine, clock_time.fromisoformat(starts), clock_time.fromisoformat(at)
+    )
+
+
+def tick(s: Scenario, item_id: int) -> None:
+    routines = s.app.services.get(keys.routines)
+    found = routines.item(item_id)
+    assert found is not None
+    routines.tick(found, routines.today(s.member("Husband")))
+
+
+async def test_an_evening_routine_with_steps_open_stays_after_its_window(wall: Scenario) -> None:
+    """Michael's at 9:23 pm: his evening routine ended at 8:30 pm with three steps open, and
+    the wall had dropped it."""
+    ends(wall, "Husband", "Evening", "17:00", "20:30")
+    dishwasher = step(wall, "Husband", "Evening", "Cycle Dishwasher")
+    step(wall, "Husband", "Evening", "Take Meds")
+    tick(wall, dishwasher)
+    clock.advance(timedelta(hours=12, minutes=23))  # 9:23 pm
+    husband = column(await screen(wall), f"m{wall.member('Husband').id}")
+    assert "Evening routine, still open" in headings(husband)
+    assert "Take Meds" in husband
+
+
+async def test_all_ticked_it_goes(wall: Scenario) -> None:
+    ends(wall, "Husband", "Evening", "17:00", "20:30")
+    tick(wall, step(wall, "Husband", "Evening", "Take Meds"))
+    clock.advance(timedelta(hours=12, minutes=23))
+    husband = column(await screen(wall), f"m{wall.member('Husband').id}")
+    assert not any("routine" in h for h in headings(husband))
+
+
+async def test_a_morning_routine_stays_until_the_next_starts(wall: Scenario) -> None:
+    ends(wall, "Husband", "Morning", "08:00", "09:00")
+    step(wall, "Husband", "Morning", "Walk the dog")
+    clock.advance(timedelta(minutes=23))  # 9:23 am
+    husband = column(await screen(wall), f"m{wall.member('Husband').id}")
+    assert "Morning routine, still open" in headings(husband)
+    assert "Walk the dog" in husband
+    clock.advance(timedelta(hours=3))  # 12:23 pm: the afternoon's
+    husband = column(await screen(wall), f"m{wall.member('Husband').id}")
+    assert "Afternoon routine" in headings(husband)
+    assert "Walk the dog" not in husband
+
+
+# ----- F55d (idea #245): each item's emoji -----------------------------------------------
+
+
+def emoji_before(html: str, title: str) -> str:
+    """The emoji drawn just before `title` in an item, or ''."""
+    found = re.search(
+        rf'<span class="wall-emoji" aria-hidden="true">([^<]+)</span>\s*'
+        rf'<span class="wall-words"><span class="wall-title">{re.escape(title)}<',
+        html,
+    )
+    return found.group(1) if found else ""
+
+
+async def test_a_chore_has_its_emoji_in_the_column_and_the_person_view(wall: Scenario) -> None:
+    from tests.integration.test_wall_views import get
+
+    await task(wall, "Erin", "Clean the bird cage", due=today(wall), chore=True)
+    erin = wall.member("Erin").id
+    assert emoji_before(column(await screen(wall), f"m{erin}"), "Clean the bird cage") == "🦜"
+    person = (await get(wall, f"/wall/view/person/{erin}")).text
+    assert emoji_before(person, "Clean the bird cage") == "🦜"
+
+
+async def test_an_item_with_no_fit_has_none(wall: Scenario) -> None:
+    await task(wall, "Erin", "Text Susan")
+    erin = column(await screen(wall), f"m{wall.member('Erin').id}")
+    assert "Text Susan" in erin
+    assert "wall-emoji" not in erin
+
+
+async def test_a_family_chosen_icon_wins(wall: Scenario) -> None:
+    made = await task(wall, "Erin", "Clean the bird cage", due=today(wall), chore=True)
+    board = wall.app.services.get(keys.taskboard)
+    board.icon_sources.append(lambda t: "czl_chores_emoji#_#star#_#⭐" if t.id == made.id else None)
+    erin = column(await screen(wall), f"m{wall.member('Erin').id}")
+    assert emoji_before(erin, "Clean the bird cage") == "⭐"
+
+
+async def test_a_routine_step_has_its_titles_emoji(wall: Scenario) -> None:
+    step(wall, "Husband", "Evening", "Take meds")
+    clock.advance(EVENING)
+    husband = column(await screen(wall), f"m{wall.member('Husband').id}")
+    assert emoji_before(husband, "Take meds") == "💊"
+
+
+# ----- F55e (idea #243): Themi's note wears Themi ------------------------------------------
+
+
+async def test_the_note_wears_themi_not_a_t(wall: Scenario) -> None:
+    from tests.integration.test_wall_views import get
+
+    await task(wall, "Erin", "Bring bins in", due=today(wall) - timedelta(days=1), chore=True,
+               both="either")  # fmt: skip
+    page = await screen(wall)
+    note = page[page.index('class="wall-card wall-note"') :]
+    note = note[: note.index("</button>")]
+    badge = re.search(r'<img class="wall-t" src="([^"]+)" alt="">', note)
+    assert badge is not None and "icons/icon.svg" in badge.group(1)
+    assert ">T<" not in note
+    served = await get(wall, badge.group(1))
+    assert served.status_code == 200 and "svg" in served.headers["content-type"]
+    view = (await get(wall, "/wall/view/note")).text
+    assert '<img class="wall-t"' in view and ">T<" not in view

@@ -63,6 +63,7 @@ class WallItem:
     # WL4: a tap ticks it (or unticks it). A chore's round, once done, can't be undone.
     tappable: bool = True
     asking: bool = False  # "Who did it?" is showing under it
+    emoji: str = ""  # F55d (idea #245): the item's emoji, as the tasks picture has it
 
 
 @dataclass(frozen=True)
@@ -199,6 +200,17 @@ class TodayLine:
 
 
 @dataclass(frozen=True)
+class WeekCalendar:
+    """F55f (idea #239): a calendar with an event in the week ahead, as a chip a tap turns
+    off there (`off`) and on again."""
+
+    key: str  # its calendar id
+    name: str  # "Erin's Work"
+    tone: str
+    off: bool = False
+
+
+@dataclass(frozen=True)
 class WeekDay:
     weekday: str  # "Fri"
     date: str  # "20"
@@ -253,6 +265,7 @@ class WallScreen:
     smalls: tuple[SmallList, ...] = field(default=())
     today: TodayLine | None = None  # WL3: None when there's no calendar
     week: tuple[WeekDay, ...] = ()
+    week_calendars: tuple[WeekCalendar, ...] = ()  # F55f: none with fewer than two
     people: tuple[WallPerson, ...] = ()  # WL4: "Who did it?"
     night: NightView | None = None  # WL6: None by day
     look: str = "light"  # F52b: "light", "dark" or "auto"
@@ -262,6 +275,7 @@ class WallView:
     def __init__(self, services: Services) -> None:
         self.services = services
         self._places: list[Place] | None = None
+        self._week: list[tuple[date, list[WallEvent]]] | None = None
 
     # ----- the whole screen -------------------------------------------------------------
 
@@ -279,6 +293,7 @@ class WallView:
             smalls=self.smalls(),
             today=self.today_line(),
             week=self.week(),
+            week_calendars=self.week_calendars(),
             people=tuple(WallPerson(m.id, m.name, self.tone_of(m)) for m in self.people()),
             night=self.night(),
             look=self.look(),
@@ -475,14 +490,14 @@ class WallView:
             WallSection(
                 "Chores",
                 tuple(self._task_item(t, today) for t in chores)
-                + tuple(_done_item(t) for t in finished if t.repeats),
+                + tuple(_done_item(t, emoji=self.emoji_of(t)) for t in finished if t.repeats),
             )
         )
         sections.append(
             WallSection(
                 "To-do",
                 tuple(self._task_item(t, today) for t in todos[:TODOS_SHOWN])
-                + tuple(_done_item(t) for t in finished if not t.repeats),
+                + tuple(_done_item(t, emoji=self.emoji_of(t)) for t in finished if not t.repeats),
                 empty="Nothing on the list",
                 more=len(todos) > TODOS_SHOWN,
             )
@@ -513,7 +528,10 @@ class WallView:
         family = sorted((t for t in both if not t.repeats), key=lambda t: _rank(t, today))
         shown = {t.id for t in either} | {t.id for t in family[:FAMILY_TODOS_SHOWN]}
         finished = [
-            (t, _done_item(t, f"{names[by]} did it" if by in names else ""))
+            (
+                t,
+                _done_item(t, f"{names[by]} did it" if by in names else "", emoji=self.emoji_of(t)),
+            )
             for t, by in done
             if _for_both(t) and t.id not in shown
         ]
@@ -540,7 +558,17 @@ class WallView:
         )
 
     def _task_item(self, task: Task, today: date) -> WallItem:
-        return WallItem(f"task-{task.id}", task.title, since(task.due_on, today))
+        return WallItem(
+            f"task-{task.id}", task.title, since(task.due_on, today), emoji=self.emoji_of(task)
+        )
+
+    def emoji_of(self, task: Task) -> str:
+        """F55d (idea #245): a family-chosen icon's emoji, else the title's fit, as the tasks
+        picture (F43b), or none."""
+        from themi.drawing.emoji import item_emoji
+
+        board = self.services.maybe(keys.taskboard)
+        return item_emoji(task.title, board.icon_of(task) if board is not None else "")
 
     def _done_today(self, member: Member) -> int:
         board = self.services.maybe(keys.taskboard)
@@ -564,18 +592,29 @@ class WallView:
         routines = self.services.maybe(keys.routines)
         if routines is None:
             return None
-        routine = current_routine(routines, member, self.now())
-        if routine is None:
-            return None
         day = routines.today(member)
+        routine = current_routine(routines, member, self.now())
+        heading = f"{routine.name} routine" if routine is not None else ""
+        if routine is None:
+            # F55c (bug #244): the one that ended last today stays while a step is open,
+            # until the next starts (or the night view takes over).
+            routine = last_routine(routines, member, self.now())
+            if routine is None or all(
+                routines.ticked(item, day) for item in routines.today_items(routine, day)
+            ):
+                return None
+            heading = f"{routine.name} routine, still open"
         items = tuple(
             WallItem(
-                f"step-{item.id}-{day.isoformat()}", item.title, done=routines.ticked(item, day)
+                f"step-{item.id}-{day.isoformat()}",
+                item.title,
+                done=routines.ticked(item, day),
+                emoji=step_emoji(item.title),
             )
             for item in routines.today_items(routine, day)
         )
         part = routine.name.lower()
-        return WallSection(f"{routine.name} routine", items, empty=f"Nothing set for this {part}")
+        return WallSection(heading, items, empty=f"Nothing set for this {part}")
 
     def _part_word(self) -> str:
         hour = self.now().hour
@@ -767,15 +806,26 @@ class WallView:
         tomorrow = self.events(now.date() + timedelta(days=1))
         return lay_out_today(now, rows, self.events(now.date()), tomorrow)
 
+    def _week_events(self) -> list[tuple[date, list[WallEvent]]]:
+        """The seven days from tomorrow and each one's events, read once per screen."""
+        if self._week is None:
+            first = self.now().date() + timedelta(days=1)
+            days = [first + timedelta(days=offset) for offset in range(7)]
+            self._week = [(day, self.events(day)) for day in days]
+        return self._week
+
     def week(self) -> tuple[WeekDay, ...]:
-        """Seven days from tomorrow, up to three events each."""
+        """Seven days from tomorrow, up to three events each. F55f: without the calendars
+        turned off for the week ahead."""
         if not self.has_calendar():
             return ()
-        first = self.now().date() + timedelta(days=1)
+        from themi_home.wall_calendars import WallCalendars
+
+        hidden = WallCalendars(self.services.store.db).hidden()
         days = []
-        for offset in range(7):
-            day = first + timedelta(days=offset)
-            events = sorted(self.events(day), key=lambda e: (not e.all_day, e.start))
+        for day, found in self._week_events():
+            shown = [e for e in found if not e.calendar_id or e.calendar_id not in hidden]
+            events = sorted(shown, key=lambda e: (not e.all_day, e.start))
             chips = tuple(Chip(e.title, e.tone) for e in events)
             days.append(
                 WeekDay(
@@ -787,6 +837,41 @@ class WallView:
                 )
             )
         return tuple(days)
+
+    def week_calendars(self) -> tuple[WeekCalendar, ...]:
+        """F55f (idea #239): each calendar with an event in the week ahead, turned off or
+        not, in the wall's order of people, then the shared ones. None with fewer than two."""
+        if not self.has_calendar():
+            return ()
+        from themi_home.wall_calendars import WallCalendars, label
+
+        calendars = WallCalendars(self.services.store.db)
+        known = calendars.known(self.people())
+        hidden = calendars.hidden()
+        people = {m.id: m for m in self.people()}
+        order = {m.id: i for i, m in enumerate(self.people())}
+        found: dict[str, tuple[tuple[int, str], WeekCalendar]] = {}
+        for _, events in self._week_events():
+            for event in events:
+                key = event.calendar_id
+                if not key or key in found:
+                    continue
+                family = event.row == "family"
+                this = known.get(key)
+                person = people.get(event.member_id)
+                name = (
+                    this.name
+                    if this is not None
+                    else label(person.name, "", "")
+                    if person is not None
+                    else "Family"
+                )
+                tone = self.together_tone() if family or person is None else self.tone_of(person)
+                rank = (len(order) if family else order.get(event.member_id, len(order)), name)
+                found[key] = (rank, WeekCalendar(key, name, tone, key in hidden))
+        if len(found) < 2:
+            return ()
+        return tuple(chip for _, chip in sorted(found.values(), key=lambda pair: pair[0]))
 
     # ----- the small lists ------------------------------------------------------------
 
@@ -843,6 +928,13 @@ def current_routine(routines: Routines, member: Member, now: datetime) -> Routin
     at = now.time()
     started = [r for r in routines.of(member) if r.starts <= at < _routine_end(r, member)]
     return max(started, key=lambda r: r.starts, default=None)
+
+
+def last_routine(routines: Routines, member: Member, now: datetime) -> Routine | None:
+    """F55c: the routine whose window ended last, earlier today (local)."""
+    at = now.time()
+    ended = [r for r in routines.of(member) if r.starts <= at and _routine_end(r, member) <= at]
+    return max(ended, key=lambda r: _routine_end(r, member), default=None)
 
 
 def _routine_end(routine: Routine, member: Member) -> time:
@@ -922,9 +1014,19 @@ def lay_out_today(
     )
 
 
-def _done_item(task: Task, sub: str = "") -> WallItem:
+def _done_item(task: Task, sub: str = "", *, emoji: str = "") -> WallItem:
     """Ticked today: struck through. A one-off can be unticked; a chore's round can't."""
-    return WallItem(f"task-{task.id}", task.title, sub, done=True, tappable=not task.repeats)
+    return WallItem(
+        f"task-{task.id}", task.title, sub, done=True, tappable=not task.repeats, emoji=emoji
+    )
+
+
+def step_emoji(title: str) -> str:
+    """F55d: a routine step's emoji, from its title only (F43b: the wall keeps an icon per
+    routine, not per step)."""
+    from themi.drawing.emoji import item_emoji
+
+    return item_emoji(title)
 
 
 def _asking(column: WallColumn, key: str) -> WallColumn:

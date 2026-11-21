@@ -1153,6 +1153,15 @@ def _not_for_tasks(ctx: ToolContext) -> None:
             "default": "",
             "description": "A stop before another event with no time said: its words, or ''.",
         },
+        "arrive_by": {  # F55a
+            "type": "string",
+            "default": "",
+            "description": (
+                "HH:MM, 24-hour: when they want to be there if earlier than the start "
+                "(visiting hours 6:30, there at 6:20: start 18:30, arrive_by 18:20); never "
+                "move the start for it. '' if they didn't say."
+            ),
+        },
     },
 )
 async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
@@ -1193,6 +1202,10 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
             f"{same.title} is already on {where} ({when_words(same.when, tz)}). To change "
             "its time, use change_calendar_event."
         )
+    arrive_by = str(args.get("arrive_by") or "").strip()
+    travel = ctx.services.maybe(keys.travel)
+    if arrive_by and stop is None and not when.all_day and travel is not None:
+        travel.keep_arrival(ctx.member, title, when.starts, arrive_by)  # F55a (bug #241)
     payload = _add_payload(title, location, when, calendar, "chat")
     details = " ".join(str(args.get("details") or "").split())[:200]
     if details:

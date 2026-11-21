@@ -3,6 +3,7 @@ has [Open in Gmail], [Not important], [Mark read] and [Make it a task]."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from tests.fakes.gmail_api import FakeGmail
@@ -166,3 +167,69 @@ async def test_the_unusual_amount_alert_has_them_and_keeps_resume(
     ]  # fmt: skip
     await scenario.tap("Erin", "Make it a task")
     assert labels(scenario, shown)[-2:] == ["Undo", "Resume automatic"]
+
+
+# ----- F55b (bug #240): a notice queued before F50c, held, then released ------------------
+
+
+def queue_old_notice(scenario: Scenario, email_id: int | None, text: str) -> None:
+    """A notice as triage queued it before F50c (no buttons), held in the morning's Email
+    tray, as outbox 2177 was on the Pi."""
+    now = clock.now().isoformat()
+    scenario.app.db.execute(
+        "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, status, "
+        "send_after, created_at, tray) VALUES (?, ?, '[]', 'normal', 'email', ?, 'queued', ?, "
+        "?, 'email')",
+        (
+            scenario.member("Erin").id,
+            text,
+            f"email-urgent:{email_id}" if email_id is not None else None,
+            now,
+            now,
+        ),
+    )
+
+
+async def release_email(scenario: Scenario) -> None:
+    await scenario.app.outbox.release(scenario.member("Erin"), "email")
+
+
+OLD_NOTICE = "An email that looks time-sensitive (money) arrived in your inbox: Schwab snapshot."
+
+
+async def test_a_held_notice_from_before_the_buttons_gets_them_when_it_goes(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    (email_id,) = await arrive(scenario, inbox, SCHWAB)
+    queue_old_notice(scenario, email_id, OLD_NOTICE)
+    await release_email(scenario)
+    assert labels(scenario, OLD_NOTICE) == [
+        "Open in Gmail",
+        "Not important",
+        "Mark read",
+        "Make it a task",
+    ]
+    await scenario.tap("Erin", "Make it a task")
+    assert "Task added:" in last_edit(scenario)
+
+
+async def test_a_held_notice_whose_email_is_gone_goes_as_it_is(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    queue_old_notice(scenario, 99999, OLD_NOTICE)
+    await release_email(scenario)
+    assert OLD_NOTICE in scenario.inbox("Erin")
+    sent = scenario.app.db.one("SELECT buttons FROM outbox WHERE text = ?", (OLD_NOTICE,))
+    assert sent is not None and sent["buttons"] == "[]"
+
+
+async def test_a_notice_with_buttons_is_unchanged(scenario: Scenario, inbox: FakeGmail) -> None:
+    await alert(scenario, inbox, SCHWAB, SCHWAB_SUMMARY)
+    row = scenario.app.db.one("SELECT buttons FROM outbox WHERE kind = 'email'")
+    assert row is not None
+    assert [b["label"] for b in json.loads(row["buttons"])] == [
+        "Open in Gmail",
+        "Not important",
+        "Mark read",
+        "Make it a task",
+    ]

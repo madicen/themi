@@ -19,7 +19,7 @@ SEPARATOR = "#_#"
 EMOJI: tuple[tuple[frozenset[str], str, str], ...] = tuple(
     (frozenset(words.split()), name, emoji)
     for words, name, emoji in (
-        ("bird birds parrot cage", "parrot", "🦜"),
+        ("bird birds birdcage parrot cage", "parrot", "🦜"),
         ("cat cats litter kitty", "cat", "🐈"),
         ("dog dogs puppy", "dog", "🐕"),
         ("feeder feeders", "bowl_with_spoon", "🥣"),

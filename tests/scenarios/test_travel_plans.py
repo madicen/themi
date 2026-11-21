@@ -246,3 +246,140 @@ async def test_a_heads_up_held_up_by_an_outage_goes_when_telegram_is_back(
     scenario.telegram.state.failures.clear()  # back at 6:05
     await at(scenario, 18, 6)
     assert went() == ["Visit at Stanford at 6:30 pm, about 35 min with traffic: time to head out."]
+
+
+# ----- F55a (bugs #241, #242, reply 521): "arrive at 6:20" for an evening visit ----------
+
+
+def visit(fake: FakeGcal) -> None:
+    """Michael's 20 Nov visit, as Erin's: 6:30-8:30 pm at Smile Dental (35 min from home, 9
+    from the in-laws)."""
+    fake.add_event(ERIN, local(18, 30), local(20, 30), summary="Visit Erin",
+                   location="Smile Dental")  # fmt: skip
+
+
+def travel_texts(scenario: Scenario) -> list[str]:
+    rows = scenario.app.db.query("SELECT text FROM outbox WHERE kind = 'travel' ORDER BY id")
+    return [r["text"] for r in rows]
+
+
+async def test_an_arrive_by_on_a_12_hour_clock_is_the_evening(
+    scenario: Scenario, in_laws: FakeGcal
+) -> None:
+    """Reply 521: arrive_by "06:30" was taken as 6:30 am, 12 hours early: "leave now"."""
+    visit(in_laws)
+    await scenario.run_periodic("calendar.busy")
+    result = await drive(scenario, "Visit Erin", arrive_by="06:30")
+    assert " am" not in result
+    assert "leave around 5:55 pm" in result
+    result = await drive(scenario, "Visit Erin", arrive_by="06:20")
+    assert "there by 6:20 pm" in result
+    assert "Leave around 5:45 pm" in result
+
+
+async def test_an_arrive_by_far_from_the_start_is_refused(
+    scenario: Scenario, in_laws: FakeGcal
+) -> None:
+    visit(in_laws)
+    await scenario.run_periodic("calendar.busy")
+    result = await drive(scenario, "Visit Erin", arrive_by="09:00")
+    assert "Not timed: 9 am is 9 hr 30 min before it starts (6:30 pm)" in result
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM travel_plans") == 0
+
+
+async def test_an_arrive_time_gone_by_says_so_and_sends_no_heads_up(
+    scenario: Scenario, in_laws: FakeGcal
+) -> None:
+    visit(in_laws)
+    await at(scenario, 17, 30)
+    result = await drive(scenario, "Visit Erin", arrive_by="17:20")
+    assert "leave now" not in result.lower()
+    assert (
+        "to be there by 5:20 pm they'd have needed to leave at 4:45 pm; leaving now gets "
+        "them there about 6:05 pm." in result
+    )
+    assert "To be there by 5:20 pm you'd have needed to leave at 4:45 pm" in result
+    assert await at(scenario, 17, 50) == []
+
+
+async def test_a_changed_plan_gets_its_own_heads_up(scenario: Scenario, in_laws: FakeGcal) -> None:
+    """Bug #242: the heads-up had gone for the wrong plan, so the one promised for the
+    right plan never came."""
+    await at(scenario, 11)
+    await drive(scenario, "ND psych", arrive_by="12:45")
+    assert len(await at(scenario, 11, 55)) == 1
+    await at(scenario, 11, 57)
+    result = await drive(scenario, "ND psych", "in-laws")
+    assert "The heads-up to get ready comes then, at about 12:21 pm." in result
+    assert await at(scenario, 12, 21) == [
+        "ND psych in person at 1 pm, there by 12:45 pm, about 35 min with traffic: leave "
+        "around 12:10 pm.",
+        f"ND psych in person at 1 pm, there by 12:45 pm, {FROM_IN_LAWS}: leave there around "
+        "12:36 pm.",
+    ]
+
+
+async def test_the_same_plan_isnt_sent_twice_or_promised_again(
+    scenario: Scenario, in_laws: FakeGcal
+) -> None:
+    await at(scenario, 11)
+    await drive(scenario, "ND psych", arrive_by="12:45")
+    assert len(await at(scenario, 11, 55)) == 1
+    result = await drive(scenario, "ND psych")
+    assert "heads-up to get ready comes" not in result
+    assert "The heads-up to get ready already went." in result
+    assert len(await at(scenario, 12, 5)) == 1
+
+
+async def test_arrive_by_given_with_a_new_event_is_kept_for_it(
+    scenario: Scenario, in_laws: FakeGcal
+) -> None:
+    """Bug #241: "I want to arrive at the parking structure at 6:20", visiting hours
+    6:30-8:30: the 6:20 went nowhere."""
+    await scenario.run_periodic("calendar.busy")
+    scenario.primary.queue_tool_call(
+        "add_calendar_event",
+        {"title": "Visit Erin", "date": "2026-10-21", "start": "18:30", "end": "20:30",
+         "location": "Smile Dental", "calendar": "mine", "details": "", "unread": "",
+         "arrive_by": "18:20"},
+    )  # fmt: skip
+    scenario.primary.queue_text("Added.")
+    replies = await scenario.say("Erin", "Add a visit to Erin today 6:30 to 8:30 at Smile "
+                                 "Dental, I want to arrive at 6:20")  # fmt: skip
+    assert replies[0].endswith("Go ahead, or not now?")
+    await scenario.tap("Erin", "Go ahead")
+    await scenario.run_periodic("calendar.busy")
+    result = await drive(scenario, "Visit Erin")
+    assert "there by 6:20 pm" in result
+    assert "Leave around 5:45 pm" in result
+
+
+async def test_michaels_visit_on_20_november(scenario: Scenario, in_laws: FakeGcal) -> None:
+    """The scenario: the visit added for 6:30-8:30 pm with "arrive at 6:20", then "When
+    should I leave? I'm at my in-laws": the leave is timed for 6:20 pm from there, and the
+    heads-up comes when getting ready starts, with no 6:30 am anywhere."""
+    await at(scenario, 17, 33)
+    scenario.primary.queue_tool_call(
+        "add_calendar_event",
+        {"title": "Visit Erin", "date": "2026-10-21", "start": "18:30", "end": "20:30",
+         "location": "Smile Dental", "calendar": "mine", "details": "", "unread": "",
+         "arrive_by": "18:20"},
+    )  # fmt: skip
+    scenario.primary.queue_text("Added.")
+    await scenario.say("Erin", "Make an appointment to visit Erin, 6:30 to 8:30 at Smile Dental. "
+                       "I want to arrive at 6:20")  # fmt: skip
+    await scenario.tap("Erin", "Go ahead")
+    await scenario.run_periodic("calendar.busy")
+    result = await drive(scenario, "Visit Erin", "in-laws")
+    assert (
+        'word for word: "Visit Erin at 6:30 pm, there by 6:20 pm: about 9 min from the in-laws '
+        "(790 La Para Ave) with traffic. Leave there around 6:11 pm; start getting ready around "
+        '5:56 pm."' in result
+    )
+    assert "The heads-up to get ready comes then, at about 5:56 pm." in result
+    assert await at(scenario, 17, 45) == []
+    assert await at(scenario, 17, 56) == [
+        "Visit Erin at 6:30 pm, there by 6:20 pm, about 9 min from the in-laws (790 La Para "
+        "Ave) with traffic: leave there around 6:11 pm."
+    ]
+    assert not any(" am" in text for text in travel_texts(scenario))

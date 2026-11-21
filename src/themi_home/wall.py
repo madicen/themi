@@ -38,6 +38,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
+from themi_home.wall_calendars import WallCalendars
 from themi_home.wall_columns import TONES, BadLayout, WallColumns, moved
 from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
 from themi_home.wall_views import WallViews, _recipe, dish_view, list_view, note_view
@@ -396,6 +397,20 @@ def routes(kit: Kit) -> APIRouter:
     def columns(request: Request, view: WallView, ask: str = "") -> HTMLResponse:
         return kit.page(request, "wall/_columns.html", screen=view.screen(ask))
 
+    @router.post("/wall/week/calendar", response_class=HTMLResponse)
+    async def week_calendar(request: Request) -> Response:
+        """F55f (idea #239): a calendar's chip turns it off in the week ahead, or on again.
+        Answers with the week, already changed."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        view = WallView(kit.app.services)
+        key = form.get("calendar", "")
+        if key in {c.key for c in view.week_calendars()}:
+            WallCalendars(kit.app.services.store.db).toggle(key)
+            view = WallView(kit.app.services)
+        return kit.page(request, "wall/_week.html", screen=view.screen())
+
     # ----- WL5a: the views -------------------------------------------------------------
 
     def sheet(request: Request, template: str, **values: Any) -> HTMLResponse:
@@ -717,6 +732,8 @@ def routes(kit: Kit) -> APIRouter:
             displays=DISPLAYS,
             columns=wall_columns().layout(members),
             chosen=bool(wall_columns().chosen()),
+            calendars=list(WallCalendars(kit.app.services.store.db).known(members).values()),
+            hidden_calendars=WallCalendars(kit.app.services.store.db).hidden(),
             tones=TONES,
             **values,
         )
@@ -759,6 +776,18 @@ def routes(kit: Kit) -> APIRouter:
         except BadLayout as exc:
             return kit.redirect(back, f"{exc} Nothing changed.")
         return kit.redirect(back, f"{said} The wall shows it at its next refresh.")
+
+    @router.post("/wall/frames/calendars")
+    async def save_calendars(request: Request) -> Response:
+        """F55f: the calendars shown in the week ahead; the ones not ticked are off there."""
+        session, _ = await kit.checked(request, admin=True)
+        shown = {str(v) for v in (await request.form()).getlist("shown")}
+        members = kit.app.services.store.list_members()
+        calendars = WallCalendars(kit.app.services.store.db)
+        calendars.save((k for k in calendars.known(members) if k not in shown), session.member)
+        return kit.redirect(
+            "/wall/frames#calendars", "Saved. The wall shows it at its next refresh."
+        )
 
     @router.post("/wall/frames/{device_id:int}/revoke")
     async def revoke(request: Request, device_id: int) -> Response:

@@ -331,6 +331,12 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F52b | Idea: the wall has a dark look | Feedback | [x] 2026-11-20 |
 | F53 | Idea: choose each person's colour and the columns' order on the wall | Feedback | [x] 2026-11-20 |
 | F54 | Feedback: a drawn recipe shows ⅓ and ⅔, not empty boxes | Feedback | [x] 2026-11-20 |
+| F55a | Feedback: "arrive at 6:20" is 6:20 pm, kept with the event; a changed plan gets its own heads-up | Feedback | [x] 2026-11-20 |
+| F55b | Feedback: a held email notice has its buttons when it goes | Feedback | [x] 2026-11-20 |
+| F55c | Feedback: the wall keeps a routine with open steps after its window | Feedback | [x] 2026-11-20 |
+| F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [x] 2026-11-20 |
+| F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [x] 2026-11-20 |
+| F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [x] 2026-11-20 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16310,6 +16316,288 @@ Notes:
 - Tests: `tests/unit/test_drawing_fractions.py`; `test_a_third_of_a_cup_draws_its_fraction`
   in `tests/scenarios/test_recipe_card.py`. Goldens unchanged.
 - **Setup:** none. Mark #238 reviewed once live.
+
+### F55a · Feedback (2026-11-20): "arrive at 6:20" is 6:20 pm for an evening visit, kept with the event, and a changed plan gets its own heads-up
+Status: [x] 2026-11-20
+Depends on: F46c, F46d, F49b
+Read first: `themi_google/travel.py` (`_early`, `drive_to_event`, `_consider`, `_send`,
+`_sent`, `_save_plan`, `_heads_up_words`, the `drive_time` spec); `themi_google/events.py`
+(`add_calendar_event`, its spec and what runs on approval); F46c's and F46d's notes. From
+Michael's bugs #241 (2026-11-20, 5:35 pm, "I want to get there at 6:20 and it was forgotten.
+Also the time to leave is clearly wrong if the drive is 16 minutes") and #242 (8:56 pm, "never
+notified me to get ready or leave for my appointment today"), and his 👎 on reply 521.
+
+What the Pi shows: at 5:33 pm Michael asked for a visit "today. I want to arrive at the parking
+structure at 6:20", then "The visiting hours are 6:30-8:30". The event went in as 6:30-8:30 pm;
+the 6:20 went nowhere (`add_calendar_event` has no way to keep it). "When should I leave? I'm at
+my in-laws" → `drive_time {"arrive_by": "06:30"}`, which `_early` took as 6:30 **am**, 12 hours
+before the start, without complaint. The reply (521) said "there by 6:30 am … Time to leave
+there now", and the heads-up job sent outbox 2248 at 5:34 pm ("there by 6:30 am … time to head
+out"), recording the event in `travel_headsups`. At 5:36 pm (reply 522) `drive_time` with
+`arrive_by "18:20"` gave the right plan (leave 6:01, get ready 5:46) and said "The heads-up to
+get ready comes then, at about 5:46 pm", but `_sent` already held the event, so nothing came.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `_early`: an `arrive_by` is the time at or before the start that it most likely means. If
+  read as given it's more than 4 hours before the start and read 12 hours later it's at or
+  before the start, take the later one ("06:30" for a 6:30 pm start: 6:30 pm, no early arrival).
+  If neither reading is within 4 hours before the start, refuse: "Not timed: 6:30 am is
+  12 hours before it starts (6:30 pm). Ask when they want to be there."
+- An arrive time already past (or a leave time more than a few minutes past) says so instead
+  of "leave now" / "time to head out": "To be there by 6:20 pm you'd have needed to leave at
+  6:01 pm; leaving now gets you there about 6:38 pm." The heads-up job never sends for a plan
+  whose arrive time has passed.
+- A changed plan gets its own heads-up: when `_save_plan` changes the origin or the early
+  minutes for an event whose heads-up already went, the event's `travel_headsups` row is
+  cleared (and the outbox `dedupe_key` for the heads-up includes the planned arrive time, so
+  the new one isn't deduped). `_heads_up_words` never promises a heads-up the job won't send:
+  if it can't (already sent for this plan, switched off, the time passed), it says what will
+  happen instead.
+- `add_calendar_event` gains `arrive_by` (HH:MM, as drive_time's), for "I want to arrive at
+  6:20" when the event's own times are something else; on approval it's saved in
+  `travel_plans` for the new event (F46d's `arrive_early`), so a later `drive_time` with
+  `arrive_by ''` uses it. Its description: "arrive_by: when they want to be there if earlier
+  than the start (visiting hours 6:30, there at 6:20: starts 18:30, arrive_by 18:20); never
+  move the start for it". `drive_time`'s description adds: "arrive_by is on a 24-hour clock:
+  6:20 in the evening is 18:20".
+
+Tests: start with failing ones: `drive_time(arrive_by='06:30')` for a 6:30 pm event times for
+6:30 pm, no "am"; `arrive_by='04:00'` for it is refused with both times; an arrive time already
+passed gives the "you'd have needed to leave" line and no heads-up; a heads-up sent, then
+`drive_time(arrive_by='18:20')`, sends a new heads-up at the new get-ready time (frozen clock,
+advance); `add_calendar_event(... arrive_by='18:20')` approved, then `drive_time` with
+`arrive_by ''` says "there by 6:20 pm"; a plan unchanged doesn't send twice.
+Scenario: Michael's 5:33 pm exchange, faked: event 6:30-8:30 pm with arrive_by 18:20 from the
+in-laws; "When should I leave?" says leave around 6:01, get ready 5:46; at 5:46 the heads-up
+comes; no 6:30 am anywhere.
+
+Data/Setup: golden `tools.json` (drive_time's and add_calendar_event's specs). Mark #241,
+#242 reviewed once live, and label reply 521 (`themi feedback --wrong-tool 521 none`: the
+tool was right, its reading wasn't).
+
+Notes:
+- `TravelHeadsUps.early_for(starts_at, arrive_by)` (`EARLIEST` = 4 hours): a morning reading
+  more than 4 hours early whose evening reading is at or before the start is the evening;
+  otherwise more than 4 hours early is refused ("Not timed: 9 am is 9 hr 30 min before it
+  starts (6:30 pm)").
+- An arrive time gone by: the tool says "to be there by 5:20 pm they'd have needed to leave at
+  4:45 pm; leaving now gets them there about 6:05 pm", Themi's own line the same with "you",
+  no heads-up promised, and `_consider` sends none.
+- `_save_plan` clears the event's `travel_headsups` row when the origin or the minutes early
+  change; the heads-up's `dedupe_key` adds the plan (`-<early>-<origin>`) when there is one, so
+  the outbox doesn't drop the new one. `_heads_up_words` says "The heads-up to get ready
+  already went." when it has.
+- `add_calendar_event` takes `arrive_by` and keeps it at once (not on approval) under the
+  title's key for that day (`keep_arrival`); `_plan` looks under the event's id, then its
+  title. An add that's never approved leaves a row that's pruned with its day.
+- Golden: `tools.json` (drive_time's and add_calendar_event's specs). Tests: seven at the end
+  of `tests/scenarios/test_travel_plans.py`, the last the 20 Nov scenario.
+- **Setup:** none. Mark #241, #242 reviewed once live; `themi feedback --wrong-tool 521 none`.
+
+### F55b · Feedback (2026-11-20): a held email notice has its buttons when it goes, however old
+Status: [x] 2026-11-20
+Depends on: F50c
+Read first: `themi/channels/outbox.py` (`release`, `release_held`, how a queued row is sent);
+`themi_google/email_buttons.py` (`notice_buttons`); `themi_google/triage.py` (the urgent
+alert, its `dedupe_key` `email-urgent:<email id>`); `themi/standard/morning.py` (the Email
+tray); F42b's burnout hold. From Michael's bug #240 (2026-11-20, 5:31 pm, "where are my
+actionable buttons for the email?").
+
+What the Pi shows: Michael tapped [Email] on the morning recap at 5:31 pm and got the Capital
+One notice (outbox 2177) with no buttons. It was queued at 9:09 am on 19 Nov, before F50c went
+live that day, held in the tray, and sent as stored (`buttons '[]'`). Erin has ten more like it
+parked since 14 Nov (1957, 2011, 2036, 2038, 2068, 2073, 2120, 2143, 2152, 2188; `send_after`
+2036, the burnout hold), all `email-urgent:<id>` with `[]`: each would go out without buttons too.
+
+Build:
+- Bug fix: start with the failing test below.
+- When an email notice (kind `email`, `dedupe_key` `email-urgent:<id>`) is sent with no
+  buttons and its email is still there, its buttons are made then with `notice_buttons`, as
+  if new (the email audit module off: as F50c leaves them). In the one place a queued row
+  turns into a send, not in each tray, so released, held and late rows all get them.
+- One-off for the Pi's rows: none needed beyond this (the fix covers them on release).
+
+Tests: start with a failing one: a notice queued with `[]` buttons and released from the
+morning tray goes with the four buttons; one whose email is gone goes as it is; a row that
+already has buttons is unchanged.
+Scenario: none beyond the test (Michael taps Email on the recap and gets the buttons).
+
+Data/Setup: none. Mark #240 reviewed once live.
+
+Notes:
+- An outbox refresher for kind `email` (`EmailNoticeButtons._with_buttons`, installed with the
+  handlers): a row with `[]` buttons and a `email-urgent:<id>` key whose email is still there
+  gets `notice_buttons` as it goes. Refreshers run at both send points (the flush and a tray's
+  release), so Erin's ten parked notices get them too when they go. Others are untouched.
+- Tests: three at the end of `tests/scenarios/test_email_buttons.py`.
+- **Setup:** none. Mark #240 reviewed once live.
+
+### F55c · Feedback (2026-11-20): the wall keeps a routine with steps still open after its window, until bedtime
+Status: [x] 2026-11-20
+Depends on: WL2, WL6
+Read first: `themi_home/wall_view.py` (`_routine`, `current_routine`, `_routine_end`, the
+night view's start); `themi/standard/routines.py` (`_end`, the evening check that sends
+"still open"); the Wall plan's "By time of day". From Michael's bug #244 (2026-11-20,
+9:25 pm, "where's my evening routine?"), with a picture of his column at 9:23 pm: no routine
+section, just to-dos, "3 done tonight".
+
+What the Pi shows: Michael's Evening routine (6) starts 17:00 with no end, so it ends an hour
+before his quiet hours (21:30): 8:30 pm. At 8:45 pm Themi sent "Evening routine, still open:
+Cycle Dishwasher, Take Meds, Cover the birdcage" (outbox 2253), and from 8:30 pm the wall
+dropped the section (`current_routine` finds none), so the steps he still had to do weren't
+there to tick.
+
+Build:
+- Bug fix: start with the failing test below.
+- A person's column: when no routine's window holds now, the routine that ended last today
+  stays while any of its steps today is open, headed "Evening routine, still open", until the
+  next routine starts or the night view begins. All ticked: it goes as now.
+- The Person view is unchanged (it already shows every routine).
+
+Tests: start with a failing one: at 9:23 pm with Michael's routines and quiet hours, two steps
+open: the column has "Evening routine, still open" with them; all ticked: no section; at 9:23
+am after the morning window with steps open: the morning one shows until the afternoon starts;
+the night view still takes over at bedtime.
+Scenario: none (the wall is looked at, not told); covered by the view test.
+
+Data/Setup: none. Mark #244 reviewed once live.
+
+Notes:
+- `wall_view.last_routine`: with no routine's window holding now, the one whose window ended
+  last today stays in the column, headed "<Name> routine, still open", while any of today's
+  steps is unticked. The next routine's start replaces it; the night view covers the screen
+  as before. The Person view is unchanged.
+- Tests: three at the end of `tests/integration/test_wall_screen.py`.
+- **Setup:** none. Mark #244 reviewed once live.
+
+### F55d · Idea (2026-11-20): chores, to-dos and routine steps on the wall have their emoji
+Status: [x] 2026-11-20
+Depends on: WL2, F43b
+Read first: `themi/drawing/emoji.py` (`item_emoji`); `TaskBoard.icon_of`
+(`themi/standard/tasks.py`); `themi_home/wall_view.py` (`WallItem`, `_task_item`,
+`_routine`); `themi_home/web/templates/wall/_columns.html`, `_view_person.html`; `wall.css`.
+From Michael's idea #245 (2026-11-20, 9:26 pm, "these should have associated emoji we could
+show on the wall"), with a picture of Erin's column (Clean upstairs bathroom, Clean the bird
+cage, Go for a run, Portable bird perch, Process the mail …).
+
+Build:
+- `WallItem` gains `emoji`: for a task `item_emoji(title, board.icon_of(task))`; for a routine
+  step `item_emoji(title)` (F43b's rule: the title's fit). No fit: none, and the title sits
+  where it does now.
+- The tick circle stays (it's what's tapped); the emoji goes between the circle and the title, at the title's size, in the Together column, people's
+  columns and the Person view. A ticked item keeps its emoji, dimmed like its title.
+- Twemoji isn't needed on the page (the frame's own emoji font draws them); check it on the
+  Cozyla frame's Chrome.
+
+Tests: a chore titled "Clean the bird cage" has 🦜 (or what `item_emoji` gives) in the column
+and the Person view; an item with no fit has none and its markup is unchanged; a family-chosen
+icon wins; routine steps get the title's fit.
+Scenario: none (the wall is looked at).
+
+Data/Setup: none. Mark #245 reviewed once live.
+
+Notes:
+- `WallItem.emoji`: tasks get `WallView.emoji_of(task)` (`item_emoji(title,
+  board.icon_of(task))`), done ones too; routine steps `step_emoji(title)` (the title's fit).
+  Drawn as `<span class="wall-emoji">` between the ring and the words in `_columns.html` and
+  `_view_person.html`, 1.5rem, dimmed when ticked. No fit: no span.
+- Found on the way: "Cover the birdcage" (Michael's step) had no emoji; "birdcage" joined the
+  parrot's words in `themi/drawing/emoji.py`. Golden `pictures/routines_emoji.svg` changed for
+  it (🦜 beside that step).
+- Changed tests (the columns' text now has the emoji): `test_wall_evening.py`,
+  `test_wall_screen.py` (two), `test_wall_views.py`, `test_wall_night.py`. New: four at the
+  end of `tests/integration/test_wall_screen.py`.
+- Not checked: how the Cozyla frame's Chrome draws them (its own emoji font). **Setup:**
+  none. Mark #245 reviewed once live.
+
+### F55e · Idea (2026-11-20): Themi's note on the wall wears Themi, not a "T"
+Status: [x] 2026-11-20
+Depends on: WL2, F52b
+Read first: `themi_home/web/templates/wall/_note.html` (the `wall-t` badge);
+`themi_home/web/static/chameleon/chameleon.svg`, `icons/icon.svg`; `wall.css` (light and
+dark). From Michael's idea #243 (2026-11-20, 9:24 pm, "let's use an image of Themi or a
+notification emoji or something besides a T for the notification bar on the wall view"), with
+a picture of the note ("Clean upstairs bathroom is still … moment.") beside its "T" tile.
+
+Build:
+- The note's badge is Themi: the chameleon (the app icon's mark, `icons/icon.svg`, or a small
+  crop of `chameleon.svg`, whichever reads at about 48 px), inline or as an `<img>` with
+  `alt=""`, on the same rounded tile, in both the light and the dark look.
+- The note's Note view (`_view_note.html`) uses the same mark if it shows the "T" too.
+
+Tests: the home screen's note has the image and no "T" text; the asset is served; the page
+golden (if any) changes only there.
+Scenario: none.
+
+Data/Setup: none. Mark #243 reviewed once live.
+
+Notes:
+- The badge is the app icon (`home/icons/icon.svg`: the chameleon on its own dark green
+  square, so it reads the same in the light and dark looks), an `<img class="wall-t" alt="">`
+  on the same 3.25rem rounded tile, in `_note.html` and the Note view's `_view_note.html`.
+- Not looked at on the frame itself. Test: one at the end of
+  `tests/integration/test_wall_screen.py`. **Setup:** none. Mark #243 reviewed once live.
+
+### F55f · Idea (2026-11-20): the week ahead has a chip per calendar, and a tap hides that calendar there
+Status: [x] 2026-11-20
+Depends on: WL3, F53
+Read first: `themi_home/wall_view.py` (`week`, `events`, `Chip`, `WeekDay`, where each event's
+calendar and tone come from); `themi_home/web/templates/wall/_week.html`; `wall.js` (taps);
+`themi_home/wall_view.py` `WallSettings` and the wall's schema (F53's settings);
+the calendar tables (`calendars`, `member_calendars`, `calendar_shown_on`, `calendar_busy`);
+the Wall plan's week-ahead section. From Michael's idea #239 (2026-11-20, 4:32 pm, "for the
+week ahead section we should have little ovals at the top that shows the source calendars for
+the data. Tapping them would turn them off for that view. That way we can turn off my work
+calendar so it's not as spammy"), with a picture of the week ahead: most days full of green
+"(no title)" chips and "+1 more".
+
+What the Pi shows: next week has about 16 entries for Michael, 4 from the Madicen Family
+calendar; the rest are his own and the busy-only ones drawn "(no title)". Find which calendar
+each "(no title)" comes from (his work calendar shared as busy, per `calendar_shown_on`) and
+name it in Notes.
+
+Build:
+- Above the week's days, a small rounded chip per calendar that has an event in the shown
+  week, in its tone, named as the family knows it ("Michael", "Michael's work", "Madicen
+  Family", "Erin"). The names come from the calendar's own name; a busy-only calendar is
+  "<name>'s work" only if that's what it's called, otherwise its own name.
+- A tap turns that calendar off in the week ahead (the chip stays, dimmed and struck through);
+  a tap again turns it back on. Kept for the frame (a wall setting, F53's store), so it stays
+  after a reload and on the next day; also on the Wall module's page as a checklist.
+- Off only in the week ahead: Today's timeline, the Day and Event views, the morning message
+  and everything else are unchanged. "+N more" counts only what's shown.
+- Fewer than two calendars in the week: no chips.
+
+Tests: the week has a chip per calendar with events; turning off the work calendar drops its
+"(no title)" chips and recounts "+N more"; it stays off after a reload and tomorrow; the
+timeline still shows them; the module page's checklist matches; one calendar: no chips.
+Scenario: none (the wall is looked at).
+
+Data/Setup: possibly a wall schema migration for the setting. Mark #239 reviewed once live.
+
+Notes:
+- On the Pi, all ten "(no title)" events next week are Michael's work calendar, which
+  `member_calendars` names by its address (`m…@stackadapt.com`); his own is
+  "Michael (Personal)", Erin's is named by her address, and both read "Madicen Family".
+- `themi_home/wall_calendars.py`: `WallCalendars` (`hidden`, `toggle`, `save`, `known`) over
+  the wall migration `0006_wall_calendars.sql` (`wall_hidden_calendars`), and `label`: a
+  shared calendar keeps its name; a primary or own-address one is the person ("Erin"); one
+  named by another address is theirs by its domain ("Michael's Stackadapt"); another is
+  "Erin's Work" unless its name already has theirs ("Michael (Personal)").
+- `WallView.week_calendars()` (`WeekCalendar`: key, name, tone, off): each calendar with an
+  event in the shown week, people in the wall's order then shared ones; none with fewer than
+  two. `week()` leaves out the hidden ones, so "+N more" counts only what's shown; the
+  week's events are read once per screen (`_week_events`). Events with no calendar id are
+  never hidden. The timeline, Day and Event views and messages are unchanged.
+- A chip posts to `/wall/week/calendar` (frame CSRF) and the week redraws. It's a setting
+  for the wall, not an action: no trust tiers, as F53's layout.
+- **Deviation:** the checklist is on the Wall frames page (`/wall/frames#calendars`, beside
+  F53's People on the wall), where the wall's own settings are, not the module settings
+  form; Save keeps the unticked ones off.
+- Tests: `tests/integration/test_wall_calendars.py` (6), `tests/unit/test_wall_calendar_names.py`
+  (3). Goldens unchanged (the golden scenario has no wall).
+- **Setup:** restart Themi (migration). Mark #239 reviewed once live.
 
 ## Conversation mode
 

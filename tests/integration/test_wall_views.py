@@ -233,9 +233,9 @@ async def test_the_person_view_is_their_whole_day(wall: Scenario) -> None:
     assert f'hx-get="/wall/view/person/{husband.id}"' in page
     shown = words((await get(wall, f"/wall/view/person/{husband.id}")).text)
     assert "Husband's day" in shown
-    assert "Morning Walk dog" in shown and "Afternoon Go for a run" in shown
-    assert "Evening Take meds" in shown
-    assert "To-do Vacuum upstairs" in shown and "Later errand" not in shown
+    assert "Morning 🐕 Walk dog" in shown and "Afternoon 🏃 Go for a run" in shown
+    assert "Evening 💊 Take meds" in shown
+    assert "To-do 🧹 Vacuum upstairs" in shown and "Later errand" not in shown
     assert (await get(wall, "/wall/view/person/999")).text == ""
 
 
