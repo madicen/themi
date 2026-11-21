@@ -1,5 +1,5 @@
 {% from "wall/_sheet.html" import sheet with context %}
-{% call sheet(person.name ~ "'s day") %}
+{% call sheet(person.name ~ "'s day", tone=person.tone) %}
 <div class="tone-{{ person.tone }} sheet-person">
   <p class="sheet-kicker">Today</p>
   <h2 class="sheet-title">{{ person.name }}'s day</h2>

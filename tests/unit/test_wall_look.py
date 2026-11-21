@@ -71,6 +71,7 @@ def text_pairs(t: dict[str, str]) -> list[tuple[str, str, str]]:
             ("muted on a card", "--muted", "--card"),
             ("muted on the screen", "--muted", "--bg"),
             ("muted on soft", "--muted", "--soft"),
+            ("a neutral view's Back button", "--on-fg", "--fg"),
             ("sub on a card", "--sub", "--card"),
             ("sub on soft", "--sub", "--soft"),
             ("faint on a card", "--faint", "--card"),
@@ -87,6 +88,9 @@ def text_pairs(t: dict[str, str]) -> list[tuple[str, str, str]]:
             (f"{p}'s name on a card", t[f"--{p}"], t["--card"]),
             (f"{p}'s blocks", t["--on-tone"], t[f"--{p}"]),
             (f"{p}'s items", t["--fg"], t[f"--{p}-bg"]),
+            # WL9a: a view's kicker and foot line on its card, and its filled Back button
+            (f"{p}'s view kicker", t[f"--{p}"], t["--card"]),
+            (f"{p}'s Back button", t["--on-tone"], t[f"--{p}"]),
         ]
     return pairs
 

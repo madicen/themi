@@ -196,16 +196,31 @@ button.wall-item:focus-visible { outline: 0.2rem solid var(--focus); outline-off
 }
 .wall-who .wall-not-yet { background: var(--field); color: var(--quiet); border: 0.12rem solid var(--edge); }
 
-/* WL5a: the views that slide up over the home screen */
+/* WL5a, WL9a: a view is a centred card over the dimmed home screen. Its kicker and its
+   Back button take the view's colour (`tone-*` on the card); a view with none is neutral. */
 .wall-backdrop { position: fixed; inset: 0; background: var(--backdrop); }
 .wall-sheet {
-  position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow: auto;
-  background: var(--card); border-radius: 2.5rem 2.5rem 0 0; padding: 1.25rem 3rem 3rem;
-  display: flex; flex-direction: column; gap: 1.5rem;
+  position: fixed; left: 5rem; right: 5rem; top: 50%; transform: translateY(-50%);
+  max-height: 85vh; overflow: auto; background: var(--card); border-radius: 2.5rem;
+  padding: 2.75rem 3rem 3rem; display: flex; flex-direction: column; gap: 1.5rem;
 }
-.wall-grip { align-self: center; width: 5rem; height: 0.4rem; border-radius: 0.2rem; background: var(--line); }
-.sheet-kicker { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.sheet-title { font-size: 3rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.sheet-x {
+  position: absolute; top: 2rem; right: 2rem; width: 4.25rem; height: 4.25rem; border-radius: 50%;
+  border: 0; background: var(--soft); display: grid; place-items: center; cursor: pointer;
+}
+.sheet-x svg { width: 1.75rem; height: 1.75rem; fill: none; stroke: var(--fg); stroke-width: 2.2; stroke-linecap: round; }
+.sheet-head { padding-right: 5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.sheet-kicker { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tone, var(--muted)); }
+.sheet-title { font-size: 3.5rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+.sheet-lead { font-size: 1.5rem; color: var(--muted); }
+.sheet-foot { border-top: 1px solid var(--line); padding-top: 1.4rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.sheet-foot p { font-size: 1.35rem; color: var(--muted); }
+.sheet-foot p:first-child { font-size: 1.5rem; font-weight: 700; color: var(--tone, var(--fg)); }
+.sheet-back {
+  width: 100%; min-height: 5rem; border-radius: 2.5rem; border: 0; cursor: pointer;
+  background: var(--tone, var(--fg)); color: var(--on-tone); font: inherit; font-size: 1.6rem; font-weight: 700;
+}
+.wall-sheet:not([class*="tone-"]) .sheet-back { color: var(--on-fg); }
 .sheet-when { font-size: 1.75rem; color: var(--quiet); }
 .sheet-status { font-size: 1.6rem; font-weight: 600; color: var(--stale); background: var(--stale-bg); border-radius: 1.5rem; padding: 1.1rem 1.6rem; }
 .sheet-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 0; }
@@ -215,7 +230,6 @@ button.wall-item:focus-visible { outline: 0.2rem solid var(--focus); outline-off
 .sheet-done { font-size: 1.4rem; font-weight: 600; color: var(--p0); }
 .sheet-note { font-size: 1.15rem; color: var(--sub); }
 .sheet-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
-.sheet-end { margin-top: 0.5rem; }
 .sheet-button {
   min-height: 4.5rem; padding: 0 2rem; border-radius: 2.25rem; border: 0.12rem solid var(--edge); background: var(--field);
   color: var(--fg); font: inherit; font-size: 1.5rem; font-weight: 600; cursor: pointer;
@@ -255,6 +269,10 @@ button.wall-item:focus-visible { outline: 0.2rem solid var(--focus); outline-off
 .sheet-row.open { background: var(--item-bg, var(--soft)); }
 .sheet-row .wall-item { min-height: 4.5rem; background: transparent; }
 .sheet-row .wall-title { font-size: 1.5rem; }
+.sheet-groceries .sheet-row { background: var(--soft); }
+.sheet-groceries .sheet-row .wall-item { min-height: 5.5rem; padding: 0 1.6rem; gap: 1.25rem; }
+.sheet-groceries .sheet-row .wall-title { font-size: 1.75rem; }
+.sheet-groceries .ring { width: 2.5rem; height: 2.5rem; }
 .sheet-menu { display: flex; gap: 0.6rem; flex-wrap: wrap; padding: 0.25rem 1rem 1.1rem; }
 .sheet-menu .sheet-button { min-height: 3.5rem; font-size: 1.25rem; padding: 0 1.4rem; }
 .sheet-words { width: 100%; }

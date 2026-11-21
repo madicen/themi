@@ -1,10 +1,22 @@
-{#- WL5a: a view sliding up over the dimmed home screen. One at a time; Close, a tap on the
-    dimmed screen, or `close_after` seconds without a touch closes it (wall.js). -#}
-{% macro sheet(label) %}
+{#- WL5a, WL9a: a view as a centred card over the dimmed home screen. One at a time; the ✕,
+    Back to the wall, a tap on the dimmed screen, or `close_after` seconds without a touch
+    close it (wall.js). `tone` colours its kicker and Back button; `foot` is its summary
+    lines ("2 items to pick up", "Shared with ..."). -#}
+{% macro sheet(label, tone="", foot=()) %}
 <div class="wall-backdrop" data-close></div>
-<section class="wall-sheet" role="dialog" aria-label="{{ label }}" data-close-after="{{ close_after }}">
-  <div class="wall-grip" aria-hidden="true"></div>
+<section class="wall-sheet{% if tone %} tone-{{ tone }}{% endif %}" role="dialog" aria-label="{{ label }}" data-close-after="{{ close_after }}">
+  <button type="button" class="sheet-x" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   {{ caller() }}
-  <div class="sheet-actions sheet-end"><button type="button" class="sheet-button" data-close>Close</button></div>
+  {% if foot %}<div class="sheet-foot">{% for line in foot %}<p>{{ line }}</p>{% endfor %}</div>{% endif %}
+  <button type="button" class="sheet-back" data-close>Back to the wall</button>
 </section>
+{% endmacro %}
+
+{#- The card's top: a small kicker in the view's colour, the title, one kind line. -#}
+{% macro head(kicker, title, lead="") %}
+<header class="sheet-head">
+  {% if kicker %}<p class="sheet-kicker">{{ kicker }}</p>{% endif %}
+  <h2 class="sheet-title">{{ title }}</h2>
+  {% if lead %}<p class="sheet-lead">{{ lead }}</p>{% endif %}
+</header>
 {% endmacro %}

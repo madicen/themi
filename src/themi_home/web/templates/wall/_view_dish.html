@@ -1,7 +1,6 @@
-{% from "wall/_sheet.html" import sheet with context %}
-{% call sheet(view.name) %}
-<p class="sheet-kicker">Things to cook</p>
-<h2 class="sheet-title">{{ view.name }}</h2>
+{% from "wall/_sheet.html" import sheet, head with context %}
+{% call sheet(view.name, tone=view.tone) %}
+{{ head("Things to cook", view.name) }}
 {% if view.said %}<p class="sheet-done" role="status">{{ view.said }}</p>{% endif %}
 {% if view.ingredients %}
 <form class="sheet-dish" hx-post="/wall/view/dish/{{ view.item_id }}/add" hx-target="#wall-view" hx-swap="innerHTML">

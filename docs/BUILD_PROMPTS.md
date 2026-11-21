@@ -515,7 +515,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL6 | Wall: time of day, night, and the frame | Wall | [x] 2026-11-20 |
 | WL7 | Wall: event notes in the Event view | Wall | [x] 2026-11-20 |
 | WL8 | Wall: deliveries from email in Themi's note | Wall | [x] 2026-11-20 |
-| WL9a | Wall: the views' new card | Wall | [ ] |
+| WL9a | Wall: the views' new card | Wall | [x] 2026-11-20 |
 | WL9b | Wall: the small lists' cards and Things to cook | Wall | [ ] |
 | WL9c | Wall: the columns say where a tap goes | Wall | [ ] |
 | WL9d | Wall: the Person and Together pages | Wall | [ ] |
@@ -23499,7 +23499,7 @@ behaviour, and its tests stay green without loosening:
 - WL7/WL8: an event's notes in its view, and deliveries in Themi's note.
 
 ### WL9a · Wall: the views' new card
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL5b, F55f (both change `wall.css`; start after F55f is `[x]`)
 Read first: the plan's "A second look (WL9)" (its table's first row); `_sheet.html`, every
 `_view_*.html`, `wall.css` (the WL5a/WL5b blocks, light and dark), `wall.js` (`data-close`, the
@@ -23526,6 +23526,19 @@ light and dark; the existing view tests pass unchanged except where they read th
 Scenario: none (the wall is looked at).
 
 Notes:
+- `_sheet.html`: `sheet(label, tone, foot)` draws the card (✕ and **Back to the wall**, both
+  `data-close`, so wall.js closes them as it closed Close); `head(kicker, title, lead)` its top.
+  Styles only by class (the site's policy allows no inline styles); a view with no tone is
+  neutral (`var(--tone, var(--fg))`, Back in `--on-fg`).
+- Tones: Event its row's (`EventView.tone`), Day, Dish and Groceries the household's
+  (`together_tone()`), a to-do list its owner's, Person the person's; Weather and the note
+  neutral. Kickers: Event `whose` ("Erin's calendar"), Day `near`, Weather the date, kept from
+  WL5a rather than the prompt's "Plan together", since they say more.
+- Groceries' foot names the household in the wall's order ("Shared with Erin and Husband"),
+  from `ListView.shared_with`; empty: "Nothing to pick up".
+- Tests: `tests/integration/test_wall_card.py` (7); `test_wall_look.py` names the Back button
+  and kicker pairs (already held by the "blocks" and "on a card" pairs). No existing test changed.
+- Not looked at on the frame or in a browser.
 
 ### WL9b · Wall: the small lists' cards and Things to cook
 Status: [ ]

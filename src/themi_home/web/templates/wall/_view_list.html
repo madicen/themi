@@ -1,8 +1,16 @@
-{% from "wall/_sheet.html" import sheet with context %}
+{% from "wall/_sheet.html" import sheet, head with context %}
 {% set base = "/wall/view/list/" ~ view.which %}
-{% call sheet(view.title) %}
-<div class="tone-{{ view.tone }} sheet-list">
-  <h2 class="sheet-title">{{ view.title }}</h2>
+{% set count = view.rows | length %}
+{% if view.groceries %}
+  {% set foot = ["Nothing to pick up" if not count else ("1 item to pick up" if count == 1 else count ~ " items to pick up")] %}
+  {% if view.shared_with | length > 1 %}{% set foot = foot + ["Shared with " ~ (view.shared_with[:-1] | join(", ")) ~ " and " ~ view.shared_with[-1]] %}{% endif %}
+{% else %}
+  {% set foot = [count ~ " open"] %}
+{% endif %}
+{% call sheet(view.title, tone=view.tone, foot=foot) %}
+<div class="tone-{{ view.tone }} sheet-list{% if view.groceries %} sheet-groceries{% endif %}">
+  {% if view.groceries %}{{ head("Household", view.title, "A short list for your next shop.") }}
+  {% else %}{{ head("To-do", view.title, "In Themi's order. Tap the words for more.") }}{% endif %}
   <form class="sheet-add" hx-post="{{ base }}" hx-target="#wall-view" hx-swap="innerHTML">
     <input type="hidden" name="op" value="add">
     <label class="sr-only" for="wall-add">Add to {{ view.title }}</label>
@@ -10,7 +18,6 @@
     <button class="sheet-button primary">Add</button>
   </form>
   {% if view.said %}<p class="sheet-done" role="status">{{ view.said }}</p>{% endif %}
-  {% if not view.groceries %}<p class="sheet-note">In Themi's order. Tap the words for more.</p>{% endif %}
   <ul class="sheet-rows">
     {% for r in view.rows %}
     <li class="sheet-row{% if r.open %} open{% endif %}" id="row-{{ r.id }}">

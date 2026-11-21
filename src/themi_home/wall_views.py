@@ -62,6 +62,7 @@ class EventView:
     ref: str
     sent: str = ""  # "Sent to Erin's phone."
     notes: str = ""  # WL7: the event's notes, shortened; "" for a Busy event
+    tone: str = ""  # WL9a: its row's colour, for the card
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,7 @@ class DayView:
     icon: str  # a data URI, or ""
     before: str  # the day before, ISO, or "" at today
     after: str
+    tone: str = ""  # WL9a: the family's colour, for the card
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,7 @@ class WallViews:
             send_to=send_to,
             ref=found.ref,
             notes=shorten(found.notes),
+            tone=found.tone,
         )
 
     def _leave_by(self, event: WallEvent, member_id: int) -> str:
@@ -213,6 +216,7 @@ class WallViews:
             icon=icon,
             before=(day - timedelta(days=1)).isoformat() if day > today else "",
             after=(day + timedelta(days=1)).isoformat() if offset < DAYS_AHEAD else "",
+            tone=self.view.together_tone(),
         )
 
     def _due(self, day: date) -> tuple[Due, ...]:
@@ -427,6 +431,7 @@ class ListView:
     family: bool = False  # "Make it a family to-do" is offered
     groceries: bool = False
     said: str = ""  # what the last change did
+    shared_with: tuple[str, ...] = ()  # WL9a: the household, for the Groceries foot
 
 
 @dataclass(frozen=True)
@@ -437,6 +442,7 @@ class DishView:
     recipe: bool
     people: tuple[tuple[int, str], ...]
     said: str = ""
+    tone: str = ""  # WL9a: the household's colour, for the card
 
 
 @dataclass(frozen=True)
@@ -463,7 +469,15 @@ def list_view(views: WallViews, which: str, opened: int = 0, said: str = "") -> 
             ListRow(g.id, g.name[:1].upper() + g.name[1:], open=g.id == opened)
             for g in groceries.needed()
         )
-        return ListView(which, "Groceries", view.together_tone(), rows, groceries=True, said=said)
+        return ListView(
+            which,
+            "Groceries",
+            view.together_tone(),
+            rows,
+            groceries=True,
+            said=said,
+            shared_with=tuple(m.name for m in people),
+        )
     whose = which.removeprefix("todo/")
     tasks = view._open_tasks(people)
     if whose == "family":
@@ -547,6 +561,7 @@ def dish_view(views: WallViews, item_id: int, said: str = "") -> DishView | None
         recipe is not None,
         tuple((m.id, m.name) for m in people),
         said,
+        views.view.together_tone(),
     )
 
 
