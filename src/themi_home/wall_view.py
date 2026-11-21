@@ -564,10 +564,18 @@ class WallView:
         routines = self.services.maybe(keys.routines)
         if routines is None:
             return None
-        routine = current_routine(routines, member, self.now())
-        if routine is None:
-            return None
         day = routines.today(member)
+        routine = current_routine(routines, member, self.now())
+        heading = f"{routine.name} routine" if routine is not None else ""
+        if routine is None:
+            # F55c (bug #244): the one that ended last today stays while a step is open,
+            # until the next starts (or the night view takes over).
+            routine = last_routine(routines, member, self.now())
+            if routine is None or all(
+                routines.ticked(item, day) for item in routines.today_items(routine, day)
+            ):
+                return None
+            heading = f"{routine.name} routine, still open"
         items = tuple(
             WallItem(
                 f"step-{item.id}-{day.isoformat()}", item.title, done=routines.ticked(item, day)
@@ -575,7 +583,7 @@ class WallView:
             for item in routines.today_items(routine, day)
         )
         part = routine.name.lower()
-        return WallSection(f"{routine.name} routine", items, empty=f"Nothing set for this {part}")
+        return WallSection(heading, items, empty=f"Nothing set for this {part}")
 
     def _part_word(self) -> str:
         hour = self.now().hour
@@ -843,6 +851,13 @@ def current_routine(routines: Routines, member: Member, now: datetime) -> Routin
     at = now.time()
     started = [r for r in routines.of(member) if r.starts <= at < _routine_end(r, member)]
     return max(started, key=lambda r: r.starts, default=None)
+
+
+def last_routine(routines: Routines, member: Member, now: datetime) -> Routine | None:
+    """F55c: the routine whose window ended last, earlier today (local)."""
+    at = now.time()
+    ended = [r for r in routines.of(member) if r.starts <= at and _routine_end(r, member) <= at]
+    return max(ended, key=lambda r: _routine_end(r, member), default=None)
 
 
 def _routine_end(routine: Routine, member: Member) -> time:

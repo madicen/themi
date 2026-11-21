@@ -333,7 +333,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F54 | Feedback: a drawn recipe shows ⅓ and ⅔, not empty boxes | Feedback | [x] 2026-11-20 |
 | F55a | Feedback: "arrive at 6:20" is 6:20 pm, kept with the event; a changed plan gets its own heads-up | Feedback | [x] 2026-11-20 |
 | F55b | Feedback: a held email notice has its buttons when it goes | Feedback | [x] 2026-11-20 |
-| F55c | Feedback: the wall keeps a routine with open steps after its window | Feedback | [ ] |
+| F55c | Feedback: the wall keeps a routine with open steps after its window | Feedback | [x] 2026-11-20 |
 | F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [ ] |
 | F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [ ] |
 | F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [ ] |
@@ -16434,7 +16434,7 @@ Notes:
 - **Setup:** none. Mark #240 reviewed once live.
 
 ### F55c · Feedback (2026-11-20): the wall keeps a routine with steps still open after its window, until bedtime
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL2, WL6
 Read first: `themi_home/wall_view.py` (`_routine`, `current_routine`, `_routine_end`, the
 night view's start); `themi/standard/routines.py` (`_end`, the evening check that sends
@@ -16464,6 +16464,12 @@ Scenario: none (the wall is looked at, not told); covered by the view test.
 Data/Setup: none. Mark #244 reviewed once live.
 
 Notes:
+- `wall_view.last_routine`: with no routine's window holding now, the one whose window ended
+  last today stays in the column, headed "<Name> routine, still open", while any of today's
+  steps is unticked. The next routine's start replaces it; the night view covers the screen
+  as before. The Person view is unchanged.
+- Tests: three at the end of `tests/integration/test_wall_screen.py`.
+- **Setup:** none. Mark #244 reviewed once live.
 
 ### F55d · Idea (2026-11-20): chores, to-dos and routine steps on the wall have their emoji
 Status: [ ]
