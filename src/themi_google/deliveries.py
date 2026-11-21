@@ -259,6 +259,11 @@ class Deliveries:
                 parcel = self._by_number(fact.number)
                 parcel_id = self._apply(parcel, fact) if parcel else self._insert(member_id, fact)
                 self._fold(parcel_id)
+                if fact.source == "email":  # PT5: news by email brings the next look forward
+                    self.db.execute(
+                        "UPDATE parcels SET look_after = ? WHERE id = ?",
+                        (to_utc_iso(clock.now()), parcel_id),
+                    )
             else:
                 target = self._numberless_target(fact)
                 if target is not None:

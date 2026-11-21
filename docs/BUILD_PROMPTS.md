@@ -523,7 +523,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | PT2 | Package tracking: one parcel per tracking number | Package tracking | [x] 2026-11-21 |
 | PT3 | Package tracking: the carriers' alert emails | Package tracking | [x] 2026-11-21 |
 | PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [x] 2026-11-21 |
-| PT5 | Package tracking: asking on a schedule | Package tracking | [ ] |
+| PT5 | Package tracking: asking on a schedule | Package tracking | [x] 2026-11-21 |
 | PT6 | Package tracking: what the family sees | Package tracking | [ ] |
 | PT7 | Package tracking: the FedEx lookup | Package tracking | deferred |
 
@@ -23881,7 +23881,7 @@ Notes:
   app (developers.usps.com), their keys on the Parcels page, then Test.
 
 ### PT5 · Package tracking: asking on a schedule
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: PT4
 Read first: the plan's "Part 3: Carrier lookup" ("When Themi asks"); `themi/scheduler.py`
 and how a module adds to `app.periodic`.
@@ -23894,6 +23894,19 @@ and how a module adds to `app.periodic`.
 Tests (frozen, advanced clock): each cadence row; the time window; the cap; a "shipped"
 email bringing a look forward; no looks without keys or with the setting off; a lookup's
 newer fact winning over an email's older one, and the other way round.
+
+Notes:
+- `ParcelChecks` (`themi_google/parcel_checks.py`), installed by the Parcels module; the
+  `parcels.check` job only when it has a carrier's keys and "Ask the carriers" is on.
+- A lookup's fact is true now (the carrier's current word), so it beats any older email;
+  an email sorted later wins only if it came later. When the carrier says nothing new the
+  parcel is only marked looked at (`checked_at`), so "no news in 21 days" still counts
+  from the last real change.
+- An email with news of a numbered parcel sets `look_after` (migration 0179), so a
+  "shipped" email is looked up at the next run. A failed lookup also counts as a look: the
+  parcel waits its usual pace rather than retrying every 15 minutes during an outage.
+- A number two carriers' patterns fit is asked of each carrier with keys until one knows
+  it; that one becomes its carrier.
 
 ### PT6 · Package tracking: what the family sees
 Status: [ ]

@@ -20,8 +20,10 @@ from themi.connectors.carriers.ups import UPS_URL
 from themi.connectors.carriers.usps import USPS_URL
 from themi.modules import Module, ModuleContext, ModuleSetup
 from themi.usage import Limits, Meter
+from themi_google.deliveries import Deliveries
 from themi_google.google_settings import ParcelsSettings
 from themi_google.groups import EMAIL
+from themi_google.parcel_checks import EVERY, ParcelChecks
 
 NAME = "parcels"
 UPS_METER = Meter("ups.calls", "UPS tracking", "calls", group="Web", order=40)
@@ -88,7 +90,9 @@ class ParcelsModule(Module):
         for name, carrier in self.carriers.items():
             if name in meters and hasattr(carrier, "tally"):
                 carrier.tally = ctx.usage_meter(meters[name])  # type: ignore[attr-defined]
-        # PT5: asking them on a schedule
+        checks = ctx.provide(ParcelChecks(ctx.get(Deliveries), self.carriers))
+        if self.carriers and self.parcel_settings.ask_carriers:  # PT5: on a schedule
+            ctx.periodic("parcels.check", EVERY, checks.run)
 
 
 def carriers_from(s: ParcelsSettings) -> dict[str, Carrier]:
