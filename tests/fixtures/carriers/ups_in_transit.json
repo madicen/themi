@@ -1,0 +1,53 @@
+{
+  "trackResponse": {
+    "shipment": [
+      {
+        "inquiryNumber": "NUMBER",
+        "package": [
+          {
+            "trackingNumber": "NUMBER",
+            "currentStatus": {
+              "type": "I",
+              "code": "DP",
+              "description": "Departed from Facility",
+              "simplifiedTextDescription": "On the Way",
+              "statusCode": "005"
+            },
+            "deliveryDate": [
+              {
+                "type": "SDD",
+                "date": "20261023"
+              }
+            ],
+            "activity": [
+              {
+                "date": "20261020",
+                "time": "221500",
+                "gmtDate": "20261020",
+                "gmtOffset": "-07:00",
+                "gmtTime": "00:00:00",
+                "location": {
+                  "address": {
+                    "city": "Portland",
+                    "stateProvince": "OR",
+                    "countryCode": "US"
+                  }
+                },
+                "status": {
+                  "type": "I",
+                  "code": "DP",
+                  "description": "Departed from Facility",
+                  "statusCode": "005"
+                }
+              }
+            ],
+            "deliveryTime": {
+              "type": "EOD",
+              "endTime": "235900"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -34,7 +34,8 @@ and today's calendar events, a weather line only when the day's weather is worth
   5 pm when a busy time covers noon). It counts once; there's no other push. What's still in
   a tray after that waits for tomorrow's morning message.
 - The weather line is a statement, never advice, and is rebuilt with the message. A
-  noteworthy line alone is reason enough to send the message.
+  noteworthy line alone is reason enough to send the message. PT6a: so is a line about
+  their own parcels due that day or with a problem, after the weather.
 - No morning message (the setting's off, or Themi was down past `SEND_WITHIN`): no tray;
   anything left in one goes back to the normal flow.
 """
@@ -215,7 +216,8 @@ class MorningMessage:
         greeting = GREETINGS[day.toordinal() % len(GREETINGS)].format(name=member.name)
         events = self.summary.items(member, day, partner=True, tasks=False, scope="mine")
         weather = self.weather_line(member, day)
-        tail = f"\n{weather}" if weather else ""
+        parcels = self.parcels_line(member, day)  # PT6a
+        tail = "".join(f"\n{line}" for line in (weather, parcels) if line)
         if not events:
             nothing = NOTHING_YOURS_TEXT if self._theirs(member, day) else NOTHING_ON_TEXT
             return f"{greeting} {nothing}{tail}"
@@ -231,11 +233,18 @@ class MorningMessage:
             return None
         return weather.line(self._on(day, at))
 
+    def parcels_line(self, member: Member, day: date) -> str | None:
+        """PT6a: their own parcels due that day, or with a problem; None without email
+        triage or with nothing to say."""
+        deliveries = self.services.maybe(keys.deliveries)
+        return deliveries.morning_line(member.id, day) if deliveries is not None else None
+
     def _worth_sending(self, member: Member, day: date, offers: list[str]) -> bool:
         return bool(
             offers
             or self.has_events(member, day)
             or self.weather_line(member, day)
+            or self.parcels_line(member, day)
             or self._empty_ok(member)
         )
 

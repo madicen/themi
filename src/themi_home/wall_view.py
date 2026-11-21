@@ -27,8 +27,9 @@ from themi import clock
 from themi.accounts import Member
 from themi.accounts.household import HouseholdSettings
 from themi.core import keys
-from themi.core.wording import and_list
 from themi.localtime import to_utc_iso
+from themi_google import parcel_words
+from themi_google.deliveries import Parcel
 from themi_home.wall_columns import TOGETHER, TOGETHER_TONE, Place, WallColumns, key_of
 
 if TYPE_CHECKING:
@@ -699,37 +700,78 @@ class WallView:
                         key,
                     )
         today = now.date()
-        came, due = self._deliveries(today, quiet)
-        if came is not None:
-            return came
+        trouble, came, moved, due = self._deliveries(today, quiet)
+        for parcel_note in (trouble, came, moved):  # PT6a: a problem first, after weather
+            if parcel_note is not None:
+                return parcel_note
         chore = self._chore_note(today, quiet)
         return chore if chore is not None else due
 
-    def _deliveries(self, today: date, quiet: set[str]) -> tuple[WallNote | None, WallNote | None]:
-        """WL8: notes for the parcels that came today and those still due, from shipping
-        emails. Only the shop's name: the wall is shared, and a parcel can be a present."""
+    def _deliveries(self, today: date, quiet: set[str]) -> tuple[WallNote | None, ...]:
+        """WL8, PT6a: notes for parcels: one with a problem, those that came today, one
+        moved to a later day, and those still due today. Only the shop's name: the wall is
+        shared, and a parcel can be a present. One parcel gets its own words (a window, a
+        signature, when and where it came); several get one line."""
         deliveries = self.services.maybe(keys.deliveries)
         if deliveries is None or not self.services.store.household(WallSettings).deliveries:
-            return None, None
-        found = deliveries.on(today)
-        came = [d.shop for d in found if d.status == "delivered"]
-        due = [d.shop for d in found if d.status != "delivered"]
-        notes: list[WallNote | None] = []
-        for shops, kind in ((came, "came"), (due, "due")):
-            key = f"delivery-{kind}-{today.isoformat()}-{','.join(shops)}"
-            if not shops or key in quiet:
-                notes.append(None)
-                continue
-            several = len(shops) > 1
-            what = f"{'Deliveries' if several else 'A delivery'} from {and_list(shops)}"
-            if kind == "came":
-                text = f"{what} came today. {'They' if several else 'It'} may be at the door."
-                why = "A shipping email says it was delivered today."
-            else:
-                text = f"{what} {'are' if several else 'is'} due today."
-                why = "A shipping email says it's expected today."
-            notes.append(WallNote(text, why, key))
-        return notes[0], notes[1]
+            return None, None, None, None
+        tz = deliveries.tz()
+        news = deliveries.news(today)  # PT2: a line per parcel
+
+        def note(text: str, why: str, key: str) -> WallNote | None:
+            return None if key in quiet else WallNote(text, why, key)
+
+        def key_of(p: Parcel) -> str:
+            return f"parcel-{p.id}-{p.status}-{p.expected_day}-{p.window_start}-{p.problem}"
+
+        troubles = [p for p in news if p.status == "problem"]
+        trouble = next(
+            (
+                n
+                for p in troubles
+                if (n := note(parcel_words.problem(p, today), parcel_words.why(p, "so"), key_of(p)))
+            ),
+            None,
+        )
+        on_today = [p for p in news if p.expected_day == today]
+        came_list = [p for p in on_today if p.status == "delivered"]
+        due_list = [p for p in on_today if p.status in ("on_the_way", "out_for_delivery")]
+        moved = next(
+            (
+                n
+                for p in news
+                if p.moved_from == today
+                and p.expected_day is not None
+                and p.expected_day > today
+                and p.status != "problem"
+                and (n := note(parcel_words.moved(p, today), parcel_words.why(p, "so"), key_of(p)))
+            ),
+            None,
+        )
+        came = due = None
+        if len(came_list) == 1:
+            [p] = came_list
+            came = note(
+                parcel_words.came(p, tz),
+                parcel_words.why(p, "it was delivered today"),
+                key_of(p),
+            )
+        elif came_list:
+            came = note(
+                parcel_words.several(came_list, "came today. They may be at the door."),
+                "Shipping emails or the carriers say they were delivered today.",
+                f"delivery-came-{today.isoformat()}-{','.join(p.shop for p in came_list)}",
+            )
+        if len(due_list) == 1:
+            [p] = due_list
+            due = note(parcel_words.due(p), parcel_words.why(p, "it's expected today"), key_of(p))
+        elif due_list:
+            due = note(
+                parcel_words.several(due_list, "are due today."),
+                "Shipping emails or the carriers say they're expected today.",
+                f"delivery-due-{today.isoformat()}-{','.join(p.shop for p in due_list)}",
+            )
+        return trouble, came, moved, due
 
     def _chore_note(self, today: date, quiet: set[str]) -> WallNote | None:
         waiting = sorted(

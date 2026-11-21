@@ -1,0 +1,10 @@
+[
+  {
+    "statusCode": "404",
+    "trackingNumber": "NUMBER",
+    "error": {
+      "code": "404",
+      "message": "The tracking number could not be found."
+    }
+  }
+]

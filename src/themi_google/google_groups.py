@@ -6,10 +6,14 @@ from themi.core.tools import ToolGroup
 
 EMAIL = ToolGroup(
     name="email",
-    description=("inboxes, expected emails, time-sensitive and important senders, the email audit"),
+    description=(
+        "inboxes, expected emails, time-sensitive and important senders, the email audit, "
+        "parcels on their way"
+    ),
     words=(
         "e-?mail|inbox|gmail|sender|expect|bill|statement|confirmation|unsubscribe|au"
-        "dit|time.sensitive|archive|noise|junk|spam|mark(?:ed)? (?:as )?read|forward"
+        "dit|time.sensitive|archive|noise|junk|spam|mark(?:ed)? (?:as )?read|forward|p"
+        "arcel|package|deliver|shipp|tracking|my order"
     ),
     examples=(
         "Is there anything in my inbox I should see?",
@@ -27,6 +31,8 @@ EMAIL = ToolGroup(
         "Forward that email to Erin",
         "Send this email to jenn@example.com",
         "Can Michael see the email from the HOA?",
+        "Where's my Chewy order?",
+        "Did the package come yet?",
     ),
     tools=(
         "expect_email",
@@ -40,6 +46,7 @@ EMAIL = ToolGroup(
         "set_sender_levels",
         "archive_noise_emails",
         "forward_email",
+        "parcel_status",
     ),
     order=70,
 )

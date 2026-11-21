@@ -519,12 +519,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WL9b | Wall: the small lists' cards and Things to cook | Wall | [x] 2026-11-20 |
 | WL9c | Wall: the columns say where a tap goes | Wall | [x] 2026-11-20 |
 | WL9d | Wall: the Person and Together pages | Wall | [x] 2026-11-21 |
-| PT1 | Package tracking: tracking numbers from email | Package tracking | [ ] |
-| PT2 | Package tracking: one parcel per tracking number | Package tracking | [ ] |
-| PT3 | Package tracking: the carriers' alert emails | Package tracking | [ ] |
-| PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [ ] |
-| PT5 | Package tracking: asking on a schedule | Package tracking | [ ] |
-| PT6 | Package tracking: what the family sees | Package tracking | [ ] |
+| PT1 | Package tracking: tracking numbers from email | Package tracking | [x] 2026-11-21 |
+| PT2 | Package tracking: one parcel per tracking number | Package tracking | [x] 2026-11-21 |
+| PT3 | Package tracking: the carriers' alert emails | Package tracking | [x] 2026-11-21 |
+| PT4 | Package tracking: the UPS and USPS lookup | Package tracking | [x] 2026-11-21 |
+| PT5 | Package tracking: asking on a schedule | Package tracking | [x] 2026-11-21 |
+| PT6a | Package tracking: what the family reads (wall, morning line, chat) | Package tracking | [~] |
+| PT6b | Package tracking: what Telegram tells them (problems, delivered) | Package tracking | [ ] |
 | PT7 | Package tracking: the FedEx lookup | Package tracking | deferred |
 
 ## Fixed technical choices
@@ -23710,7 +23711,7 @@ in the morning message and in chat. The prefix is PT. Rules every PT prompt keep
   faked in `tests/fakes/carriers.py`.
 
 ### PT1 · Package tracking: tracking numbers from email
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: WL8
 Read first: the plan's "Part 1: Parcel identity" ("Finding numbers");
 `themi_google/connectors/gmail/parse.py` (`_TextOnly`, `html_to_text`);
@@ -23735,8 +23736,31 @@ Tests: each carrier's valid numbers; bad check digits; order and phone numbers; 
 numbers; a number only in a link; one inside a redirect link; the FedEx/USPS clash both
 ways; an email with none; that links aren't stored; the vetting's match tests.
 
+Notes:
+- Vetted and vendored: `tracking_number_data` v2.0.0 (commit fec2d02d), MIT, the UPS, USPS,
+  FedEx and Amazon files unchanged in `themi_google/tracking_data/` with `LICENSE` and
+  `SOURCE.md` (release, what was checked, how to update). Themi reads only the patterns,
+  check digits and test numbers; the files' `tracking_url`s are never used. Every valid
+  and invalid test number in the four files is a test.
+- Left out: UPS freight waybills and Amazon International (a letter and ten digits, too
+  common in ordinary text), and the S10 international format (`s10.json`, mostly a country
+  table). The plan's "2 letters + 9 digits + US" isn't found; add it if a USPS
+  international parcel ever matters.
+- Kinds with a fixed prefix (UPS `1Z`, `TBA`, USPS `92`-`95`, FedEx `96`) count on their
+  own; bare digit runs (FedEx 12/15/18/32/34, USPS 20) need "track", a carrier's name,
+  "postal", "shipment" or "waybill" on their line or the lines next to them, or in their
+  link. In a clash a fixed-prefix kind wins: a USPS `420`+ZIP+`92...` number also passes
+  FedEx's 34-digit check. Then the sender or a nearby carrier name; else both are kept.
+- A match inside a longer one is dropped (a 22-digit USPS number holds a valid FedEx 12
+  with its spaces). Text is searched line by line, so spaces never join two lines' digits.
+- `GmailMessage.tracking` and `emails.tracking` (JSON, migration 0177). The whole text is
+  searched up to 60,000 characters (`MAX_TEXT`), past the 20,000 stored; at most 12
+  numbers an email.
+- Work is in the jj workspace `parcels` (`../themi-parcels`) because another session was
+  working in the main checkout; it's a separate line of commits on `main`.
+
 ### PT2 · Package tracking: one parcel per tracking number
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: PT1
 Read first: the plan's "Part 1: Parcel identity" ("Triage assigns numbers to parcels",
 "The parcel table", "Merging with WL8"); `themi_google/deliveries.py`;
@@ -23757,8 +23781,32 @@ Tests: shop email then carrier email make one parcel; an invented number is drop
 digest's three parcels; the shop name kept; `delivered` stays; the fold; the migration;
 two parcels from one shop on the wall; nothing shows contents or a number.
 
+Notes:
+- `parcels` (migration 0178) replaces `deliveries`, which it copies (one numberless parcel
+  per shop and day, the furthest along) and drops. A number is unique across carriers;
+  `carrier` holds several space-separated while PT1 couldn't tell (PT5 settles it).
+  `window_start`/`window_end`, `left_at` and `checked_at` are there for PT5.
+- Triage's `delivery` is now `parcels` (shop, tracking, date, status, problem). The found
+  numbers go in a `<data source="email N tracking numbers">` block after the body; a
+  number the model gives that isn't one of them is dropped. When an email has one parcel
+  and one number and the model left the number out, they go together.
+- The model may also say `problem` (missed, held, delayed, needs a signature) with a few
+  words of its own ("Delivery attempted"), cut to 80 characters. PT6 words it on the wall.
+- Beyond the plan's "same shop on the same day": a numberless email joins the same shop's
+  parcel already on its day, else the nearest open one due within 3 days (a parcel that
+  comes two days early); an undated one joins only when the shop has just one open parcel.
+  A parcel known only by its carrier ("UPS") takes in the day's numberless parcel when
+  there's just one. The plan says so since 2026-11-21 (also: USPS Tracking v3r2,
+  and the morning line and chat use the person's own parcels).
+- The wall's note counts parcels from one shop: "Two deliveries from Amazon are due
+  today." Its "Got it" key now has a name per parcel, so a second parcel from the same shop
+  is a new note.
+- Tests changed because they reached into moved wiring: `test_triage_parts`
+  (`_verdicts` takes each email's found numbers), `test_deliveries` (`parse`'s new shape),
+  `test_wall_deliveries` (verdicts send `parcels`; the count is from `parcels`).
+
 ### PT3 · Package tracking: the carriers' alert emails
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: PT2
 Read first: the plan's "Part 2: Carrier alert emails".
 - Fixtures in `tests/fixtures/parcels/` (anonymised, each saying where its shape came
@@ -23773,8 +23821,22 @@ Read first: the plan's "Part 2: Carrier alert emails".
 Tests: each fixture's parcels, shops and statuses; a carrier email joining a shop's parcel
 by number; the guide on the module's page.
 
+Notes:
+- Fixtures in `tests/fixtures/parcels/` are written for Themi in the shape of each sender's
+  public examples (its README says so); their tracking numbers are the data set's own
+  test numbers, so the check digits hold.
+- Triage also takes a `window` per parcel ("14:15-16:15", 24-hour), so UPS My Choice's
+  window reaches the parcel from email (the plan's Part 2 table); anything else is no
+  window.
+- `parcels` (`themi_google/parcels.py`, Email group, requires email_triage) is only an
+  entry point, not in any template or `app.py`'s list: off until turned on, like weather.
+  An installed Themi needs its package reinstalled (`make install`, or the deploy's
+  install) to see the new entry point. Its page shows `setup/parcels.md`; the three links
+  answered 200 on 2026-11-21.
+- Parcels from email keep working without the module: `Deliveries` stays in email triage.
+
 ### PT4 · Package tracking: the UPS and USPS lookup
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: PT2
 Read first: the plan's "Part 3: Carrier lookup" ("The connector", "Settings");
 `themi/connectors/search.py` and `weather.py` (shape, `tls`, `Tally`); the Usage plan's
@@ -23796,8 +23858,32 @@ secrets redacted from logs; the Test buttons.
 Setup Michael does: the UPS and USPS developer apps (the plan's "Setup and open
 questions"). Not needed to build or test.
 
+Notes:
+- USPS: Tracking **v3r2** (POST `/tracking/v3r2/tracking` with a list), not the plan's
+  Tracking 3: USPS's own spec says Tracking 3.0 retires on 31 July 2027. Same OAuth
+  (`/oauth2/v3/token`, the app's consumer key and secret). UPS: `/api/track/v1/details`,
+  client credentials as Basic auth. Shapes from the carriers' published OpenAPI files
+  (UPS-API/api-documentation `Tracking.yaml`; developers.usps.com `tracking-v3r2`).
+- Mapping, one table each: UPS `currentStatus.type` D delivered, X problem, "Out For
+  Delivery" in the words out for delivery; USPS `statusCategory`. UPS's spec doesn't list
+  its type letters beyond examples, so the words count too; an unknown type or category is
+  logged and counted as on its way. "Needs a signature" is read from the services
+  (`Tracking.signature`), best effort.
+- Settings (`ParcelsSettings`): `UPS_CLIENT_ID`/`UPS_CLIENT_SECRET`,
+  `USPS_CONSUMER_KEY`/`USPS_CONSUMER_SECRET` (each pair together), `PARCELS_ASK_CARRIERS`
+  (on), and `UPS_URL`/`USPS_URL` for a fake. One Test for the module (it asks each carrier
+  with keys for a token and names any that fail), not a button per carrier: the Modules
+  page has one Test per module.
+- Usage card: "UPS tracking" (no published limit) and "USPS tracking" (1,440 a day: the
+  reported 60 an hour). Tokens and lookups both count.
+- `app.py` builds the module only when it's handed carriers (tests, like weather);
+  otherwise it's the entry point, off until turned on. Fakes: `tests/fakes/carriers.py`
+  (`fake_carriers`), answers in `tests/fixtures/carriers/`.
+- Setup Michael does: a UPS developer app with the Tracking product, and a USPS developer
+  app (developers.usps.com), their keys on the Parcels page, then Test.
+
 ### PT5 · Package tracking: asking on a schedule
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: PT4
 Read first: the plan's "Part 3: Carrier lookup" ("When Themi asks"); `themi/scheduler.py`
 and how a module adds to `app.periodic`.
@@ -23811,8 +23897,23 @@ Tests (frozen, advanced clock): each cadence row; the time window; the cap; a "s
 email bringing a look forward; no looks without keys or with the setting off; a lookup's
 newer fact winning over an email's older one, and the other way round.
 
+Notes:
+- `ParcelChecks` (`themi_google/parcel_checks.py`), installed by the Parcels module; the
+  `parcels.check` job only when it has a carrier's keys and "Ask the carriers" is on.
+- A lookup's fact is true now (the carrier's current word), so it beats any older email;
+  an email sorted later wins only if it came later. When the carrier says nothing new the
+  parcel is only marked looked at (`checked_at`), so "no news in 21 days" still counts
+  from the last real change.
+- An email with news of a numbered parcel sets `look_after` (migration 0179), so a
+  "shipped" email is looked up at the next run. A failed lookup also counts as a look: the
+  parcel waits its usual pace rather than retrying every 15 minutes during an outage.
+- A number two carriers' patterns fit is asked of each carrier with keys until one knows
+  it; that one becomes its carrier.
+
 ### PT6 · Package tracking: what the family sees
-Status: [ ]
+Status: split (2026-11-21) into PT6a (the wall's notes, the morning line, chat) and PT6b
+(the problem nudge with its reminder offer, "Tell me when it's delivered"). Both keep
+the last bullet: their wording is checked with Michael before they're marked done.
 Depends on: PT2 (PT5 for windows and problems)
 Read first: the plan's "What the family sees"; `themi_home/wall_view.py` (`note`,
 `_deliveries`); `themi/standard/morning.py` (`weather_line`); `themi_google/expected.py`
@@ -23841,6 +23942,59 @@ the chat answers; that no line shows contents or a tracking number.
 Scenarios: a Chewy "shipped" email then a UPS My Choice "out for delivery" shows one Chewy
 parcel with its window; a UPS lookup's "delivery attempted" sends Michael one nudge and
 shows on the wall, and the next day's "delivered" replaces it.
+
+### PT6a · Package tracking: what the family reads (wall, morning line, chat)
+Status: [~]
+Depends on: PT2, PT5
+Read first: PT6 above; the plan's "What the family sees" (The wall's note, The morning
+message, Asking in chat).
+- One set of sentences (`themi_google/parcel_words.py`) for the wall, the morning message
+  and chat, with the plan's wording table.
+- The wall's note: weather alert, a parcel with a problem, parcels that came today, one
+  moved to a later day, chores from yesterday, parcels due today.
+- The morning message: one line about the person's own parcels due that day or with a
+  problem, after the weather line; a line alone is reason to send it.
+- Chat: `parcel_status` (email group) answers "where's the Chewy order?".
+Tests: each wall wording; the order; the morning line (own parcels only, alone sends);
+chat answers; no line shows contents or a tracking number.
+
+Notes:
+- Built and green (2026-11-21). **Blocked:** the wording waits for Michael (PT6's last
+  bullet). The sentences are all in `parcel_words.py`; the ones to look at:
+  - "A delivery from Chewy is due between 2:15 and 4:15 pm." / "... is due today and needs
+    someone to sign for it."
+  - "A delivery from Chewy came at 1:40 pm. It was left at the front door." (a time and
+    place only when the carrier said; from email it stays "came today. It may be at the
+    door.")
+  - "UPS couldn't deliver the parcel from Chewy. It's now due tomorrow." / "The delivery
+    from Etsy has a hitch (Held at Post Office)." (the carrier's words, cut to 80)
+  - "The delivery from Chewy is now due Friday."
+  - Morning: "Two deliveries today, from Amazon and Chewy (Chewy between 2 and 4 pm)."
+  - Chat: "I haven't seen a shipping email from Zappos lately."
+- Decided here, for Michael to confirm: the morning line and chat use only the person's
+  own parcels (found in their email), since a parcel can be a present for the other; the
+  wall, shared, shows everyone's as before.
+- Parcels gained `signature` and `moved_from` (migration 0180); lookups set them.
+- Golden `tools.json` changes as it should: `parcel_status` in the email group, and
+  `more_tools` with the email group's new description ("parcels on their way"). The email
+  group's words now include parcel, package, deliver, shipp, tracking, "my order".
+
+### PT6b · Package tracking: what Telegram tells them (problems, delivered)
+Status: [ ]
+Depends on: PT6a
+Read first: PT6 above; the plan's "A nudge for problems"; `themi/channels/outbox.py`;
+`themi.autonomy.stage`.
+- The problem nudge: one Telegram message through the outbox to the member whose email
+  found the parcel, once per parcel per problem, normal urgency; a signature needed today
+  goes at once. Its offer to add a reminder makes a task through `themi.autonomy.stage`.
+  "Tell me about problems" (on), per member, on the Parcels module.
+- "Tell me when it's delivered", per member, off by default: on, one message when the
+  parcel comes, under quiet hours and the daily limit.
+- Sentences from `parcel_words.py`, worded with Michael before it's marked done.
+Tests: the nudge once per problem, quiet hours, the signature exception, the setting; the
+reminder offer staged; the delivered message on and off.
+Scenario: a UPS lookup's "delivery attempted" sends Michael one nudge and shows on the
+wall, and the next day's "delivered" replaces it.
 
 ### PT7 · Package tracking: the FedEx lookup (deferred)
 Status: deferred

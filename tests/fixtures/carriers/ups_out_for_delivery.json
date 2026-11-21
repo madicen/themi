@@ -1,0 +1,74 @@
+{
+  "trackResponse": {
+    "shipment": [
+      {
+        "inquiryNumber": "NUMBER",
+        "package": [
+          {
+            "trackingNumber": "NUMBER",
+            "currentStatus": {
+              "type": "I",
+              "code": "OT",
+              "description": "Out For Delivery Today",
+              "simplifiedTextDescription": "Out for Delivery",
+              "statusCode": "021"
+            },
+            "deliveryDate": [
+              {
+                "type": "SDD",
+                "date": "20261021"
+              }
+            ],
+            "activity": [
+              {
+                "date": "20261021",
+                "time": "081000",
+                "gmtDate": "20261021",
+                "gmtOffset": "-07:00",
+                "gmtTime": "00:00:00",
+                "location": {
+                  "address": {
+                    "city": "Portland",
+                    "stateProvince": "OR",
+                    "countryCode": "US"
+                  }
+                },
+                "status": {
+                  "type": "I",
+                  "code": "OT",
+                  "description": "Out For Delivery Today",
+                  "statusCode": "005"
+                }
+              },
+              {
+                "date": "20261020",
+                "time": "221500",
+                "gmtDate": "20261020",
+                "gmtOffset": "-07:00",
+                "gmtTime": "00:00:00",
+                "location": {
+                  "address": {
+                    "city": "Portland",
+                    "stateProvince": "OR",
+                    "countryCode": "US"
+                  }
+                },
+                "status": {
+                  "type": "I",
+                  "code": "DP",
+                  "description": "Departed from Facility",
+                  "statusCode": "005"
+                }
+              }
+            ],
+            "deliveryTime": {
+              "type": "EDW",
+              "startTime": "141500",
+              "endTime": "161500"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

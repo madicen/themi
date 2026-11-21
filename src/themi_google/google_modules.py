@@ -27,7 +27,7 @@ from themi.modules.web import WaitingLink
 from themi.standard.currency import FRANKFURTER_METER, Converter
 from themi.standard.tasks import TaskBoard
 from themi.usage import Meter
-from themi_google import email_forward, google_groups
+from themi_google import email_forward, google_groups, parcel_words
 from themi_google.calendar import TaskCalendar
 from themi_google.calendar_copies import CalendarCopies
 from themi_google.calendar_twins import CalendarTwins
@@ -140,6 +140,7 @@ class EmailTriageModule(Module):
         triage.install()
         deliveries = ctx.provide(Deliveries(ctx.services))  # WL8: parcels, for the wall
         triage.verdict_listeners.append(deliveries.on_verdict)
+        ctx.services.tools.register(parcel_words.parcel_status)  # PT6a: "where's my order?"
         ctx.periodic("email.triage", timedelta(minutes=1), triage.run)
 
 

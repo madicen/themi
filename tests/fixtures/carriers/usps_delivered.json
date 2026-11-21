@@ -1,0 +1,23 @@
+[
+  {
+    "trackingNumber": "NUMBER",
+    "statusCategory": "Delivered",
+    "status": "Delivered, Front Door/Porch",
+    "statusSummary": "Your item was delivered to the front door or porch.",
+    "deliveryDateExpectation": {
+      "expectedDeliveryDate": "2026-10-21"
+    },
+    "trackingEvents": [
+      {
+        "eventType": "Delivered, Front Door/Porch",
+        "eventCode": "01",
+        "GMTTimestamp": "2026-10-21T20:40:00Z"
+      },
+      {
+        "eventType": "Out for Delivery",
+        "eventCode": "OF",
+        "GMTTimestamp": "2026-10-21T15:05:00Z"
+      }
+    ]
+  }
+]

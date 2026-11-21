@@ -10,7 +10,7 @@ from typing import Self
 
 from pydantic import model_validator
 
-from themi.core.connector_settings import _https, _together  # noqa: F401
+from themi.core.connector_settings import _https, _together
 from themi.modules.settings import ModuleSettings, env_field
 from themi.storage.secrets import Secret
 from themi_google.connectors.google.oauth import GoogleConfig
@@ -86,3 +86,47 @@ class TravelSettings(ModuleSettings):
         ask="TomTom API key, for live traffic (blank: estimates)",
         help="developer.tomtom.com, free plan",
     )
+
+
+class ParcelsSettings(ModuleSettings):
+    """PT4: asking UPS and USPS about parcels, each with a free developer app's keys."""
+
+    ups_client_id: str = env_field(
+        "UPS_CLIENT_ID",
+        "",
+        ask="UPS client ID (blank: don't ask UPS)",
+        help="developer.ups.com, an app with the Tracking product",
+    )
+    ups_client_secret: Secret | None = env_field(
+        "UPS_CLIENT_SECRET", secret=True, ask="UPS client secret"
+    )
+    usps_consumer_key: str = env_field(
+        "USPS_CONSUMER_KEY",
+        "",
+        ask="USPS consumer key (blank: don't ask USPS)",
+        help="developers.usps.com, an app with the Tracking API",
+    )
+    usps_consumer_secret: Secret | None = env_field(
+        "USPS_CONSUMER_SECRET", secret=True, ask="USPS consumer secret"
+    )
+    ask_carriers: bool = env_field(
+        "PARCELS_ASK_CARRIERS",
+        True,
+        label="Ask the carriers about parcels with a tracking number",
+        help="Off: parcels are followed from email alone.",
+    )
+    ups_url: str = env_field("UPS_URL", "")  # a fake's, in tests and `make dev`
+    usps_url: str = env_field("USPS_URL", "")
+
+    @model_validator(mode="after")
+    def _checks(self) -> Self:
+        _together("UPS_CLIENT_ID", "UPS_CLIENT_SECRET", self.ups_client_id, self.ups_client_secret)
+        _together(
+            "USPS_CONSUMER_KEY",
+            "USPS_CONSUMER_SECRET",
+            self.usps_consumer_key,
+            self.usps_consumer_secret,
+        )
+        _https("UPS_URL", self.ups_url)
+        _https("USPS_URL", self.usps_url)
+        return self

@@ -1,0 +1,20 @@
+[
+  {
+    "trackingNumber": "NUMBER",
+    "statusCategory": "In Transit",
+    "status": "In Transit to Next Facility",
+    "statusSummary": "Your item is in transit to the next facility.",
+    "deliveryDateExpectation": {
+      "expectedDeliveryDate": "2026-10-23"
+    },
+    "trackingEvents": [
+      {
+        "eventType": "Departed USPS Regional Facility",
+        "eventCode": "T1",
+        "GMTTimestamp": "2026-10-20T22:15:00Z",
+        "eventCity": "PORTLAND",
+        "eventState": "OR"
+      }
+    ]
+  }
+]

@@ -160,3 +160,44 @@ def test_a_plain_part_like_the_snippet_is_kept() -> None:
         )
     )
     assert parsed.text == "Your bill of $84 is due."
+
+
+# ----- PT1: tracking numbers --------------------------------------------------------------
+
+
+def test_tracking_numbers_from_the_html_links_even_when_plain_text_is_the_body() -> None:
+    from themi_google.tracking import Found
+
+    link = "https://click.shop.example/c?u=https%3A%2F%2Fwww.ups.com%2Ftrack%3Ftracknum%3D1Z5R89390357567127"
+    parsed = parse_message(
+        message(
+            {
+                "mimeType": "multipart/alternative",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": b64("Your order shipped.")}},
+                    {
+                        "mimeType": "text/html",
+                        "body": {
+                            "data": b64(f'<p>Your order shipped. <a href="{link}">Track</a></p>')
+                        },
+                    },
+                ],
+            }
+        )
+    )
+    assert parsed.tracking == (Found("ups", "1Z5R89390357567127"),)
+    assert "click.shop.example" not in parsed.text
+
+
+def test_tracking_numbers_past_the_body_cap_are_found() -> None:
+    from themi_google.tracking import Found
+
+    text = "x\n" * MAX_BODY + "Tracking number: 9400111206206406260787"
+    parsed = parse_message(message({"mimeType": "text/plain", "body": {"data": b64(text)}}))
+    assert len(parsed.text) == MAX_BODY
+    assert parsed.tracking == (Found("usps", "9400111206206406260787"),)
+
+
+def test_no_tracking_numbers_in_an_ordinary_email() -> None:
+    parsed = parse_message(message({"mimeType": "text/plain", "body": {"data": b64("Hi")}}))
+    assert parsed.tracking == ()

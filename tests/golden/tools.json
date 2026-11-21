@@ -253,7 +253,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "2b31ec254445"
+    "spec": "422d9b317bb6"
   },
   "move_expense": {
     "group": "spending",
@@ -262,6 +262,10 @@
   "move_list_item": {
     "group": "core",
     "spec": "96728c58869f"
+  },
+  "parcel_status": {
+    "group": "email",
+    "spec": "b27d3e84d318"
   },
   "pause_messages": {
     "group": "settings",

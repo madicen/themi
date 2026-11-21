@@ -1,0 +1,59 @@
+{
+  "trackResponse": {
+    "shipment": [
+      {
+        "inquiryNumber": "NUMBER",
+        "package": [
+          {
+            "trackingNumber": "NUMBER",
+            "currentStatus": {
+              "type": "X",
+              "code": "48",
+              "description": "The receiver was not available for delivery. We'll make a second attempt the next business day.",
+              "simplifiedTextDescription": "Delivery Attempted",
+              "statusCode": "048"
+            },
+            "deliveryDate": [
+              {
+                "type": "SDD",
+                "date": "20261021"
+              },
+              {
+                "type": "RDD",
+                "date": "20261022"
+              }
+            ],
+            "activity": [
+              {
+                "date": "20261021",
+                "time": "151000",
+                "gmtDate": "20261021",
+                "gmtOffset": "-07:00",
+                "gmtTime": "00:00:00",
+                "location": {
+                  "address": {
+                    "city": "Portland",
+                    "stateProvince": "OR",
+                    "countryCode": "US"
+                  }
+                },
+                "status": {
+                  "type": "X",
+                  "code": "48",
+                  "description": "The receiver was not available for delivery.",
+                  "statusCode": "005"
+                }
+              }
+            ],
+            "additionalServices": [
+              {
+                "type": "SIGNATURE_REQUIRED",
+                "description": "Signature Required"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "trackingNumber": "NUMBER",
+    "statusCategory": "Out for Delivery",
+    "status": "Out for Delivery",
+    "statusSummary": "Your item is out for delivery.",
+    "deliveryDateExpectation": {
+      "expectedDeliveryDate": "2026-10-21",
+      "predictedDeliveryWindowStartTime": "10:00:00",
+      "predictedDeliveryWindowEndTime": "14:00:00"
+    },
+    "trackingEvents": [
+      {
+        "eventType": "Out for Delivery",
+        "eventCode": "OF",
+        "GMTTimestamp": "2026-10-21T15:05:00Z"
+      }
+    ]
+  }
+]

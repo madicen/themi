@@ -11,8 +11,10 @@ Categories and what follows:
 | receipt      | announce `ReceiptFound` (the pantry and budget, prompt 25)    |
 | routine      | nothing                                                       |
 
-Any of them can also be about a parcel on its way (WL8): its `delivery` (the shop, the day,
-how far along) goes to the verdict listeners, and `Deliveries` keeps it for the wall.
+Any of them can also be about parcels on their way (WL8, PT2): its `parcels` (the shop, the
+tracking number, the day, how far along) go to the verdict listeners, and `Deliveries`
+keeps them, one per parcel. The model only matches tracking numbers code found in the
+email (PT1, given in their own data block); any other number it gives is dropped.
 
 The email audit's answers about a sender (E2, E2b) change that: urgent right away, its
 alerts are always `urgent` priority; important, its noise isn't offered for archiving;
@@ -61,9 +63,11 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi_google.connectors.gmail import GmailSync
 from themi_google.connectors.gmail.parse import in_primary
-from themi_google.deliveries import parse as parse_delivery
+from themi_google.deliveries import STATUSES as PARCEL_STATUSES
+from themi_google.deliveries import parse_all as parse_parcels
 from themi_google.email_buttons import EmailNoticeButtons, notice_buttons
 from themi_google.events import title_matches
+from themi_google.tracking import from_json as tracking_from_json
 
 log = logging.getLogger(__name__)
 
@@ -125,11 +129,19 @@ short title ("Vet: Biscuit's checkup"), the date (YYYY-MM-DD), start and end
 (HH:MM, 24-hour; both empty for an all-day event) and the place, as written.
 Otherwise leave every event field empty.
 
-For an email about a parcel coming to the family (shipped, on its way, out for delivery,
-delivered, a new delivery date), fill delivery: shop is who it's from in a word or two,
-the shop's or sender's name ("Amazon", "Chewy"), never what's in it; date is the day it's
-expected or came (YYYY-MM-DD; empty if the email gives none); status is on_the_way,
-out_for_delivery or delivered. Otherwise leave every delivery field empty.
+For an email about parcels coming to the family (shipped, on its way, out for delivery,
+delivered, a new delivery date, a missed or held delivery), list each parcel in parcels:
+shop is who it's from in a word or two, the shop's or sender's name ("Amazon", "Chewy"),
+never what's in it; tracking is that parcel's number from the email's tracking numbers
+block, exactly as written there (empty if none of them is that parcel's); date is the day
+it's expected or came (YYYY-MM-DD; empty if the email gives none); status is on_the_way,
+out_for_delivery, problem (a missed delivery, held, delayed, needs a signature) or
+delivered; problem is a few plain words for a problem ("Delivery attempted", "Held at the
+post office"), otherwise empty; window is the delivery window the email gives, as 24-hour
+HH:MM-HH:MM ("14:15-16:15"), otherwise empty. A carrier's own email (USPS Informed
+Delivery's digest, UPS My Choice, FedEx Delivery Manager) is about parcels even when it
+lists several: list each package it names, with shop the shop or sender it names for that
+package ("Chewy"), or the carrier ("USPS") when it names none. Otherwise leave parcels empty.
 
 For a confirmation or receipt, give amount_paid: what the reader paid, was charged,
 pledged or owes, exactly as the email writes it ("$179.00"). Leave it empty when the
@@ -176,18 +188,28 @@ SCHEMA: dict[str, Any] = {
                         "required": ["title", "date", "start", "end", "location"],
                         "additionalProperties": False,
                     },
-                    "delivery": {
-                        "type": "object",
-                        "properties": {
-                            "shop": {"type": "string"},
-                            "date": {"type": "string"},
-                            "status": {
-                                "type": "string",
-                                "enum": ["", "on_the_way", "out_for_delivery", "delivered"],
+                    "parcels": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "shop": {"type": "string"},
+                                "tracking": {"type": "string"},
+                                "date": {"type": "string"},
+                                "status": {"type": "string", "enum": list(PARCEL_STATUSES)},
+                                "problem": {"type": "string"},
+                                "window": {"type": "string"},
                             },
+                            "required": [
+                                "shop",
+                                "tracking",
+                                "date",
+                                "status",
+                                "problem",
+                                "window",
+                            ],
+                            "additionalProperties": False,
                         },
-                        "required": ["shop", "date", "status"],
-                        "additionalProperties": False,
                     },
                 },
                 "required": [
@@ -200,7 +222,7 @@ SCHEMA: dict[str, Any] = {
                     "reply_draft",
                     "amount_paid",
                     "event",
-                    "delivery",
+                    "parcels",
                 ],
                 "additionalProperties": False,
             },
@@ -239,8 +261,8 @@ class Verdict:
     # F28b: what the reader paid, as the email writes it; "" for none, None when the
     # model didn't say (then the email's labelled amount is used).
     amount_paid: str | None = None
-    # WL8: the parcel it's about (shop, date, status), for the wall's note; None for none.
-    delivery: dict[str, str] | None = None
+    # WL8, PT2: the parcels it's about (shop, tracking, date, status, problem); () for none.
+    parcels: tuple[dict[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -270,6 +292,10 @@ def _preview(row: dict[str, Any]) -> str:
     return " ".join(re.sub(r"[\u034f\u200b-\u200f\u2060\ufeff]", " ", text).split())
 
 
+def _numbers(row: dict[str, Any]) -> set[str]:
+    return {f.number for f in tracking_from_json(row.get("tracking"))}
+
+
 def email_prompt(rows: list[dict[str, Any]], accounts: dict[int, LinkedAccount]) -> str:
     parts = []
     for row in rows:
@@ -283,6 +309,8 @@ def email_prompt(rows: list[dict[str, Any]], accounts: dict[int, LinkedAccount])
             + "\n"
         )
         parts.append(as_data(f"email {row['id']}", header + row["body_text"][:BODY_CHARS]))
+        if numbers := _numbers(row):  # PT1: found by code in the whole email and its links
+            parts.append(as_data(f"email {row['id']} tracking numbers", "\n".join(sorted(numbers))))
     urgent = sorted({p for a in accounts.values() for p in a.urgent_senders})
     hint = f"\nSenders the family always treats as urgent: {', '.join(urgent)}." if urgent else ""
     return f"Sort these {len(rows)} emails.{hint}\n\n" + "\n\n".join(parts)
@@ -446,7 +474,7 @@ class EmailTriage:
             max_tokens=4000,
             kind=CallKind.BACKGROUND,
         )
-        verdicts = _verdicts(response.data, {r["id"] for r in rows})
+        verdicts = _verdicts(response.data, {r["id"]: _numbers(r) for r in rows})
         settled = 0
         for row in rows:
             verdict = verdicts.get(row["id"])
@@ -474,6 +502,7 @@ class EmailTriage:
                     verdict.severe,
                     verdict.summary,
                     "",
+                    parcels=verdict.parcels,
                 )
             self._record(row, verdict)
             for listener in self.verdict_listeners:
@@ -590,8 +619,9 @@ class EmailTriage:
                     log.exception("A ReceiptFound listener failed for email %s", row["id"])
 
 
-def _verdicts(data: dict[str, Any], batch_ids: set[int]) -> dict[int, Verdict]:
-    """The model's results, keeping only well-formed ones about emails in this batch."""
+def _verdicts(data: dict[str, Any], batch: dict[int, set[str]]) -> dict[int, Verdict]:
+    """The model's results, keeping only well-formed ones about emails in this batch.
+    `batch`: each email's id and the tracking numbers code found in it (PT1)."""
     verdicts: dict[int, Verdict] = {}
     for item in data.get("results", []) or []:
         try:
@@ -599,7 +629,7 @@ def _verdicts(data: dict[str, Any], batch_ids: set[int]) -> dict[int, Verdict]:
             category = str(item["category"])
         except (KeyError, TypeError, ValueError):
             continue
-        if email_id not in batch_ids or category not in CATEGORIES or email_id in verdicts:
+        if email_id not in batch or category not in CATEGORIES or email_id in verdicts:
             continue
         kind = str(item.get("urgent_kind") or "")
         paid = item.get("amount_paid")
@@ -613,7 +643,7 @@ def _verdicts(data: dict[str, Any], batch_ids: set[int]) -> dict[int, Verdict]:
             _event(item.get("event")) if category == "confirmation" else None,
             bool(item.get("unsure")),
             None if paid is None else " ".join(str(paid).split())[:40],
-            parse_delivery(item.get("delivery")),
+            parse_parcels(item.get("parcels"), batch[email_id]),
         )
     return verdicts
 
