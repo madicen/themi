@@ -335,7 +335,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F55b | Feedback: a held email notice has its buttons when it goes | Feedback | [x] 2026-11-20 |
 | F55c | Feedback: the wall keeps a routine with open steps after its window | Feedback | [x] 2026-11-20 |
 | F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [x] 2026-11-20 |
-| F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [ ] |
+| F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [x] 2026-11-20 |
 | F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -16512,7 +16512,7 @@ Notes:
   none. Mark #245 reviewed once live.
 
 ### F55e · Idea (2026-11-20): Themi's note on the wall wears Themi, not a "T"
-Status: [ ]
+Status: [x] 2026-11-20
 Depends on: WL2, F52b
 Read first: `themi_home/web/templates/wall/_note.html` (the `wall-t` badge);
 `themi_home/web/static/chameleon/chameleon.svg`, `icons/icon.svg`; `wall.css` (light and
@@ -16533,6 +16533,11 @@ Scenario: none.
 Data/Setup: none. Mark #243 reviewed once live.
 
 Notes:
+- The badge is the app icon (`home/icons/icon.svg`: the chameleon on its own dark green
+  square, so it reads the same in the light and dark looks), an `<img class="wall-t" alt="">`
+  on the same 3.25rem rounded tile, in `_note.html` and the Note view's `_view_note.html`.
+- Not looked at on the frame itself. Test: one at the end of
+  `tests/integration/test_wall_screen.py`. **Setup:** none. Mark #243 reviewed once live.
 
 ### F55f · Idea (2026-11-20): the week ahead has a chip per calendar, and a tap hides that calendar there
 Status: [ ]

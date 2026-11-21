@@ -559,3 +559,23 @@ async def test_a_routine_step_has_its_titles_emoji(wall: Scenario) -> None:
     clock.advance(EVENING)
     husband = column(await screen(wall), f"m{wall.member('Husband').id}")
     assert emoji_before(husband, "Take meds") == "💊"
+
+
+# ----- F55e (idea #243): Themi's note wears Themi ------------------------------------------
+
+
+async def test_the_note_wears_themi_not_a_t(wall: Scenario) -> None:
+    from tests.integration.test_wall_views import get
+
+    await task(wall, "Erin", "Bring bins in", due=today(wall) - timedelta(days=1), chore=True,
+               both="either")  # fmt: skip
+    page = await screen(wall)
+    note = page[page.index('class="wall-card wall-note"') :]
+    note = note[: note.index("</button>")]
+    badge = re.search(r'<img class="wall-t" src="([^"]+)" alt="">', note)
+    assert badge is not None and "icons/icon.svg" in badge.group(1)
+    assert ">T<" not in note
+    served = await get(wall, badge.group(1))
+    assert served.status_code == 200 and "svg" in served.headers["content-type"]
+    view = (await get(wall, "/wall/view/note")).text
+    assert '<img class="wall-t"' in view and ">T<" not in view
