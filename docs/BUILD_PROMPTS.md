@@ -339,7 +339,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [x] 2026-11-20 |
 | F56a | Feedback: [Open in Gmail] opens the Gmail app on a phone | Feedback | [x] 2026-11-21 |
 | F57a | Idea: a remembered fact is found when the words differ, and on a follow-up | Feedback | [x] 2026-11-21 |
-| F57b | Idea: named places ("Stanford" → the parking lot), and idle pinned facts unpinned | Feedback | [ ] |
+| F57b | Idea: named places ("Stanford" → the parking lot), and idle pinned facts unpinned | Feedback | [x] 2026-11-22 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16770,7 +16770,7 @@ Notes:
   important ones on the Rules & memory page.
 
 ### F57b · Idea (2026-11-21): "go to Stanford" means the visitor parking lot, and pinned facts stay few
-Status: [ ]
+Status: [x] 2026-11-22
 Depends on: F57a
 Read first: `themi/standard/places.py` (`named_place`, `_remembered`, `ADDRESS`, F29e and
 F46b's docstrings); `themi_google/travel.py` (`address_for`, `NOT_SURE_TEXT`);
@@ -16832,6 +16832,48 @@ before an idle pinned fact is unpinned; nothing is unpinned on the day of the up
 the job's first run.
 
 Notes:
+- Changes from the prompt (decided in the session, 2026-11-21/22):
+  - Places have `arrive_early` (0–120 minutes). The prompt left this out, but Michael's case
+    ("get there 10 minutes early to park and walk to her room") needs it. A saved place's
+    minutes are an event's default when nothing was said for that event
+    (`TravelHeadsUps._plan_or_place`). An `arrive_by` said for the event wins. An arrival
+    said as "at the start" reads as unsaid, so the place's minutes apply.
+  - A saved place is also recognised by its address (number and street, as whole words),
+    not only by its name. The prompt line asks the model to put the place's address as an
+    event's location, so the calendar shows the lot and phone maps open it. Travel still
+    knows it's Stanford, with its note and minutes.
+  - Places named in the message (or in the earlier two) come with the turn's notes as
+    "Place: … means …", not only through `search_memory`. That way "visit Erin tomorrow at
+    Stanford" has the hours in front of the model when it picks the time.
+  - An unpin isn't logged in `context_repairs`. That table needs a member and has a
+    diagnosis CHECK, so using it would mean rebuilding the table. Instead
+    `facts.unpinned_at` is set, the page shows it, and it's logged. `Memory.pin` clears it
+    and sets `pinned_at`, so a fact pinned again by hand counts from then.
+- Migration 0182: `places`, plus `facts.last_matched_at`, `pinned_at` and `unpinned_at`.
+  Facts already pinned get `pinned_at` = the update, so none is unpinned in the first 8 weeks.
+- `themi/standard/places.py`: `SavedPlace`, `Places` (`save` updates a place with the same
+  name in the same scope; `update`, `find`, `mentioned`, `search`), and `Named.saved`.
+  `named_place` checks saved places first, before the digit check, then F29e's kin rules
+  and F46b's facts as before.
+- `remember_place` is registered by the Memory module. `search_memory` appends matching
+  places. The new prompt line is `memory.remember-place` (act, 76). Travel's `drive_time`
+  result carries the note as `<data source="memory">What they told Themi about <name>: …</data>`.
+- `memory.unpin_idle` runs daily (`UNPIN_AFTER` = 8 weeks). It counts only a match with
+  what was said or looked up (`last_matched_at`), never just being in the prompt.
+- Rules & memory has a Places section (add, edit, forget; personal places only by their
+  owner) at `POST /places/new` and `POST /places/{id}/{edit|delete}`. An unpinned fact
+  says "Unpinned <date>: it hadn't come up in 8 weeks."
+- Goldens: `jobs.json` (`memory.unpin_idle`), `routes.json` (the two place routes),
+  `system_prompt.txt` and `tools.json`. `tests/unit/test_standard_modules.py`'s Memory case
+  now expects the job.
+- Tests: `tests/unit/test_saved_places.py` (12), `tests/scenarios/test_saved_places.py` (5),
+  and two page tests in `tests/integration/test_admin_pages.py`.
+- **Setup:** update the Pi. Then Michael tells Themi once: "When I say Stanford, take me to
+  the visitor parking lot at <address>. Visiting hours are 6:30–8:30 pm weekdays and
+  12–8:30 pm weekends. I like to get there 10 minutes early." Or he adds it under Places
+  on the Rules & memory page. Also: "Remember Erin is at Stanford Hospital, room ___, for
+  now" (a fact). Forget both when she's home.
+
 
 ## Conversation mode
 
