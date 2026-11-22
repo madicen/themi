@@ -338,7 +338,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [x] 2026-11-20 |
 | F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [x] 2026-11-20 |
 | F56a | Feedback: [Open in Gmail] opens the Gmail app on a phone | Feedback | [x] 2026-11-21 |
-| F57a | Idea: a remembered fact is found when the words differ, and on a follow-up | Feedback | [ ] |
+| F57a | Idea: a remembered fact is found when the words differ, and on a follow-up | Feedback | [x] 2026-11-21 |
 | F57b | Idea: named places ("Stanford" → the parking lot), and idle pinned facts unpinned | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -16687,7 +16687,7 @@ Notes:
   which worked here. Mark #246 reviewed once live.
 
 ### F57a · Idea (2026-11-21): Themi finds a remembered fact when the words don't match, and on a follow-up
-Status: [ ]
+Status: [x] 2026-11-21
 Depends on: none
 Read first: `themi/standard/memory.py` (`Memory.search`, `for_prompt`, `terms`, the module
 docstring); `themi/storage/schema/0011_memory.sql` (`facts`, `facts_fts`);
@@ -16734,6 +16734,8 @@ stays at 5; Themi's own replies in history aren't searched; `search_memory` retu
 and unpinned facts the member may see, never another member's personal fact, and stamps
 `last_shown_at`; an empty query and a query with no match each get their reply; the
 migration keeps existing facts searchable (an FTS match on an old fact still works after it).
+`tests/golden/system_prompt.txt` (the two prompt lines) and `tools.json` (`search_memory`,
+`remember_fact`'s `keywords`) change.
 Scenario: Michael says "Remember Stanford's visiting hours are 6:30–8:30 pm weekdays and
 12–8:30 pm weekends", then later "Let's go see Dad at Stanford" and "what time should we
 leave?". The model's turn has the hours in its notes.
@@ -16744,6 +16746,28 @@ Michael yet: model-written search words instead of embeddings (no new service, n
 when a model changes). Revisit embeddings only if `themi feedback` still shows facts being missed.
 
 Notes:
+- Migration 0181 (`0181_fact_keywords.sql`): `facts.keywords`, and `facts_fts` rebuilt with
+  three columns. Its update trigger fires on `subject`, `fact` or `keywords`.
+- `remember_fact` has a `keywords` argument (comma-separated, `""` for none). Tool schemas
+  are strict, so every argument is required and the model always sends it.
+  `tests/scenarios/test_conversation.py`'s two scripted `remember_fact` calls gained
+  `"keywords": ""` for that reason. Saying a fact again with new words merges them
+  (`keyword_text`: lower-case, no repeats, at most 12).
+- Follow-ups: `services.their_last(history)` (the person's own last 2 messages,
+  `EARLIER_MESSAGES`) goes to `facts_for(member, text, earlier)`, in the agent and in
+  conversation mode. `Memory.for_prompt` searches the latest message first, and the earlier
+  messages fill what's left of the 5.
+- `search_memory` is a starter tool in no group, so it goes with every message. It calls
+  `Memory.lookup` (pinned and unpinned, up to 8, `LOOKUP_LIMIT`) and returns
+  `#<id> <subject>: <fact>` lines in `as_data("memory", ...)`. It stamps `last_shown_at`.
+- The prompt has two new lines: `memory.remember-that-the-bins` asks for keywords, and
+  `memory.search-memory` (act, 75) says to look before saying you don't know.
+- Rules & memory: a fact's row shows "· also: <words>". Its edit form has an "Also comes up
+  for" field. A form without that field leaves the words as they were.
+- Tests: `tests/unit/test_memory_finding.py` (11), `tests/scenarios/test_memory_finding.py`
+  (3), and one page test in `tests/integration/test_admin_pages.py`.
+- **Setup:** update the Pi. Facts saved before this have no search words. Add words to the
+  important ones on the Rules & memory page.
 
 ### F57b · Idea (2026-11-21): "go to Stanford" means the visitor parking lot, and pinned facts stay few
 Status: [ ]
