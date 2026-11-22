@@ -106,6 +106,8 @@ def routes(kit: Kit) -> APIRouter:
             if not text:
                 return kit.redirect("/knowledge", "A fact needs some words.")
             memory().correct(fact.id, text)
+            if "keywords" in form:  # F57a
+                memory().set_keywords(fact.id, str(form.get("keywords", "")))
             message = "Updated."
         elif change == "delete":
             memory().forget(fact.id)

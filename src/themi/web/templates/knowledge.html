@@ -69,11 +69,12 @@
 Household facts are shared; personal ones only appear in your own conversations.</p>
 <div class="rows">
 {% for fact in facts %}
-{% call(part) row(fact.fact, meta=("Personal" if fact.scope == "member" else "Household") ~ " · " ~ fact.subject, chips=[("Pinned", "info")] if fact.pinned else [], id="fact-" ~ fact.id) %}
+{% call(part) row(fact.fact, meta=("Personal" if fact.scope == "member" else "Household") ~ " · " ~ fact.subject ~ ((" · also: " ~ fact.keywords) if fact.keywords else ""), chips=[("Pinned", "info")] if fact.pinned else [], id="fact-" ~ fact.id) %}
 {% if part == "body" %}
   <form method="post" action="/facts/{{ fact.id }}/edit">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label>What Themi remembers <input name="fact" value="{{ fact.fact }}" required></label>
+    <label>Also comes up for <input name="keywords" value="{{ fact.keywords }}" placeholder="Other words, like “Dad, hospital”"></label>
     <button>Save</button>
   </form>
   <div class="danger-zone buttons">

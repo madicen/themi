@@ -325,7 +325,7 @@
   },
   "remember_fact": {
     "group": "core",
-    "spec": "3dc5ff951902"
+    "spec": "92eb7d279e25"
   },
   "remove_follow_up": {
     "group": "core",
@@ -378,6 +378,10 @@
   "search_journal": {
     "group": "core",
     "spec": "2d64b9a7e7e7"
+  },
+  "search_memory": {
+    "group": "core",
+    "spec": "139b4018cdec"
   },
   "search_web": {
     "group": "web",

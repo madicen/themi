@@ -4,7 +4,10 @@ Facts are household-wide (scope "family") or personal (scope "member", seen
 only in that member's conversations). Two ways they reach the model:
 - pinned facts go into the system prompt every time;
 - other facts are found by full-text search on the incoming message (top 5)
-  and placed in that turn as notes.
+  and placed in that turn as notes. F57a: a fact's search words ("Dad, hospital, visit")
+  are searched with it, and the person's last two messages fill any places the latest one
+  leaves, so a follow-up ("what time should we leave?") still finds what it's about. The
+  model can also look facts up itself with `search_memory`.
 Each time a fact is put in front of the model, `last_shown_at` is stamped,
 which is how context repair can tell "never saw it" from "saw it and
 ignored it".
@@ -21,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
@@ -42,6 +46,9 @@ Scope = Literal["family", "member"]
 Diagnosis = Literal["never_stored", "not_retrieved", "stored_wrong", "ignored"]
 
 RETRIEVE_LIMIT = 5
+# F57a: what search_memory returns at most, and how many search words a fact keeps.
+LOOKUP_LIMIT = 8
+KEYWORDS_LIMIT = 12
 # A fact shown to the model this recently counts as "it was in front of you".
 RECENTLY_SHOWN = timedelta(days=2)
 # Word overlap below this means a correction really says something different.
@@ -75,6 +82,7 @@ class Fact:
     fact: str
     pinned: bool
     last_shown_at: datetime | None
+    keywords: str = ""
 
 
 @dataclass(frozen=True)
@@ -96,7 +104,19 @@ def _fact_from_row(row: dict[str, Any]) -> Fact:
         last_shown_at=datetime.fromisoformat(row["last_shown_at"])
         if row["last_shown_at"]
         else None,
+        keywords=row.get("keywords") or "",
     )
+
+
+def keyword_text(words: str | Iterable[str]) -> str:
+    """Search words as stored: lower-case, comma-separated, no repeats, at most 12."""
+    parts = words.split(",") if isinstance(words, str) else list(words)
+    kept: list[str] = []
+    for part in parts:
+        word = " ".join(part.lower().split())
+        if word and word not in kept:
+            kept.append(word)
+    return ", ".join(kept[:KEYWORDS_LIMIT])
 
 
 def terms(text: str) -> list[str]:
@@ -117,9 +137,12 @@ class Memory:
         self.db = db
         self.rulebook = rulebook
 
-    def prompt_facts(self, member: Member, message: str = "") -> tuple[list[str], list[str]]:
-        """(pinned facts for the system prompt, notes retrieved for this message)."""
-        pinned, retrieved = self.for_prompt(member, message)
+    def prompt_facts(
+        self, member: Member, message: str = "", earlier: Sequence[str] = ()
+    ) -> tuple[list[str], list[str]]:
+        """(pinned facts for the system prompt, notes retrieved for this message and
+        their `earlier` messages)."""
+        pinned, retrieved = self.for_prompt(member, message, earlier)
         return [f.fact for f in pinned], [f.fact for f in retrieved]
 
     # ----- writing ------------------------------------------------------------
@@ -133,8 +156,10 @@ class Memory:
         scope: Scope = "family",
         pinned: bool = False,
         source: str = "chat",
+        keywords: str | Iterable[str] = "",
     ) -> Fact:
         subject, fact = subject.strip() or "general", fact.strip()
+        words = keyword_text(keywords)
         if not fact:
             raise ValueError("a fact needs some text")
         member_id = member.id if scope == "member" else None
@@ -145,12 +170,14 @@ class Memory:
         if existing is not None:
             if pinned and not existing["pinned"]:
                 self.pin(existing["id"])
+            if words:  # said again with new search words: keep both
+                self.set_keywords(existing["id"], f"{existing['keywords']}, {words}")
             return self.get(existing["id"])
         now = to_utc_iso(clock.now())
         fact_id = self.db.execute(
-            "INSERT INTO facts (scope, member_id, subject, fact, pinned, source, created_by, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (scope, member_id, subject, fact, int(pinned), source, member.id, now, now),
+            "INSERT INTO facts (scope, member_id, subject, fact, keywords, pinned, source, "
+            "created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (scope, member_id, subject, fact, words, int(pinned), source, member.id, now, now),
         )
         return self.get(fact_id)
 
@@ -165,6 +192,13 @@ class Memory:
         self.db.execute(
             "UPDATE facts SET fact = ?, updated_at = ? WHERE id = ?",
             (fact.strip(), to_utc_iso(clock.now()), fact_id),
+        )
+        return self.get(fact_id)
+
+    def set_keywords(self, fact_id: int, keywords: str | Iterable[str]) -> Fact:
+        self.db.execute(
+            "UPDATE facts SET keywords = ?, updated_at = ? WHERE id = ?",
+            (keyword_text(keywords), to_utc_iso(clock.now()), fact_id),
         )
         return self.get(fact_id)
 
@@ -214,18 +248,40 @@ class Memory:
         )
         return [_fact_from_row(r) for r in rows]
 
-    def for_prompt(self, member: Member, message: str) -> tuple[list[Fact], list[Fact]]:
-        """(pinned facts for the system prompt, retrieved notes for this turn), stamped as shown."""
+    def for_prompt(
+        self, member: Member, message: str, earlier: Sequence[str] = ()
+    ) -> tuple[list[Fact], list[Fact]]:
+        """(pinned facts for the system prompt, retrieved notes for this turn), stamped as
+        shown. The latest message's matches come first; `earlier` (their own last messages,
+        F57a) only fill the places left."""
         pinned = self.pinned(member)
         retrieved = self.search(message, member)
-        shown = [f.id for f in (*pinned, *retrieved)]
+        if earlier and len(retrieved) < RETRIEVE_LIMIT:
+            seen = {f.id for f in retrieved}
+            for fact in self.search(" ".join(earlier), member):
+                if len(retrieved) >= RETRIEVE_LIMIT:
+                    break
+                if fact.id not in seen:
+                    retrieved.append(fact)
+                    seen.add(fact.id)
+        self._stamp_shown([*pinned, *retrieved])
+        return pinned, retrieved
+
+    def lookup(self, member: Member, query: str, limit: int = LOOKUP_LIMIT) -> list[Fact]:
+        """F57a, `search_memory`: facts this member may see, pinned or not, best first,
+        stamped as shown."""
+        found = self.search(query, member, limit=limit, include_pinned=True)
+        self._stamp_shown(found)
+        return found
+
+    def _stamp_shown(self, facts: Sequence[Fact]) -> None:
+        shown = [f.id for f in facts]
         if shown:
             placeholders = ", ".join("?" for _ in shown)
             self.db.execute(
                 f"UPDATE facts SET last_shown_at = ? WHERE id IN ({placeholders})",
                 (to_utc_iso(clock.now()), *shown),
             )
-        return pinned, retrieved
 
     # ----- context repair -----------------------------------------------------
 
@@ -296,7 +352,17 @@ PROMPT_RULES = (
         70,
         """\
 - "Remember that the bins go out on Wednesday nights" tells you a fact: remember_fact.
-  Make it a task with reminders only when they ask to be reminded ("remind me...").""",
+  Make it a task with reminders only when they ask to be reminded ("remind me...").
+  Give it keywords: other words someone might use when it matters (people, places, what
+  it's for), so it comes up when they don't use the same words.""",
+    ),
+    PromptFragment(
+        "memory.search-memory",
+        "act",
+        75,
+        """\
+- Before saying you don't know something they may have told you (a place, opening or
+  visiting hours, someone's preference), look with search_memory.""",
     ),
     PromptFragment(
         "memory.after-answering-a-general",

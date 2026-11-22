@@ -247,6 +247,26 @@ async def test_pinning_editing_and_forgetting_facts(
     assert memory.visible(scenario.member("Erin")) == []
 
 
+async def test_a_facts_search_words_are_shown_and_edited(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """F57a: the words a fact also comes up for, under it and in its edit form."""
+    memory = scenario.app.services.maybe(keys.memory)
+    assert memory is not None
+    fact = memory.remember(
+        scenario.member("Erin"), "visiting hours", "Visiting is 6:30-8:30 pm.", keywords="dad"
+    )
+    csrf = await sign_in(scenario, site, "Erin")
+    assert "also: dad" in (await site.get("/knowledge")).text
+    await site.post(
+        f"/facts/{fact.id}/edit",
+        data={"csrf": csrf, "fact": "Visiting is 6:30-8:30 pm.", "keywords": "Dad, hospital"},
+    )
+    assert memory.get(fact.id).keywords == "dad, hospital"
+    await site.post(f"/facts/{fact.id}/edit", data={"csrf": csrf, "fact": "Visiting is 7-8."})
+    assert memory.get(fact.id).keywords == "dad, hospital"  # a form without the field keeps them
+
+
 async def test_drafts_and_rules_from_the_page(scenario: Scenario, site: httpx.AsyncClient) -> None:
     rulebook = scenario.app.rulebook
     draft = await rulebook.propose(scenario.member("Erin"), "Bins reminder", "Mention the bins.")

@@ -41,7 +41,7 @@ from themi.core.approvals import ASK_TEXT
 from themi.core.capabilities import PICTURES, VOICE_NOTES
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
-from themi.core.services import AwaitingItem, Decision, Services
+from themi.core.services import AwaitingItem, Decision, Services, their_last
 from themi.core.tools import PICTURE_GROUPS, ToolContext, twins_text
 from themi.core.wording import name_key
 from themi.energy.remarks import energy_remark
@@ -668,7 +668,8 @@ class Agent:
                 log.warning("Couldn't read member %s's calendar again", member.id, exc_info=True)
         family = services.store.get_family()
         timezone = family.timezone if family else "UTC"
-        pinned, notes = services.facts_for(member, text)
+        history = self._history(member, event)
+        pinned, notes = services.facts_for(member, text, their_last(history))
         household, personal = services.rules(member)
         system = build_system(
             household,
@@ -677,7 +678,6 @@ class Agent:
             owner=member.name,
             base=pronouns.with_line(services.system_text(), pronouns.chosen(services.store)),
         )
-        history = self._history(member, event)
         turn = build_turn(
             member,
             text,
