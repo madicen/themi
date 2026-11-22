@@ -337,6 +337,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [x] 2026-11-20 |
 | F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [x] 2026-11-20 |
 | F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [x] 2026-11-20 |
+| F56a | Feedback: [Open in Gmail] opens the Gmail app on a phone | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16603,6 +16604,58 @@ Notes:
 - Tests: `tests/integration/test_wall_calendars.py` (6), `tests/unit/test_wall_calendar_names.py`
   (3). Goldens unchanged (the golden scenario has no wall).
 - **Setup:** restart Themi (migration). Mark #239 reviewed once live.
+
+### F56a · Feedback (2026-11-21): [Open in Gmail] opens the Gmail app on a phone
+Status: [ ]
+Depends on: F50c
+Read first: `themi_google/email_buttons.py` (`notice_buttons`, `OPEN_LABEL`);
+`themi_google/connectors/gmail/parse.py` (`web_link`); `themi/channels/telegram.py` (link
+buttons, around `InlineKeyboardButton(url=...)`); `themi/web/site.py` and `themi/web/auth.py`
+(routes, the site's signing secret); `themi/web/__init__.py` (`site_base_url`); F40c's notes
+(why a plain URL button lands in Telegram's in-app browser); F50c's notes. From Michael's bug
+#246 (2026-11-21, 9:12 pm, "open in Gmail should open the app").
+
+What the Pi shows: every email notice since 20 Nov (outbox 2226, 2229, 2266, 2280, 2281 for
+Michael and Erin) has [Open in Gmail] as `https://mail.google.com/mail/u/<address>/#all/<gmail_id>`.
+Michael is on an iPhone (F45c). Telegram opens that in its in-app browser, where Gmail on the
+web asks to sign in or shows the mobile site; the Gmail app never opens, and Telegram buttons
+can only carry `http(s)`/`tg` links, so a `googlegmail://` link can't be the button itself.
+The `emails` table keeps `thread_id`, which an app link needs.
+
+Build:
+- [Open in Gmail] points at Themi's own site: `<public_url>/open/email/<email id>?s=<sig>`,
+  the signature an HMAC of the id with the site's secret, so it needs no sign-in (Telegram's
+  in-app browser may not send a cookie, BD3a's notes) and can't be walked to other ids. A bad or missing
+  signature, or an email that's gone (account unlinked): a plain "That email isn't here any
+  more." page, 404.
+- The page is tiny (no outside assets) and picks by the browser:
+  - iPhone/iPad: goes to the Gmail app's link for the thread (`googlegmail:///cv=<thread_id>`,
+    with the account if the app link needs it; see Data/Setup), and after about 1.5 s, if
+    still showing, shows two buttons: "Open the Gmail app" (`googlegmail://`, the inbox) and
+    "Open in Gmail on the web" (today's `web_link`), and the email's sender and subject so it
+    can be found.
+  - Android: an `intent://` link for `com.google.android.gm` with `S.browser_fallback_url` set
+    to `web_link`.
+  - Anything else (a computer, Telegram Desktop): a redirect straight to `web_link`.
+- The same link in Slack and the website chat (they go through the same page, so a phone
+  there opens the app too). `web_link` stays for text links (the email audit's lines,
+  spending's), which are unchanged.
+- Already-sent notices keep their old button; only new ones get the new link.
+
+Tests: an urgent alert's [Open in Gmail] is the signed `/open/email/` URL on the public URL;
+the page with an iPhone user agent has the `googlegmail://` thread link and both fallback
+buttons; Android gets the `intent://` link with the web fallback; a desktop user agent gets a
+redirect to `web_link`; a wrong signature or a deleted email is 404 with the plain page; no
+sign-in is needed. `tests/golden/routes.json` gains the route.
+Scenario: none (it's a tap off Themi). Michael's check on his iPhone is the real test.
+
+Data/Setup: the Gmail app's link for one thread is undocumented. Try `googlegmail:///cv=<thread_id>`
+first and, if Michael's phone opens only the inbox or the wrong account, try
+`googlegmail:///cv=<thread_id>/accountId=<n>&create-new-tab` (n the account's place in the
+app); record in Notes which one worked. If none opens the thread, the inbox plus sender and
+subject is the fallback. Decided here, not with Michael yet: going through Themi's page
+rather than asking him to set Telegram to open links in Safari (Safari doesn't hand
+`mail.google.com` to the app either). Mark #246 reviewed once live.
 
 ## Conversation mode
 
