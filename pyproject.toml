@@ -185,6 +185,7 @@ themi_home = [  # CR17b: its own pages' templates and static files
 themi_google = [
     "web/templates/*.html",
     "web/templates/*/*.html",
+    "web/static/*",  # F56a: the open-email page's script
     "setup/*.md",
     "tracking_data/*",  # PT1: the vendored tracking number patterns
 ]

@@ -31,6 +31,7 @@
   "GET /modules/restart/status",
   "GET /modules/{name}",
   "GET /more",
+  "GET /open/email/{email_id:int}",
   "GET /passkeys",
   "GET /recipes",
   "GET /recipes/kitchen",

@@ -141,6 +141,9 @@ class EmailTriageModule(Module):
         deliveries = ctx.provide(Deliveries(ctx.services))  # WL8: parcels, for the wall
         triage.verdict_listeners.append(deliveries.on_verdict)
         ctx.services.tools.register(parcel_words.parcel_status)  # PT6a: "where's my order?"
+        from themi_google.web import open_email
+
+        ctx.web(open_email.routes)  # F56a: [Open in Gmail] opens the app on a phone
         ctx.periodic("email.triage", timedelta(minutes=1), triage.run)
 
 

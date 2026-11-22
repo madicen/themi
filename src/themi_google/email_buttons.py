@@ -4,7 +4,8 @@ actionable"): [Open in Gmail], [Not important], [Mark read], [Make it a task].
 The urgent and time-sensitive alerts (triage) and the unusual-amount alert (expected
 emails) carry them. A tap does it and redraws the notice: the line saying what happened
 under it, that button gone, and an [Undo] for "not important" and the task. [Open in Gmail]
-is a link (no callback) and always stays.
+is a link (no callback) and always stays. F56a (bug #246, "open in Gmail should open the
+app"): it goes through Themi's own page (`open_link`), which opens the Gmail app on a phone.
 
 What a redraw needs (the notice's words, what's been done) rides in the buttons' payloads,
 which stay on the server, so a tap needs nothing else.
@@ -41,6 +42,9 @@ TASK_UNDONE_TEXT = "Taken off your tasks: {title}."
 NOT_YOURS_TEXT = "That's {name}'s inbox, so it's theirs to sort."
 GONE_TEXT = "That email isn't here any more."
 
+OPEN_PURPOSE = "open-email"  # what `open_link`'s signature is for
+OPEN_PATH = "/open/email/"
+
 TITLE_MAX = 70
 _CLAUSE = re.compile(r"[,;:.!?](?:\s|$)")
 
@@ -53,6 +57,18 @@ def task_title(row: dict[str, Any]) -> str:
     if len(title) > TITLE_MAX:
         title = title[:TITLE_MAX].rsplit(" ", 1)[0]
     return title[:1].upper() + title[1:]
+
+
+def open_link(services: Services, row: dict[str, Any], account: LinkedAccount) -> str:
+    """[Open in Gmail]'s link: Themi's `/open/email/<id>` page, signed so it needs no sign-in
+    and can't be walked to other emails. Telegram opens a button's link in its own browser,
+    where Gmail's web link never reaches the app (F56a). Without an https site (a local
+    run), the web link itself."""
+    base = services.site_url.rstrip("/")
+    if not base.startswith("https://"):
+        return web_link(account.address, row["gmail_id"])
+    signature = services.store.cipher.sign(OPEN_PURPOSE, str(row["id"]))
+    return f"{base}{OPEN_PATH}{row['id']}?s={signature}"
 
 
 def notice_buttons(
@@ -74,7 +90,7 @@ def notice_buttons(
         "keep": [_dump(b) for b in keep or []],
     }
     used = set(state["used"])
-    out = [Button(OPEN_LABEL, "email_open", url=web_link(account.address, row["gmail_id"]))]
+    out = [Button(OPEN_LABEL, "email_open", url=open_link(services, row, account))]
     if "quiet" not in used and services.maybe(keys.email_audit) is not None:
         out.append(Button(QUIET_LABEL, "email_quiet", state))
     if "read" not in used:

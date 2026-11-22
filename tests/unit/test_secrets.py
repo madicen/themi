@@ -64,3 +64,17 @@ def test_secret_store_crud() -> None:
     assert store.names() == ["ourgroceries_password", "tuya_client_secret"]
     store.delete("tuya_client_secret")
     assert store.names() == ["ourgroceries_password"]
+
+
+def test_a_signature_is_short_url_safe_and_tied_to_key_purpose_and_text() -> None:
+    """F56a: the email links' signatures."""
+    key = generate_key()
+    cipher = Cipher(key)
+    sig = cipher.sign("open-email", "42")
+    assert sig == Cipher(key).sign("open-email", "42")  # the same after a restart
+    assert len(sig) == 22 and sig.replace("-", "").replace("_", "").isalnum()
+    assert cipher.signed("open-email", "42", sig)
+    assert not cipher.signed("open-email", "43", sig)
+    assert not cipher.signed("other", "42", sig)
+    assert not cipher.signed("open-email", "42", "")
+    assert not Cipher(generate_key()).signed("open-email", "42", sig)

@@ -8,6 +8,8 @@ line or exception can't leak it.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import hmac
 from typing import TYPE_CHECKING, NoReturn
 
@@ -76,6 +78,7 @@ class Cipher:
             raise SecretKeyError(
                 "THEMI_SECRET_KEY is not a valid key; generate one with `themi keygen`"
             ) from exc
+        self._sign_key = hashlib.sha256(b"themi-sign:" + raw.strip().encode()).digest()
 
     def encrypt(self, value: str | Secret) -> bytes:
         raw = value.reveal() if isinstance(value, Secret) else value
@@ -88,6 +91,15 @@ class Cipher:
             raise DecryptionError(
                 "could not decrypt a stored secret: wrong THEMI_SECRET_KEY or corrupted data"
             ) from exc
+
+    def sign(self, purpose: str, text: str) -> str:
+        """A short, URL-safe signature of `text` for `purpose` (F56a's email links), keyed
+        from the server's secret key, so a link can't be changed to point elsewhere."""
+        mac = hmac.new(self._sign_key, f"{purpose}:{text}".encode(), hashlib.sha256).digest()
+        return base64.urlsafe_b64encode(mac[:16]).decode().rstrip("=")
+
+    def signed(self, purpose: str, text: str, signature: str) -> bool:
+        return hmac.compare_digest(self.sign(purpose, text), signature or "")
 
     def encrypt_bytes(self, data: bytes) -> bytes:
         """For whole files (backups): the same key, Fernet's authenticated encryption."""
