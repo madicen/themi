@@ -45,6 +45,7 @@ def routes(kit: Kit) -> APIRouter:
             personal=app.rulebook.personal(member),
             drafts=app.rulebook.drafts(member),
             facts=memory().visible(member),
+            places=memory().places.visible(member),
             repairs=list(reversed(memory().repairs(member.id)))[:20],
             entries=entries,
             query=query,
@@ -106,6 +107,8 @@ def routes(kit: Kit) -> APIRouter:
             if not text:
                 return kit.redirect("/knowledge", "A fact needs some words.")
             memory().correct(fact.id, text)
+            if "keywords" in form:  # F57a
+                memory().set_keywords(fact.id, str(form.get("keywords", "")))
             message = "Updated."
         elif change == "delete":
             memory().forget(fact.id)
@@ -113,5 +116,63 @@ def routes(kit: Kit) -> APIRouter:
         else:
             return kit.page(request, "message.html", 404, title="Not found", body="")
         return kit.redirect("/knowledge", message)
+
+    # ----- places (F57b) ---------------------------------------------------------------
+
+    def place_fields(form: object) -> dict[str, object]:
+        get = form.get  # type: ignore[attr-defined]
+        try:
+            early = int(str(get("arrive_early", "") or 0))
+        except ValueError:
+            early = 0
+        return {
+            "aliases": str(get("aliases", "")),
+            "note": str(get("note", "")),
+            "arrive_early": early,
+        }
+
+    @router.post("/places/new")
+    async def add_place(request: Request) -> Response:
+        session, form = await kit.checked(request)
+        scope = "member" if form.get("about") == "personal" else "family"
+        try:
+            place = memory().places.save(
+                session.member,
+                str(form.get("name", "")),
+                str(form.get("address", "")),
+                scope=scope,
+                **place_fields(form),  # type: ignore[arg-type]
+            )
+        except ValueError:
+            return kit.redirect("/knowledge#places", "A place needs a name and an address.")
+        return kit.redirect("/knowledge#places", f"Saved {place.name}.")
+
+    @router.post("/places/{place_id:int}/{change}")
+    async def change_place(request: Request, place_id: int, change: str) -> Response:
+        session, form = await kit.checked(request)
+        places = memory().places
+        try:
+            place = places.get(place_id)
+        except NotFound:
+            place = None
+        if place is None or not places.can_edit(session.member, place):
+            return kit.redirect("/knowledge#places", "That place isn't one you can change.")
+        if change == "edit":
+            try:
+                places.update(
+                    place.id,
+                    str(form.get("name", "")),
+                    str(form.get("address", "")),
+                    **place_fields(form),  # type: ignore[arg-type]
+                )
+            except ValueError:
+                return kit.redirect("/knowledge#places", "A place needs a name and an address.")
+            message = "Updated."
+        elif change == "delete":
+            places.remove(place.id)
+            message = f"Forgot {place.name}."
+        else:
+            return kit.page(request, "message.html", 404, title="Not found", body="")
+        return kit.redirect("/knowledge#places", message)
 
     return router

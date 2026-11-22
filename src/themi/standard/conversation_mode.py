@@ -41,6 +41,7 @@ from themi.channels.outbox import Priority
 from themi.core import keys, listening, pronouns
 from themi.core.agent import CLAIMS_DONE
 from themi.core.prompts import PHRASING_WORDS, day_note
+from themi.core.services import their_last
 from themi.localtime import to_local
 from themi.logs import redact
 from themi.modules import Module, ModuleContext
@@ -432,7 +433,7 @@ class ConversationMode:
         s = self.services
         family = s.store.get_family()
         timezone = family.timezone if family else "UTC"
-        _pinned, notes = s.facts_for(member, text)
+        _pinned, notes = s.facts_for(member, text, their_last(history))
         in_burnout = bool(s.maybe(keys.burnout) and s.get(keys.burnout).current(member))
         turn = build_chat_turn(
             member,

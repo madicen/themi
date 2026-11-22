@@ -49,7 +49,7 @@ CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[st
     (HabitsModule, HabitReserve, [], {"habits.offer", "habits.send"}),
     (RoutinesModule, Routines, [], {"routines.check"}),
     (JournalModule, Journal, [], {"memory.journal"}),
-    (MemoryModule, Memory, [], set()),
+    (MemoryModule, Memory, [], {"memory.unpin_idle"}),
     (FeedbackModule, FeedbackChat, [], {"feedback.forget_pictures"}),
     (CommandsModule, Commands, [], set()),
     (LiaisonModule, Liaison, [], set()),

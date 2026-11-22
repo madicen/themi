@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Open in Gmail · Themi{% endblock %}
+{% block content %}
+<section class="card" id="open-email" data-app="{{ app_link }}">
+  <h1>Opening Gmail</h1>
+  <div id="open-email-more">
+    <p>From {{ sender }}: <strong>{{ subject }}</strong><br>
+      <span class="muted">In {{ address }}</span></p>
+    <p><a class="button primary" href="{{ inbox_link }}">Open the Gmail app</a>
+      <a class="button" href="{{ web_link }}">Open in Gmail on the web</a></p>
+  </div>
+</section>
+<script src="{{ asset('google/open-email.js') }}" defer></script>
+{% endblock %}

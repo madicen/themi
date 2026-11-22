@@ -52,7 +52,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.wording import untitled
 from themi.localtime import to_utc_iso
 from themi.standard.lists import name_key
-from themi.standard.places import NOT_SURE_TEXT, named_place
+from themi.standard.places import NOT_SURE_TEXT, SavedPlace, named_place
 from themi_google.events import When, title_matches, when_words
 
 if TYPE_CHECKING:
@@ -227,7 +227,7 @@ class TravelHeadsUps:
         """Where the drive starts, the place they'd said if it's no longer found, and when to
         be there: what they said for the event (F46c, F46d), else the event just before,
         else home, for its start."""
-        kept, early = self._plan(member, entry)
+        kept, early = self._plan_or_place(member, entry)
         start: Origin | None = None
         lost = ""
         if kept:
@@ -316,7 +316,7 @@ class TravelHeadsUps:
         """One heads-up per event, start time and plan (F55a: a changed plan's isn't a
         duplicate of the one that went for the old plan)."""
         key = f"travel-{member.id}-{self._event_key(entry)}-{to_utc_iso(entry.starts_at)}"
-        origin, early = self._plan(member, entry)
+        origin, early = self._plan_or_place(member, entry)
         if origin or early:
             key += f"-{early}-{name_key(origin)}"
         return key[:300]
@@ -400,7 +400,7 @@ class TravelHeadsUps:
             return as_data("calendars", line) + "\n" + own
         else:
             place = own
-        kept, early = self._plan(owner, entry)
+        kept, early = self._plan_or_place(owner, entry)
         new_early = self._early(entry, arrive_by) if arrive_by.strip() else None
         said_from = bool(start_from.strip())
         if not said_from and kept:
@@ -454,6 +454,11 @@ class TravelHeadsUps:
         if start.label:
             plan = plan.replace("leave around", "leave there around").replace(
                 "to leave at", "to leave there at"
+            )
+        saved = self.saved_place(owner, address or entry.location or "")
+        if saved is not None and saved.note:  # F57b: e.g. its visiting hours
+            note += "\n" + as_data(
+                "memory", f"What they told Themi about {saved.name}: {saved.note}"
             )
         return as_data("calendars", line) + (
             f"\nAbout {_duration(route.minutes)} {start.words} {how}: {plan}.{heads_up}{note}"
@@ -719,6 +724,15 @@ class TravelHeadsUps:
             return location
         return named.address
 
+    def saved_place(self, member: Member, location: str) -> SavedPlace | None:
+        """F57b: the saved place an event's location is (by name or address), or None."""
+        home = self.home()
+        named = named_place(
+            self.db, member, self.services.store.list_members(), location,
+            home[0] if home else None,
+        )  # fmt: skip
+        return named.saved if named is not None else None
+
     def _too_far(self, address: str, home: Place, place: Place) -> str | None:
         """A phrase with no street number or town found far away is likely another place of
         that name (bug #154: "parent's house" near Oroville)."""
@@ -774,6 +788,16 @@ class TravelHeadsUps:
         """The event (its id, else its title: a place changed later keeps it) and its day."""
         key = f"id:{entry.event_id}" if entry.event_id else name_key(entry.title)
         return key[:200], entry.starts_at.astimezone(self._tz()).date().isoformat()
+
+    def _plan_or_place(self, member: Member, entry: Entry) -> tuple[str, int]:
+        """`_plan`, with a saved place's minutes early (F57b) when nothing was said for the
+        event itself (an arrival at the start, said for the event, reads as unsaid too)."""
+        origin, early = self._plan(member, entry)
+        if not early and entry.location:
+            saved = self.saved_place(member, entry.location)
+            if saved is not None:
+                early = saved.arrive_early
+        return origin, early
 
     def _plan(self, member: Member, entry: Entry) -> tuple[str, int]:
         """Where they said they'd leave from ('' home or unsaid), and how many minutes before

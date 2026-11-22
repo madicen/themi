@@ -54,6 +54,7 @@ async def test_tool_call_then_reply(scenario: Scenario) -> None:
             "subject": "vet",
             "fact": "Luna's vet appointments are on Tuesdays.",
             "about": "household",
+            "keywords": "",
         },
     )
     scenario.primary.queue_text("Got it, Tuesdays for Luna's vet.")
@@ -310,7 +311,12 @@ async def test_a_message_to_pass_on_isnt_saved_as_a_note(scenario: Scenario) -> 
     a note and answered "I've saved that for her". It's a relay (34a), never a note."""
     scenario.primary.queue_tool_call(
         "remember_fact",
-        {"subject": "message", "fact": "Michael says I Wuv U to Erin.", "about": "household"},
+        {
+            "subject": "message",
+            "fact": "Michael says I Wuv U to Erin.",
+            "about": "household",
+            "keywords": "",
+        },
     )
     scenario.primary.queue_text("Okay.")
     await scenario.say("Husband", "Can you tell Hundo “I Wuv U ❤️”?")

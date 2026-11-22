@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -81,12 +82,22 @@ async def test_the_snapshot_has_no_plaintext(
 ) -> None:
     seed_secrets(family)
     family.store.save_household(family.erin, PantrySettings, staples=("olive oil", "cardamom pods"))
-    snapshot = await backups.create(family.db)
-    stored = fake_s3.objects[snapshot.key]
-    for needle in (b"SQLite format 3", b"Erin", b"Husband", b"cardamom", b"erin@gmail.com"):
-        assert needle not in stored
-    assert b"refresh-token-xyz" not in stored
-    assert stored.startswith(b"gAAAAA")  # a Fernet token
+    # Fernet tokens are base64 text, so a short word like "Erin" turns up in a 68 KB token
+    # by chance about 1 run in 250. Each needle is looked for in the decoded ciphertext of
+    # two snapshots (each has a fresh IV): a real leak is in both, a coincidence isn't.
+    sealed = []
+    for _ in range(2):
+        snapshot = await backups.create(family.db)
+        stored = fake_s3.objects[snapshot.key]
+        assert stored.startswith(b"gAAAAA")  # a Fernet token
+        assert b"SQLite format 3" not in stored and b"erin@gmail.com" not in stored
+        sealed.append(base64.urlsafe_b64decode(stored))
+        clock.advance(timedelta(seconds=1))  # the second snapshot gets its own name
+    for needle in (
+        b"SQLite format 3", b"Erin", b"Husband", b"cardamom", b"erin@gmail.com",
+        b"refresh-token-xyz",
+    ):  # fmt: skip
+        assert not all(needle in raw for raw in sealed), needle
 
 
 async def test_a_snapshot_needs_the_same_key(

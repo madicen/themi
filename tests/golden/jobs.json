@@ -45,6 +45,7 @@
   "maintenance.offer": 900,
   "meals.nudges": 900,
   "memory.journal": 3600,
+  "memory.unpin_idle": 86400,
   "modules.announce": 60,
   "outbox.flush": 30,
   "oven.left_on": 300,

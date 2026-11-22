@@ -69,11 +69,13 @@
 Household facts are shared; personal ones only appear in your own conversations.</p>
 <div class="rows">
 {% for fact in facts %}
-{% call(part) row(fact.fact, meta=("Personal" if fact.scope == "member" else "Household") ~ " · " ~ fact.subject, chips=[("Pinned", "info")] if fact.pinned else [], id="fact-" ~ fact.id) %}
+{% call(part) row(fact.fact, meta=("Personal" if fact.scope == "member" else "Household") ~ " · " ~ fact.subject ~ ((" · also: " ~ fact.keywords) if fact.keywords else ""), chips=[("Pinned", "info")] if fact.pinned else [], id="fact-" ~ fact.id) %}
 {% if part == "body" %}
+  {% if fact.unpinned_at and not fact.pinned %}<p class="muted">Unpinned {{ fact.unpinned_at.strftime('%-d %B') }}: it hadn't come up in 8 weeks. It still comes up when it's relevant; Pin keeps it always in front of Themi.</p>{% endif %}
   <form method="post" action="/facts/{{ fact.id }}/edit">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label>What Themi remembers <input name="fact" value="{{ fact.fact }}" required></label>
+    <label>Also comes up for <input name="keywords" value="{{ fact.keywords }}" placeholder="Other words, like “Dad, hospital”"></label>
     <button>Save</button>
   </form>
   <div class="danger-zone buttons">
@@ -90,6 +92,48 @@ Household facts are shared; personal ones only appear in your own conversations.
 <p class="empty muted">Nothing remembered yet.</p>
 {% endfor %}
 </div>
+
+<h2 id="places">Places</h2>
+<p class="muted">Places you name instead of an address, like “Stanford” for its visitor parking lot.
+Themi drives to the address, keeps the note in mind (visiting hours) and has you there the minutes early you set.</p>
+<div class="rows">
+{% for place in places %}
+{% call(part) row(place.name, meta=("Personal" if place.scope == "member" else "Household") ~ " · " ~ place.address ~ ((" · also: " ~ place.aliases) if place.aliases else ""), id="place-" ~ place.id) %}
+{% if part == "body" %}
+  {% if place.note %}<p>{{ place.note }}</p>{% endif %}
+  <form method="post" action="/places/{{ place.id }}/edit">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Name <input name="name" value="{{ place.name }}" required></label>
+    <label>Other names <input name="aliases" value="{{ place.aliases }}" placeholder="Stanford Hospital"></label>
+    <label>Address <input name="address" value="{{ place.address }}" required></label>
+    <label>Note <input name="note" value="{{ place.note }}" placeholder="Visiting hours 6:30–8:30 pm weekdays"></label>
+    <label>Get there early (minutes) <input name="arrive_early" type="number" min="0" max="120" value="{{ place.arrive_early }}"></label>
+    <button>Save</button>
+  </form>
+  <div class="danger-zone buttons">
+    <form method="post" action="/places/{{ place.id }}/delete">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Forget</button>
+    </form>
+  </div>
+{% endif %}
+{% endcall %}
+{% else %}
+<p class="empty muted">No places saved yet.</p>
+{% endfor %}
+</div>
+<details class="add-place">
+  <summary>Add a place</summary>
+  <form method="post" action="/places/new">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Name <input name="name" required placeholder="Stanford"></label>
+    <label>Other names <input name="aliases" placeholder="Stanford Hospital"></label>
+    <label>Address <input name="address" required placeholder="The visitor parking lot's address"></label>
+    <label>Note <input name="note" placeholder="Visiting hours 6:30–8:30 pm weekdays"></label>
+    <label>Get there early (minutes) <input name="arrive_early" type="number" min="0" max="120" value="0"></label>
+    <label>For <select name="about"><option value="household">The household</option><option value="personal">Just me</option></select></label>
+    <button>Save</button>
+  </form>
+</details>
 
 <h2 id="journal">Your journal</h2>
 <p class="muted">Once a day is over, Themi writes down what you talked about and what was decided.

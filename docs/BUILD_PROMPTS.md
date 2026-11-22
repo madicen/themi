@@ -337,6 +337,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F55d | Idea: chores, to-dos and routine steps on the wall have their emoji | Feedback | [x] 2026-11-20 |
 | F55e | Idea: Themi's note on the wall wears Themi, not a "T" | Feedback | [x] 2026-11-20 |
 | F55f | Idea: the week ahead has a chip per calendar; a tap hides it there | Feedback | [x] 2026-11-20 |
+| F56a | Feedback: [Open in Gmail] opens the Gmail app on a phone | Feedback | [x] 2026-11-21 |
+| F57a | Idea: a remembered fact is found when the words differ, and on a follow-up | Feedback | [x] 2026-11-21 |
+| F57b | Idea: named places ("Stanford" → the parking lot), and idle pinned facts unpinned | Feedback | [x] 2026-11-22 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16603,6 +16606,274 @@ Notes:
 - Tests: `tests/integration/test_wall_calendars.py` (6), `tests/unit/test_wall_calendar_names.py`
   (3). Goldens unchanged (the golden scenario has no wall).
 - **Setup:** restart Themi (migration). Mark #239 reviewed once live.
+
+### F56a · Feedback (2026-11-21): [Open in Gmail] opens the Gmail app on a phone
+Status: [x] 2026-11-21
+Depends on: F50c
+Read first: `themi_google/email_buttons.py` (`notice_buttons`, `OPEN_LABEL`);
+`themi_google/connectors/gmail/parse.py` (`web_link`); `themi/channels/telegram.py` (link
+buttons, around `InlineKeyboardButton(url=...)`); `themi/web/site.py` and `themi/web/auth.py`
+(routes, the site's signing secret); `themi/web/__init__.py` (`site_base_url`); F40c's notes
+(why a plain URL button lands in Telegram's in-app browser); F50c's notes. From Michael's bug
+#246 (2026-11-21, 9:12 pm, "open in Gmail should open the app").
+
+What the Pi shows: every email notice since 20 Nov (outbox 2226, 2229, 2266, 2280, 2281 for
+Michael and Erin) has [Open in Gmail] as `https://mail.google.com/mail/u/<address>/#all/<gmail_id>`.
+Michael is on an iPhone (F45c). Telegram opens that in its in-app browser, where Gmail on the
+web asks to sign in or shows the mobile site; the Gmail app never opens, and Telegram buttons
+can only carry `http(s)`/`tg` links, so a `googlegmail://` link can't be the button itself.
+The `emails` table keeps `thread_id`, which an app link needs.
+
+Build:
+- [Open in Gmail] points at Themi's own site: `<public_url>/open/email/<email id>?s=<sig>`,
+  the signature an HMAC of the id with the site's secret, so it needs no sign-in (Telegram's
+  in-app browser may not send a cookie, BD3a's notes) and can't be walked to other ids. A bad or missing
+  signature, or an email that's gone (account unlinked): a plain "That email isn't here any
+  more." page, 404.
+- The page is tiny (no outside assets) and picks by the browser:
+  - iPhone/iPad: goes to the Gmail app's link for the thread (`googlegmail:///cv=<thread_id>`,
+    with the account if the app link needs it; see Data/Setup), and after about 1.5 s, if
+    still showing, shows two buttons: "Open the Gmail app" (`googlegmail://`, the inbox) and
+    "Open in Gmail on the web" (today's `web_link`), and the email's sender and subject so it
+    can be found.
+  - Android: an `intent://` link for `com.google.android.gm` with `S.browser_fallback_url` set
+    to `web_link`.
+  - Anything else (a computer, Telegram Desktop): a redirect straight to `web_link`.
+- The same link in Slack and the website chat (they go through the same page, so a phone
+  there opens the app too). `web_link` stays for text links (the email audit's lines,
+  spending's), which are unchanged.
+- Already-sent notices keep their old button; only new ones get the new link.
+
+Tests: an urgent alert's [Open in Gmail] is the signed `/open/email/` URL on the public URL;
+the page with an iPhone user agent has the `googlegmail://` thread link and both fallback
+buttons; Android gets the `intent://` link with the web fallback; a desktop user agent gets a
+redirect to `web_link`; a wrong signature or a deleted email is 404 with the plain page; no
+sign-in is needed. `tests/golden/routes.json` gains the route.
+Scenario: none (it's a tap off Themi). Michael's check on his iPhone is the real test.
+
+Data/Setup: the Gmail app's link for one thread is undocumented. Try `googlegmail:///cv=<thread_id>`
+first and, if Michael's phone opens only the inbox or the wrong account, try
+`googlegmail:///cv=<thread_id>/accountId=<n>&create-new-tab` (n the account's place in the
+app); record in Notes which one worked. If none opens the thread, the inbox plus sender and
+subject is the fallback. Decided here, not with Michael yet: going through Themi's page
+rather than asking him to set Telegram to open links in Safari (Safari doesn't hand
+`mail.google.com` to the app either). Mark #246 reviewed once live.
+
+Notes:
+- [Open in Gmail] is `email_buttons.open_link`: `<site_url>/open/email/<id>?s=<sig>` when the
+  site is https; a local run (http) keeps `web_link`, as the Mini App buttons do. Notices
+  sent or queued before the update keep their old link (F55b's refresher only fills in
+  notices with no buttons).
+- The signature is `Cipher.sign(purpose, text)` (`themi/storage/secrets.py`): HMAC-SHA256 from
+  a key derived from `THEMI_SECRET_KEY`, 16 bytes, base64url (22 characters); `Cipher.signed`
+  checks it in constant time. Changing the secret key breaks old links (they show "That
+  email isn't here any more.").
+- `themi_google/web/open_email.py` (installed by the Email triage module), its template
+  `open_email.html` and `static/open-email.js` (`/static/google/open-email.js`; the CSP keeps
+  scripts to Themi's own files). iPhone/iPad: `googlegmail:///cv=<thread_id>` (the constant
+  `IOS_THREAD_LINK`), then after 1.5 s "Open the Gmail app" (`googlegmail://`) and "Open in
+  Gmail on the web", with the sender, subject and account. Android: an `intent:` for
+  `com.google.android.gm` (opens the app's inbox; Android has no thread link) with
+  `S.browser_fallback_url`. Anything else: 303 to `web_link`. A bad signature or a gone
+  email: 404, "That email isn't here any more."
+- An iPad whose Safari says it's a Mac gets the web link (it reads as a computer).
+- `themi_google`'s package data gained `web/static/*`.
+- Tests: `tests/scenarios/test_open_email.py` (6), `tests/unit/test_open_email_phone.py`,
+  and a signing test in `tests/unit/test_secrets.py`. Golden `routes.json` gains
+  `GET /open/email/{email_id:int}`, as the prompt says.
+- **Setup:** update the Pi. Then Michael taps [Open in Gmail] on the next email notice on his
+  iPhone. If the app opens only to the inbox or in the wrong account, change
+  `IOS_THREAD_LINK` to `googlegmail:///cv={thread}/accountId=<n>&create-new-tab` and note
+  which worked here. Mark #246 reviewed once live.
+
+### F57a · Idea (2026-11-21): Themi finds a remembered fact when the words don't match, and on a follow-up
+Status: [x] 2026-11-21
+Depends on: none
+Read first: `themi/standard/memory.py` (`Memory.search`, `for_prompt`, `terms`, the module
+docstring); `themi/storage/schema/0011_memory.sql` (`facts`, `facts_fts`);
+`themi/core/starter_tools.py` (`remember_fact`); `themi/core/services.py` (`facts_for`);
+`themi/core/agent.py` (`_converse`, `_history`); `themi/standard/conversation_mode.py`
+(its `facts_for` call); `themi/web/knowledge_pages.py`. From Michael (2026-11-21, in a Claude
+Code session): he wants to keep facts like "Stanford's visiting hours are 6:30–8:30 pm on
+weekdays and 12–8:30 pm on weekends" without them crowding every request.
+
+What happens today: pinned facts and locked rules go into every prompt. Every other fact is
+found by an FTS5 `OR` match on the words of the latest message only (top 5, `bm25`). So
+storing more unpinned facts is cheap, and that stays the design. Three gaps:
+- "Can we see Dad tonight?" finds nothing, because no word in it is in the visiting-hours fact.
+- "Let's go to Stanford" then "what time should we leave?": the second message doesn't say
+  Stanford, so the hours aren't in front of the model when it matters.
+- The model has no way to look a fact up itself when the 5 notes it got aren't the right ones.
+
+Build:
+- **Search words.** `facts` gains `keywords TEXT NOT NULL DEFAULT ''` (migration 0181), and
+  `facts_fts` indexes it as a third column. The migration rebuilds `facts_fts` and its
+  triggers, and the update trigger fires on `keywords` too. `remember_fact` gains an optional
+  `keywords` argument: "other words someone might use when this matters: people, places,
+  what it's for (e.g. 'Dad, hospital, visit' for visiting hours)". `Memory.remember` stores
+  them, deduplicated, lower-case, at most 12. The prompt fragment tells the model to fill it
+  in. Facts saved before this keep `''`.
+- **Follow-ups.** `facts_for(member, message, earlier=())` also searches the member's last 2
+  messages in this conversation, from what `_history` already loaded (their words, not
+  Themi's replies). The latest message's matches rank first. Facts matched only by earlier
+  messages fill the remaining places, so it's still at most 5 notes. Conversation mode passes
+  its own last 2.
+- **`search_memory` tool** (starter tools, next to `remember_fact`): `query` (words) →
+  up to 8 facts this member may see, best first, as `#<id> <subject>: <fact>`, inside
+  `as_data`. It reads all visible facts, pinned or not, and stamps `last_shown_at` like
+  `for_prompt` does. If nothing matches: "Nothing remembered matches '<query>'." The prompt
+  fragment says: before saying you don't know something they might have told you (a place,
+  hours, someone's preference), use `search_memory`. It doesn't change anything, so it isn't
+  a staged side effect.
+- The Rules & memory page shows a fact's search words under it (muted) and lets them be edited
+  with the fact.
+
+Tests: a fact saved with keywords "Dad, hospital" is found by "can we see dad tonight"; a
+fact found by an earlier message comes after the latest message's matches, and the total
+stays at 5; Themi's own replies in history aren't searched; `search_memory` returns pinned
+and unpinned facts the member may see, never another member's personal fact, and stamps
+`last_shown_at`; an empty query and a query with no match each get their reply; the
+migration keeps existing facts searchable (an FTS match on an old fact still works after it).
+`tests/golden/system_prompt.txt` (the two prompt lines) and `tools.json` (`search_memory`,
+`remember_fact`'s `keywords`) change.
+Scenario: Michael says "Remember Stanford's visiting hours are 6:30–8:30 pm weekdays and
+12–8:30 pm weekends", then later "Let's go see Dad at Stanford" and "what time should we
+leave?". The model's turn has the hours in its notes.
+
+Data/Setup: none. Facts saved earlier have no search words. They're found as before, and
+Michael can add words to the important ones on the Rules & memory page. Decided here, not with
+Michael yet: model-written search words instead of embeddings (no new service, no re-indexing
+when a model changes). Revisit embeddings only if `themi feedback` still shows facts being missed.
+
+Notes:
+- Migration 0181 (`0181_fact_keywords.sql`): `facts.keywords`, and `facts_fts` rebuilt with
+  three columns. Its update trigger fires on `subject`, `fact` or `keywords`.
+- `remember_fact` has a `keywords` argument (comma-separated, `""` for none). Tool schemas
+  are strict, so every argument is required and the model always sends it.
+  `tests/scenarios/test_conversation.py`'s two scripted `remember_fact` calls gained
+  `"keywords": ""` for that reason. Saying a fact again with new words merges them
+  (`keyword_text`: lower-case, no repeats, at most 12).
+- Follow-ups: `services.their_last(history)` (the person's own last 2 messages,
+  `EARLIER_MESSAGES`) goes to `facts_for(member, text, earlier)`, in the agent and in
+  conversation mode. `Memory.for_prompt` searches the latest message first, and the earlier
+  messages fill what's left of the 5.
+- `search_memory` is a starter tool in no group, so it goes with every message. It calls
+  `Memory.lookup` (pinned and unpinned, up to 8, `LOOKUP_LIMIT`) and returns
+  `#<id> <subject>: <fact>` lines in `as_data("memory", ...)`. It stamps `last_shown_at`.
+- The prompt has two new lines: `memory.remember-that-the-bins` asks for keywords, and
+  `memory.search-memory` (act, 75) says to look before saying you don't know.
+- Rules & memory: a fact's row shows "· also: <words>". Its edit form has an "Also comes up
+  for" field. A form without that field leaves the words as they were.
+- Tests: `tests/unit/test_memory_finding.py` (11), `tests/scenarios/test_memory_finding.py`
+  (3), and one page test in `tests/integration/test_admin_pages.py`.
+- **Setup:** update the Pi. Facts saved before this have no search words. Add words to the
+  important ones on the Rules & memory page.
+
+### F57b · Idea (2026-11-21): "go to Stanford" means the visitor parking lot, and pinned facts stay few
+Status: [x] 2026-11-22
+Depends on: F57a
+Read first: `themi/standard/places.py` (`named_place`, `_remembered`, `ADDRESS`, F29e and
+F46b's docstrings); `themi_google/travel.py` (`address_for`, `NOT_SURE_TEXT`);
+`themi/standard/memory.py` (`repair`, `pinned`, `for_prompt`); `themi/web/knowledge_pages.py`
+and `templates/knowledge.html`; F46b's notes. From the same session as F57a.
+
+What happens today: F46b finds "Stanford visitor parking" in a fact worded "Stanford visitor
+parking address is 200 S Pasteur Dr, …". But "When I say Stanford, take me to the visitor
+parking lot at …" only works because "stanford" happens to come before the address. Nothing
+says that a name means a particular address, and something said about the place, like its
+visiting hours, isn't tied to it. Separately, every "you keep forgetting" repair pins a fact
+and nothing ever unpins one, so the facts sent with every request only grow. For a pinned
+fact, `last_shown_at` is stamped on every request, so it can't tell whether the fact still
+comes up.
+
+Build:
+- **Places.** A `places` table (migration 0182): `id`, `scope`/`member_id` as `facts` has
+  them, `name` ("Stanford"), `aliases` (comma-separated: "Stanford hospital, Stanford
+  Health"), `address` (where to go: the lot's), `note` (optional: "Visiting hours 6:30–8:30 pm
+  weekdays, 12–8:30 pm weekends"), `created_by`, `created_at`, `updated_at`.
+  - `remember_place` tool (with `remember_fact`): name, address, aliases, note, household or
+    personal. The prompt fragment says: "when I say X, take me to Y" and "X's address is Y" are
+    places, not facts. Saving a place with the same name (any case) updates it.
+  - `named_place` checks places first: the phrase, in `_words` form, equals the name or an
+    alias, or contains one as whole words ("the Stanford lot" → Stanford). It returns that
+    address. The kin rules (F29e) and the fact search (F46b) stay as fallbacks after it, so
+    nothing found today stops being found.
+  - `Named` gains `note`. When a place has one, travel's answer (leave time, route) gives the
+    model the note as data next to the route, so "when should we leave for Stanford?" can
+    take the visiting hours into account.
+  - `search_memory` (F57a) also returns matching places, as `place: <name> → <address>
+    (<note>)`.
+  - The Rules & memory page gets a Places section: name, aliases, address, note, edit and
+    remove, for the people allowed to edit facts (`Memory.can_edit`'s rule).
+- **Few pinned facts.** `facts` gains `last_matched_at` (same migration). It's stamped when a
+  fact (pinned or not) matches the message search in `for_prompt` or is returned by
+  `search_memory`. A daily job unpins a pinned fact that hasn't matched in 8 weeks
+  (`UNPIN_AFTER`). If `last_matched_at` is null, it counts from when the fact was pinned. The
+  fact stays saved and searchable. Each unpin is logged in `context_repairs` with diagnosis
+  `unpinned_idle`, and the page shows "Unpinned <date>: hadn't come up in 8 weeks" with a
+  [Pin] button. A fact re-pinned by hand isn't unpinned again for 8 weeks. Standing-reminder
+  rules are left alone (rules are Michael's to keep).
+- Migration 0182 copies nothing on its own. Facts that F46b would read as places stay facts.
+
+Tests: "Stanford", "the Stanford lot" and an alias resolve to the place's address; a place
+beats a fact for the same name; a personal place is seen only by its owner; a kin phrase
+with no place still uses F29e; travel's tool result has the note inside a data block;
+`remember_place` with an existing name updates it; a pinned fact not matched for 8 weeks is
+unpinned by the job and logged, and one matched 7 weeks ago isn't; the clock is advanced,
+never slept; the page lists places and the "Unpinned" line.
+Scenario: Michael says "When I say I'm going to Stanford, take me to the visitor parking lot
+at 200 S Pasteur Dr, Palo Alto. Visiting hours are 6:30–8:30 pm weekdays and 12–8:30 pm
+weekends." Then on a Tuesday at 5 pm he asks "when should I leave for Stanford?". The route
+goes to 200 S Pasteur Dr, and the reply works to the 6:30 start.
+
+Data/Setup: after the update, Michael tells Themi the Stanford place once (as in the
+scenario), or adds it on the Rules & memory page. Decided here, not with Michael yet: 8 weeks
+before an idle pinned fact is unpinned; nothing is unpinned on the day of the update before
+the job's first run.
+
+Notes:
+- Changes from the prompt (decided in the session, 2026-11-21/22):
+  - Places have `arrive_early` (0–120 minutes). The prompt left this out, but Michael's case
+    ("get there 10 minutes early to park and walk to her room") needs it. A saved place's
+    minutes are an event's default when nothing was said for that event
+    (`TravelHeadsUps._plan_or_place`). An `arrive_by` said for the event wins. An arrival
+    said as "at the start" reads as unsaid, so the place's minutes apply.
+  - A saved place is also recognised by its address (number and street, as whole words),
+    not only by its name. The prompt line asks the model to put the place's address as an
+    event's location, so the calendar shows the lot and phone maps open it. Travel still
+    knows it's Stanford, with its note and minutes.
+  - Places named in the message (or in the earlier two) come with the turn's notes as
+    "Place: … means …", not only through `search_memory`. That way "visit Erin tomorrow at
+    Stanford" has the hours in front of the model when it picks the time.
+  - An unpin isn't logged in `context_repairs`. That table needs a member and has a
+    diagnosis CHECK, so using it would mean rebuilding the table. Instead
+    `facts.unpinned_at` is set, the page shows it, and it's logged. `Memory.pin` clears it
+    and sets `pinned_at`, so a fact pinned again by hand counts from then.
+- Migration 0182: `places`, plus `facts.last_matched_at`, `pinned_at` and `unpinned_at`.
+  Facts already pinned get `pinned_at` = the update, so none is unpinned in the first 8 weeks.
+- `themi/standard/places.py`: `SavedPlace`, `Places` (`save` updates a place with the same
+  name in the same scope; `update`, `find`, `mentioned`, `search`), and `Named.saved`.
+  `named_place` checks saved places first, before the digit check, then F29e's kin rules
+  and F46b's facts as before.
+- `remember_place` is registered by the Memory module. `search_memory` appends matching
+  places. The new prompt line is `memory.remember-place` (act, 76). Travel's `drive_time`
+  result carries the note as `<data source="memory">What they told Themi about <name>: …</data>`.
+- `memory.unpin_idle` runs daily (`UNPIN_AFTER` = 8 weeks). It counts only a match with
+  what was said or looked up (`last_matched_at`), never just being in the prompt.
+- Rules & memory has a Places section (add, edit, forget; personal places only by their
+  owner) at `POST /places/new` and `POST /places/{id}/{edit|delete}`. An unpinned fact
+  says "Unpinned <date>: it hadn't come up in 8 weeks."
+- Goldens: `jobs.json` (`memory.unpin_idle`), `routes.json` (the two place routes),
+  `system_prompt.txt` and `tools.json`. `tests/unit/test_standard_modules.py`'s Memory case
+  now expects the job.
+- Tests: `tests/unit/test_saved_places.py` (12), `tests/scenarios/test_saved_places.py` (5),
+  and two page tests in `tests/integration/test_admin_pages.py`.
+- **Setup:** update the Pi. Then Michael tells Themi once: "When I say Stanford, take me to
+  the visitor parking lot at <address>. Visiting hours are 6:30–8:30 pm weekdays and
+  12–8:30 pm weekends. I like to get there 10 minutes early." Or he adds it under Places
+  on the Rules & memory page. Also: "Remember Erin is at Stanford Hospital, room ___, for
+  now" (a fact). Forget both when she's home.
+
 
 ## Conversation mode
 

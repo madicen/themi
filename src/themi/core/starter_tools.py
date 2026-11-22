@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 from themi.core import keys, partner
+from themi.core.prompts import as_data
 from themi.core.tools import Tool, ToolContext, ToolFailed, dumps, more_tools, tool
 
 # What the person must have said themselves before the model answers a card for them.
@@ -53,6 +54,12 @@ _FORGOT = re.compile(
             "enum": ["household", "personal"],
             "description": "household for shared facts; personal for things only about them.",
         },
+        "keywords": {
+            "type": "string",
+            "description": "Other words someone might use when this matters, comma-separated: "
+            "people, places, what it's for (e.g. 'Dad, hospital, visit' for visiting hours). "
+            "Empty if none.",
+        },
     },
 )
 async def remember_fact(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -67,8 +74,32 @@ async def remember_fact(ctx: ToolContext, args: dict[str, Any]) -> str:
             "Nothing was saved."
         )
     scope = "member" if args["about"] == "personal" else "family"
-    saved = memory.remember(ctx.member, args["subject"], fact, scope=scope)
+    saved = memory.remember(
+        ctx.member, args["subject"], fact, scope=scope, keywords=args.get("keywords") or ""
+    )
     return f"Remembered: {saved.fact}"
+
+
+@tool(
+    "search_memory",
+    "Look up what Themi was told before (places, hours, people, preferences, how they like "
+    "things done) when the notes in this turn don't have it. Use it before saying you don't "
+    "know something they may have told you.",
+    {"query": {"type": "string", "description": "The words to look for, e.g. 'Erin hospital'."}},
+)
+async def search_memory(ctx: ToolContext, args: dict[str, Any]) -> str:
+    memory = ctx.services.maybe(keys.memory)
+    assert memory is not None
+    query = " ".join(str(args.get("query", "")).split())
+    if not query:
+        return "Nothing to look for: say some words to search for."
+    found = memory.lookup(ctx.member, query)
+    places = memory.places.search(ctx.member, query)  # F57b
+    if not found and not places:
+        return f"Nothing remembered matches '{query}'."
+    lines = [f"#{f.id} {f.subject}: {f.fact}" for f in found]
+    lines += [p.line() for p in places]
+    return as_data("memory", "\n".join(lines))
 
 
 @tool(
@@ -216,6 +247,7 @@ async def set_phrasing(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 STARTER_TOOLS: list[Tool] = [
     remember_fact,
+    search_memory,
     report_forgotten_context,
     log_energy_note,
     log_energy_level,

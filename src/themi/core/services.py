@@ -7,7 +7,7 @@ awaiting-item source and a button handler, rules and memory fill in
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol
@@ -76,6 +76,17 @@ class NoEnergyReadYet:
         return False
 
 
+# F57a: how many of their own last messages are searched for facts with the latest one.
+EARLIER_MESSAGES = 2
+
+
+def their_last(history: Sequence[Any], count: int = EARLIER_MESSAGES) -> list[str]:
+    """The text of the person's own last `count` messages in `history` (logged messages,
+    oldest first), not Themi's replies."""
+    said = [m.text for m in history if getattr(m, "direction", "") == "in" and m.text]
+    return said[-count:] if count else []
+
+
 @dataclass(frozen=True)
 class AwaitingItem:
     """Something waiting on a yes/no from this member (an approval, a rule to lock)."""
@@ -126,7 +137,8 @@ class Services(Registry):
     # CR3: what the agent's context reads from modules, set by the module that has it.
     calendar_source: Callable[[Member], str] | None = None  # the calendar module (K1)
     lands_source: Callable[[Member], str] | None = None  # reactions (S5)
-    facts_source: Callable[[Member, str], tuple[list[str], list[str]]] | None = None  # memory
+    # memory: (member, message, their earlier messages) -> (pinned, notes)
+    facts_source: Callable[[Member, str, Sequence[str]], tuple[list[str], list[str]]] | None = None
     # BD1a: tool groups a member's state calls for, whatever the words (a session going on).
     group_sources: list[Callable[[Member], set[str]]] = field(default_factory=list)
     # RC1b onwards: what each action on a "recipe" button does (show, cook, grocery card...).
@@ -246,8 +258,11 @@ class Services(Registry):
         """(locked household rules, the member's own personal rules), for the system prompt."""
         return self.rulebook.prompt_rules(member) if self.rulebook is not None else ([], [])
 
-    def facts_for(self, member: Member, message: str = "") -> tuple[list[str], list[str]]:
-        """(pinned facts for the system prompt, notes retrieved for this message)."""
+    def facts_for(
+        self, member: Member, message: str = "", earlier: Sequence[str] = ()
+    ) -> tuple[list[str], list[str]]:
+        """(pinned facts for the system prompt, notes retrieved for this message). `earlier`:
+        their own last messages (F57a), whose matches fill any places left."""
         if self.facts_source is None:
             return [], []
-        return self.facts_source(member, message)
+        return self.facts_source(member, message, earlier)
