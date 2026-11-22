@@ -94,10 +94,12 @@ async def search_memory(ctx: ToolContext, args: dict[str, Any]) -> str:
     if not query:
         return "Nothing to look for: say some words to search for."
     found = memory.lookup(ctx.member, query)
-    if not found:
+    places = memory.places.search(ctx.member, query)  # F57b
+    if not found and not places:
         return f"Nothing remembered matches '{query}'."
-    lines = "\n".join(f"#{f.id} {f.subject}: {f.fact}" for f in found)
-    return as_data("memory", lines)
+    lines = [f"#{f.id} {f.subject}: {f.fact}" for f in found]
+    lines += [p.line() for p in places]
+    return as_data("memory", "\n".join(lines))
 
 
 @tool(

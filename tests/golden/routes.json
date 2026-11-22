@@ -147,6 +147,8 @@
   "POST /passkeys/sign-in",
   "POST /passkeys/sign-in/options",
   "POST /passkeys/{passkey_id:int}/remove",
+  "POST /places/new",
+  "POST /places/{place_id:int}/{change}",
   "POST /recipes/diet",
   "POST /recipes/kitchen/{session_id:int}/{action}",
   "POST /recipes/{recipe_id:int}/cook",

@@ -327,6 +327,10 @@
     "group": "core",
     "spec": "92eb7d279e25"
   },
+  "remember_place": {
+    "group": "core",
+    "spec": "2930136d302d"
+  },
   "remove_follow_up": {
     "group": "core",
     "spec": "3738f64ddad8"

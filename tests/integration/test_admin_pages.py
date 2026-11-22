@@ -267,6 +267,55 @@ async def test_a_facts_search_words_are_shown_and_edited(
     assert memory.get(fact.id).keywords == "dad, hospital"  # a form without the field keeps them
 
 
+async def test_places_are_added_edited_and_forgotten_on_the_page(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """F57b: the Places section of Rules & memory."""
+    memory = scenario.app.services.maybe(keys.memory)
+    assert memory is not None
+    places = memory.places
+    csrf = await sign_in(scenario, site, "Erin")
+    await site.post(
+        "/places/new",
+        data={
+            "csrf": csrf, "name": "Stanford", "aliases": "Stanford Hospital",
+            "address": "200 S Pasteur Dr", "note": "Visiting 6:30-8:30 pm",
+            "arrive_early": "10", "about": "household",
+        },
+    )  # fmt: skip
+    (place,) = places.visible(scenario.member("Husband"))
+    assert (place.name, place.arrive_early) == ("Stanford", 10)
+    page = (await site.get("/knowledge")).text
+    assert "Stanford" in page and "Visiting 6:30-8:30 pm" in page
+    await site.post(
+        f"/places/{place.id}/edit",
+        data={"csrf": csrf, "name": "Stanford", "address": "300 Pasteur Dr", "arrive_early": "x"},
+    )
+    assert (places.get(place.id).address, places.get(place.id).arrive_early) == (
+        "300 Pasteur Dr",
+        0,
+    )
+    mine = places.save(scenario.member("Husband"), "Work", "1 Office Park", scope="member")
+    await site.post(f"/places/{mine.id}/delete", data={"csrf": csrf})  # not Erin's to forget
+    assert places.get(mine.id).name == "Work"
+    await site.post(f"/places/{place.id}/delete", data={"csrf": csrf})
+    assert places.visible(scenario.member("Erin")) == []
+
+
+async def test_an_unpinned_fact_says_why(scenario: Scenario, site: httpx.AsyncClient) -> None:
+    from datetime import timedelta
+
+    from themi import clock
+
+    memory = scenario.app.services.maybe(keys.memory)
+    assert memory is not None
+    memory.remember(scenario.member("Erin"), "vet", "Vet on Tuesdays.", pinned=True)
+    clock.advance(timedelta(weeks=9))
+    assert memory.unpin_idle() == 1
+    await sign_in(scenario, site, "Erin")
+    assert "it hadn't come up in 8 weeks" in (await site.get("/knowledge")).text
+
+
 async def test_drafts_and_rules_from_the_page(scenario: Scenario, site: httpx.AsyncClient) -> None:
     rulebook = scenario.app.rulebook
     draft = await rulebook.propose(scenario.member("Erin"), "Bins reminder", "Mention the bins.")
