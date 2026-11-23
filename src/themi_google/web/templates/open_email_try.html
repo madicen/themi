@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Try the Gmail links · Themi{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Which link opens this email?</h1>
+  <p>From {{ sender }}: <strong>{{ subject }}</strong><br>
+    <span class="muted">In {{ address }}</span></p>
+  <p>Tap each one in turn on the phone. When the Gmail app opens this email, that's the one:
+    choose it as "Gmail app link on iPhone" on the Email triage module's page.</p>
+  {% for candidate in candidates %}
+  <p><a class="button" href="{{ candidate.link }}">{{ candidate.label }}</a><br>
+    <code class="muted">{{ candidate.link }}</code></p>
+  {% endfor %}
+</section>
+{% endblock %}

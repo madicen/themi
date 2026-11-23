@@ -340,7 +340,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F56a | Feedback: [Open in Gmail] opens the Gmail app on a phone | Feedback | [x] 2026-11-21 |
 | F57a | Idea: a remembered fact is found when the words differ, and on a follow-up | Feedback | [x] 2026-11-21 |
 | F57b | Idea: named places ("Stanford" → the parking lot), and idle pinned facts unpinned | Feedback | [x] 2026-11-22 |
-| F58a | Feedback: [Open in Gmail] opens the email in the app, not an error | Feedback | [ ] |
+| F58a | Feedback: [Open in Gmail] opens the email in the app, not an error | Feedback | [x] 2026-11-22 |
 | F58b | Feedback: litter box error 6 is "out of sani-solution"; the A.I. counts cleans too | Feedback | [ ] |
 | F58c | Feedback: the wall fits the frame, nothing cut off at the bottom | Feedback | [ ] |
 | F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [ ] |
@@ -16881,7 +16881,7 @@ Notes:
 
 
 ### F58a · Feedback (2026-11-22): [Open in Gmail] opens the email itself in the Gmail app, not an error
-Status: [ ]
+Status: [x] 2026-11-22
 Depends on: F56a
 Read first: `themi_google/web/open_email.py` (`IOS_THREAD_LINK`, `IOS_APP_LINK`, `routes`),
 `templates/open_email.html` and `static/open-email.js`; `themi_google/email_buttons.py`
@@ -16939,6 +16939,33 @@ his iPhone and tells Themi (or the session) which number opened the email. Then 
 "Gmail app link on iPhone" to that number on the Modules page. If none opens the email,
 the inbox setting stays, and that goes in Notes. Decided here, not with Michael yet: the
 inbox as the default until a candidate is proven. Mark #247 and #246 reviewed once live.
+
+Notes:
+- Changes from the prompt:
+  - The setting's choices are named forms, not numbers: "The inbox" (the default), "Thread
+    link", "Thread link (decimal)", "Search link", "Search link (three slashes)". Try-out
+    buttons 1 and 2 are both "Thread link" (accounts 1 and 2), so pick "Thread link" for
+    either and set the order (below).
+  - The accounts' place in the app is one household setting, "gmail_app_order": the Gmail
+    addresses in the app's order, comma-separated. Blank: the order they were linked in
+    (`linked_accounts.id`). The prompt asked for a setting per account; one line was
+    simpler for two accounts.
+  - `themi email try-link` prints the link only (no `--send`): a second process can't send
+    through the running bot's outbox cleanly. Open the printed URL on the iPhone.
+- Both settings are `EmailLinkSettings` (household settings of `email_triage`,
+  `themi_google/web/open_email.py`), so they show on the Email triage module's page and
+  need no restart. `app_link` falls back to `googlegmail://` whenever a form can't be built
+  (a thread id that isn't hex, no Message-ID kept).
+- The try-out page is `GET /open/email/<id>/try?s=<sig>` (same signature as the open page),
+  template `open_email_try.html`; each button shows its link under it. Golden `routes.json`
+  gains it.
+- Tests: `tests/scenarios/test_open_email.py` (the iPhone test now expects the inbox; 3 new)
+  and `tests/unit/test_open_email_phone.py` (one new).
+- **Setup:** update the Pi, then `ssh themi@themi 'cd ~/themi; docker compose exec -T themi
+  themi email try-link --member 2'` and open the printed link on the iPhone (in Safari or
+  Telegram). Tap each button; whichever opens the email, choose that form under Email
+  triage → "Gmail iphone link" on the Modules page (and the app's account order if it
+  opened the wrong account). If none does, leave "The inbox" and note it here.
 
 ### F58b · Feedback (2026-11-22): a litter box's error 6 says "out of sani-solution", and the A.I.'s cleans are shown like the Whoosh's
 Status: [ ]
