@@ -368,3 +368,44 @@ async def test_staging_a_cart_never_makes_the_things_to_buy_list(scenario: Scena
     await ask_for_cart(scenario)
     assert "Eggs for the Safeway cart\nGo ahead, or not now?" in scenario.inbox("Erin")
     assert scenario.app.db.query("SELECT id FROM lists WHERE purpose = 'things_to_buy'") == []
+
+
+# ----- the popup's list (SW1) ------------------------------------------------------------
+
+
+async def test_the_helper_reads_the_list_it_would_fill(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    assert (await site.get("/api/safeway/list")).status_code == 401
+    helper = FakeSafewayHelper(site, await connect(scenario, site))
+    assert await helper.shopping_list() == {"items": [], "waiting": False}
+
+    on_the_list(scenario, "eggs", "2 oat milk")
+    to_buy(scenario, batteries="Safeway", **{"body wash": "Amazon"})
+    product = {"id": "960304348", "name": "Lucerne Eggs - 18 Count", "size": "18 Count"}
+    safeway(scenario).remember("eggs", product)
+    safeway(scenario).set_search_words("oat milk", "oatly oat milk")
+    assert await helper.shopping_list() == {
+        "items": [
+            {"name": "eggs", "qty": 1, "search": "eggs", "product": product, "from": "groceries"},
+            {
+                "name": "oat milk",
+                "qty": 2,
+                "search": "oatly oat milk",
+                "product": None,
+                "from": "groceries",
+            },
+            {
+                "name": "batteries",
+                "qty": 1,
+                "search": "batteries",
+                "product": None,
+                "from": "Things to Buy",
+            },
+        ],
+        "waiting": False,
+    }
+
+    await ask_for_cart(scenario)
+    await scenario.tap("Erin", "Go ahead")
+    assert (await helper.shopping_list())["waiting"] is True  # a cart is queued for the helper

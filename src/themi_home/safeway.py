@@ -2,7 +2,8 @@
 `extension/safeway` that fills the cart in the family's own signed-in browser.
 
 - Pairing: anyone can connect a helper on the website. Its token is shown once and kept
-  hashed, and it can only claim and answer cart jobs and read and set remembered products.
+  hashed, and it can only claim and answer cart jobs, read and set remembered products, and
+  read the list a cart would be filled from (SW1, for the helper's popup).
 - "Fill the Safeway cart" is a `safeway_cart` proposal (Tier 1, capped: always a yes). The
   yes queues a job with the grocery list's items, plus the things to buy that usually come
   from Safeway (L2b, named apart on the same card); a helper claims it once and posts what it
@@ -326,17 +327,26 @@ class SafewayCart:
 
     def for_helper(self, job: Job) -> dict[str, Any]:
         """What the helper gets: each item with what to search for, and the remembered product."""
-        items = []
-        for item in job.items:
-            known = self.product(item["name"])
-            product = None
-            if known and known.product_id:
-                product = {"id": known.product_id, "name": known.product_name, "size": known.size}
-            search = known.search_words if known and known.search_words else item["name"]
-            items.append(
-                {"name": item["name"], "qty": item["qty"], "search": search, "product": product}
-            )
-        return {"id": job.id, "items": items}
+        return {"id": job.id, "items": [self._helper_item(i["name"], i["qty"]) for i in job.items]}
+
+    def _helper_item(self, name: str, qty: int) -> dict[str, Any]:
+        known = self.product(name)
+        product = None
+        if known and known.product_id:
+            product = {"id": known.product_id, "name": known.product_name, "size": known.size}
+        search = known.search_words if known and known.search_words else name
+        return {"name": name, "qty": qty, "search": search, "product": product}
+
+    def shopping_list(self, member: Member) -> dict[str, Any]:
+        """SW1: what the helper's popup shows, the items a cart would be filled from (as
+        `fill_safeway_cart` takes them), each like a job's item plus where it's from:
+        "groceries" or the things-to-buy list's name. `waiting` is a cart queued or claimed.
+        Reading only: nothing is staged and no list is made."""
+        groceries = self.list_items()
+        list_name, extras = self.things_to_buy(member, groceries)
+        items = [{**self._helper_item(i["name"], i["qty"]), "from": "groceries"} for i in groceries]
+        items += [{**self._helper_item(i["name"], i["qty"]), "from": list_name} for i in extras]
+        return {"items": items, "waiting": self.open_job() is not None}
 
     async def finish(self, job_id: int, helper: Helper, raw: Any) -> str:
         """A helper's answer: validated, recorded, remembered, and told to the person.

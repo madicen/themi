@@ -23,6 +23,11 @@ class FakeSafewayHelper:
             self.jobs.append(response.json()["job"])
         return response
 
+    async def shopping_list(self) -> Any:
+        """What the popup shows (SW1): the list a cart would be filled from."""
+        response = await self.client.get("/api/safeway/list", headers=self.headers)
+        return response.json() if response.status_code == 200 else response.status_code
+
     async def answer(self, job_id: int, body: Any) -> httpx.Response:
         return await self.client.post(
             f"/api/safeway/jobs/{job_id}/results", headers=self.headers, json=body
