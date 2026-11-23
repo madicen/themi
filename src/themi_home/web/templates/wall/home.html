@@ -16,6 +16,7 @@
   <link rel="apple-touch-icon" href="{{ asset('home/icons/apple-touch-icon.png') }}">
   <link rel="stylesheet" href="{{ asset('home/wall.css') }}">
   <script src="{{ asset('htmx.min.js') }}" defer></script>
+  <script src="{{ asset('home/wall-fit.js') }}" defer></script>
   <script src="{{ asset('home/wall.js') }}" defer></script>
 </head>
 <body class="wall{% if screen.night %} night{% endif %}" hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>

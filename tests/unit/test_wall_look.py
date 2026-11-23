@@ -137,3 +137,27 @@ def test_every_colour_on_offer_has_a_tone_rule() -> None:
     """F53: a colour chosen on Wall frames draws something."""
     for tone in TONES:
         assert f".tone-{tone} {{ --tone: var(--{tone});" in CSS, tone
+
+
+# ----- F58c (bug #249): one screen tall, nothing past the frame's bottom ---------------------
+
+
+def rule(selector: str) -> str:
+    return " ".join(b for s, b in blocks() if s == selector)
+
+
+def test_the_wall_and_its_night_screen_are_exactly_one_screen_tall() -> None:
+    for selector in (".wall-screen", ".wall-night"):
+        body = rule(selector)
+        assert "height: 100dvh" in body and "overflow: hidden" in body, selector
+        assert "min-height: 100vh" not in body, selector
+    assert "min-height: 100vh" not in CSS
+    assert "flex: 1 1 0" in rule(".wall-screen > .wall-columns")
+    assert "min-height: 0" in rule(".wall-screen > .wall-columns")
+    assert "overflow: hidden" in rule(".wall-col-body")
+
+
+def test_the_wall_fits_its_columns_whenever_they_change() -> None:
+    assert "themiWallFit.fitWall" in SCRIPT
+    for when in ('"htmx:afterSwap"', '"resize"', '"DOMContentLoaded"'):
+        assert when in SCRIPT

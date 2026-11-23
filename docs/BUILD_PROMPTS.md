@@ -342,7 +342,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F57b | Idea: named places ("Stanford" → the parking lot), and idle pinned facts unpinned | Feedback | [x] 2026-11-22 |
 | F58a | Feedback: [Open in Gmail] opens the email in the app, not an error | Feedback | [x] 2026-11-22 |
 | F58b | Feedback: litter box error 6 is "out of sani-solution"; the A.I. counts cleans too | Feedback | [x] 2026-11-22 |
-| F58c | Feedback: the wall fits the frame, nothing cut off at the bottom | Feedback | [ ] |
+| F58c | Feedback: the wall fits the frame, nothing cut off at the bottom | Feedback | [x] 2026-11-22 |
 | F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [ ] |
 | F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -17055,7 +17055,7 @@ Notes:
 - **Setup:** none beyond updating the Pi.
 
 ### F58c · Feedback (2026-11-22): the wall fits the frame's screen, with nothing cut off at the bottom
-Status: [ ]
+Status: [x] 2026-11-22
 Depends on: F52a, F53
 Read first: `themi_home/web/static/wall.css` (`.wall-screen`, `.wall-col`, the bottom strip);
 `themi_home/web/static/wall.js` (rendering parts, `shownAs`, F52a's full screen);
@@ -17093,6 +17093,25 @@ Scenario: none (layout). Michael's look at the frame is the check.
 
 Data/Setup: update the Pi. The frame picks up the new CSS on its next poll (the service
 worker's version changes). Mark #249 reviewed once live.
+
+Notes:
+- `wall.css`: `.wall-screen` and `.wall-night` are `height: 100vh; height: 100dvh;
+  overflow: hidden; box-sizing: border-box`. The screen's children are `flex: none`, except
+  `.wall-columns` (`flex: 1 1 0; min-height: 0`). `.wall-col-body` grows into the column and
+  hides its overflow. `.wall-entry.wall-cut` is hidden.
+- New `static/wall-fit.js` (loaded before `wall.js`): `fitColumn` is the arithmetic (also a
+  CommonJS export, for the test), and `fitWall` measures each column body and hides entries
+  from the end of the last section first. `wall.js` calls it on DOMContentLoaded, `load`,
+  every htmx swap, `resize` (after 150 ms) and when a night-time touch wakes the screen
+  (the columns have no height while hidden).
+- `_columns.html`: every section with items has its `.wall-more` button with
+  `data-more` (the server's count), hidden at 0 and with no text, so the script can show
+  "+N more" without htmx processing a new element. The server's top-few counts are
+  unchanged.
+- Tests: `tests/unit/test_wall_fit.py` (4; runs `fitColumn` under node, and skips if node
+  isn't installed) and two in `tests/unit/test_wall_look.py`.
+- **Setup:** update the Pi. The frame picks up the new files on its next full load (the
+  asset links carry a version). If it's still cut off, reload the wall once on the frame.
 
 ### F58d · Feedback (2026-11-22): fixing the vacuum and saying so clears its alert, so "Unjam the vacuum" ticks off
 Status: [ ]
