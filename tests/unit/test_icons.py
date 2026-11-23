@@ -8,7 +8,15 @@ import struct
 
 import pytest
 
-from tools.draw_icons import ICONS, SIZES, icon_svg, parts
+from tools.draw_icons import (
+    EXTENSION_ICONS,
+    EXTENSION_SIZES,
+    ICONS,
+    SIZES,
+    extension_svg,
+    icon_svg,
+    parts,
+)
 
 # the icons drawn before BD3c (the pale chameleon on green), no longer used
 OLD = {
@@ -34,3 +42,21 @@ def test_each_png_is_new_and_its_size(name: str, size: int) -> None:
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert struct.unpack(">II", data[16:24]) == (size, size)
     assert hashlib.sha256(data).hexdigest() not in OLD
+
+
+def test_the_safeway_helpers_icon_is_the_scripts_and_in_its_manifest() -> None:
+    """SW1: the extension showed a plain "T" in Chrome's toolbar."""
+    import json
+
+    assert (EXTENSION_ICONS / "icon.svg").read_text(encoding="utf-8") == extension_svg()
+    manifest = json.loads((EXTENSION_ICONS.parent / "manifest.json").read_text(encoding="utf-8"))
+    wanted = {str(size): f"icons/{name}" for name, size in EXTENSION_SIZES.items()}
+    assert manifest["icons"] == wanted
+    assert manifest["action"]["default_icon"] == wanted
+
+
+@pytest.mark.parametrize(("name", "size"), list(EXTENSION_SIZES.items()))
+def test_each_extension_png_is_its_size(name: str, size: int) -> None:
+    data = (EXTENSION_ICONS / name).read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    assert struct.unpack(">II", data[16:24]) == (size, size)
