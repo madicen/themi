@@ -51,6 +51,7 @@ from themi_google.noise_digest import NoiseDigest, NoisePreferences
 from themi_google.senders import SenderSuggestions
 from themi_google.task_blocks import TaskBlocks
 from themi_google.triage import EmailTriage
+from themi_google.web.open_email import EmailLinkSettings
 
 
 def needs_of(modules: list[Module]) -> list[ScopeNeed]:
@@ -134,6 +135,7 @@ class EmailTriageModule(Module):
     group = EMAIL
     summary = "Sorts new mail into what needs someone now, what can wait, and what's noise."
     requires = ("gmail",)
+    household = EmailLinkSettings  # F58a: how [Open in Gmail] opens the iPhone's Gmail app
 
     def install(self, ctx: ModuleContext) -> None:
         triage = ctx.provide(EmailTriage(ctx.services, ctx.get(GmailSync)))

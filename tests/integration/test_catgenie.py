@@ -129,7 +129,7 @@ async def test_tokens_are_renewed_before_they_end_and_after_a_401(
     clock.advance(timedelta(minutes=10))
     assert await linked.poll() == 0
     assert renewals() == 2
-    assert state(linked) == "ready, 39% sani-solution left"
+    assert state(linked) == "ready, 39 cleans of sani-solution left"
 
 
 async def test_a_new_refresh_token_is_kept(
@@ -183,7 +183,7 @@ async def test_an_empty_answer_or_an_outage_is_a_failure_never_an_empty_account(
     with caplog.at_level(logging.WARNING):
         assert await linked.poll() == 0
     assert "answered with nothing" in caplog.text
-    assert state(linked) == "ready, 39% sani-solution left"  # as it was, not changed
+    assert state(linked) == "ready, 39 cleans of sani-solution left"  # as it was, not changed
     boxes.fail(times=1)
     assert await linked.poll() == 0
     device = linked.devices()[0]
@@ -201,11 +201,11 @@ async def test_the_first_read_is_the_starting_point_then_changes_are_events(
     events = heard(linked)
     boxes.set(BOX, sani=15)
     assert await linked.poll() == 0  # low already when linked: nothing announced
-    assert state(linked) == "ready, 15% sani-solution left"
+    assert state(linked) == "ready, 15 cleans of sani-solution left"
     boxes.set(BOX, sani=0, error="HEATER_FAULT", cleaning=40)
     assert await linked.poll() == 2
     assert state(linked) == (
-        "cleaning (40% done), 0% sani-solution left; it shows an error (heater fault)"
+        "cleaning (40% done), 0 cleans of sani-solution left; it shows an error (heater fault)"
     )
     assert [(e.kind, e.detail, e.gone) for e in events] == [
         (ERROR, "it shows an error (heater fault)", False),
@@ -267,7 +267,7 @@ async def test_notifications_failing_still_read_the_box(
     linked.account.notifications = down  # type: ignore[method-assign]
     assert await linked.poll() == 1
     linked.account.notifications = real  # type: ignore[method-assign]
-    assert state(linked) == "ready, 10% sani-solution left"
+    assert state(linked) == "ready, 10 cleans of sani-solution left"
 
 
 async def test_read_now_keeps_the_report(linked: CatGenieWatcher, boxes: FakeCatGenie) -> None:
@@ -278,7 +278,7 @@ async def test_read_now_keeps_the_report(linked: CatGenieWatcher, boxes: FakeCat
     assert reading.cycles == 600
     raw = linked.raw(device)
     assert raw is not None and raw["remainingSaniSolution"] == 15
-    assert state(linked) == "ready, 15% sani-solution left"
+    assert state(linked) == "ready, 15 cleans of sani-solution left"
 
 
 async def test_capture_leaves_out_ids_names_and_numbers(

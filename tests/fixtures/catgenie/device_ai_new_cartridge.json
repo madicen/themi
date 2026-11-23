@@ -1,0 +1,86 @@
+{
+ "manufacturerId": "CGU0000003",
+ "name": "AI",
+ "parentId": null,
+ "hwRevision": "V1",
+ "fwVersion": "8.7.205R",
+ "type": 0,
+ "status": 2,
+ "reportedStatus": "connected",
+ "creationTime": "2024-09-23T04:47:17.921",
+ "lastUpdatedTime": null,
+ "mbLastFwStatus": "OK",
+ "cpLastFwStatus": "OK",
+ "lgLastFwStatus": null,
+ "pumpTypeEnum": "PEGASUS",
+ "configuration": {
+  "childLock": 1,
+  "autoLock": 300,
+  "volumeLevel": 4,
+  "mode": 0,
+  "manual": 0,
+  "catSense": 64,
+  "timezone": "-08:00",
+  "dstFrom": "03-08 10:00:00",
+  "dstTo": "11-01 09:00:00",
+  "dndFrom": "",
+  "dndTo": "",
+  "schedule": [
+   "02:00:00"
+  ],
+  "catDelay": 300,
+  "pumpPctT": 100,
+  "activation": {
+   "date": "2024-12-29T18:25:14.232",
+   "state": 3,
+   "count": 674
+  },
+  "lng": {
+   "des": "",
+   "act": "enUS"
+  },
+  "heater": {
+   "model": 0,
+   "tempOutRef": 161
+  },
+  "water": {
+   "fillMax": 125,
+   "fillMin": 30,
+   "senseDetect": 1900,
+   "senseClean": 300
+  },
+  "extraDry": false,
+  "binaryElements": {
+   "EXTRA_SHAKE": false,
+   "EXTRA_WASH": true
+  }
+ },
+ "operationStatus": {
+  "state": 0,
+  "progress": 255
+ },
+ "macAddress": "000000000003",
+ "lastClean": "2026-11-23T02:57:51",
+ "remainingSaniSolution": 238,
+ "tagType": 1,
+ "connectionMode": "WIFI",
+ "bleConnectionId": "000000000003",
+ "state": 0,
+ "selectedLang": null,
+ "mainErrorType": null,
+ "activeErrors": [],
+ "updateGroup": {
+  "id": "00000000-0000-0000-0000-000000000003",
+  "name": "Production"
+ },
+ "serviceLevel": "Classic",
+ "activationDateFromDesired": "2024-12-29T18:25:14.232",
+ "inBlacklist": null,
+ "countryCode": 1,
+ "scaleId": null,
+ "lowHeater": true,
+ "fanShutter": true,
+ "dome": false,
+ "tempOutRefFromDesired": 161,
+ "connectionModifiedTime": "2026-11-20T11:40:21.288"
+}

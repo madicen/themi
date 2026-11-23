@@ -13,17 +13,31 @@ F57b: a place can also be saved as one (`places`, the `remember_place` tool, the
 memory page): "when I say Stanford, take me to the visitor parking lot at 200 S Pasteur
 Dr". A saved place's name or other names are looked up before everything else, and it can
 carry a note (visiting hours) and how many minutes early they like to arrive there.
+
+F58e (bug #251): its hours by weekday, as data ("weekdays 6:30-8:30 pm, weekends 12-8:30
+pm"), so the day an event's on gets that day's hours: the note's free text let a Monday
+visit take the weekend's 12-8:30. The turn's place line gives the day named in the message,
+and `add_calendar_event` refuses a time outside that day's hours.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date, time, timedelta
 from typing import Any, Literal
 
 from themi import clock
 from themi.accounts import Member, NotFound
 from themi.localtime import to_utc_iso
+from themi.standard.business_hours import (
+    DAY_NAMES,
+    Hours,
+    hours_from_json,
+    hours_json,
+    parse_hours,
+)
+from themi.standard.tasks import clock_words
 from themi.storage import Database
 
 Scope = Literal["family", "member"]
@@ -83,21 +97,37 @@ class SavedPlace:
     address: str
     note: str
     arrive_early: int
+    hours: Hours = field(default_factory=dict)  # F58e: weekday (Monday 0) -> span; {} unsaid
 
     def names(self) -> list[str]:
         """Its name and other names, in `_words` form."""
         found = [_words(self.name), *(_words(a) for a in self.aliases.split(","))]
         return [n for n in dict.fromkeys(found) if n]
 
-    def line(self) -> str:
-        """How it's put in front of the model."""
+    def line(self, day: date | None = None) -> str:
+        """How it's put in front of the model; with `day` (the day the message names,
+        F58e), that day's hours too."""
         other = f" (also called {self.aliases})" if self.aliases else ""
         text = f"Place: {self.name}{other} means {self.address}."
+        if self.hours:
+            text += f" Hours: {hours_words(self.hours)}."
+            if day is not None:
+                text += f" On {day_label(day)}: {self.hours_on(day)}."
         if self.note:
             text += f" {self.note.rstrip('.')}."
         if self.arrive_early:
             text += f" They like to get there {self.arrive_early} minutes early."
         return text
+
+    @property
+    def hours_text(self) -> str:
+        """Its hours in words, for the page ("" when none are saved)."""
+        return hours_words(self.hours) if self.hours else ""
+
+    def hours_on(self, day: date) -> str:
+        """ "6:30-8:30 pm", or "closed" (F58e)."""
+        span = self.hours.get(day.weekday())
+        return span_words(span) if span else "closed"
 
 
 def _saved_from_row(row: dict[str, Any]) -> SavedPlace:
@@ -110,7 +140,71 @@ def _saved_from_row(row: dict[str, Any]) -> SavedPlace:
         address=row["address"],
         note=row["note"],
         arrive_early=int(row["arrive_early"]),
+        hours=hours_from_json(row["hours"]) if row.get("hours") else {},
     )
+
+
+def span_words(span: tuple[time, time]) -> str:
+    """ "6:30-8:30 pm", "12-8:30 pm", "9 am-1 pm"."""
+    opens, closes = clock_words(span[0]), clock_words(span[1])
+    half = closes[-2:]
+    if opens.endswith(half) and opens[-2:] in ("am", "pm"):
+        opens = opens[:-3]
+    return f"{opens}-{closes}"
+
+
+def hours_words(hours: Hours) -> str:
+    """ "Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm" (closed days said as closed)."""
+    groups: list[tuple[list[int], tuple[time, time] | None]] = []
+    for day in range(7):
+        span = hours.get(day)
+        if groups and groups[-1][1] == span:
+            groups[-1][0].append(day)
+        else:
+            groups.append(([day], span))
+    parts = []
+    for days, span in groups:
+        named = DAY_NAMES[days[0]][:3] + (f"-{DAY_NAMES[days[-1]][:3]}" if len(days) > 1 else "")
+        parts.append(f"{named} {span_words(span)}" if span else f"{named} closed")
+    return "; ".join(parts)
+
+
+def day_label(day: date) -> str:
+    """ "Mon 23 Nov"."""
+    return f"{day:%a} {day.day} {day:%b}"
+
+
+def read_hours(text: str) -> Hours:
+    """Hours as said ("weekdays 6:30-8:30 pm, weekends 12-8:30 pm"); ValueError when none
+    can be read."""
+    hours = parse_hours(text)
+    if not hours:
+        raise ValueError(
+            "couldn't read those hours; say them per day or as weekdays and weekends, "
+            "e.g. 'weekdays 6:30-8:30 pm, weekends 12-8:30 pm'"
+        )
+    return hours
+
+
+_WEEKDAYS = {name.lower(): i for i, name in enumerate(DAY_NAMES)}
+_DAY_WORD = re.compile(
+    r"\b(today|tonight|tomorrow|tmrw|monday|tuesday|wednesday|thursday|friday|saturday|"
+    r"sunday)\b"
+)
+
+
+def day_named(text: str, today: date) -> date | None:
+    """The day a message names: today, tomorrow, or the next such weekday (today's own
+    name is today). None when it names none."""
+    found = _DAY_WORD.search(text.lower())
+    if found is None:
+        return None
+    word = found.group(1)
+    if word in ("today", "tonight"):
+        return today
+    if word in ("tomorrow", "tmrw"):
+        return today + timedelta(days=1)
+    return today + timedelta(days=(_WEEKDAYS[word] - today.weekday()) % 7)
 
 
 def _aliases(text: str, name: str) -> str:
@@ -148,20 +242,28 @@ class Places:
         note: str = "",
         arrive_early: int = 0,
         scope: Scope = "family",
+        hours: Hours | None = None,
     ) -> SavedPlace:
-        """Save a place, or update the one with this name (any case) that they can see."""
+        """Save a place, or update the one with this name (any case) that they can see.
+        `hours`: None keeps what an existing place has (F58e)."""
         existing = self._named(member, name, scope)
         if existing is not None:
             return self.update(
-                existing.id, name, address, aliases=aliases, note=note, arrive_early=arrive_early
+                existing.id,
+                name,
+                address,
+                aliases=aliases,
+                note=note,
+                arrive_early=arrive_early,
+                hours=existing.hours if hours is None else hours,
             )
         name, values = _place_values(name, address, aliases, note, arrive_early)
         now = to_utc_iso(clock.now())
         member_id = member.id if scope == "member" else None
         place_id = self.db.execute(
             "INSERT INTO places (scope, member_id, name, aliases, address, note, arrive_early, "
-            "created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (scope, member_id, name, *values, member.id, now, now),
+            "hours, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (scope, member_id, name, *values, _hours_text(hours), member.id, now, now),
         )
         return self.get(place_id)
 
@@ -174,12 +276,15 @@ class Places:
         aliases: str = "",
         note: str = "",
         arrive_early: int = 0,
+        hours: Hours | None = None,
     ) -> SavedPlace:
+        """`hours`: None keeps the place's own."""
         name, values = _place_values(name, address, aliases, note, arrive_early)
+        kept = self.get(place_id).hours if hours is None else hours
         self.db.execute(
             "UPDATE places SET name = ?, aliases = ?, address = ?, note = ?, arrive_early = ?, "
-            "updated_at = ? WHERE id = ?",
-            (name, *values, to_utc_iso(clock.now()), place_id),
+            "hours = ?, updated_at = ? WHERE id = ?",
+            (name, *values, _hours_text(kept), to_utc_iso(clock.now()), place_id),
         )
         return self.get(place_id)
 
@@ -258,6 +363,10 @@ class Places:
             if wanted & words:
                 found.append(place)
         return found
+
+
+def _hours_text(hours: Hours | None) -> str:
+    return hours_json(hours) if hours else ""
 
 
 def _kin(phrase: str) -> str | None:

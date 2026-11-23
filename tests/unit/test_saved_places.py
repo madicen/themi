@@ -133,3 +133,56 @@ def test_pinned_again_by_hand_counts_from_then(memory: Memory, family: SeededFam
     assert memory.get(fact.id).unpinned_at is None
     clock.advance(UNPIN_AFTER - timedelta(days=1))
     assert memory.unpin_idle() == 0
+
+
+# ----- F58e (bug #251): a place's hours by day --------------------------------------------
+
+
+def test_hours_said_as_weekdays_and_weekends_are_seven_days() -> None:
+    from datetime import time
+
+    from themi.standard.places import read_hours
+
+    hours = read_hours("weekdays 6:30-8:30 pm, weekends 12-8:30 pm")
+    assert len(hours) == 7
+    assert hours[0] == (time(18, 30), time(20, 30))  # "6:30-8:30 pm" is both pm
+    assert hours[6] == (time(12, 0), time(20, 30))  # "12-8:30 pm" opens at noon
+    assert read_hours("Mon-Fri 9-5 pm")[0] == (time(9), time(17))  # 9 am
+
+
+def test_hours_it_cant_read_are_refused() -> None:
+    from themi.standard.places import read_hours
+
+    with pytest.raises(ValueError, match="couldn't read those hours"):
+        read_hours("whenever they let us in")
+
+
+def test_the_place_line_gives_the_named_days_hours(places: Places, family: SeededFamily) -> None:
+    from datetime import date
+
+    from themi.standard.places import day_named, read_hours
+
+    hours = read_hours("weekdays 6:30-8:30 pm, weekends 12-8:30 pm")
+    saved = places.save(family.erin, "Stanford", LOT, hours=hours)
+    sunday = date(2026, 10, 25)
+    monday = day_named("I want to visit Erin at Stanford tomorrow", sunday)
+    assert monday == date(2026, 10, 26)
+    assert saved.line(monday) == (
+        f"Place: Stanford means {LOT}. Hours: Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm. "
+        "On Mon 26 Oct: 6:30-8:30 pm."
+    )
+    assert day_named("see you saturday", sunday) == date(2026, 10, 31)
+    assert day_named("what's for dinner?", sunday) is None
+
+
+def test_saving_again_without_hours_keeps_them_and_no_hours_is_as_before(
+    places: Places, family: SeededFamily
+) -> None:
+    from themi.standard.places import read_hours
+
+    hours = read_hours("weekdays 6:30-8:30 pm")
+    places.save(family.erin, "Stanford", LOT, hours=hours)
+    again = places.save(family.erin, "stanford", LOT, note="Sign in at the desk")
+    assert again.hours == hours
+    plain = places.save(family.erin, "Dentist", "1 Main St, Palo Alto")
+    assert plain.hours == {} and "Hours" not in plain.line()

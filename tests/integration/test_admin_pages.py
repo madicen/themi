@@ -302,6 +302,35 @@ async def test_places_are_added_edited_and_forgotten_on_the_page(
     assert places.visible(scenario.member("Erin")) == []
 
 
+async def test_a_places_hours_are_set_and_shown_on_the_page(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """F58e: hours by day on the Places form, read back in words; unreadable ones refused."""
+    memory = scenario.app.services.maybe(keys.memory)
+    assert memory is not None
+    csrf = await sign_in(scenario, site, "Erin")
+    await site.post(
+        "/places/new",
+        data={
+            "csrf": csrf, "name": "Stanford", "address": "200 S Pasteur Dr",
+            "hours": "weekdays 6:30-8:30 pm, weekends 12-8:30 pm", "about": "household",
+        },
+    )  # fmt: skip
+    (place,) = memory.places.visible(scenario.member("Erin"))
+    assert len(place.hours) == 7
+    page = (await site.get("/knowledge")).text
+    assert "Hours: Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm" in page
+    refused = await site.post(
+        f"/places/{place.id}/edit",
+        data={"csrf": csrf, "name": "Stanford", "address": "200 S Pasteur Dr", "hours": "soon"},
+        follow_redirects=True,
+    )
+    assert "Couldn&#39;t read those hours" in refused.text or "Couldn't read those hours" in (
+        refused.text
+    )
+    assert memory.places.get(place.id).hours == place.hours  # unchanged
+
+
 async def test_an_unpinned_fact_says_why(scenario: Scenario, site: httpx.AsyncClient) -> None:
     from datetime import timedelta
 

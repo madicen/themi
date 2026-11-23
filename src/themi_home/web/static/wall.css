@@ -52,10 +52,15 @@ body.wall {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 .wall p, .wall h2, .wall h3, .wall ul { margin: 0; }
+/* F58c (bug #249): exactly one screen tall, never taller; the columns give up items
+   ("+N more", wall-fit.js) so the week ahead and the bottom strip stay on the frame. */
 .wall-screen {
-  min-height: 100vh; padding: 2.75rem 2.5rem 2.5rem;
+  height: 100vh; height: 100dvh; overflow: hidden; box-sizing: border-box;
+  padding: 2.75rem 2.5rem 2.5rem;
   display: flex; flex-direction: column; gap: 1.5rem;
 }
+.wall-screen > * { flex: none; }  /* F58c: only the columns give way */
+.wall-screen > .wall-columns { flex: 1 1 0; min-height: 0; }
 .wall-card { background: var(--card); border-radius: 1.75rem; padding: 1.4rem 1.75rem; }
 .wall-slot:empty { display: none; }
 
@@ -89,7 +94,11 @@ button.wall-col-head { cursor: pointer; }
   display: grid; place-items: center; font-weight: 800; font-size: 1.4rem;
 }
 .wall-avatar svg { width: 1.6rem; height: 1.6rem; fill: var(--on-tone); }
-.wall-col-body { padding: 0.25rem 0.75rem 1rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.wall-col-body {
+  padding: 0.25rem 0.75rem 1rem; display: flex; flex-direction: column; gap: 0.25rem;
+  flex: 1 1 auto; min-height: 0; overflow: hidden;
+}
+.wall-entry.wall-cut { display: none; }
 .wall-col h3 {
   margin: 0.9rem 0.5rem 0.25rem; font-size: 0.9rem; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--muted); font-weight: 700;
@@ -326,7 +335,7 @@ button.wall-item:focus-visible { outline: 0.2rem solid var(--focus); outline-off
 body.night:not(.awake) #wall-night { display: block; }
 body.night:not(.awake) .wall-screen { display: none; }
 body.night:not(.awake) { background: var(--night-bg); }
-.wall-night { min-height: 100vh; padding: 7.5rem 6rem; color: var(--night-fg); display: flex; flex-direction: column; gap: 2.5rem; }
+.wall-night { height: 100vh; height: 100dvh; overflow: hidden; box-sizing: border-box; padding: 7.5rem 6rem; color: var(--night-fg); display: flex; flex-direction: column; gap: 2.5rem; }
 .night-time { font-size: 10rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
 .night-time span { font-size: 3rem; margin-left: 0.8rem; color: var(--night-soft); }
 .night-date { font-size: 2.25rem; color: var(--night-soft); }

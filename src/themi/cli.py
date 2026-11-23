@@ -125,6 +125,16 @@ def build_parser() -> argparse.ArgumentParser:
         "(no ids, keys or names), so a mapping can be written for its model",
     )
     tuya_capture.add_argument("--out", default="tuya-captures", help="the folder to write to")
+    email = commands.add_parser("email", help="email notices")
+    email_commands = email.add_subparsers(dest="email_command", required=True)
+    try_link = email_commands.add_parser(
+        "try-link",
+        help="F58a: print the page that tries each Gmail app link, for one email notice",
+    )
+    try_link.add_argument("email_id", nargs="?", type=int, help="the email (default: newest)")
+    try_link.add_argument(
+        "--member", type=int, default=None, help="the newest email notice this member got"
+    )
     catgenie = commands.add_parser("catgenie", help="the litter box, through CatGenie's cloud")
     catgenie_commands = catgenie.add_subparsers(dest="catgenie_command", required=True)
     catgenie_capture = catgenie_commands.add_parser(
@@ -677,6 +687,33 @@ def _catgenie_capture(out: str) -> int:
     return 0
 
 
+def _email_try_link(email_id: int | None, member_id: int | None) -> int:
+    """F58a: the signed try-out page for an email notice (the newest the member got)."""
+    from themi.settings import Settings
+    from themi.web import site_base_url
+    from themi_google.email_buttons import OPEN_PATH, OPEN_PURPOSE
+    from themi_google.web.open_email import TRY_PATH
+
+    store = _store()
+    if email_id is None:
+        row = store.db.one(
+            "SELECT CAST(substr(dedupe_key, length('email-urgent:') + 1) AS INTEGER) AS id "
+            "FROM outbox WHERE dedupe_key LIKE 'email-urgent:%' "
+            + ("AND member_id = ? " if member_id is not None else "")
+            + "ORDER BY id DESC LIMIT 1",
+            (member_id,) if member_id is not None else (),
+        )
+        if row is None or not row["id"]:
+            print("No email notice has gone out yet.", file=sys.stderr)
+            return 1
+        email_id = int(row["id"])
+    settings = Settings.load()
+    base = site_base_url(settings.public_url, settings.http_host, settings.http_port)
+    signature = store.cipher.sign(OPEN_PURPOSE, str(email_id))
+    print(f"{base.rstrip('/')}{OPEN_PATH}{email_id}{TRY_PATH}?s={signature}")
+    return 0
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -722,6 +759,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _tuya_capture(args.out)
         elif args.command == "catgenie":
             return _catgenie_capture(args.out)
+        elif args.command == "email":
+            return _email_try_link(args.email_id, args.member)
         else:
             parser.print_help()
     except (SettingsError, AccountsError, BackupError, S3Error, DecryptionError) as exc:

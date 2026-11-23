@@ -100,7 +100,7 @@ async def test_stuck_in_the_kitchen_goes_to_whoever_has_more_room(
     assert await scenario.advance(minutes=4) == []  # it might free itself
     assert await scenario.advance(minutes=1) == [STUCK_IN_KITCHEN]
     assert scenario.inbox("Husband") == [STUCK_IN_KITCHEN]
-    assert scenario.last_buttons("Husband") == ["Done", "Later"]
+    assert scenario.last_buttons("Husband") == ["Fixed it", "Later"]  # F58d
     assert scenario.inbox("Erin") == []
     clock.advance(timedelta(minutes=1))
     await scenario.run_periodic("devices.vacuum")  # still stuck: no second task
@@ -129,11 +129,14 @@ async def test_out_of_clean_water_and_the_alert_cleared_after_done(
     assert await scenario.advance(minutes=5) == [
         "The vacuum's dock is out of clean water. Refill the tank?"
     ]
-    # Refilled; the dock's alert stays until it's cleared.
+    # Refilled; the dock's alert stays until it's cleared. F58d (bug #250): saying it's
+    # done clears it then and there, with no second "Go ahead?" card.
     await scenario.tap("Husband", "Done")
     assert tasks(scenario)[0][1] == "done"
-    assert scenario.inbox("Husband")[-1] == "Clear the vacuum's alert\nGo ahead, or not now?"
-    await scenario.tap("Husband", "Go ahead")
+    assert scenario.inbox("Husband")[-1] == (
+        "Cleared the vacuum's alert, since Refill the vacuum's clean water is done."
+    )
+    assert not any("Go ahead" in text for text in scenario.inbox("Husband"))
     assert robot.resolved == [(ROBOT, 38)]
     assert robot.sent_home == []  # it's on its dock
     await seen(scenario, robot, "docked")
@@ -146,9 +149,8 @@ async def test_a_done_alert_isnt_raised_again_until_its_gone(
     await seen(scenario, robot, "dirty_water_full")
     await scenario.advance(minutes=5)
     who = "Erin" if scenario.inbox("Erin") else "Husband"
-    await scenario.tap(who, "Done")
-    await scenario.tap(who, "Not now")  # the alert stays on the robot
-    await seen(scenario, robot, "dirty_water_full")
+    await scenario.tap(who, "Done")  # F58d: Themi clears the alert...
+    await seen(scenario, robot, "dirty_water_full")  # ...but the dock still says full
     assert len(tasks(scenario)) == 1
     await seen(scenario, robot, "docked")
     await seen(scenario, robot, "dirty_water_full")  # full again: a new chore
@@ -174,7 +176,8 @@ async def test_a_jam_sorted_then_sent_home_with_a_yes(
     tired(scenario)
     await seen(scenario, robot, "main_brush_jammed")
     assert await scenario.advance(minutes=5) == [
-        "The vacuum needs a hand: the main brush is jammed. Clear it when you can?"
+        "The vacuum needs a hand: the main brush is jammed. Tap Fixed it once it's clear, and "
+        "Themi clears the alert."
     ]
     clock.advance(timedelta(minutes=10))
     robot.set_status(ROBOT, "idle_away")  # cleared, left where it stopped
@@ -199,7 +202,7 @@ async def test_with_the_rule_on_its_sent_home_without_asking(
     scenario.app.services.autonomy.grant_tier2(CATEGORY, via_rule_id=1, by=scenario.member("Erin"))
     await seen(scenario, robot, "trapped")
     await scenario.advance(minutes=5)
-    await scenario.tap("Husband", "Done")  # freed, but it still shows the alert
+    await scenario.tap("Husband", "Fixed it")  # freed, but it still shows the alert
     assert robot.resolved == [(ROBOT, 8)]
     assert robot.sent_home == [ROBOT]
     assert not any("Go ahead" in text for text in scenario.inbox("Husband"))
@@ -443,3 +446,91 @@ async def test_stopping_themi_closes_the_vacuum_session(
     assert robot.sessions and not robot.sessions[-1].closed
     await close_all(scenario.app.services.closers)
     assert robot.sessions[-1].closed
+
+
+# ----- F58d (bug #250): saying it's fixed clears the alert, so the chore ticks off ---------
+
+DOCK_JAM = (
+    "The vacuum needs a hand: the dock's cleaning brush is jammed. Tap Fixed it once it's "
+    "clear, and Themi clears the alert."
+)
+
+
+async def jammed_dock(scenario: Scenario, robot: FakeRoborock) -> None:
+    """The dock's cleaning brush jams (code 42), with the robot on its dock, as on 22 Nov."""
+    tired(scenario)
+    await seen(scenario, robot, "docked", dock_error_status=42)
+    assert tasks(scenario)[0][0] == "Unjam the vacuum"
+    assert await scenario.advance(minutes=5) == [DOCK_JAM]
+    assert scenario.last_buttons("Husband") == ["Fixed it", "Later"]
+
+
+async def test_fixed_it_clears_the_docks_alert_with_no_second_card(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    await jammed_dock(scenario, robot)
+    await scenario.tap("Husband", "Fixed it")
+    assert robot.resolved == [(ROBOT, 42)]
+    assert tasks(scenario)[0][1] == "done"
+    (problem,) = scenario.app.db.query("SELECT status FROM vacuum_problems")
+    assert problem["status"] == "done"
+    assert scenario.inbox("Husband")[-1] == (
+        "Cleared the vacuum's alert, since Unjam the vacuum is done."
+    )
+    assert not any("Go ahead" in text for text in scenario.inbox("Husband"))
+    assert scenario.app.db.query("SELECT 1 FROM pending_actions WHERE status = 'pending'") == []
+
+
+async def test_an_unreachable_vacuum_still_marks_it_done_and_says_the_alert_is_showing(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    await jammed_dock(scenario, robot)
+    robot.offline(ROBOT)
+    await scenario.tap("Husband", "Fixed it")
+    assert tasks(scenario)[0][1] == "done"
+    assert robot.resolved == []
+    assert scenario.inbox("Husband")[-1] == (
+        "Unjam the vacuum is done, but the vacuum couldn't be reached, so its alert is still "
+        "showing. Clear it in the Roborock app."
+    )
+
+
+async def test_ticked_on_the_wall_or_said_in_chat_clears_it_too(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    await jammed_dock(scenario, robot)
+    (task,) = scenario.app.db.query("SELECT id FROM tasks")
+    board = scenario.app.services.get(keys.taskboard)
+    await board.complete(task["id"], scenario.member("Husband"), ticked_on="the wall")
+    await scenario.app.outbox.flush()
+    assert robot.resolved == [(ROBOT, 42)]
+    assert "Cleared the vacuum's alert, since Unjam the vacuum is done." in (
+        scenario.inbox("Husband")
+    )
+
+
+async def test_a_robot_off_its_dock_still_gets_the_send_home_card(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    tired(scenario)
+    await seen(scenario, robot, "main_brush_jammed")
+    await scenario.advance(minutes=5)
+    await scenario.tap("Husband", "Fixed it")
+    assert robot.resolved == []  # waits for the yes: it'd be sent home too
+    assert scenario.inbox("Husband")[-1].endswith("Go ahead, or not now?")
+
+
+async def test_not_back_on_its_dock_keeps_done(scenario: Scenario, robot: FakeRoborock) -> None:
+    tired(scenario)
+    await seen(scenario, robot, "battery_flat_away")
+    await scenario.advance(minutes=30)
+    assert scenario.last_buttons("Husband") == ["Done", "Later"]
+
+
+async def test_asked_about_it_says_the_alert_stays_until_cleared(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    tired(scenario)
+    await seen(scenario, robot, "docked", dock_error_status=42)
+    said = await ask(scenario, "Is the vacuum still jammed?", "vacuum")
+    assert "The alert stays on the robot until it's cleared; once it's fixed, say so" in said

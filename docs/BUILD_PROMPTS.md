@@ -340,6 +340,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F56a | Feedback: [Open in Gmail] opens the Gmail app on a phone | Feedback | [x] 2026-11-21 |
 | F57a | Idea: a remembered fact is found when the words differ, and on a follow-up | Feedback | [x] 2026-11-21 |
 | F57b | Idea: named places ("Stanford" → the parking lot), and idle pinned facts unpinned | Feedback | [x] 2026-11-22 |
+| F58a | Feedback: [Open in Gmail] opens the email in the app, not an error | Feedback | [x] 2026-11-22 |
+| F58b | Feedback: litter box error 6 is "out of sani-solution"; the A.I. counts cleans too | Feedback | [x] 2026-11-22 |
+| F58c | Feedback: the wall fits the frame, nothing cut off at the bottom | Feedback | [x] 2026-11-22 |
+| F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [x] 2026-11-22 |
+| F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [x] 2026-11-22 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16874,6 +16879,414 @@ Notes:
   on the Rules & memory page. Also: "Remember Erin is at Stanford Hospital, room ___, for
   now" (a fact). Forget both when she's home.
 
+
+### F58a · Feedback (2026-11-22): [Open in Gmail] opens the email itself in the Gmail app, not an error
+Status: [x] 2026-11-22
+Depends on: F56a
+Read first: `themi_google/web/open_email.py` (`IOS_THREAD_LINK`, `IOS_APP_LINK`, `routes`),
+`templates/open_email.html` and `static/open-email.js`; `themi_google/email_buttons.py`
+(`open_link`, `OPEN_PURPOSE`); the `emails` table (`thread_id`, `message_id_header`); F56a's
+Notes. From Michael's bug #247 (2026-11-22, 4:19 am, "when opening a gmail link it now opens
+the app, but not the message").
+
+What the Pi shows: F56a is live. On Michael's iPhone, [Open in Gmail] (the Google Fi notice,
+outbox of Sun 03:53) hands over to the Gmail app, which shows "Failed to open link. Unable
+to understand the link." over the inbox (report-247-1). So the app is installed and takes
+`googlegmail://`, but it doesn't understand `googlegmail:///cv=<thread_id>`. Thread ids on
+the Pi are 16 hex digits (`1a206bcb61e9dd07`), the same as `gmail_id` for a one-message
+thread. Michael's Gmail is account 1 (`michael.diceguyd30@…`), Erin's is account 2. Which
+of the two the Gmail app lists first on Michael's phone isn't known.
+
+Build:
+- **A try-out page, so a guess needn't ship.** `GET /open/email/<id>/try?s=<sig>` (the same
+  signature as the open page). It shows one big button for each candidate link below, each
+  labelled with its number and its form, and the sender and subject so Michael knows what
+  should open. Michael taps them in turn on his phone and says which opened the email.
+  - 1: `googlegmail:///cv=<thread_id>/accountId=1&create-new-tab`
+  - 2: `googlegmail:///cv=<thread_id>/accountId=2&create-new-tab`
+  - 3: `googlegmail:///cv=<thread id as a decimal number>/accountId=1&create-new-tab`
+  - 4: `googlegmail://search?q=rfc822msgid:<Message-ID, URL-encoded>` (when
+    `message_id_header` is kept)
+  - 5: `googlegmail:///search?q=rfc822msgid:<…>` (the three-slash form of 4)
+  - 6: `googlegmail://` (the inbox, which works today)
+  These are guesses about an undocumented link, written down as such in the page's
+  docstring. `themi email try-link [--member N] [EMAIL_ID]` prints the signed try-out URL
+  for that email, or for the newest email notice the member got; it can also send it to
+  them in chat (`--send`, through the outbox).
+- **The open page uses one candidate, chosen in settings.** The Email triage module gains a
+  setting "Gmail app link on iPhone" (the Modules page, MP's rules for a setting), with the
+  candidates above by number and "the inbox". The default is "the inbox" until Michael
+  picks one. That stops the error: the app opens, and the page's sender and subject (F56a's
+  fallback buttons) show which email it was. Once a candidate is chosen, the open page uses
+  it for the thread, with the inbox as the fallback button as today. For forms 1–3, the
+  account number is that account's place in the app. A second setting, per linked Google
+  account, "Its place in the Gmail app (1, 2, …)", defaults to the account's order on
+  Themi's Accounts page.
+- Android and computers are unchanged.
+
+Tests: the try-out page with a good signature lists the six links built from a known
+`thread_id` and Message-ID (decimal form checked against `int(hex, 16)`); a bad signature
+gives a 404; with no `message_id_header`, 4 and 5 are left out. The open page, with the
+setting on its default, puts `googlegmail://` as the app link for an iPhone; with candidate
+1 and the account's place set to 2, it's `googlegmail:///cv=<id>/accountId=2&create-new-tab`.
+`tests/golden/routes.json` gains the try-out route; the settings golden gains the two
+settings.
+Scenario: none (the real test is Michael's phone).
+
+Data/Setup: after the update, run `themi email try-link --member 2 --send` on the Pi, so
+Michael gets the try-out link in chat. He taps each button on
+his iPhone and tells Themi (or the session) which number opened the email. Then he sets
+"Gmail app link on iPhone" to that number on the Modules page. If none opens the email,
+the inbox setting stays, and that goes in Notes. Decided here, not with Michael yet: the
+inbox as the default until a candidate is proven. Mark #247 and #246 reviewed once live.
+
+Notes:
+- Changes from the prompt:
+  - The setting's choices are named forms, not numbers: "The inbox" (the default), "Thread
+    link", "Thread link (decimal)", "Search link", "Search link (three slashes)". Try-out
+    buttons 1 and 2 are both "Thread link" (accounts 1 and 2), so pick "Thread link" for
+    either and set the order (below).
+  - The accounts' place in the app is one household setting, "gmail_app_order": the Gmail
+    addresses in the app's order, comma-separated. Blank: the order they were linked in
+    (`linked_accounts.id`). The prompt asked for a setting per account; one line was
+    simpler for two accounts.
+  - `themi email try-link` prints the link only (no `--send`): a second process can't send
+    through the running bot's outbox cleanly. Open the printed URL on the iPhone.
+- Both settings are `EmailLinkSettings` (household settings of `email_triage`,
+  `themi_google/web/open_email.py`), so they show on the Email triage module's page and
+  need no restart. `app_link` falls back to `googlegmail://` whenever a form can't be built
+  (a thread id that isn't hex, no Message-ID kept).
+- The try-out page is `GET /open/email/<id>/try?s=<sig>` (same signature as the open page),
+  template `open_email_try.html`; each button shows its link under it. Golden `routes.json`
+  gains it.
+- Tests: `tests/scenarios/test_open_email.py` (the iPhone test now expects the inbox; 3 new)
+  and `tests/unit/test_open_email_phone.py` (one new).
+- **Setup:** update the Pi, then `ssh themi@themi 'cd ~/themi; docker compose exec -T themi
+  themi email try-link --member 2'` and open the printed link on the iPhone (in Safari or
+  Telegram). Tap each button; whichever opens the email, choose that form under Email
+  triage → "Gmail app link on iPhone" on the Modules page (and "Gmail accounts, in the
+  app's order" if it opened the wrong account). If none does, leave "The inbox" and note it here.
+
+### F58b · Feedback (2026-11-22): a litter box's error 6 says "out of sani-solution", and the A.I.'s cleans are shown like the Whoosh's
+Status: [x] 2026-11-22
+Depends on: F41a
+Read first: `themi_home/connectors/catgenie/events.py` (`CODES`, `error_words`, `sani_unit`,
+`WHOOSH_FIRMWARE`, `read_device`, `LitterBoxReading.problems`, `state_word`);
+`themi_home/connectors/catgenie/watch.py` (`_saw`, the "no words for" and "left out" logs);
+`themi_home/litter_box.py` (`TEXTS`, `LOW_TEXT`, around line 360's "(about … left)");
+`tests/fixtures/catgenie/README.md`; F41a's Notes. From Michael's bugs #248 (2026-11-22,
+10:32 am, "just showing the error number in the original message doesn't make sense") and
+#252 (8:57 pm, "the two litter boxes don't have the same display for their sani-solution
+readout").
+
+What the Pi shows:
+- **Error 6.** `litter_problems`: twice now a box reported error `6` at the same time as its
+  sani-solution ran out. The Whoosh did on 11 Nov (problems 1 and 2, opened 06:04 and 06:25,
+  both cleared together at 07:51 when the cartridge was changed). The A.I. did on 22 Nov
+  (problems 3 and 4, both cleared together at 19:11 UTC, with the new cartridge). So Michael
+  got "The AI - CGU7225298 needs a look: it shows an error (6). Check it when you can?" and
+  a second chore, "Check the AI - CGU7225298" (task 127), for what the running-low message
+  and task 116 already said. He had to ask what the error was, and the model guessed it
+  from the 0%.
+- **The A.I. counts cleans too.** Its `fwVersion` is `8.7.205R`, so F41a reads its
+  `remainingSaniSolution` as a percent. After the new cartridge it reported 239, then 238
+  after one clean (the log: "The litter box reported 239% sani-solution; left out", then
+  238). So it's a count of cleans, like the Whoosh's (407, down one a clean). `litter_states`
+  has `sani_left` NULL for the A.I., which is why the Home page shows "AI - CGU7225298:
+  ready" and nothing about sani-solution, while the Whoosh shows "ready, 407 cleans of
+  sani-solution left" (report-252-1). The earlier "about 4% left" and "0% left" were most
+  likely 4 and 0 cleans as well.
+
+Build:
+- `CODES["6"] = OUT` ("out of sani-solution"), with a comment naming the two captures above.
+  A code whose words are the solution's folds into the SOLUTION problem: `problems` doesn't
+  add an ERROR entry for it, so there's no second message, chore or wall item. When the
+  sani-solution reading isn't 0 but error 6 shows, the SOLUTION problem is OUT anyway.
+- An error code with no words yet no longer shows the bare number to the family. The message
+  is "{The} needs a look: it's showing a code Themi doesn't know yet ({code}). The CatGenie
+  app says what it is." `appliance_status` says the same. The log line stays.
+- Every CatGenie's `remainingSaniSolution` is a count of cleans. `sani_unit` is always
+  CLEANS (remove `WHOOSH_FIRMWARE`, `odd_sani` and the "left out" log). `LOW_CLEANS` (30)
+  applies to both. `litter_states.sani_unit` is rewritten on the next reading, so nothing
+  needs a migration. Update the module docstring, which says the A.I.'s is a percent.
+- The low message says "(about 4 cleans left)" for both boxes, and the Home and Accounts
+  pages, `appliance_status`, the wall and the day card all use `sani_words` the same way
+  for both.
+- Add a capture of the A.I. from the Pi (`themi catgenie capture`, scrubbed) to
+  `tests/fixtures/catgenie` as `device_ai_new_cartridge.json`, with its source in the
+  README.
+
+Tests (start with failing ones): the A.I. fixture at 238 reads as "238 cleans of
+sani-solution left"; the A.I. at 4 is running low and at 0 is out; a reading with error `6`
+and 0 left has one problem (SOLUTION, OUT) and makes one message and one chore; error `6`
+with 50 left is OUT; an unknown code `7` gives the "a code Themi doesn't know yet (7)"
+wording and is logged once.
+Scenario: the A.I. runs from 5 cleans to 0, then reports error 6. Michael gets one "running
+low" message and one chore. A new cartridge (239) clears it, and the Home page shows "ready,
+239 cleans of sani-solution left".
+
+Data/Setup: none beyond the update. Decided here, not with Michael yet: every CatGenie
+counts cleans (the A.I.'s 239 → 238 says so; if a capture ever shows a percent again, a
+reading would need its own rule). Mark #248 and #252 reviewed once live.
+
+Notes:
+- Changes from the prompt: the "code Themi doesn't know yet" wording is used only for a bare
+  number. A code with letters ("HEATER_FAULT") still reads "it shows an error (heater
+  fault)": it says something, and the bug was about the number. The wording is "it's
+  showing a code Themi doesn't know yet (7), which the CatGenie app can explain", so it
+  fits both the "needs a look: …" message and `appliance_status`.
+- `events.py`: `CODES = {"6": OUT}`. `LitterBoxReading.problems` puts a code that means OUT
+  under SOLUTION (OUT even when the count isn't 0), never ERROR. `sani_unit`,
+  `WHOOSH_FIRMWARE`, `PERCENT`, `LOW_PERCENT` and `odd_sani` are gone, along with the "left
+  out" log. `sani_unit` stays on the reading (always `CLEANS`) because `litter_states`
+  stores it; the next poll rewrites the A.I.'s row. `LOW_CLEANS` (30) applies to both boxes.
+- Tests changed because the behaviour changed, not loosened: every "N% sani-solution left"
+  became "N cleans of sani-solution left" (`device.json`'s 39 is now cleans) in
+  `test_catgenie_events.py`, `test_catgenie.py`, `test_dev_faults.py`,
+  `test_dev_controls.py` and `test_litter_box.py`. The A.I.'s low mark moved from 20 to 30.
+  `test_the_ai_still_reads_a_percent`, `test_the_unit_comes_from_the_firmware` and
+  `test_a_percent_over_a_hundred_shows_no_level` tested F41a's percent rule and were
+  replaced by `test_the_ai_counts_cleans_too` and `test_the_ai_runs_low_at_thirty_cleans…`.
+  The dev panel's "Set the sani-solution" control takes 0–500 cleans.
+- New fixture `tests/fixtures/catgenie/device_ai_new_cartridge.json` (the Pi's A.I. on
+  2026-11-23, scrubbed). New tests: 3 for error 6 and bare codes in
+  `test_catgenie_events.py`, and the scenario
+  `test_error_six_while_out_is_one_message_and_one_chore_…` in `test_litter_box.py`.
+- **Setup:** none beyond updating the Pi.
+
+### F58c · Feedback (2026-11-22): the wall fits the frame's screen, with nothing cut off at the bottom
+Status: [x] 2026-11-22
+Depends on: F52a, F53
+Read first: `themi_home/web/static/wall.css` (`.wall-screen`, `.wall-col`, the bottom strip);
+`themi_home/web/static/wall.js` (rendering parts, `shownAs`, F52a's full screen);
+`themi_home/wall_view.py` (`more`, WL9c's "top few"); `tests/integration/test_wall_page.py`,
+`tests/integration/test_wall_fullscreen.py` and `tests/unit/test_wall_look.py`; F52a's and
+F55c's Notes. From Michael's bug #249 (2026-11-22, 11:27 am, "on the wall, the frame goes
+off the bottom").
+
+What the Pi shows: report-249-1 is a photo of the Cozyla frame. The columns, the week ahead
+and the bottom strip (Groceries, Things to cook) are there, but the strip's lower half is
+under the frame's bezel and the page carries on past the screen. `.wall-screen` is
+`min-height: 100vh`, so the page grows with what's in it. A column with several chores, a
+routine kept open after its window (F55c) and two to-dos makes the page taller than the
+screen. Nothing on the wall scrolls by design, so the bottom is just lost.
+
+Build:
+- The wall is exactly one screen tall: `.wall-screen` is `height: 100dvh` (with `100vh`
+  before it for older WebViews) and `overflow: hidden`. The header, note, week ahead and
+  bottom strip keep their natural height. The columns row takes what's left (`flex: 1;
+  min-height: 0`).
+- Each column fits its items to its height. After each render and on `resize`, `wall.js`
+  hides the items at the end of a section that don't fit, and the section's "+N more"
+  counts them along with the server's `more`. Done items ("1 done") and the [View full day]
+  button always stay. The order is kept (routines, chores, to-dos as today), and the last
+  section shrinks first.
+- The night screen (`.wall-night`) gets the same `height` and `overflow` rules.
+- No change to what the server sends; the "top few" counts stay as they are.
+
+Tests: `test_wall_look.py` checks that `.wall-screen` and `.wall-night` use `100dvh` and
+`overflow: hidden` and no longer `min-height: 100vh`. A wall.js test (with the harness the
+existing wall JS tests use; if there's none, a small jsdom-free check with fixed element
+heights in `tests/unit`) checks that 8 items in a column with room for 5 shows 4, and
+"+4 more" when the server said 0 more and "+6 more" when it said 2.
+Scenario: none (layout). Michael's look at the frame is the check.
+
+Data/Setup: update the Pi. The frame picks up the new CSS on its next poll (the service
+worker's version changes). Mark #249 reviewed once live.
+
+Notes:
+- `wall.css`: `.wall-screen` and `.wall-night` are `height: 100vh; height: 100dvh;
+  overflow: hidden; box-sizing: border-box`. The screen's children are `flex: none`, except
+  `.wall-columns` (`flex: 1 1 0; min-height: 0`). `.wall-col-body` grows into the column and
+  hides its overflow. `.wall-entry.wall-cut` is hidden.
+- New `static/wall-fit.js` (loaded before `wall.js`): `fitColumn` is the arithmetic (also a
+  CommonJS export, for the test), and `fitWall` measures each column body and hides entries
+  from the end of the last section first. `wall.js` calls it on DOMContentLoaded, `load`,
+  every htmx swap, `resize` (after 150 ms) and when a night-time touch wakes the screen
+  (the columns have no height while hidden).
+- `_columns.html`: every section with items has its `.wall-more` button with
+  `data-more` (the server's count), hidden at 0 and with no text, so the script can show
+  "+N more" without htmx processing a new element. The server's top-few counts are
+  unchanged.
+- Tests: `tests/unit/test_wall_fit.py` (4; runs `fitColumn` under node, and skips if node
+  isn't installed) and two in `tests/unit/test_wall_look.py`.
+- **Setup:** update the Pi. The frame picks up the new files on its next full load (the
+  asset links carry a version). If it's still cut off, reload the wall once on the frame.
+
+### F58d · Feedback (2026-11-22): fixing the vacuum and saying so clears its alert, so "Unjam the vacuum" ticks off
+Status: [x] 2026-11-22
+Depends on: F25a
+Read first: `themi_home/vacuum.py` (`_gone`, `_task_changed`, `_offer_home`, `_execute`,
+`_nudge`'s buttons, `TEXTS`, `HOME_AFTER`); `themi_home/connectors/roborock/watch.py`
+(`read`, `resolve`); `themi_home/connectors/roborock/events.py` (code 42, "the dock's
+cleaning brush is jammed"); the wall's to-do ticks (how a tick on the wall reaches
+`Board.complete`); F50c's notes (a button that acts with no second card). From Michael's bug
+#250 (2026-11-22, 11:29 am, "how long will it take to auto check Unjam the vacuum since I
+already fixed it?").
+
+What the Pi shows: `vacuum_problems` 21 (jammed, "the dock's cleaning brush is jammed",
+task 126) opened at 4:44 am. Michael cleared the jam by hand before 11:29. The robot kept
+showing code 42, because a Roborock alert stays until someone clears it in the app or on
+the robot, so the problem never went and the task never ticked. At 11:30 Themi sent "Clear
+the vacuum's alert. Go ahead, or not now?" (an offer that came after the robot's other
+problems of the morning, 22 to 24). He tapped Go ahead at 11:35, the alert cleared, and
+task 126 was marked done a second later. The same happened the day before (problem 19,
+task 124, done by hand at 10:22 am, but the alert stayed until 11:30). So "auto check"
+here can only mean: the moment the alert is cleared.
+
+Build:
+- **[Fixed it] on the nudge.** A vacuum problem's nudge (`_nudge`) for an alert kind (every
+  kind in `HOME_AFTER`, and any other that the robot shows as an alert code) has [Fixed it]
+  in place of [Done]. A tap marks the task done and then clears the robot's alert, and
+  sends it home if it's off its dock, through `autonomy.stage` as an action the tap already
+  approved (as F50c's buttons do). There's no second "Go ahead?" card. The edit says
+  "Marked done: Unjam the vacuum. Cleared its alert." If the robot can't be reached, it
+  says "Marked done. The vacuum couldn't be reached, so its alert is still showing; clear
+  it in the Roborock app." A problem kind that isn't an alert keeps [Done].
+- **The same from the wall and from chat.** A tick on the wall, or "done" in chat, for a
+  vacuum problem's task does the same through `_task_changed`. Today that path stages the
+  "Clear the vacuum's alert" card. When the person ticked it themselves, the alert is
+  cleared straight away instead, with a one-line note in chat ("Cleared the vacuum's
+  alert, since Unjam the vacuum is done."). The card stays only for the case where the
+  robot is off its dock and must be sent home (moving it is a bigger thing than clearing
+  an alert).
+- **The answer to Michael's question.** The jam message says how it ends: "The vacuum needs
+  a hand: the dock's cleaning brush is jammed. Tap Fixed it once it's clear, and Themi
+  clears the alert." `appliance_status`, for a vacuum with an open alert problem, adds
+  "The alert stays on the robot until it's cleared; once it's fixed, say so and Themi
+  clears it."
+
+Tests (start with failing ones): a jammed problem's nudge has [Fixed it]; tapping it with
+the fake Roborock showing code 42 calls `resolve`, marks the task done, closes the problem
+as done and sends no second card; with the fake unreachable, the task is done and the
+words say the alert is still showing; ticking the task on the wall clears the alert and
+posts the one-line note; a robot off its dock still gets the send-home card; a not-docked
+problem keeps [Done].
+Scenario: the dock's brush jams at 4:44 am. The nudge comes at 8 am. At 11:25 Michael taps
+[Fixed it]. The fake robot's alert is cleared, "Unjam the vacuum" is done and off the wall,
+and no "Go ahead?" card follows.
+
+Data/Setup: none beyond the update. Decided here, not with Michael yet: clearing an alert
+on a person's own "fixed it" needs no second approval; sending the robot home still does.
+Mark #250 reviewed once live.
+
+Notes:
+- Changes from the prompt:
+  - The tap's own edit stays "Marked done: Unjam the vacuum. Thank you." What was cleared
+    comes as a separate line in chat: "Cleared the vacuum's alert, since Unjam the vacuum is
+    done." (or, when the robot can't be reached, "… is done, but the vacuum couldn't be
+    reached, so its alert is still showing. Clear it in the Roborock app."). That way one
+    path covers the tap, a tick on the wall and "done" in chat.
+  - [Fixed it] replaces [Done] for the kinds in `HOME_AFTER` (stuck, jammed, dustbin, fault).
+    The dock's water alerts keep [Done] ("Refill the tank?" → Fixed it reads oddly), but
+    saying them done clears their alert the same way. Not-docked and worn parts keep [Done]
+    and behave as before.
+  - Whether it's on its dock comes from a fresh read (`watcher.read`), not the stored state
+    word: "stopped with a problem" covers a dock alert and a robot stuck in the kitchen
+    alike.
+- `vacuum.py`: `_task_changed` calls `_clear_on_done` for a problem in `ALERT_KINDS`. On its
+  dock (or cleaning, or heading back) with an alert, it stages `vacuum_home` with
+  `{"device", "alert_only": true}` and `requested=True` (the person's word is the yes;
+  `_execute` clears the alert only). Off its dock, it's `_offer_home`'s card as before. The
+  jam message now ends "Tap Fixed it once it's clear, and Themi clears the alert."
+  `chores` (for `appliance_status`) adds "The alert stays on the robot until it's cleared;
+  once it's fixed, say so and Themi clears it." when an alert chore is open.
+- Tests changed because the behaviour changed: in `tests/scenarios/test_vacuum.py`, the stuck
+  nudge's buttons are [Fixed it, Later]; "out of clean water" clears on Done with no card;
+  "a done alert isn't raised again" no longer taps Not now (there's no card); the jam text;
+  and the rule test taps Fixed it. Six new tests: Fixed it on the dock's brush jam (code
+  42), the robot unreachable, ticked on the wall, a robot off its dock still gets the card,
+  not-docked keeps Done, and `appliance_status`'s line.
+- **Setup:** none beyond updating the Pi.
+
+### F58e · Feedback (2026-11-22): a saved place's hours are by day, so Monday's visit uses Monday's hours
+Status: [x] 2026-11-22
+Depends on: F57b
+Read first: `themi/standard/places.py` (`SavedPlace`, `line`, `mentioned`, `save`);
+`themi/standard/memory.py` (`remember_place`, `for_prompt`'s places, the
+`memory.remember-place` prompt line); `themi/standard/business_hours.py` and the
+`place_hours` table (the weekday → hours form already used for shops); the
+`add_calendar_event` tool and its staging (`themi/standard/calendar*` or
+`themi_google/calendar*`, where `arrive_by` is handled); `themi/web/knowledge_pages.py`'s
+Places section; F57b's Notes. From Michael's bug #251 (2026-11-22, 5:51 pm, "it pulled the
+wrong visiting hours for Monday").
+
+What the Pi shows: place 1 is Stanford, with the note "Visiting hours: 6:30–8:30 pm weekdays
+and 12–8:30 pm weekends." At 5:50 pm Sunday Michael said "I want to visit Erin at Stanford
+tomorrow". Reply 534 called `add_calendar_event` for Mon 23 Nov 12:00–20:30, arrive by
+11:50. Those are the weekend hours: Saturday's and Sunday's visits (12–8:30) were the same
+request on a weekend day, and the model copied them. The note was in the turn's notes as
+free text, and nothing checks an event's time against it. Michael tapped Not now and
+reported it.
+
+Build:
+- **Hours as data.** `places` gains `hours` (migration 0183, JSON in `place_hours`' form:
+  weekday 0–6 → `[open, close]` or null). `remember_place` gains an optional `hours`
+  argument, filled by the model from what was said ("weekdays 18:30–20:30, weekends
+  12:00–20:30"). The tool parses it with `business_hours`' parser and refuses one it can't
+  read ("Couldn't read those hours; say them per day or as weekdays and weekends"). Saving
+  the Stanford place again sets them, and the note keeps anything else.
+- **The turn sees that day's hours.** `SavedPlace.line()` and travel's data block give the
+  hours as days ("Visiting hours: Mon–Fri 6:30–8:30 pm; Sat–Sun 12–8:30 pm"). When the
+  message names a day ("tomorrow", "Monday"), the place line adds that day's hours:
+  "Mon 23 Nov: 6:30–8:30 pm". Days are worked out with `themi.clock`, in the member's
+  timezone.
+- **A check before staging.** When `add_calendar_event`'s location is a saved place with
+  hours, and the event's start or end falls outside that date's hours, the tool doesn't
+  stage it. It returns "Stanford's hours on Mon 23 Nov are 6:30–8:30 pm, so that time is
+  outside them. Use those hours, or ask the person." With "arrive_by" before opening, that's
+  fine (arriving early to park is the point), but the start isn't.
+- The Places section on the Rules & memory page edits the hours per day (seven rows of
+  open/close, or "closed").
+- Migration 0183 copies nothing. The Stanford place gets its hours when Michael says them
+  again or edits the page (see Data/Setup).
+
+Tests (start with a failing one): reply 534's turn, faked. On a Sunday at 5:50 pm, with
+Stanford's hours set, the model calls `add_calendar_event` for Monday 12:00–20:30. The tool
+refuses with Monday's hours. A second call for 18:30–20:30 with arrive_by 18:20 is staged.
+Also: `remember_place` with "weekdays 6:30–8:30 pm, weekends 12–8:30 pm" stores seven days;
+unreadable hours are refused; the place line for "tomorrow" on a Sunday says Monday's
+hours; a place with no hours behaves as today.
+Scenario: Michael, on a Sunday evening: "I want to visit Erin at Stanford tomorrow". With
+the model faked to try the weekend hours first, the card he gets says Mon 23 Nov,
+6:30–8:30 pm, there by 6:20 pm.
+
+Data/Setup: after the update, Michael says once: "Stanford's visiting hours are 6:30–8:30 pm
+weekdays and 12–8:30 pm weekends", or sets them under Places on the Rules & memory page.
+Decided here, not with Michael yet: a time outside a place's hours is refused at the tool,
+not just warned about. Mark #251 reviewed once live.
+
+Notes:
+- Changes from the prompt:
+  - The Places form has one "Hours" text field ("Weekdays 6:30-8:30 pm, weekends 12-8:30
+    pm"), read back as "Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm", rather than seven rows of
+    open/close. It reads the same words the tool takes, and the read-back reads back in.
+    Blank clears the hours; unreadable hours are refused and the place is left as it was.
+  - `business_hours._span` now reads an unmarked opening time by the closing time's half:
+    "6:30-8:30 pm" is 6:30 pm (it was 6:30 am), "12-8:30 pm" opens at noon, "9-5 pm" still
+    opens at 9 am. Shops' hours (F33) parse through the same function; their tests pass.
+- Migration 0183: `places.hours` (JSON in `place_hours`' form, '' for none). `SavedPlace`
+  has `hours`, `hours_on(day)`, `hours_text`, and `line(day)`. `places.py` also has
+  `read_hours`, `hours_words`, `span_words`, `day_label` and `day_named` (today, tomorrow,
+  or the next such weekday). Saving a place again with no hours keeps the ones it has.
+- `remember_place` has an `hours` argument; unreadable hours fail with what to say instead.
+  `Memory.prompt_facts` gives a mentioned place's line the hours of the day the message
+  names ("On Mon 26 Oct: 6:30-8:30 pm."), in the family's timezone through `themi.clock`.
+  Travel's data block adds "Hours on <day>: …" for the event's day.
+- `add_calendar_event` (`_keep_to_hours` in `themi_google/events.py`) refuses an event at a
+  saved place with hours whose start or end falls outside that day's ("Stanford's hours on
+  Mon 26 Oct are 6:30-8:30 pm, so that time is outside them. Use those hours, or ask the
+  person."), or on a closed day. `arrive_by` isn't checked, so arriving early is fine.
+  `change_calendar_event` isn't checked (not asked for).
+- Goldens: `system_prompt.txt` (the `memory.remember-place` line) and `tools.json`
+  (`remember_place` gained `hours`).
+- Tests: 4 in `tests/unit/test_saved_places.py`, reply 534's turn in
+  `tests/scenarios/test_saved_places.py`, and a page test in
+  `tests/integration/test_admin_pages.py`. F57b's scenario now passes `"hours": ""` to
+  `remember_place` (every argument is required in the tool schema).
+- **Setup:** update the Pi. Then Michael says once: "Stanford's visiting hours are
+  6:30–8:30 pm weekdays and 12–8:30 pm weekends", or types them into the Hours box for
+  Stanford under Places on the Rules & memory page. The old note can then be cleared.
 
 ## Conversation mode
 

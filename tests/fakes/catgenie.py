@@ -3,7 +3,7 @@ httpx transport.
 
     fake_catgenie.add_box("CGR0000001", "CatGenie")       # tests/fixtures/catgenie/device.json
     fake_catgenie.add_box("SFU0000001", "Whoosh", "device_whoosh")  # sani-solution: cleans left
-    fake_catgenie.set("CGR0000001", sani=15)              # its sani-solution, % (or cleans)
+    fake_catgenie.set("CGR0000001", sani=15)              # its sani-solution: cleans left
     fake_catgenie.set("CGR0000001", error="HEATER_FAULT") # operationStatus.error
     fake_catgenie.clean("CGR0000001", at)                 # a clean: lastClean, one more cycle
     fake_catgenie.alert("CGR0000001", "DOME_OPEN", at)    # a notification naming an error
@@ -66,7 +66,7 @@ class FakeCatGenie(Snapshots):
     # ----- the test's controls ----------------------------------------------------------
 
     def add_box(self, manufacturer_id: str, name: str, fixture: str = "device") -> None:
-        """`fixture`: "device" (an A.I., sani-solution in %) or "device_whoosh" (cleans left)."""
+        """`fixture`: "device" (an A.I.) or "device_whoosh"; both count cleans left (F58b)."""
         box = payload(fixture)
         box["manufacturerId"], box["name"] = manufacturer_id, name
         box["macAddress"] = f"{len(self.devices) + 1:012d}"

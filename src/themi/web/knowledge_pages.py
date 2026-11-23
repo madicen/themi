@@ -13,6 +13,7 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.core import keys
 from themi.core.rules import RuleError
 from themi.standard.memory import Fact, Memory
+from themi.standard.places import read_hours
 from themi.web.kit import Kit
 
 
@@ -125,11 +126,22 @@ def routes(kit: Kit) -> APIRouter:
             early = int(str(get("arrive_early", "") or 0))
         except ValueError:
             early = 0
+        said = " ".join(str(get("hours", "")).split())
         return {
             "aliases": str(get("aliases", "")),
             "note": str(get("note", "")),
             "arrive_early": early,
+            "hours": read_hours(said) if said else {},  # F58e: ValueError when unreadable
         }
+
+    def place_problem(exc: ValueError) -> str:
+        said = str(exc)
+        if said.startswith("couldn't read those hours"):
+            return (
+                "Couldn't read those hours. Say them like "
+                "“weekdays 6:30-8:30 pm, weekends 12-8:30 pm”."
+            )
+        return "A place needs a name and an address."
 
     @router.post("/places/new")
     async def add_place(request: Request) -> Response:
@@ -143,8 +155,8 @@ def routes(kit: Kit) -> APIRouter:
                 scope=scope,
                 **place_fields(form),  # type: ignore[arg-type]
             )
-        except ValueError:
-            return kit.redirect("/knowledge#places", "A place needs a name and an address.")
+        except ValueError as exc:
+            return kit.redirect("/knowledge#places", place_problem(exc))
         return kit.redirect("/knowledge#places", f"Saved {place.name}.")
 
     @router.post("/places/{place_id:int}/{change}")
@@ -165,8 +177,8 @@ def routes(kit: Kit) -> APIRouter:
                     str(form.get("address", "")),
                     **place_fields(form),  # type: ignore[arg-type]
                 )
-            except ValueError:
-                return kit.redirect("/knowledge#places", "A place needs a name and an address.")
+            except ValueError as exc:
+                return kit.redirect("/knowledge#places", place_problem(exc))
             message = "Updated."
         elif change == "delete":
             places.remove(place.id)

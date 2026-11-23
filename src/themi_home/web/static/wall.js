@@ -65,9 +65,18 @@
 
   document.addEventListener("htmx:sendError", function () { stale(true); });
   document.addEventListener("htmx:responseError", function () { stale(true); });
+  // F58c: the columns give up what doesn't fit on the frame ("+N more", wall-fit.js).
+  function fit() { if (window.themiWallFit) window.themiWallFit.fitWall(document); }
+  var refit = null;
+  window.addEventListener("load", function () { fit(); });  // fonts and icons in
+  window.addEventListener("resize", function () {
+    if (refit) clearTimeout(refit);
+    refit = setTimeout(fit, 150);
+  });
   document.addEventListener("htmx:afterSwap", function (event) {
     stale(false);
     place(event.target);
+    fit();
     if (event.target.id === "wall-view") watchView();
     if (event.target.id === "wall-night") nightMode();
   });
@@ -104,6 +113,7 @@
     if (awake) { clearTimeout(awake); awake = null; }
     document.body.classList.toggle("awake", on);
     if (on) awake = setTimeout(function () { wake(false); }, 120000);
+    if (on) fit();  // F58c: hidden at night, the columns had no height to fit into
   }
   document.addEventListener("pointerdown", function () {
     if (document.body.classList.contains("night")) wake(true);
@@ -145,6 +155,7 @@
     place(document);
     nightMode();
     hold();
+    fit();
     setInterval(tick, 60000);
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/wall/sw.js", { scope: "/wall" }).catch(function () {});

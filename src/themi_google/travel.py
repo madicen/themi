@@ -52,7 +52,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.wording import untitled
 from themi.localtime import to_utc_iso
 from themi.standard.lists import name_key
-from themi.standard.places import NOT_SURE_TEXT, SavedPlace, named_place
+from themi.standard.places import NOT_SURE_TEXT, SavedPlace, day_label, named_place
 from themi_google.events import When, title_matches, when_words
 
 if TYPE_CHECKING:
@@ -456,9 +456,16 @@ class TravelHeadsUps:
                 "to leave at", "to leave there at"
             )
         saved = self.saved_place(owner, address or entry.location or "")
-        if saved is not None and saved.note:  # F57b: e.g. its visiting hours
+        if saved is not None and (saved.note or saved.hours):  # F57b: e.g. its visiting hours
+            told = [saved.note] if saved.note else []
+            if saved.hours:
+                told = [
+                    t.rstrip(".") + "." for t in told
+                ]  # F58e: that day's, so a weekday visit isn't timed to a weekend's
+                day = entry.starts_at.astimezone(self._tz()).date()
+                told.append(f"Hours on {day_label(day)}: {saved.hours_on(day)}.")
             note += "\n" + as_data(
-                "memory", f"What they told Themi about {saved.name}: {saved.note}"
+                "memory", f"What they told Themi about {saved.name}: {' '.join(told)}"
             )
         return as_data("calendars", line) + (
             f"\nAbout {_duration(route.minutes)} {start.words} {how}: {plan}.{heads_up}{note}"

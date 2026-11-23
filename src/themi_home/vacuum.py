@@ -17,7 +17,11 @@ From the robot's events (Roborock, `themi_home.connectors.roborock`):
 - Once a stuck, jammed or binned robot is sorted and it's sitting off its dock, or someone
   says a chore's done while the robot still shows its alert (a dock's water alert stays
   until it's cleared), Themi offers to clear the alert and send it home: a side effect, so
-  it's staged in `vacuum_home`, a card until a rule makes it automatic.
+  it's staged in `vacuum_home`, a card until a rule makes it automatic. F58d (bug #250):
+  a person saying the chore's done (a tap on [Fixed it] or [Done], a tick on the wall, a
+  word in chat) while the robot sits on its dock showing the alert clears it straight away,
+  their saying so being the yes, with a line in chat; the card stays for sending it home.
+  A Roborock alert stays until it's cleared, so without this the chore never ticked off.
 - A part nearly worn out makes a "Replace the vacuum's filter" task, once until the part's
   counter is reset in the Roborock app. Not time-bound: the usual daily limit applies.
 - The robot showing a problem's gone (a worn part's too) checks off today's wall routine
@@ -82,7 +86,10 @@ TITLES = {
 }
 TEXTS = {
     STUCK: "The vacuum's stuck{where} ({detail}). Free it and pop it back on the dock?",
-    JAMMED: "The vacuum needs a hand{where}: {detail}. Clear it when you can?",
+    JAMMED: (
+        "The vacuum needs a hand{where}: {detail}. Tap Fixed it once it's clear, and Themi "
+        "clears the alert."
+    ),
     WATER_EMPTY: "The vacuum's dock is out of clean water. Refill the tank?",
     WATER_FULL: "The vacuum's dock needs emptying ({detail}). Empty the tank?",
     BIN: "The vacuum needs a hand: {detail}. Sort it when you can?",
@@ -102,11 +109,25 @@ EXPIRED_TEXT = (
     "be linked again on the website's Accounts page."
 )
 DONE, LATER = "Done", "Later"
+FIXED = "Fixed it"  # F58d: [Done]'s words for a problem a person fixes (HOME_AFTER's)
 WAIT = timedelta(minutes=5)  # a problem's first nudge waits this long
 AWAY_WAIT = timedelta(minutes=30)  # "not back on its dock" waits longer: it may be sent home
 LATER_FOR = 60  # minutes: Later asks again in an hour
 HOME_AFTER = (STUCK, JAMMED, BIN, FAULT)  # sorted, it may be sitting where it stopped
 CARD_FOR = timedelta(hours=2)  # an offer to send it home goes stale
+# F58d: the problems the robot shows as an alert, which stays until it's cleared.
+ALERT_KINDS = (STUCK, JAMMED, WATER_EMPTY, WATER_FULL, BIN, FAULT)
+CLEAR_SUMMARY = "Clear the vacuum's alert"
+ALERT_CLEARED = "Cleared the vacuum's alert."
+ALREADY_FINE = "The vacuum's already fine, so there was nothing to do."
+CLEARED_TEXT = "Cleared the vacuum's alert, since {title} is done."
+UNREACHED_TEXT = (
+    "{title} is done, but the vacuum couldn't be reached, so its alert is still showing. "
+    "Clear it in the Roborock app."
+)
+ALERT_STAYS = (
+    "The alert stays on the robot until it's cleared; once it's fixed, say so and Themi clears it."
+)
 # F25a: a routine item is about the robot when it names it and the problem ("Refill vacuum
 # water"); "Vacuum upstairs bedroom" is a person's chore. A fault has no words of its own.
 NAMES = "vacuum vac robot roborock"
@@ -300,12 +321,15 @@ class Vacuum:
         device = self._device(int(payload["device"]))
         if device is None:
             return "The vacuum isn't linked any more, so nothing was sent."
+        alert_only = bool(payload.get("alert_only"))  # F58d: a person said it's fixed
         try:
             status = await self.watcher.read(device)
             done = []
             if status.alert:
                 await self.watcher.resolve(device, status.alert)
                 done.append("cleared the vacuum's alert")
+            if alert_only:
+                return ALERT_CLEARED if done else ALREADY_FINE
             if not (status.docked or status.cleaning or status.returning):
                 await self.watcher.send_home(device)
                 done.append("sent it back to its dock")
@@ -313,9 +337,53 @@ class Vacuum:
             log.warning("Couldn't send the vacuum home: %s", exc)
             return "The vacuum couldn't be reached, so nothing was sent."
         if not done:
-            return "The vacuum's already fine, so there was nothing to do."
+            return ALREADY_FINE
         said = " and ".join(done)
         return said[0].upper() + said[1:] + "."
+
+    async def _clear_on_done(self, device_id: int, member: Member, task: Task) -> None:
+        """F58d (bug #250): a chore said done while the robot may still show its alert.
+        Sitting on its dock (or cleaning, or heading back), the alert's cleared now, their
+        saying so being the yes, and a line says so. Anywhere else it's the card to clear
+        it and send it home, as before: moving it is a bigger thing than clearing an alert."""
+        device = self._device(device_id)
+        if device is None:
+            return
+        try:
+            status = await self.watcher.read(device)
+        except RoborockError as exc:
+            log.warning("Couldn't read the vacuum to clear its alert: %s", exc)
+            await self._say_cleared(member, task, UNREACHED_TEXT)
+            return
+        if not (status.docked or status.cleaning or status.returning):
+            await self._offer_home(device_id, member)
+            return
+        if not status.alert:
+            return
+        outcome = await self.services.autonomy.stage(
+            CATEGORY,
+            member,
+            CLEAR_SUMMARY,
+            {"device": device.id, "alert_only": True},
+            EXECUTOR,
+            requested=True,
+            expires=clock.now() + CARD_FOR,
+        )
+        if outcome.action.status != "done":
+            return  # a card after all (the category asks): it says what it's for
+        if outcome.message == ALERT_CLEARED:
+            await self._say_cleared(member, task, CLEARED_TEXT)
+        elif "couldn't be reached" in outcome.message:
+            await self._say_cleared(member, task, UNREACHED_TEXT)
+
+    async def _say_cleared(self, member: Member, task: Task, text: str) -> None:
+        await self.services.outbox.send(
+            member,
+            text.format(title=task.title),
+            priority=Priority.NORMAL,
+            kind=KIND,
+            dedupe_key=f"vacuum-cleared-{task.id}",
+        )
 
     # ----- the nudge ------------------------------------------------------------------
 
@@ -346,7 +414,11 @@ class Vacuum:
             priority=Priority.NORMAL,
             kind=KIND,
             buttons=[
-                Button(DONE, "task", {"task": task.id, "action": "done"}),
+                Button(
+                    FIXED if kind in HOME_AFTER else DONE,
+                    "task",
+                    {"task": task.id, "action": "done"},
+                ),
                 Button(LATER, "task", {"task": task.id, "action": "later", "minutes": LATER_FOR}),
             ],
             not_before=not_before,
@@ -375,7 +447,11 @@ class Vacuum:
             (to_utc_iso(clock.now()), row["id"]),
         )
         if change == "done" and not str(row["problem"]).startswith(PART) and task.assignee:
-            await self._offer_home(int(row["device_id"]), self.store.get_member(task.assignee))
+            member = self.store.get_member(task.assignee)
+            if row["problem"] in ALERT_KINDS:
+                await self._clear_on_done(int(row["device_id"]), member, task)  # F58d
+            else:
+                await self._offer_home(int(row["device_id"]), member)
 
     async def _expired(self, why: str) -> None:
         for member in self.store.list_members():
@@ -432,6 +508,8 @@ class Vacuum:
                 else "not asked yet"
             )
             lines.append(f"Open chore: {task.title}, {whose}, {when}.")
+            if row["problem"] in ALERT_KINDS and ALERT_STAYS not in lines:
+                lines.append(ALERT_STAYS)  # F58d: why it hasn't ticked itself off
         return lines
 
     # ----- small things -------------------------------------------------------------------
