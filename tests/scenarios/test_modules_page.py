@@ -226,3 +226,17 @@ async def test_an_off_card_says_what_it_needs(scenario: Scenario) -> None:
     async with admin_site(scenario) as site:
         page = (await site.get("/modules")).text
     assert "Needs Family cookbook, Recipe groceries" in card_of(page, "cooking")
+
+
+async def test_the_safeway_page_says_how_to_install_the_helper(scenario: Scenario) -> None:
+    """SW1: installing the Chrome extension was only in the repo's README."""
+    async with admin_site(scenario) as site:
+        page = (await site.get("/modules/safeway")).text
+        safeway = (await site.get("/safeway")).text
+    assert "Load unpacked" in page and "chrome://extensions" in page
+    assert "https://github.com/madicen/themi/archive/refs/heads/main.zip" in page
+    assert "<code>http://themi.test</code>" in page  # what to paste as Themi's address
+    # anyone can connect a helper, and the Modules page is for admins: /safeway shows it too
+    assert "Load unpacked" in safeway and "<code>http://themi.test</code>" in safeway
+    assert "README" not in safeway
+    assert '<details class="module-guide card" open>' in safeway  # no helper yet: open
