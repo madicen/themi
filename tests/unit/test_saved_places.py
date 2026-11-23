@@ -186,3 +186,40 @@ def test_saving_again_without_hours_keeps_them_and_no_hours_is_as_before(
     assert again.hours == hours
     plain = places.save(family.erin, "Dentist", "1 Main St, Palo Alto")
     assert plain.hours == {} and "Hours" not in plain.line()
+
+
+# ----- F58f (bug #253): hours in a place's note, or said as a fact ---------------------------
+
+PI_NOTE = "Visiting hours: 6:30\u20138:30 pm weekdays and 12\u20138:30 pm weekends."
+PI_FACT = "Stanford's visiting hours are 6:30\u20138:30 pm weekdays and 12\u20138:30 pm weekends."
+
+
+def test_a_place_with_no_hours_set_reads_them_from_its_note(
+    places: Places, family: SeededFamily
+) -> None:
+    from datetime import time
+
+    saved = places.save(family.erin, "Stanford", LOT, note=PI_NOTE)  # as place 1 on the Pi
+    assert family.db.scalar("SELECT hours FROM places WHERE id = ?", (saved.id,)) == ""
+    assert saved.hours[0] == (time(18, 30), time(20, 30))
+    assert saved.hours[6] == (time(12), time(20, 30))
+
+
+def test_hours_set_for_a_place_win_over_its_note(places: Places, family: SeededFamily) -> None:
+    from datetime import time
+
+    from themi.standard.places import read_hours
+
+    saved = places.save(family.erin, "Stanford", LOT, note=PI_NOTE, hours=read_hours("daily 9-5"))
+    assert saved.hours[6] == (time(9), time(17))
+
+
+def test_a_fact_with_a_saved_places_hours_sets_them(places: Places, family: SeededFamily) -> None:
+    from datetime import time
+
+    saved = places.save(family.erin, "Stanford", LOT)
+    found = places.hours_from(family.erin, PI_FACT)
+    assert found is not None and found.id == saved.id
+    assert places.get(saved.id).hours[0] == (time(18, 30), time(20, 30))
+    assert places.hours_from(family.erin, "Stanford's hours are daily 9-5") is None  # set: kept
+    assert places.hours_from(family.erin, "The library's hours are daily 9-5") is None

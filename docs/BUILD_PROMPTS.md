@@ -345,7 +345,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F58c | Feedback: the wall fits the frame, nothing cut off at the bottom | Feedback | [x] 2026-11-22 |
 | F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [x] 2026-11-22 |
 | F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [x] 2026-11-22 |
-| F58f | Feedback: "6:30–8:30 pm weekdays" is read, and hours in a place's note or a fact count | Feedback | [ ] |
+| F58f | Feedback: "6:30–8:30 pm weekdays" is read, and hours in a place's note or a fact count | Feedback | [x] 2026-11-23 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -17295,7 +17295,7 @@ Notes:
   Stanford under Places on the Rules & memory page. The old note can then be cleared.
 
 ### F58f · Feedback (2026-11-22): hours said "6:30–8:30 pm weekdays" are read, and a place's hours said in a note or a fact are used
-Status: [ ]
+Status: [x] 2026-11-23
 Depends on: F58e
 Read first: `themi/standard/business_hours.py` (`ENTRY`, `_SPEC`, `_TIME`, `parse_hours`);
 `themi/standard/places.py` (`read_hours`, `SavedPlace.hours`, `_saved_from_row`, `mentioned`);
@@ -17345,6 +17345,31 @@ Scenario: reply 543's turn, faked. Stanford is saved as on the Pi (note with hou
 
 Data/Setup: none after the update (the note already has the hours). Fact 12 can be
 forgotten once this is live. Mark #251 and #253 reviewed once live.
+
+Notes:
+- `business_hours.parse_hours` reads time-first entries (`ENTRY_AFTER`) before day-first ones,
+  then blanks each out. A time-first entry's days don't run on past a comma ("9-5 Mon-Fri,
+  Sat 10-2": Saturday is 10-2), and it's skipped when a day comes right before its time
+  ("Sat 9am-1pm Sun closed": that time is Saturday's). Every existing hours test reads the
+  same.
+- `SavedPlace.hours` falls back to the hours its note says when none are set;
+  `hours_set` says which. With hours set, the place line says "Hours: …" before the note.
+  With only the note's, the note speaks for itself and only "On <day>: …" is added, so
+  the hours aren't said twice. Saving a place again keeps only hours that were set; the
+  note's are read again from whatever note it's given. Travel's data block adds "Hours on
+  <day>: …" for either kind, and `add_calendar_event`'s check uses either.
+- `Places.hours_from(member, text)`: `remember_fact` with a fact naming exactly one saved
+  place and readable hours sets that place's hours when none are set, and its result adds
+  "Also saved as Stanford's hours: Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm." The
+  `memory.remember-place` line now says "X's hours are …" for a saved place is
+  remember_place with those hours. No migration: the Pi's Stanford note already counts.
+- Tests: 3 in `tests/unit/test_business_hours.py` (the note's and fact 12's words), 3 in
+  `tests/unit/test_saved_places.py`, and 2 scenarios in `tests/scenarios/test_saved_places.py`
+  (reply 543 with only the note; fact 12 setting the hours). F57b's travel-block
+  assertion now includes "Hours on Wed 21 Oct: 6:30-8:30 pm.", since the note's hours
+  are read. Golden `system_prompt.txt` changes for the prompt line.
+- **Setup:** update the Pi. Nothing else: Stanford's note gives Monday's 6:30-8:30 pm. Fact 12
+  can be forgotten on the Rules & memory page once this is live.
 
 ## Conversation mode
 

@@ -501,8 +501,9 @@ PROMPT_RULES = (
         """\
 - "When I say Stanford, take me to the parking lot at ..." or "X's address is ..." is a
   place: remember_place, with its hours by day in hours and how early they like to
-  arrive. For an event at a saved place, use its address as the event's location, and
-  keep to that day's hours (weekdays and weekends can differ).""",
+  arrive. "X's hours are ..." for a saved place X: remember_place with the same name and
+  address and those hours. For an event at a saved place, use its address as the event's
+  location, and keep to that day's hours (weekdays and weekends can differ).""",
     ),
     PromptFragment(
         "memory.after-answering-a-general",

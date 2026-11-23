@@ -64,9 +64,9 @@ async def test_the_drive_to_stanford_goes_to_the_lot_ten_minutes_early_with_the_
     await scenario.run_periodic("calendar.busy")
     result = await ask(scenario, "Erin", "visit", "")
     assert "to be there by 6:20 pm, leave around 5:45 pm" in result
-    assert f'<data source="memory">\nWhat they told Themi about Stanford: {HOURS}\n</data>' in (
-        result
-    )
+    # F58f: the note's hours are read, so the event day's come with it.
+    told = f"What they told Themi about Stanford: {HOURS}. Hours on Wed 21 Oct: 6:30-8:30 pm."
+    assert f'<data source="memory">\n{told}\n</data>' in result
     looked_up = "SELECT COUNT(*) FROM geocodes WHERE query_key = 'stanford'"
     assert scenario.app.db.scalar(looked_up) == 0  # the name never went to the map
     assert await at(scenario, 17, 30) == [
@@ -188,3 +188,52 @@ async def test_mondays_visit_keeps_to_mondays_hours_not_the_weekends(
     )
     assert "Visit Erin at Stanford, Mon 26 Oct, 6:30-8:30 pm" in staged
     assert any("6:30-8:30 pm" in r for r in replies)
+
+
+async def test_hours_only_in_the_places_note_still_keep_mondays_visit_to_them(
+    scenario: Scenario, ready: FakeGcal
+) -> None:
+    """F58f, reply 543: on the Pi the Stanford place had its hours only in its note, so
+    nothing checked Monday's 12-8:30. The note counts now."""
+    memory(scenario).places.save(
+        scenario.member("Erin"),
+        "Stanford",
+        LOT,
+        note="Visiting hours: 6:30\u20138:30 pm weekdays and 12\u20138:30 pm weekends.",
+        arrive_early=10,
+    )
+    clock.advance(timedelta(days=4, hours=13, minutes=49))  # Sun 25 Oct, 10:49 pm
+    scenario.primary.queue_tool_call(
+        "add_calendar_event", visit("12:00", "20:30", arrive_by="11:50")
+    )
+    scenario.primary.queue_tool_call(
+        "add_calendar_event", visit("18:30", "20:30", arrive_by="18:20")
+    )
+    scenario.primary.queue_text("Visit Erin at Stanford tomorrow from 6:30 to 8:30 pm?")
+    await scenario.say("Erin", "I want to visit Erin at Stanford tomorrow")
+    refused, staged = tool_results(scenario)[-2:]
+    assert refused.startswith("Stanford's hours on Mon 26 Oct are 6:30-8:30 pm")
+    assert "Visit Erin at Stanford, Mon 26 Oct, 6:30-8:30 pm" in staged
+
+
+async def test_saying_a_saved_places_hours_as_a_fact_sets_them(
+    scenario: Scenario, ready: FakeGcal
+) -> None:
+    """Fact 12 on the Pi: "Stanford's visiting hours are ..." went to remember_fact."""
+    saved = memory(scenario).places.save(scenario.member("Erin"), "Stanford", LOT)
+    scenario.primary.queue_tool_call(
+        "remember_fact",
+        {
+            "subject": "Stanford",
+            "fact": "Stanford's visiting hours are 6:30\u20138:30 pm weekdays and "
+            "12\u20138:30 pm weekends.",
+            "about": "household",
+            "keywords": "",
+        },
+    )
+    scenario.primary.queue_text("Saved.")
+    await scenario.say("Erin", "Stanford's visiting hours are 6:30\u20138:30 pm weekdays and ...")
+    assert tool_result(scenario).endswith(
+        "Also saved as Stanford's hours: Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm."
+    )
+    assert len(memory(scenario).places.get(saved.id).hours) == 7

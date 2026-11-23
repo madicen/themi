@@ -30,3 +30,31 @@ def test_daily_and_24_hours() -> None:
 
 def test_nothing_to_read() -> None:
     assert parse_hours("Call us at 650-555-0100 for an appointment") == {}
+
+
+# ----- F58f (bug #253): the time before the days, as people say it ---------------------------
+
+STANFORD = {
+    **{d: (time(18, 30), time(20, 30)) for d in range(5)},
+    5: (time(12), time(20, 30)),
+    6: (time(12), time(20, 30)),
+}
+
+
+def test_the_time_before_the_days_is_read() -> None:
+    assert parse_hours("6:30\u20138:30 pm weekdays and 12\u20138:30 pm weekends") == STANFORD
+    assert parse_hours("6:30-8:30 pm on weekdays, 12-8:30 pm on weekends") == STANFORD
+
+
+def test_the_notes_and_the_facts_own_words_are_read() -> None:
+    """Place 1's note and fact 12 on the Pi, word for word."""
+    note = "Visiting hours: 6:30\u20138:30 pm weekdays and 12\u20138:30 pm weekends."
+    fact = "Stanford's visiting hours are 6:30\u20138:30 pm weekdays and 12\u20138:30 pm weekends."
+    assert parse_hours(note) == STANFORD
+    assert parse_hours(fact) == STANFORD
+
+
+def test_both_orders_together() -> None:
+    hours = parse_hours("9-5 Mon-Fri, Sat 10-2")
+    assert hours[0] == (time(9), time(17)) and hours[5] == (time(10), time(14))
+    assert hours[6] is None
