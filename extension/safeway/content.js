@@ -5,7 +5,7 @@
 (function () {
   const { createClient, readyToShop } = globalThis.ThemiSafeway;
   const { fillCart, alternatives, choose, createMemory } = globalThis.ThemiFill;
-  const { parseList, itemKey } = globalThis.ThemiList;
+  const { itemKey } = globalThis.ThemiList;
   const { createRemoteMemory } = globalThis.ThemiLink;
   const { jobItems } = globalThis.ThemiWorker;
 
@@ -54,21 +54,17 @@
     return paired ? createRemoteMemory(ask, itemKey) : createMemory(storage);
   }
 
-  async function fill(text) {
-    await run(parseList(text));
-  }
-
   async function run(items, jobId) {
     if (!items.length) return null;
     running = true;
     let result;
     try {
-      await storage.set({ run: { state: "running", done: 0, total: items.length, item: items[0].name } });
+      await storage.set({ run: { state: "running", at: Date.now(), done: 0, total: items.length, item: items[0].name } });
       result = await fillCart({
         items,
         client: await client(),
         memory: await memory(),
-        onProgress: (p) => storage.set({ run: { state: "running", ...p } }),
+        onProgress: (p) => storage.set({ run: { state: "running", at: Date.now(), ...p } }),
       });
     } catch (e) {
       result = { added: [], notFound: [], outOfStock: [], failed: [], stopped: String(e.message || e) };
@@ -88,9 +84,12 @@
       return true;
     }
     if (msg.type === "fill") {
+      // The popup's ticked rows (SW1), in a job's shape so they're checked the same way.
+      const items = jobItems({ items: msg.items }, itemKey);
       if (running) reply({ ok: false, detail: "Already filling the cart." });
+      else if (!items.length) reply({ ok: false, detail: "Tick at least one thing to add." });
       else {
-        fill(String(msg.text || ""));
+        run(items);
         reply({ ok: true });
       }
       return false;

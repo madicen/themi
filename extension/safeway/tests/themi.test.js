@@ -35,6 +35,14 @@ test("the API sends the token, never cookies, and reads jobs", async () => {
   assert.deepEqual(themi.calls[1].body, { items: [], stopped: false });
 });
 
+test("the grocery list a cart would be filled from (SW1)", async () => {
+  const body = { items: [{ name: "eggs", qty: 1, search: "eggs", product: null, from: "groceries" }], waiting: false };
+  const themi = fakeThemi({ "GET /api/safeway/list": [200, body] });
+  const api = createThemiApi({ base: "https://themi.test", token: "swh_abc", fetchFn: themi.fetchFn });
+  assert.deepEqual(await api.shoppingList(), body);
+  assert.equal(themi.calls[0].headers.Authorization, "Bearer swh_abc");
+});
+
 test("no job is null, and a 401 is Revoked", async () => {
   const none = createThemiApi({ base: "https://t", token: "x", fetchFn: fakeThemi({ "POST /api/safeway/claim": [204, null] }).fetchFn });
   assert.equal(await none.claim(), null);

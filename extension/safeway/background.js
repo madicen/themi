@@ -35,6 +35,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     case "job-done":
       worker.jobDone(msg.jobId, msg.result || {});
       return false;
+    case "themi-list":
+      worker.list().then(reply);
+      return true;
     case "themi-products":
       worker.products().then(reply);
       return true;

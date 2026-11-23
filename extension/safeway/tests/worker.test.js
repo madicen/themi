@@ -9,7 +9,7 @@ const { fixture, fakeSafeway, fakeStorage, ctx, noSleep } = require("./fakes.js"
 const PAIRED = { themiUrl: "https://themi.test", themiToken: "swh_" + "a".repeat(30), themiStatus: "connected" };
 const JOB = { id: 7, items: [{ name: "eggs", qty: 2, search: "eggs", product: null }] };
 
-function setup({ settings = PAIRED, tabs = [{ id: 3 }], answering = [3], signedOut = [], claim = [200, { job: JOB }], tabTakes = true } = {}) {
+function setup({ settings = PAIRED, tabs = [{ id: 3 }], answering = [3], signedOut = [], claim = [200, { job: JOB }], tabTakes = true, list = [200, { items: [], waiting: false }] } = {}) {
   const storage = fakeStorage(settings);
   const posted = [];
   const sentToTab = [];
@@ -21,6 +21,7 @@ function setup({ settings = PAIRED, tabs = [{ id: 3 }], answering = [3], signedO
       claims++;
       return { status: claim[0], json: async () => claim[1] };
     }
+    if (path === "/api/safeway/list") return { status: list[0], json: async () => list[1] };
     posted.push({ path, body: JSON.parse(init.body) });
     return { status: 200, json: async () => ({ ok: true }) };
   };
@@ -140,4 +141,15 @@ test("job items: a remembered product skips the search; search words are what's 
   assert.equal(site.lines.get("970597593").qty, 2);
   assert.equal(site.lines.get("960304348").qty, 1);
   assert.equal(result.added.length, 2);
+});
+
+test("the popup's list comes from Themi through the worker (SW1)", async () => {
+  const items = [{ name: "eggs", qty: 1, search: "eggs", product: null, from: "groceries" }];
+  const s = setup({ list: [200, { items, waiting: true }] });
+  assert.deepEqual(await s.worker.list(), { ok: true, items, waiting: true });
+  const unpaired = setup({ settings: {} });
+  assert.equal((await unpaired.worker.list()).ok, false);
+  const revoked = setup({ list: [401, { error: "not connected" }] });
+  assert.equal((await revoked.worker.list()).ok, false);
+  assert.equal(revoked.storage.data.themiStatus, "revoked");
 });
