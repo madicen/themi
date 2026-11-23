@@ -205,12 +205,12 @@ async def test_the_feeders_are_read_at_once(panel: Panel) -> None:
 
 async def test_the_litter_box_is_read_at_once(panel: Panel) -> None:
     assert await panel.ok("litter_box", "sani", left="15") == (
-        "Litter box (CatGenie): CatGenie: 15% sani-solution left"
+        "Litter box (CatGenie): CatGenie: 15 cleans of sani-solution left"
     )
-    assert panel.device_state("CatGenie") == "ready, 15% sani-solution left"
+    assert panel.device_state("CatGenie") == "ready, 15 cleans of sani-solution left"
     await panel.ok("litter_box", "error", code="HEATER_FAULT")
     assert panel.device_state("CatGenie") == (
-        "ready, 15% sani-solution left; it shows an error (heater fault)"
+        "ready, 15 cleans of sani-solution left; it shows an error (heater fault)"
     )
     assert await panel.ok("litter_box", "error", code="") == (
         "Litter box (CatGenie): CatGenie shows no error"
@@ -219,8 +219,8 @@ async def test_the_litter_box_is_read_at_once(panel: Panel) -> None:
     await panel.ok("litter_box", "clean", times="2")
     state = controls._litter_box_state(panel.run.fakes)
     assert state == [
-        "CatGenie: ready, 15% sani-solution left, 602 cleans ever",
+        "CatGenie: ready, 15 cleans of sani-solution left, 602 cleans ever",
         "1 alert naming an error",
     ]
     refused = await panel.act("litter_box", "sani", left="-1")
-    assert refused.json()["error"] == "sani-solution left is 0 to 100%"
+    assert refused.json()["error"] == "sani-solution left is 0 to 500 cleans"

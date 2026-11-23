@@ -1058,10 +1058,10 @@ async def _read_litter_box(fakes: DevFakes) -> None:
 
 def _sani(fakes: DevFakes, v: Values) -> str:
     left = int(v.number("left"))
-    if not 0 <= left <= 100:
-        raise ControlError("sani-solution left is 0 to 100%")
+    if not 0 <= left <= 500:  # F58b: cleans left (a new cartridge is about 240 to 480)
+        raise ControlError("sani-solution left is 0 to 500 cleans")
     fakes.catgenie.set(LITTER, sani=left)
-    return f"CatGenie: {left}% sani-solution left"
+    return f"CatGenie: {left} cleans of sani-solution left"
 
 
 def _litter_error(fakes: DevFakes, v: Values) -> str:
@@ -1103,7 +1103,7 @@ LITTER_BOX = Section(
         Action(
             "sani",
             "Set the sani-solution",
-            (Field("left", "Sani-solution left (%)", "number", default="15"),),
+            (Field("left", "Sani-solution left (cleans)", "number", default="15"),),
             _sani,
             (_read_litter_box,),
             "20% or under is running low, 0 is out; more than it was is a new cartridge.",

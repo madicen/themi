@@ -188,10 +188,6 @@ class CatGenieWatcher:
             if code not in self._logged:
                 self._logged.add(code)
                 log.warning("The litter box reported %r, which Themi has no words for", code)
-        odd = f"sani:{reading.odd_sani}" if reading.odd_sani is not None else ""
-        if odd and odd not in self._logged:  # F41a: a percent over 100 shows no level
-            self._logged.add(odd)
-            log.warning("The litter box reported %s%% sani-solution; left out", reading.odd_sani)
         self._keep_word(device, state_word(reading))
         for listener in self.reading_listeners:
             try:

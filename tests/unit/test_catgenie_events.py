@@ -18,12 +18,10 @@ from themi_home.connectors.catgenie.events import (
     ERROR,
     LOW,
     OUT,
-    PERCENT,
     SOLUTION,
     error_words,
     read_alert,
     read_device,
-    sani_unit,
     state_word,
 )
 
@@ -40,20 +38,21 @@ def test_the_documented_report_reads_as_ready_with_its_solution_and_cycles() -> 
     assert (reading.sani_left, reading.cycles, reading.errors) == (39, 600, ())
     assert reading.last_clean == datetime(2026, 10, 21, 15, 30, tzinfo=UTC)  # no zone: UTC
     assert reading.problems == {}
-    assert state_word(reading) == "ready, 39% sani-solution left"
+    assert state_word(reading) == "ready, 39 cleans of sani-solution left"
 
 
 def test_cleaning_offline_and_progress() -> None:
     cleaning = read_device(box(operationStatus={"state": 1, "progress": 40}))
-    assert state_word(cleaning) == "cleaning (40% done), 39% sani-solution left"
+    assert state_word(cleaning) == "cleaning (40% done), 39 cleans of sani-solution left"
     idle = read_device(box(operationStatus={"state": 0, "progress": 255}))
     assert idle.progress is None
     assert state_word(read_device(box(reportedStatus="disconnected"))) == "offline"
 
 
-def test_sani_solution_low_at_twenty_and_out_at_none() -> None:
-    assert read_device(box(remainingSaniSolution=21)).problems == {}
-    assert read_device(box(remainingSaniSolution=20)).problems == {SOLUTION: LOW}
+def test_sani_solution_low_at_thirty_cleans_and_out_at_none() -> None:
+    """F58b: cleans on every box, so the A.I.'s low mark is the Whoosh's 30, not 20%."""
+    assert read_device(box(remainingSaniSolution=31)).problems == {}
+    assert read_device(box(remainingSaniSolution=30)).problems == {SOLUTION: LOW}
     assert read_device(box(remainingSaniSolution=0)).problems == {SOLUTION: OUT}
     assert read_device(box(remainingSaniSolution=None)).problems == {}  # not reported
 
@@ -110,10 +109,13 @@ def test_the_whoosh_reads_cleans_left_never_a_percent() -> None:
     assert reading.problems == {}
 
 
-def test_the_ai_still_reads_a_percent() -> None:
-    reading = read_device(box(remainingSaniSolution=56, fwVersion="8.7.205R"))
-    assert reading.sani_unit == PERCENT
-    assert state_word(reading) == "ready, 56% sani-solution left"
+def test_the_ai_counts_cleans_too() -> None:
+    """F58b (bug #252): F41a read the A.I.'s as a percent; its new cartridge's 239 then 238
+    after one clean says it counts cleans like the Whoosh."""
+    reading = read_device(payload("device_ai_new_cartridge"))  # the family's own, 2026-11-23
+    assert (reading.sani_left, reading.sani_unit) == (238, CLEANS)
+    assert state_word(reading) == "ready, 238 cleans of sani-solution left"
+    assert reading.problems == {}
 
 
 def test_the_whoosh_runs_low_at_thirty_cleans_and_out_at_none() -> None:
@@ -130,16 +132,35 @@ def test_the_whoosh_runs_low_at_thirty_cleans_and_out_at_none() -> None:
     assert state_word(read_device(raw)) == "ready, 1 clean of sani-solution left"
 
 
-def test_the_unit_comes_from_the_firmware() -> None:
-    assert sani_unit("100.4.14R") == CLEANS
-    assert sani_unit("101.0") == CLEANS
-    assert sani_unit("8.7.205R") == PERCENT
-    assert sani_unit(None) == PERCENT  # unreadable: a percent, as before
-    assert sani_unit("R?") == PERCENT
+def test_the_ai_runs_low_at_thirty_cleans_and_out_at_none() -> None:
+    """F58b: the A.I.'s "about 4% left" and "0% left" were cleans, and low as the Whoosh's."""
+
+    def ai(left: int) -> dict[str, str]:
+        return read_device(box(remainingSaniSolution=left, fwVersion="8.7.205R")).problems
+
+    assert ai(31) == {}
+    assert ai(4) == {SOLUTION: LOW}
+    assert ai(0) == {SOLUTION: OUT}
 
 
-def test_a_percent_over_a_hundred_shows_no_level() -> None:
-    reading = read_device(box(remainingSaniSolution=140))
-    assert (reading.sani_left, reading.odd_sani) == (None, 140)
-    assert state_word(reading) == "ready"
-    assert reading.problems == {}
+# ----- F58b, bug #248: error 6 is the cartridge running out ---------------------------------
+
+
+def test_error_six_with_none_left_is_one_problem_the_solutions() -> None:
+    reading = read_device(box(remainingSaniSolution=0, operationStatus={"error": "6"}))
+    assert reading.problems == {SOLUTION: OUT}
+    assert reading.unknown == ()
+    assert "error" not in state_word(reading) and "(6)" not in state_word(reading)
+
+
+def test_error_six_alone_is_out_whatever_the_count_says() -> None:
+    reading = read_device(box(remainingSaniSolution=50, operationStatus={"error": "6"}))
+    assert reading.problems == {SOLUTION: OUT}
+
+
+def test_a_bare_number_nobody_has_named_is_a_code_themi_doesnt_know() -> None:
+    reading = read_device(box(operationStatus={"error": "7"}))
+    assert reading.problems[ERROR] == (
+        "it's showing a code Themi doesn't know yet (7), which the CatGenie app can explain"
+    )
+    assert reading.unknown == ("7",)

@@ -9,7 +9,11 @@ in its models and test fixtures (read 2026-11-04). `tests/fakes/catgenie.py` ser
 - `device_whoosh.json`: a CatGenie Whoosh (`fwVersion` 100.4.14R), captured from the family's
   own box on 2026-11-11 (F41a, bug #197), with its ids, name and addresses replaced. Its
   `remainingSaniSolution` (477) is **cleans left**, as the app shows it, not a percent.
-  The A.I. (`fwVersion` 8.x, `device.json`) reports a percent.
+- `device_ai_new_cartridge.json`: the family's CatGenie A.I. (`fwVersion` 8.7.205R), read
+  from the Pi's `catgenie_devices` on 2026-11-23 (F58b, bug #252), ids, name and addresses
+  replaced. A new cartridge read 239, then 238 after one clean: the A.I. counts **cleans
+  left** too, so F41a's "the A.I. reports a percent" was wrong. (`device.json`'s 39 is read
+  as cleans as well.)
 - `notification.json`: one entry of `GET notification/v1/push/user`'s `notifications`. Its
   `data` is JSON text; `type` 24 with an empty `errorType` is the package's one sample, and
   nothing says what 24 means.

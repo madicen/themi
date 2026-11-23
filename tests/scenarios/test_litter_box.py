@@ -66,7 +66,7 @@ async def test_linking_by_a_texted_code_from_the_accounts_page(
 
     await scenario.run_periodic("devices.litter_box")
     page = await site.get("/accounts")
-    assert "CatGenie · ready, 39% sani-solution left" in page.text
+    assert "CatGenie · ready, 39 cleans of sani-solution left" in page.text
     assert "<code>remainingSaniSolution</code>: 39" in page.text  # what it reports
     assert BOX not in page.text  # its id stays out
     assert "Unlink CatGenie" in page.text and "Send code" not in page.text
@@ -113,8 +113,8 @@ async def test_asked_how_the_litter_box_is_themi_reads_it(
     said = await ask(scenario, "Is the litter box ok?", "litter_box")
     assert "appliance_status" in tool_names(scenario)  # the words chose the devices group
     assert said.startswith(
-        "CatGenie (litter_box), read just now: cleaning (60% done), 15% sani-solution left; "
-        "last cleaned 8 am today."
+        "CatGenie (litter_box), read just now: cleaning (60% done), 15 cleans of "
+        "sani-solution left; last cleaned 8 am today."
     )
 
 
@@ -124,8 +124,8 @@ async def test_when_it_cant_be_read_it_says_when_it_was_last_seen(
     litter_box.fail(times=1)
     said = await ask(scenario, "How much sani-solution is left in the CatGenie?", "litter_box")
     assert said.startswith(
-        "CatGenie (litter_box): couldn't be read just now. As of 9 am it was ready, 39% "
-        "sani-solution left."
+        "CatGenie (litter_box): couldn't be read just now. As of 9 am it was ready, 39 cleans "
+        "of sani-solution left."
     )
 
 
@@ -133,7 +133,7 @@ async def test_when_it_cant_be_read_it_says_when_it_was_last_seen(
 
 ERROR = "The CatGenie needs a look: it shows an error (heater fault). Check it when you can?"
 LOW = (
-    "The CatGenie is running low on sani-solution (about 15% left). Swap in a new cartridge "
+    "The CatGenie is running low on sani-solution (about 15 cleans left). Swap in a new cartridge "
     "when you can?"
 )
 OUT = "The CatGenie is out of sani-solution, so it can't wash. Swap in a new cartridge?"
@@ -290,7 +290,7 @@ async def test_asked_about_it_with_a_chore_open(
     await seen(scenario, litter_box, sani=15)
     await scenario.advance(minutes=10)
     said = await ask(scenario, "Is the litter box ok?", "litter_box")
-    assert "15% sani-solution left" in said
+    assert "15 cleans of sani-solution left" in said
     assert "Open chore: Change the CatGenie's sani-solution cartridge, Husband's, asked at" in said
 
 
@@ -337,3 +337,25 @@ async def test_the_whoosh_says_cleans_left_and_runs_low_at_thirty(
     home = await site.get("/")
     assert "30 cleans of sani-solution left" in home.text
     assert "30%" not in home.text
+
+
+async def test_error_six_while_out_is_one_message_and_one_chore_then_a_new_cartridge_reads_cleans(
+    scenario: Scenario, litter_box: FakeCatGenie
+) -> None:
+    """F58b (bugs #248 and #252): the A.I. runs from 5 cleans to none, then shows error 6.
+    That's the same problem, not a second message and chore with a bare "(6)"; and a new
+    cartridge's 239 reads as cleans, never left out as a percent over 100."""
+    tired(scenario)
+    await seen(scenario, litter_box, sani=5)
+    await scenario.advance(minutes=10)
+    await seen(scenario, litter_box, sani=0)
+    await seen(scenario, litter_box, error="6")
+    await scenario.advance(minutes=30)
+    said = scenario.inbox("Husband") + scenario.inbox("Erin")
+    assert not any("(6)" in s or "needs a look" in s for s in said)
+    assert [t[0] for t in tasks(scenario)] == ["Change the CatGenie's sani-solution cartridge"]
+    await seen(scenario, litter_box, sani=239, error="")
+    assert tasks(scenario)[0][1] == "done"
+    watcher = scenario.app.services.maybe(keys.catgenie)
+    assert watcher is not None
+    assert list(watcher.states().values()) == ["ready, 239 cleans of sani-solution left"]

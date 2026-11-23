@@ -341,7 +341,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F57a | Idea: a remembered fact is found when the words differ, and on a follow-up | Feedback | [x] 2026-11-21 |
 | F57b | Idea: named places ("Stanford" → the parking lot), and idle pinned facts unpinned | Feedback | [x] 2026-11-22 |
 | F58a | Feedback: [Open in Gmail] opens the email in the app, not an error | Feedback | [x] 2026-11-22 |
-| F58b | Feedback: litter box error 6 is "out of sani-solution"; the A.I. counts cleans too | Feedback | [ ] |
+| F58b | Feedback: litter box error 6 is "out of sani-solution"; the A.I. counts cleans too | Feedback | [x] 2026-11-22 |
 | F58c | Feedback: the wall fits the frame, nothing cut off at the bottom | Feedback | [ ] |
 | F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [ ] |
 | F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [ ] |
@@ -16968,7 +16968,7 @@ Notes:
   opened the wrong account). If none does, leave "The inbox" and note it here.
 
 ### F58b · Feedback (2026-11-22): a litter box's error 6 says "out of sani-solution", and the A.I.'s cleans are shown like the Whoosh's
-Status: [ ]
+Status: [x] 2026-11-22
 Depends on: F41a
 Read first: `themi_home/connectors/catgenie/events.py` (`CODES`, `error_words`, `sani_unit`,
 `WHOOSH_FIRMWARE`, `read_device`, `LitterBoxReading.problems`, `state_word`);
@@ -17028,6 +17028,31 @@ low" message and one chore. A new cartridge (239) clears it, and the Home page s
 Data/Setup: none beyond the update. Decided here, not with Michael yet: every CatGenie
 counts cleans (the A.I.'s 239 → 238 says so; if a capture ever shows a percent again, a
 reading would need its own rule). Mark #248 and #252 reviewed once live.
+
+Notes:
+- Changes from the prompt: the "code Themi doesn't know yet" wording is used only for a bare
+  number. A code with letters ("HEATER_FAULT") still reads "it shows an error (heater
+  fault)": it says something, and the bug was about the number. The wording is "it's
+  showing a code Themi doesn't know yet (7), which the CatGenie app can explain", so it
+  fits both the "needs a look: …" message and `appliance_status`.
+- `events.py`: `CODES = {"6": OUT}`. `LitterBoxReading.problems` puts a code that means OUT
+  under SOLUTION (OUT even when the count isn't 0), never ERROR. `sani_unit`,
+  `WHOOSH_FIRMWARE`, `PERCENT`, `LOW_PERCENT` and `odd_sani` are gone, along with the "left
+  out" log. `sani_unit` stays on the reading (always `CLEANS`) because `litter_states`
+  stores it; the next poll rewrites the A.I.'s row. `LOW_CLEANS` (30) applies to both boxes.
+- Tests changed because the behaviour changed, not loosened: every "N% sani-solution left"
+  became "N cleans of sani-solution left" (`device.json`'s 39 is now cleans) in
+  `test_catgenie_events.py`, `test_catgenie.py`, `test_dev_faults.py`,
+  `test_dev_controls.py` and `test_litter_box.py`. The A.I.'s low mark moved from 20 to 30.
+  `test_the_ai_still_reads_a_percent`, `test_the_unit_comes_from_the_firmware` and
+  `test_a_percent_over_a_hundred_shows_no_level` tested F41a's percent rule and were
+  replaced by `test_the_ai_counts_cleans_too` and `test_the_ai_runs_low_at_thirty_cleans…`.
+  The dev panel's "Set the sani-solution" control takes 0–500 cleans.
+- New fixture `tests/fixtures/catgenie/device_ai_new_cartridge.json` (the Pi's A.I. on
+  2026-11-23, scrubbed). New tests: 3 for error 6 and bare codes in
+  `test_catgenie_events.py`, and the scenario
+  `test_error_six_while_out_is_one_message_and_one_chore_…` in `test_litter_box.py`.
+- **Setup:** none beyond updating the Pi.
 
 ### F58c · Feedback (2026-11-22): the wall fits the frame's screen, with nothing cut off at the bottom
 Status: [ ]

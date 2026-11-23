@@ -7,17 +7,19 @@ models, checked 2026-11-04):
 - `operationStatus`: `state` (1 while cleaning), `progress` (0-100, 255 when idle) and
   `error` (text, empty when fine).
 - `activeErrors`: a list whose entries nobody has documented yet.
-- `remainingSaniSolution`: the cartridge's sani-solution left. On the A.I. (`fwVersion` 8.x)
-  it's a percent. On the Whoosh (`fwVersion` 100.x) it's how many cleans are left, as its app
-  shows it (F41a, bug #197: "480% sani-solution").
+- `remainingSaniSolution`: how many cleans the cartridge has left, on every box. F41a (bug
+  #197, "480% sani-solution") found it on the Whoosh (`fwVersion` 100.x) and kept the A.I.
+  (8.x) as a percent; F58b (bug #252) found the A.I. counts cleans too: a new cartridge
+  read 239, then 238 after one clean.
 - `lastClean`, and `configuration.activation.count`: its cleaning cycles, ever.
 
 There's no granule (litter) level: the granules' chore counts cycles instead
 (`themi_home.litter_box`).
 
 Errors are put in words by `CODES`, written from captures (`themi catgenie capture`, into
-`tests/fixtures/catgenie`), never guessed. Until a code is there, it's still a problem, in
-plain words from the code itself, and logged once.
+`tests/fixtures/catgenie`, or the Pi's `litter_problems`), never guessed. Until a code is
+there, it's still a problem, in plain words from the code itself (a bare number is said to
+be a code Themi doesn't know yet, F58b), and logged once.
 """
 
 from __future__ import annotations
@@ -30,14 +32,16 @@ from typing import Any
 
 ERROR, ALERT, SOLUTION, GRANULES = "error", "alert", "solution", "granules"
 LOW, OUT = "running low on sani-solution", "out of sani-solution"
-LOW_PERCENT = 20  # sani-solution left at or under this is running low (as the feeders' food)
-LOW_CLEANS = 30  # the Whoosh: cleans left at or under this (about ten days at three a day)
-PERCENT, CLEANS = "%", "cleans"
-WHOOSH_FIRMWARE = 100  # a firmware major version this high or more counts cleans (F41a)
+LOW_CLEANS = 30  # cleans left at or under this is running low (about ten days at three a day)
+CLEANS = "cleans"  # F58b: every box's sani-solution is a count of cleans
 GRANULES_TEXT = "due a granule top-up"
 
 # An error code (as the box or an alert gives it) -> words. From captures only.
-CODES: dict[str, str] = {}
+CODES: dict[str, str] = {
+    # F58b (bug #248): the Whoosh on 11 Nov and the A.I. on 22 Nov each showed error 6 while
+    # out of sani-solution, and both cleared with the new cartridge (`litter_problems` 1-4).
+    "6": OUT,
+}
 # A notification's `type` -> what it is, once captures show which are errors. Until then a
 # notification is an error only when its `errorType` says one.
 ALERT_TYPES: dict[int, str] = {}
@@ -50,9 +54,8 @@ class LitterBoxReading:
     cleaning: bool = False
     progress: int | None = None  # % through a clean, while cleaning
     last_clean: datetime | None = None
-    sani_left: int | None = None  # in `sani_unit`
-    sani_unit: str = PERCENT  # PERCENT, or CLEANS on the Whoosh
-    odd_sani: int | None = None  # a percent over 100, left out of `sani_left` (logged once)
+    sani_left: int | None = None  # cleans left
+    sani_unit: str = CLEANS  # always CLEANS since F58b (kept: `litter_states` stores it)
     cycles: int | None = None  # cleaning cycles ever
     errors: tuple[str, ...] = ()  # codes, as it reports them
 
@@ -60,12 +63,14 @@ class LitterBoxReading:
     def problems(self) -> dict[str, str]:
         """What it needs a person for: kind -> words."""
         found: dict[str, str] = {}
-        if self.errors:
-            found[ERROR] = "; ".join(error_words(e) for e in self.errors)
-        low = LOW_CLEANS if self.sani_unit == CLEANS else LOW_PERCENT
-        if self.sani_left is not None and self.sani_left <= 0:
+        # F58b: a code that means the cartridge is out is the solution's problem, not an
+        # error of its own (no second message, chore or wall item).
+        errors = [e for e in self.errors if CODES.get(e) != OUT]
+        if errors:
+            found[ERROR] = "; ".join(error_words(e) for e in errors)
+        if len(errors) < len(self.errors) or (self.sani_left is not None and self.sani_left <= 0):
             found[SOLUTION] = OUT
-        elif self.sani_left is not None and self.sani_left <= low:
+        elif self.sani_left is not None and self.sani_left <= LOW_CLEANS:
             found[SOLUTION] = LOW
         return found
 
@@ -105,17 +110,13 @@ def read_device(raw: dict[str, Any]) -> LitterBoxReading:
     progress = _int(status.get("progress"))
     errors = [str(status.get("error") or "").strip()]
     errors += [_label(entry) for entry in raw.get("activeErrors") or []]
-    unit = sani_unit(raw.get("fwVersion"))
     sani = _int(raw.get("remainingSaniSolution"))
-    odd = sani if unit == PERCENT and sani is not None and sani > 100 else None
     return LitterBoxReading(
         online=str(raw.get("reportedStatus") or "").lower() == "connected",
         cleaning=cleaning,
         progress=progress if cleaning and progress is not None and 0 <= progress <= 100 else None,
         last_clean=_time(raw.get("lastClean")),
-        sani_left=None if odd is not None else sani,
-        sani_unit=unit,
-        odd_sani=odd,
+        sani_left=sani if sani is None or sani >= 0 else None,
         cycles=_int(activation.get("count")),
         errors=tuple(dict.fromkeys(e for e in errors if e.lower() not in NOT_AN_ERROR)),
     )
@@ -140,23 +141,21 @@ def read_alert(raw: dict[str, Any]) -> Alert:
     )
 
 
-def sani_unit(firmware: Any) -> str:
-    """CLEANS for the Whoosh (firmware 100.x or later), else PERCENT (also when unreadable)."""
-    found = re.match(r"\s*(\d+)", str(firmware or ""))
-    return CLEANS if found and int(found.group(1)) >= WHOOSH_FIRMWARE else PERCENT
-
-
-def sani_words(left: int, unit: str) -> str:
-    """ "56% sani-solution left", or on the Whoosh "477 cleans of sani-solution left"."""
-    if unit == CLEANS:
-        return f"{left} clean{'' if left == 1 else 's'} of sani-solution left"
-    return f"{left}% sani-solution left"
+def sani_words(left: int, unit: str = CLEANS) -> str:
+    """ "477 cleans of sani-solution left" (`unit` is kept for callers; it's always cleans)."""
+    return f"{left} clean{'' if left == 1 else 's'} of sani-solution left"
 
 
 def error_words(code: str) -> str:
-    """ "it shows an error (heater fault)" until a capture gives the code its words."""
+    """ "it shows an error (heater fault)" until a capture gives the code its words. A bare
+    number says nothing to a person, so it's called a code Themi doesn't know (F58b)."""
     if code in CODES:
         return CODES[code]
+    if code.strip().isdigit():
+        return (
+            f"it's showing a code Themi doesn't know yet ({code.strip()}), "
+            "which the CatGenie app can explain"
+        )
     plain = re.sub(r"[_\-]+", " ", re.sub(r"([a-z])([A-Z])", r"\1 \2", code)).strip().lower()
     return f"it shows an error ({plain})"
 

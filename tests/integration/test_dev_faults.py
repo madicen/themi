@@ -100,7 +100,7 @@ async def test_catgenie_refusing_the_sign_in_tells_the_admins_and_working_again_
     happened = await panel.ok("litter_box", "fault", fault="CatGenie works again")
     assert happened.endswith("relinked as from the Accounts page")
     assert watcher.account.problem() is None
-    assert panel.device_state("CatGenie") == "ready, 39% sani-solution left"
+    assert panel.device_state("CatGenie") == "ready, 39 cleans of sani-solution left"
 
 
 async def test_home_connect_revoked_then_approved_again(panel: Panel) -> None:

@@ -40,7 +40,6 @@ from themi.localtime import in_quiet_hours, to_local, to_utc_iso
 from themi.standard.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi_home.connectors.catgenie import (
     ALERT,
-    CLEANS,
     ERROR,
     GRANULES,
     OUT,
@@ -355,10 +354,8 @@ class LitterBox:
         )
         if state is None or state["sani_left"] is None:
             return ""
-        left = int(state["sani_left"])
-        if state["sani_unit"] == CLEANS:  # F41a: the Whoosh counts cleans
-            return f" (about {left} clean{'' if left == 1 else 's'} left)"
-        return f" (about {left}% left)"
+        left = int(state["sani_left"])  # cleans, on every box (F58b)
+        return f" (about {left} clean{'' if left == 1 else 's'} left)"
 
     def _timezone(self) -> str:
         family = self.store.get_family()
