@@ -16964,8 +16964,8 @@ Notes:
 - **Setup:** update the Pi, then `ssh themi@themi 'cd ~/themi; docker compose exec -T themi
   themi email try-link --member 2'` and open the printed link on the iPhone (in Safari or
   Telegram). Tap each button; whichever opens the email, choose that form under Email
-  triage → "Gmail iphone link" on the Modules page (and the app's account order if it
-  opened the wrong account). If none does, leave "The inbox" and note it here.
+  triage → "Gmail app link on iPhone" on the Modules page (and "Gmail accounts, in the
+  app's order" if it opened the wrong account). If none does, leave "The inbox" and note it here.
 
 ### F58b · Feedback (2026-11-22): a litter box's error 6 says "out of sani-solution", and the A.I.'s cleans are shown like the Whoosh's
 Status: [x] 2026-11-22

@@ -66,11 +66,13 @@ class EmailLinkSettings(HouseholdSettings):
     module: ClassVar[str] = "email_triage"
     gmail_iphone_link: IphoneLink = Field(
         INBOX,
+        title="Gmail app link on iPhone",
         description="How [Open in Gmail] opens an email in the Gmail app on an iPhone. The "
         "inbox always works; pick another once the try-out page shows it opens the email.",
     )
     gmail_app_order: str = Field(
         "",
+        title="Gmail accounts, in the app's order",
         description="The Gmail addresses in the order the Gmail app on the iPhone lists "
         "them, separated by commas. Blank: the order they were linked in.",
     )
