@@ -343,7 +343,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F58a | Feedback: [Open in Gmail] opens the email in the app, not an error | Feedback | [x] 2026-11-22 |
 | F58b | Feedback: litter box error 6 is "out of sani-solution"; the A.I. counts cleans too | Feedback | [x] 2026-11-22 |
 | F58c | Feedback: the wall fits the frame, nothing cut off at the bottom | Feedback | [x] 2026-11-22 |
-| F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [ ] |
+| F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [x] 2026-11-22 |
 | F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -17114,7 +17114,7 @@ Notes:
   asset links carry a version). If it's still cut off, reload the wall once on the frame.
 
 ### F58d · Feedback (2026-11-22): fixing the vacuum and saying so clears its alert, so "Unjam the vacuum" ticks off
-Status: [ ]
+Status: [x] 2026-11-22
 Depends on: F25a
 Read first: `themi_home/vacuum.py` (`_gone`, `_task_changed`, `_offer_home`, `_execute`,
 `_nudge`'s buttons, `TEXTS`, `HOME_AFTER`); `themi_home/connectors/roborock/watch.py`
@@ -17169,6 +17169,35 @@ and no "Go ahead?" card follows.
 Data/Setup: none beyond the update. Decided here, not with Michael yet: clearing an alert
 on a person's own "fixed it" needs no second approval; sending the robot home still does.
 Mark #250 reviewed once live.
+
+Notes:
+- Changes from the prompt:
+  - The tap's own edit stays "Marked done: Unjam the vacuum. Thank you." What was cleared
+    comes as a separate line in chat: "Cleared the vacuum's alert, since Unjam the vacuum is
+    done." (or, when the robot can't be reached, "… is done, but the vacuum couldn't be
+    reached, so its alert is still showing. Clear it in the Roborock app."). That way one
+    path covers the tap, a tick on the wall and "done" in chat.
+  - [Fixed it] replaces [Done] for the kinds in `HOME_AFTER` (stuck, jammed, dustbin, fault).
+    The dock's water alerts keep [Done] ("Refill the tank?" → Fixed it reads oddly), but
+    saying them done clears their alert the same way. Not-docked and worn parts keep [Done]
+    and behave as before.
+  - Whether it's on its dock comes from a fresh read (`watcher.read`), not the stored state
+    word: "stopped with a problem" covers a dock alert and a robot stuck in the kitchen
+    alike.
+- `vacuum.py`: `_task_changed` calls `_clear_on_done` for a problem in `ALERT_KINDS`. On its
+  dock (or cleaning, or heading back) with an alert, it stages `vacuum_home` with
+  `{"device", "alert_only": true}` and `requested=True` (the person's word is the yes;
+  `_execute` clears the alert only). Off its dock, it's `_offer_home`'s card as before. The
+  jam message now ends "Tap Fixed it once it's clear, and Themi clears the alert."
+  `chores` (for `appliance_status`) adds "The alert stays on the robot until it's cleared;
+  once it's fixed, say so and Themi clears it." when an alert chore is open.
+- Tests changed because the behaviour changed: in `tests/scenarios/test_vacuum.py`, the stuck
+  nudge's buttons are [Fixed it, Later]; "out of clean water" clears on Done with no card;
+  "a done alert isn't raised again" no longer taps Not now (there's no card); the jam text;
+  and the rule test taps Fixed it. Six new tests: Fixed it on the dock's brush jam (code
+  42), the robot unreachable, ticked on the wall, a robot off its dock still gets the card,
+  not-docked keeps Done, and `appliance_status`'s line.
+- **Setup:** none beyond updating the Pi.
 
 ### F58e · Feedback (2026-11-22): a saved place's hours are by day, so Monday's visit uses Monday's hours
 Status: [ ]
