@@ -345,6 +345,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F58c | Feedback: the wall fits the frame, nothing cut off at the bottom | Feedback | [x] 2026-11-22 |
 | F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [x] 2026-11-22 |
 | F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [x] 2026-11-22 |
+| F58f | Feedback: "6:30–8:30 pm weekdays" is read, and hours in a place's note or a fact count | Feedback | [x] 2026-11-23 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -16966,6 +16967,11 @@ Notes:
   Telegram). Tap each button; whichever opens the email, choose that form under Email
   triage → "Gmail app link on iPhone" on the Modules page (and "Gmail accounts, in the
   app's order" if it opened the wrong account). If none does, leave "The inbox" and note it here.
+- **Tried on the Pi (2026-11-22, 0.8.24, email 2094):** none of the five candidate links opens
+  the email on Michael's iPhone. Each opens the Gmail app with "Failed to open link. Unable
+  to understand the link." Only `googlegmail://` (the inbox) works. "The inbox" stays the
+  setting, and the open page's sender and subject show which email it was. Nothing more to
+  try without a documented link; mark #246 and #247 reviewed.
 
 ### F58b · Feedback (2026-11-22): a litter box's error 6 says "out of sani-solution", and the A.I.'s cleans are shown like the Whoosh's
 Status: [x] 2026-11-22
@@ -17287,6 +17293,83 @@ Notes:
 - **Setup:** update the Pi. Then Michael says once: "Stanford's visiting hours are
   6:30–8:30 pm weekdays and 12–8:30 pm weekends", or types them into the Hours box for
   Stanford under Places on the Rules & memory page. The old note can then be cleared.
+
+### F58f · Feedback (2026-11-22): hours said "6:30–8:30 pm weekdays" are read, and a place's hours said in a note or a fact are used
+Status: [x] 2026-11-23
+Depends on: F58e
+Read first: `themi/standard/business_hours.py` (`ENTRY`, `_SPEC`, `_TIME`, `parse_hours`);
+`themi/standard/places.py` (`read_hours`, `SavedPlace.hours`, `_saved_from_row`, `mentioned`);
+`themi/standard/memory.py` (`remember_fact`, `remember_place`, the `memory.remember-place`
+prompt line); `themi_google/events.py` (`_keep_to_hours`); F58e's Notes. From Michael's bug
+#253 (2026-11-22, 10:50 pm, "it still got the hours wrong").
+
+What the Pi shows: place 1 (Stanford) still has `hours` = '' and its note is "Visiting hours:
+6:30–8:30 pm weekdays and 12–8:30 pm weekends." At 10:30 pm Michael said "Stanford's
+visiting hours are 6:30–8:30 pm weekdays and 12–8:30 pm weekends". The Pi was still on
+0.8.23 (0.8.24 arrived at 10:47), so it saved fact 12 with those words and left the place
+alone. At 10:49, on 0.8.24, "I want to visit Erin at Stanford tomorrow" (reply 543) staged
+Mon 23 Nov 12–8:30 pm again: the place had no hours, so nothing checked the time. Two gaps
+behind the timing:
+- `parse_hours` reads only day-then-time ("weekdays 6:30-8:30 pm"). Time-then-day, the way
+  Michael says it and the way his note and fact 12 are worded, reads as {}. So
+  `remember_place` with `hours` = "6:30–8:30 pm weekdays and 12–8:30 pm weekends" is refused
+  as unreadable even on 0.8.24.
+- Hours that exist only in a place's note, or in a fact naming the place, are never used.
+
+Build:
+- `parse_hours` also reads time-then-day entries: "6:30–8:30 pm weekdays", "12–8:30 pm
+  weekends", "9-5 Mon-Fri", joined by "and", commas or semicolons, with "on" allowed before
+  the days ("6:30-8:30 pm on weekdays"). The day-then-time form keeps working. The half-day
+  rule (F58e's `_span`) applies to both.
+- A saved place with no `hours` reads them from its note when the note has readable ones
+  (`SavedPlace.hours` is filled at load; the column stays as it is). Hours set explicitly
+  always win over the note.
+- "X's hours are …" for a saved place X is the place's hours, not a fact: the
+  `memory.remember-place` line says so ("hours for a saved place: remember_place with the
+  same name and the hours"). And `remember_fact`, given a fact that names a saved place and
+  has readable hours, also sets that place's hours when it has none, saying "Also saved as
+  Stanford's hours: Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm."
+- A one-off at startup (or migration 0184, as a data step in Python if the migration runner
+  allows it; otherwise the load-time note reading above covers it): nothing to copy, since
+  the note now counts.
+
+Tests (start with failing ones): `parse_hours("6:30–8:30 pm weekdays and 12–8:30 pm
+weekends")` is Mon–Fri 18:30–20:30 and Sat–Sun 12:00–20:30; so is the note's exact text
+"Visiting hours: 6:30–8:30 pm weekdays and 12–8:30 pm weekends." and fact 12's; "9-5
+Mon-Fri, Sat 10-2" is read; every existing business-hours case still reads the same. A
+place whose note has the hours and whose `hours` is '' refuses Monday 12:00–20:30 in
+`add_calendar_event`. `remember_fact` with fact 12's words sets the Stanford place's hours.
+Scenario: reply 543's turn, faked. Stanford is saved as on the Pi (note with hours, no
+`hours`). On Sunday 22 Nov at 10:49 pm, the model calls `add_calendar_event` for Monday
+12:00–20:30 and is refused with Monday's hours; its second call for 18:30–20:30 is staged.
+
+Data/Setup: none after the update (the note already has the hours). Fact 12 can be
+forgotten once this is live. Mark #251 and #253 reviewed once live.
+
+Notes:
+- `business_hours.parse_hours` reads time-first entries (`ENTRY_AFTER`) before day-first ones,
+  then blanks each out. A time-first entry's days don't run on past a comma ("9-5 Mon-Fri,
+  Sat 10-2": Saturday is 10-2), and it's skipped when a day comes right before its time
+  ("Sat 9am-1pm Sun closed": that time is Saturday's). Every existing hours test reads the
+  same.
+- `SavedPlace.hours` falls back to the hours its note says when none are set;
+  `hours_set` says which. With hours set, the place line says "Hours: …" before the note.
+  With only the note's, the note speaks for itself and only "On <day>: …" is added, so
+  the hours aren't said twice. Saving a place again keeps only hours that were set; the
+  note's are read again from whatever note it's given. Travel's data block adds "Hours on
+  <day>: …" for either kind, and `add_calendar_event`'s check uses either.
+- `Places.hours_from(member, text)`: `remember_fact` with a fact naming exactly one saved
+  place and readable hours sets that place's hours when none are set, and its result adds
+  "Also saved as Stanford's hours: Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm." The
+  `memory.remember-place` line now says "X's hours are …" for a saved place is
+  remember_place with those hours. No migration: the Pi's Stanford note already counts.
+- Tests: 3 in `tests/unit/test_business_hours.py` (the note's and fact 12's words), 3 in
+  `tests/unit/test_saved_places.py`, and 2 scenarios in `tests/scenarios/test_saved_places.py`
+  (reply 543 with only the note; fact 12 setting the hours). F57b's travel-block
+  assertion now includes "Hours on Wed 21 Oct: 6:30-8:30 pm.", since the note's hours
+  are read. Golden `system_prompt.txt` changes for the prompt line.
+- **Setup:** update the Pi. Nothing else: Stanford's note gives Monday's 6:30-8:30 pm. Fact 12
+  can be forgotten on the Rules & memory page once this is live.
 
 ## Conversation mode
 

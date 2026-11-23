@@ -105,6 +105,18 @@ ENTRY = re.compile(
     rf"({_SPEC})\s*:?\s*(?:(closed)|{_TIME}\s*(?:-|to|until)\s*{_TIME}|(24\s*hours|open\s+24))",
     re.IGNORECASE,
 )
+# F58f (bug #253): the time first, as people say it: "6:30-8:30 pm weekdays", "9-5 Mon-Fri",
+# "12-8:30 pm on weekends".
+# Its days don't run on past a comma ("9-5 Mon-Fri, Sat 10-2": Saturday is the next time's).
+_SPEC_AFTER = (
+    rf"(?:{_RANGE}(?:\s*(?:&|and)\s*{_RANGE})*|weekdays|weekends|daily|every\s+day|"
+    r"7\s+days(?:\s+a\s+week)?)"
+)
+ENTRY_AFTER = re.compile(
+    rf"(?<![\d:]){_TIME}\s*(?:-|to|until)\s*{_TIME}\s*(?:on\s+)?({_SPEC_AFTER})(?![a-z])",
+    re.IGNORECASE,
+)
+_DAY_BEFORE = re.compile(rf"\b{_SPEC}\s*:?\s*$", re.IGNORECASE)
 DAY_INDEX = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
 Hours = dict[int, tuple[time, time] | None]
@@ -137,9 +149,11 @@ def _clock(hour: str, minute: str | None, half: str | None) -> tuple[int, int, s
     return int(hour), int(minute or 0), (half or "").lower()[:1]
 
 
-def _span(m: re.Match[str]) -> tuple[time, time] | None:
-    oh, om, oa = _clock(m.group(3), m.group(4), m.group(5))
-    ch, cm, ca = _clock(m.group(6), m.group(7), m.group(8))
+def _span(m: re.Match[str], first: int = 3) -> tuple[time, time] | None:
+    """The opening and closing times in `m`'s six groups from `first`."""
+    g = [m.group(first + k) for k in range(6)]
+    oh, om, oa = _clock(g[0], g[1], g[2])
+    ch, cm, ca = _clock(g[3], g[4], g[5])
     if not (0 < oh <= 24 and 0 < ch <= 24 and om < 60 and cm < 60):
         return None
     if not oa and ca and oh <= 12 and ch <= 12:
@@ -163,6 +177,18 @@ def parse_hours(text: str) -> Hours:
     closed". Days not mentioned are closed, once any day is read. {} when none are."""
     cleaned = re.sub("[\u2013\u2014\u2012]", "-", text)
     found: Hours = {}
+    # F58f: the time-first entries ("6:30-8:30 pm weekdays") first, unless a day comes right
+    # before the time ("Sat 9am-1pm Sun closed": that time is Saturday's). Each one read is
+    # blanked out, so the day-first reading doesn't take its days for the next time.
+    for m in ENTRY_AFTER.finditer(cleaned):
+        if _DAY_BEFORE.search(cleaned[: m.start()]):
+            continue
+        span = _span(m, 1)
+        if span is None:
+            continue
+        for day in _days(m.group(7)):
+            found.setdefault(day, span)
+        cleaned = cleaned[: m.start()] + " " * (m.end() - m.start()) + cleaned[m.end() :]
     for m in ENTRY.finditer(cleaned):
         days = _days(m.group(1))
         if m.group(2):

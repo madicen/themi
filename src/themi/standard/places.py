@@ -98,6 +98,7 @@ class SavedPlace:
     note: str
     arrive_early: int
     hours: Hours = field(default_factory=dict)  # F58e: weekday (Monday 0) -> span; {} unsaid
+    hours_set: bool = False  # F58f: set for it, not read from its note
 
     def names(self) -> list[str]:
         """Its name and other names, in `_words` form."""
@@ -109,12 +110,14 @@ class SavedPlace:
         F58e), that day's hours too."""
         other = f" (also called {self.aliases})" if self.aliases else ""
         text = f"Place: {self.name}{other} means {self.address}."
-        if self.hours:
+        if self.hours and self.hours_set:
             text += f" Hours: {hours_words(self.hours)}."
-            if day is not None:
-                text += f" On {day_label(day)}: {self.hours_on(day)}."
+        if self.hours and self.hours_set and day is not None:
+            text += f" On {day_label(day)}: {self.hours_on(day)}."
         if self.note:
             text += f" {self.note.rstrip('.')}."
+        if self.hours and not self.hours_set and day is not None:  # F58f: the note's hours
+            text += f" On {day_label(day)}: {self.hours_on(day)}."
         if self.arrive_early:
             text += f" They like to get there {self.arrive_early} minutes early."
         return text
@@ -140,7 +143,10 @@ def _saved_from_row(row: dict[str, Any]) -> SavedPlace:
         address=row["address"],
         note=row["note"],
         arrive_early=int(row["arrive_early"]),
-        hours=hours_from_json(row["hours"]) if row.get("hours") else {},
+        # F58f: hours set for it win; otherwise any its note says ("Visiting hours: 6:30-8:30
+        # pm weekdays and 12-8:30 pm weekends").
+        hours=hours_from_json(row["hours"]) if row.get("hours") else parse_hours(row["note"]),
+        hours_set=bool(row.get("hours")),
     )
 
 
@@ -255,7 +261,7 @@ class Places:
                 aliases=aliases,
                 note=note,
                 arrive_early=arrive_early,
-                hours=existing.hours if hours is None else hours,
+                hours=(existing.hours if existing.hours_set else {}) if hours is None else hours,
             )
         name, values = _place_values(name, address, aliases, note, arrive_early)
         now = to_utc_iso(clock.now())
@@ -280,7 +286,8 @@ class Places:
     ) -> SavedPlace:
         """`hours`: None keeps the place's own."""
         name, values = _place_values(name, address, aliases, note, arrive_early)
-        kept = self.get(place_id).hours if hours is None else hours
+        place = self.get(place_id)
+        kept = (place.hours if place.hours_set else {}) if hours is None else hours
         self.db.execute(
             "UPDATE places SET name = ?, aliases = ?, address = ?, note = ?, arrive_early = ?, "
             "hours = ?, updated_at = ? WHERE id = ?",
@@ -300,6 +307,23 @@ class Places:
         if row is None:
             raise NotFound(f"no place with id {place_id}")
         return _saved_from_row(row)
+
+    def hours_from(self, member: Member, text: str) -> SavedPlace | None:
+        """F58f (bug #253): "Stanford's visiting hours are 6:30-8:30 pm weekdays and ..."
+        saved as a fact: the hours of the one saved place it names, when that place has
+        none set. Returns the place it set them on."""
+        hours = parse_hours(text)
+        named = self.mentioned(member, text)
+        if not hours or len(named) != 1:
+            return None
+        place = named[0]
+        if self.db.scalar("SELECT hours FROM places WHERE id = ?", (place.id,)):
+            return None  # hours set for it win
+        self.db.execute(
+            "UPDATE places SET hours = ?, updated_at = ? WHERE id = ?",
+            (hours_json(hours), to_utc_iso(clock.now()), place.id),
+        )
+        return self.get(place.id)
 
     def remove(self, place_id: int) -> None:
         self.db.execute("DELETE FROM places WHERE id = ?", (place_id,))

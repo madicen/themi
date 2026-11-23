@@ -77,7 +77,11 @@ async def remember_fact(ctx: ToolContext, args: dict[str, Any]) -> str:
     saved = memory.remember(
         ctx.member, args["subject"], fact, scope=scope, keywords=args.get("keywords") or ""
     )
-    return f"Remembered: {saved.fact}"
+    said = f"Remembered: {saved.fact}"
+    place = memory.places.hours_from(ctx.member, fact)  # F58f: a saved place's hours
+    if place is not None:
+        said += f" Also saved as {place.name}'s hours: {place.hours_text}."
+    return said
 
 
 @tool(
