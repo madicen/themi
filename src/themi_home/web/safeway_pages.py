@@ -20,7 +20,9 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from themi.core import keys
+from themi.modules.guides import guide
 from themi.web.kit import Kit
+from themi.web.markdown import render
 from themi_home.safeway import Helper, InvalidResults, SafewayCart, check_product
 
 MAX_BODY = 64_000
@@ -34,6 +36,14 @@ def routes(kit: Kit) -> APIRouter:
         assert app.services.maybe(keys.safeway) is not None
         return app.services.maybe(keys.safeway)
 
+    def install_guide() -> Any:
+        """SW1: the module's setup guide (installing the helper in Chrome), shown here too,
+        since anyone can connect a helper and the Modules page is for admins."""
+        from themi_home.safeway import SafewayModule
+
+        text = guide(SafewayModule)
+        return render(text.replace("$SITE", kit.ctx.base_url)) if text else None
+
     def page(request: Request, **values: Any) -> HTMLResponse:
         session = kit.current(request)
         names = {m.id: m.name for m in app.store.list_members()}
@@ -45,6 +55,7 @@ def routes(kit: Kit) -> APIRouter:
             helpers=helpers,
             products=safeway().products(),
             base_url=kit.ctx.base_url,
+            guide=install_guide(),
             **values,
         )
 

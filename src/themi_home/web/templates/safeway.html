@@ -5,7 +5,14 @@
 <h1>Safeway helper</h1>
 <p class="muted">The Safeway helper is a Chrome extension that fills the Safeway cart from the
 grocery list when you say "fill the Safeway cart". It only adds to the cart; you check out on
-safeway.com. Install steps are in <code>extension/safeway/README.md</code>.</p>
+safeway.com.</p>
+
+{% if guide %}
+<details class="module-guide card"{% if not helpers %} open{% endif %}>
+  <summary>Install and connect the helper</summary>
+  {{ guide }}
+</details>
+{% endif %}
 
 {% if new_token %}
 <section class="card">

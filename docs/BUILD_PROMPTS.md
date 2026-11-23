@@ -17409,8 +17409,15 @@ Notes (2026-11-23):
 - "Done" also clears typed items that went in, and resets the ticks.
 - Manifest 0.3.0. Checked by rendering the popup's states in headless Chrome with a stubbed
   `chrome`; not yet loaded unpacked against the real Themi.
-- **Setup:** update the Pi (for `/api/safeway/list`), then reload the extension on
-  `chrome://extensions` and the Safeway tab.
+- Install steps on the website (asked the same day): the Safeway module's setup guide
+  (`themi_home/setup/safeway.md`): download the repo's ZIP from GitHub, load
+  `extension/safeway` unpacked, pin it, connect it with this site's address (`$SITE`), and
+  update it. The Modules page is for admins and anyone can connect a helper, so `/safeway`
+  shows the same guide, open until a helper is connected. The deployed image has no
+  `extension/` folder, hence the GitHub download. Follow-up if wanted: Themi serving the
+  helper as a ZIP itself, so it always matches the running version.
+- **Setup:** update the Pi (for `/api/safeway/list` and the guide), then reload the
+  extension on `chrome://extensions` and the Safeway tab.
 
 ## Conversation mode
 
