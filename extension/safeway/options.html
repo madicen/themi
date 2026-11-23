@@ -3,41 +3,64 @@
   <head>
     <meta charset="utf-8" />
     <title>Safeway helper: connect to Themi</title>
+    <link rel="icon" href="icons/icon-32.png" />
     <link rel="stylesheet" href="popup.css" />
     <style>
       body {
         width: auto;
         max-width: 520px;
-        margin: 24px auto;
+        margin: 32px auto;
         padding: 0 16px;
+        font-size: 14px;
       }
+      .top { padding: 0 0 16px; }
+      .top img { border-radius: 10px; }
+      h1 { font-size: 18px; }
+      .card { padding: 16px; }
+      label { display: block; margin: 12px 0 4px; font-weight: 600; }
       input {
-        box-sizing: border-box;
         width: 100%;
-        margin-bottom: 10px;
-        padding: 6px;
+        padding: 8px 10px;
         border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--bg);
+        border-radius: var(--radius-sm);
+        background: var(--card);
         color: var(--fg);
         font: inherit;
       }
+      input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+      .actions { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+      .actions .primary { width: auto; padding: 8px 20px; }
+      #status { margin: 14px 0 0; }
+      ol { margin: 0 0 4px; padding-left: 20px; color: var(--muted); }
+      li { margin: 3px 0; }
     </style>
   </head>
   <body>
-    <h1>Connect to Themi</h1>
-    <p class="muted">With this, "fill the Safeway cart" in Themi fills it here whenever a
-    safeway.com tab is open, and both of your browsers remember the same products. Get a
-    token on Themi's website: Safeway, then "Connect the Safeway helper".</p>
-    <label for="url">Themi's address</label>
-    <input id="url" type="url" placeholder="https://themi.example.com" autocomplete="off" />
-    <label for="token">Token</label>
-    <input id="token" type="password" placeholder="swh_..." autocomplete="off" />
-    <div class="row">
-      <button id="save" type="button">Connect</button>
-      <button id="disconnect" type="button" class="link">Disconnect</button>
-    </div>
-    <p id="status" role="status"></p>
+    <header class="top">
+      <img src="icons/icon-48.png" alt="" width="40" height="40" />
+      <div class="title">
+        <h1>Connect the Safeway helper to Themi</h1>
+        <p class="sub">The popup then shows Themi's grocery list, and "fill the Safeway cart"
+          in Themi's chat fills it here.</p>
+      </div>
+    </header>
+    <section class="card">
+      <ol>
+        <li>On Themi's website, open <strong>Safeway</strong> and click
+          <strong>Connect the Safeway helper</strong>.</li>
+        <li>Paste Themi's address and the token it shows below, then click Connect.</li>
+        <li>Allow access to that address when Chrome asks.</li>
+      </ol>
+      <label for="url">Themi's address</label>
+      <input id="url" type="url" placeholder="https://themi.example.com" autocomplete="off" />
+      <label for="token">Token</label>
+      <input id="token" type="password" placeholder="swh_..." autocomplete="off" />
+      <div class="actions">
+        <button id="save" type="button" class="primary">Connect</button>
+        <button id="disconnect" type="button" class="text-button">Disconnect</button>
+      </div>
+      <p id="status" class="sub" role="status"></p>
+    </section>
     <script src="lib/themi.js"></script>
     <script src="options.js"></script>
   </body>

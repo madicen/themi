@@ -55,6 +55,11 @@
       postResults(jobId, body) {
         return call(`/api/safeway/jobs/${encodeURIComponent(jobId)}/results`, { method: "POST", body: JSON.stringify(body) });
       },
+      // SW1: the grocery list (and Safeway things to buy) a cart would be filled from.
+      async shoppingList() {
+        const json = await call("/api/safeway/list");
+        return { items: (json && Array.isArray(json.items) && json.items) || [], waiting: Boolean(json && json.waiting) };
+      },
       async products() {
         const json = await call("/api/safeway/products");
         return (json && json.products) || [];

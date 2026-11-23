@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Themi Safeway helper",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Fills your Safeway cart from a list, or from Themi. You still check out yourself.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "minimum_chrome_version": "111",
   "permissions": ["storage", "alarms"],
   "host_permissions": ["https://www.safeway.com/*"],
@@ -15,8 +21,14 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "Fill the Safeway cart",
-    "default_popup": "popup.html"
+    "default_title": "Themi: fill the Safeway cart",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
   "content_scripts": [
     {

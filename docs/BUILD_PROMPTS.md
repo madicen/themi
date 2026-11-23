@@ -346,6 +346,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [x] 2026-11-22 |
 | F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [x] 2026-11-22 |
 | F58f | Feedback: "6:30–8:30 pm weekdays" is read, and hours in a place's note or a fact count | Feedback | [x] 2026-11-23 |
+| SW1 | Feedback: the Safeway helper's popup shows Themi's grocery list, an icon, no old fills | Feedback | [x] 2026-11-23 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -17370,6 +17371,46 @@ Notes:
   are read. Golden `system_prompt.txt` changes for the prompt line.
 - **Setup:** update the Pi. Nothing else: Stanford's note gives Monday's 6:30-8:30 pm. Fact 12
   can be forgotten on the Rules & memory page once this is live.
+
+### SW1 · Feedback (2026-11-23): the Safeway helper's popup shows Themi's grocery list, has an icon, and drops old fills
+Status: [x] 2026-11-23
+Depends on: 35d
+Read first: 35b's, 35c's and 35d's Notes; `extension/safeway/README.md`. From Michael
+(2026-11-23, a screenshot of the popup): no icon (Chrome showed a "T"), not synced with
+Themi's groceries ("just a huge, blank box"), and under it the items from a cart filled
+"ages ago" and already delivered. Asked for "a massive UI/UX improvement pass".
+
+Build:
+- Icons: the chameleon from `tools/draw_icons.py` on a rounded square with a cart badge,
+  16/32/48/128, in the manifest's `icons` and `action.default_icon`.
+- `GET /api/safeway/list` (the helper's bearer token): the items `fill_safeway_cart` would
+  take (the grocery list, then Things to Buy from Safeway), each like a job's item plus
+  `from`, and `waiting` (a cart queued or claimed). Read-only: nothing staged, no list made.
+- The popup: Themi's list as a checklist with each item's remembered product (or its search
+  words), an add box for anything else (paste a list to add several), one notice at a time
+  (open Safeway, reload the tab, sign in, Themi unreachable or disconnected), a progress bar
+  while it fills, and "Add N to cart". Unpaired, the list is only what's added here.
+- The last fill is shown for 12 hours or until **Done**, with its age and a rough total; what
+  it added stays unticked for those 12 hours, and Themi's items start unticked while a cart
+  waits for the helper, so nothing goes in twice.
+
+Tests: the endpoint (401 without a token, items with products and search words, Things to
+Buy, `waiting`); the popup's rows, ticks, fresh and stalled fills and notices
+(`tests/popup.test.js`); the worker's and API client's list call; the icons.
+
+Notes (2026-11-23):
+- The token's reach grows by one read: the list a cart would be filled from. Module and
+  page docstrings say so.
+- The popup's fills now go to the tab as a job's items (`fill` with `items`), checked by
+  `jobItems` like Themi's jobs, so a remembered product or search words from Themi apply
+  to a popup fill too. The old free-text `draft` is dropped from storage on first open.
+- A fill's running state carries `at`, updated with each item; one with no progress for 3
+  minutes (its tab closed partway) no longer holds the button at "Filling…".
+- "Done" also clears typed items that went in, and resets the ticks.
+- Manifest 0.3.0. Checked by rendering the popup's states in headless Chrome with a stubbed
+  `chrome`; not yet loaded unpacked against the real Themi.
+- **Setup:** update the Pi (for `/api/safeway/list`), then reload the extension on
+  `chrome://extensions` and the Safeway tab.
 
 ## Conversation mode
 

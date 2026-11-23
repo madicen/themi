@@ -5,7 +5,8 @@ JSON API the helper (the Chrome extension) uses, under /api/safeway/.
   page the POST returns (never in a URL or a cookie), and kept only as a hash.
 - The API takes the token as a bearer token and nothing else: no session cookie, so no CSRF
   to check. A missing, wrong or revoked token is a 401. A token can only claim and answer
-  cart jobs and read and set remembered products.
+  cart jobs, read and set remembered products, and read the list a cart would be filled
+  from (SW1: the popup shows it).
 - What the helper sends is checked (`themi_home.safeway.check_results`) and is data:
   product names are escaped here and never reach the model.
 """
@@ -125,6 +126,16 @@ def routes(kit: Kit) -> APIRouter:
         except InvalidResults as exc:
             return JSONResponse({"error": str(exc)}, status_code=422)
         return JSONResponse({"ok": True})
+
+    @router.get("/api/safeway/list")
+    def shopping_list(request: Request) -> Response:
+        found = helper(request)
+        if found is None:
+            return refused()
+        member = app.store.get_member(found.member_id)
+        if member is None:
+            return refused()
+        return JSONResponse(safeway().shopping_list(member))
 
     @router.get("/api/safeway/products")
     def products(request: Request) -> Response:

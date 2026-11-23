@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- SW1: drawn by tools/draw_icons.py from chameleon.svg; edit that, not this. -->
+  <style>
+.cham-skin { fill: #3aa79b; stroke: #1b4b46; stroke-width: 1.8; }
+.cham-belly { fill: #b4ead6; }
+.cham-stripe { fill: none; stroke: #23857a; stroke-width: 4; opacity: .5; }
+.cham-outline { fill: none; stroke: #1b4b46; stroke-width: 9.6; stroke-linecap: round; }
+.cham-limb { fill: none; stroke: #3aa79b; stroke-width: 6; stroke-linecap: round; }
+.cham-tail .cham-outline { stroke-width: 11.6; }
+.cham-tail .cham-limb { stroke-width: 8; }
+.cham-tail .cham-stripe { stroke-width: 8; stroke-dasharray: 3 6; opacity: .55; }
+.cham-mouth, .cham-crease { fill: none; stroke: #1b4b46; stroke-width: 1.6;
+  stroke-linecap: round; }
+.cham-crease { opacity: .5; }
+.cham-eyeball { fill: #ffffff; stroke: #1b4b46; stroke-width: 1.6; }
+.cham-pupil { fill: #1b4b46; }
+.cham-glint { fill: #ffffff; }
+</style>
+  <clipPath id="square"><rect width="512" height="512" rx="112"/></clipPath>
+  <g clip-path="url(#square)">
+  <rect width="512" height="512" fill="#16302d"/>
+  <circle cx="230" cy="236" r="190" fill="#21433f"/>
+  <svg x="-30" y="10" width="512" height="512" viewBox="-2 -14 124 124" overflow="hidden">
+  <g class="cham-tail">
+    <path class="cham-outline" d="M42 120 C 26 127, 8 123, 8 106 C 8 95, 19 91, 23 99"/>
+    <path class="cham-limb" d="M42 120 C 26 127, 8 123, 8 106 C 8 95, 19 91, 23 99"/>
+    <path class="cham-stripe" d="M42 120 C 26 127, 8 123, 8 106 C 8 95, 19 91, 23 99"/>
+  </g>
+  <g class="cham-foot">
+    <path class="cham-skin" d="M42 116 C 41 124, 40 130, 40 136 C 34 136, 30 140, 33 143 L 50 143 C 52 140, 50 136, 48 136 C 48 130, 49 124, 50 116 Z"/>
+    <path class="cham-skin" d="M64 116 C 65 124, 66 130, 66 136 C 64 136, 62 140, 64 143 L 81 143 C 84 140, 80 136, 74 136 C 74 130, 73 124, 72 116 Z"/>
+    <path class="cham-crease" d="M39 143 L 39 140 M44 143 L 44 140 M70 143 L 70 140 M75 143 L 75 140"/>
+  </g>
+  <g class="cham-body">
+    <path class="cham-skin" d="M40 62 C 30 76, 28 100, 32 114 C 36 127, 78 127, 82 114 C 86 100, 84 76, 74 62 Z"/>
+    <path class="cham-belly" d="M45 72 C 39 86, 39 106, 45 116 C 51 122, 65 122, 71 116 C 77 106, 76 86, 70 72 C 63 68, 52 68, 45 72 Z"/>
+    <path class="cham-stripe" d="M43 80 C 52 85, 65 85, 72 80 M41 93 C 51 98, 66 98, 75 93"/>
+  </g>
+  <g class="cham-hand cham-hand-back">
+    <path class="cham-outline" d="M39 72 C 31 81, 27 91, 27 101"/>
+    <path class="cham-limb" d="M39 72 C 31 81, 27 91, 27 101"/>
+  </g>
+  <g class="cham-hand cham-hand-front">
+    <path class="cham-outline" d="M76 72 C 85 80, 89 88, 90 98"/>
+    <path class="cham-limb" d="M76 72 C 85 80, 89 88, 90 98"/>
+  </g>
+  <g class="cham-head">
+    <path class="cham-skin" d="M22 42 C 20 22, 38 10, 58 10 C 80 10, 96 22, 94 42 C 93 58, 78 68, 58 68 C 38 68, 23 58, 22 42 Z"/>
+    <path class="cham-crease" d="M46 15 C 52 19, 62 19, 68 15"/>
+    <path class="cham-mouth" d="M49 49 C 55 56, 65 56, 71 48"/>
+    <g class="cham-eye">
+      <circle class="cham-eyeball" cx="35" cy="29" r="11"/>
+      <circle class="cham-eyeball" cx="81" cy="28" r="10.5"/>
+      <g class="cham-pupil"><circle cx="37" cy="30.5" r="6.4"/><circle class="cham-glint" cx="35" cy="28" r="2"/></g>
+      <g class="cham-pupil"><circle cx="83" cy="29.5" r="6.1"/><circle class="cham-glint" cx="81" cy="27" r="1.9"/></g>
+    </g>
+  </g>
+  </svg>
+  </g>
+  <circle cx="392" cy="392" r="120" fill="#e8613c" stroke="#16302d" stroke-width="20"/>
+  <g transform="translate(392 396) scale(8.4) translate(-12 -12)" fill="none" stroke="#ffffff"
+     stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 4h3l2 11h11l2-8H7M10 20h.01M17 20h.01"/>
+  </g>
+</svg>

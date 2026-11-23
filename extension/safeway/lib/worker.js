@@ -126,6 +126,7 @@
       poll,
       jobDone,
       products: () => ask(async (api) => ({ products: await api.products() })),
+      list: () => ask(async (api) => api.shoppingList()),
       setProduct: (name, product) => ask(async (api) => (await api.setProduct(name, product), {})),
       test: () => ask(async (api) => (await api.products(), {})),
     };

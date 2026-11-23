@@ -6,19 +6,68 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <label for="list">One item per line. A number in front sets the quantity.</label>
-    <textarea id="list" rows="8" placeholder="eggs&#10;2 oat milk&#10;bananas"></textarea>
-    <div class="row">
-      <button id="fill" type="button">Fill cart</button>
-      <button id="open" type="button" class="link">Open Safeway</button>
-      <span id="status" role="status"></span>
-    </div>
-    <p id="reload" class="stopped" hidden>Reload your Safeway tab so the helper can use it.</p>
-    <p id="sign-in" class="stopped" hidden>Open Safeway and sign in so the helper can fill the cart.</p>
-    <div id="results"></div>
-    <p class="small">This only adds to your cart. You check out on safeway.com.</p>
-    <p class="small"><span id="themi"></span> <button id="options" type="button" class="link">Settings</button></p>
+    <header class="top">
+      <img src="icons/icon-48.png" alt="" width="32" height="32" />
+      <div class="title">
+        <h1>Safeway cart</h1>
+        <p id="link" class="sub"></p>
+      </div>
+      <button id="options" type="button" class="icon-button" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4" /></svg>
+      </button>
+    </header>
+
+    <main>
+      <div id="notice" class="notice" role="status" hidden>
+        <span id="notice-text"></span>
+        <button id="notice-action" type="button" class="small-button"></button>
+      </div>
+
+      <section id="progress" class="card" hidden>
+        <div class="progress-head">
+          <strong id="progress-text"></strong>
+          <span id="progress-count" class="muted"></span>
+        </div>
+        <div class="bar"><div id="progress-bar"></div></div>
+        <p class="hint">You can close this. It keeps going in the Safeway tab.</p>
+      </section>
+
+      <section id="results" class="card" hidden>
+        <div class="results-head">
+          <div>
+            <strong id="results-title"></strong>
+            <p id="results-sub" class="muted"></p>
+          </div>
+          <button id="dismiss" type="button" class="small-button">Done</button>
+        </div>
+        <p id="results-stopped" class="stopped" hidden></p>
+        <div id="results-body"></div>
+      </section>
+
+      <section class="list">
+        <div class="list-head">
+          <h2 id="list-title">Shopping list</h2>
+          <button id="toggle-all" type="button" class="text-button"></button>
+        </div>
+        <p id="waiting" class="hint" hidden>Themi has a cart waiting for the helper. It fills
+          on its own within a minute of a signed-in Safeway tab, so these start unticked.</p>
+        <ul id="rows" class="rows"></ul>
+        <p id="empty" class="empty" hidden></p>
+        <form id="add-form" class="add" autocomplete="off">
+          <input id="add" type="text" placeholder="Add something…" aria-label="Add something to the list" />
+          <button type="submit" class="small-button">Add</button>
+        </form>
+        <p class="hint">A number in front sets how many: <em>2 oat milk</em>. Paste a list to add several.</p>
+      </section>
+    </main>
+
+    <footer class="bottom">
+      <button id="fill" type="button" class="primary"></button>
+      <p class="hint center">Only adds to the cart. You check out on safeway.com.</p>
+    </footer>
+
     <script src="lib/list.js"></script>
+    <script src="lib/popup.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

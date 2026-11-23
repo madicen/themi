@@ -9,6 +9,9 @@ dark green square:
 
 It writes `icons/icon.svg` and, through resvg (as the day card is drawn), `icon-512.png`,
 `icon-192.png` and `apple-touch-icon.png` (180). The same chameleon gives the same files.
+
+SW1: it also draws the Safeway helper's toolbar icons (`extension/safeway/icons/`), the same
+chameleon on a rounded square with a cart in the corner, so Chrome shows Themi, not a "T".
 """
 
 from __future__ import annotations
@@ -21,6 +24,8 @@ STATIC = Path(__file__).resolve().parent.parent / "src" / "themi_home" / "web" /
 CHAMELEON = STATIC / "chameleon" / "chameleon.svg"
 ICONS = STATIC / "icons"
 SIZES = {"icon-512.png": 512, "icon-192.png": 192, "apple-touch-icon.png": 180}
+EXTENSION_ICONS = Path(__file__).resolve().parent.parent / "extension" / "safeway" / "icons"
+EXTENSION_SIZES = {f"icon-{n}.png": n for n in (16, 32, 48, 128)}
 
 BACKGROUND = "#16302d"  # a deep green, darker than the chameleon's teal
 HALO = "#21433f"  # a soft disc behind the head, inside the maskable safe zone
@@ -68,15 +73,46 @@ def icon_svg() -> str:
 """
 
 
+BADGE = "#e8613c"  # a warm orange: the cart stands out from the greens
+CART = "M3 4h3l2 11h11l2-8H7M10 20h.01M17 20h.01"  # themi.web.icons.SAFEWAY
+
+
+def extension_svg() -> str:
+    """The Safeway helper's icon: the chameleon on a rounded square, a cart badge in the
+    bottom right corner."""
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- SW1: drawn by tools/draw_icons.py from chameleon.svg; edit that, not this. -->
+  <style>{STYLE}</style>
+  <clipPath id="square"><rect width="512" height="512" rx="112"/></clipPath>
+  <g clip-path="url(#square)">
+  <rect width="512" height="512" fill="{BACKGROUND}"/>
+  <circle cx="230" cy="236" r="190" fill="{HALO}"/>
+  <svg x="-30" y="10" width="512" height="512" viewBox="-2 -14 124 124" overflow="hidden">
+{parts()}
+  </svg>
+  </g>
+  <circle cx="392" cy="392" r="120" fill="{BADGE}" stroke="{BACKGROUND}" stroke-width="20"/>
+  <g transform="translate(392 396) scale(8.4) translate(-12 -12)" fill="none" stroke="#ffffff"
+     stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="{CART}"/>
+  </g>
+</svg>
+"""
+
+
 def main() -> int:
     import resvg_py
 
-    svg = icon_svg()
-    (ICONS / "icon.svg").write_text(svg, encoding="utf-8")
-    for name, size in SIZES.items():
-        png = bytes(resvg_py.svg_to_bytes(svg_string=svg, width=size, skip_system_fonts=True))
-        (ICONS / name).write_bytes(png)
-        print(f"wrote {name} ({size} px)")
+    for folder, svg, sizes in (
+        (ICONS, icon_svg(), SIZES),
+        (EXTENSION_ICONS, extension_svg(), EXTENSION_SIZES),
+    ):
+        folder.mkdir(exist_ok=True)
+        (folder / "icon.svg").write_text(svg, encoding="utf-8")
+        for name, size in sizes.items():
+            png = bytes(resvg_py.svg_to_bytes(svg_string=svg, width=size, skip_system_fonts=True))
+            (folder / name).write_bytes(png)
+            print(f"wrote {folder.name}/{name} ({size} px)")
     return 0
 
 
