@@ -58,6 +58,7 @@ from themi.core.wording import (  # CR10b1: the matching helpers live there
     words_in_common,
 )
 from themi.localtime import to_utc_iso
+from themi.standard.places import Places, day_label, span_words
 from themi_google.connectors.gcal import CalendarError, CalendarNotFound, event_id
 from themi_google.connectors.gcal.busy import TASK_BLOCK
 from themi_google.connectors.google import CALENDAR_SCOPE
@@ -1095,6 +1096,33 @@ def _located(ctx: ToolContext, location: str) -> str:
     return travel.address_for(ctx.member, location) or location
 
 
+def _keep_to_hours(ctx: ToolContext, said: str, location: str, when: When, tz: ZoneInfo) -> None:
+    """F58e (bug #251): an event at a saved place with hours keeps to that day's ("I want to
+    visit Erin at Stanford tomorrow" on a Sunday took the weekend's 12-8:30 for Monday).
+    Arriving early is fine (an `arrive_by` before it opens); the event itself isn't."""
+    if when.all_day:
+        return
+    places = Places(ctx.services.store.db)
+    place = places.find(ctx.member, location) if location else None
+    if place is None and said:
+        place = places.find(ctx.member, said)
+    if place is None or not place.hours:
+        return
+    starts, ends = when.starts.astimezone(tz), when.ends.astimezone(tz)
+    day = starts.date()
+    span = place.hours.get(day.weekday())
+    if span is None:
+        raise ToolFailed(
+            f"{place.name} is closed on {day_label(day)}, so that time is outside its hours. "
+            "Pick another day, or ask the person."
+        )
+    if starts.time() < span[0] or ends.date() != day or ends.time() > span[1]:
+        raise ToolFailed(
+            f"{place.name}'s hours on {day_label(day)} are {span_words(span)}, so that time is "
+            "outside them. Use those hours, or ask the person."
+        )
+
+
 def _events(ctx: ToolContext) -> Events:
     events = ctx.services.maybe(keys.events)
     if events is None:
@@ -1191,6 +1219,7 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
     calendar = str(args["calendar"])
     where = "the family calendar" if calendar == "family" else "your calendar"
     tz = events._tz()
+    _keep_to_hours(ctx, said_location or location, location, when, tz)  # F58e
     same = events.made_that_day(ctx.member, calendar, title, when)
     if same is not None and same.when == when:
         raise ToolDeclined(

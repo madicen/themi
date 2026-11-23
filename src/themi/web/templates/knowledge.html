@@ -100,13 +100,15 @@ Themi drives to the address, keeps the note in mind (visiting hours) and has you
 {% for place in places %}
 {% call(part) row(place.name, meta=("Personal" if place.scope == "member" else "Household") ~ " · " ~ place.address ~ ((" · also: " ~ place.aliases) if place.aliases else ""), id="place-" ~ place.id) %}
 {% if part == "body" %}
+  {% if place.hours_text %}<p>Hours: {{ place.hours_text }}</p>{% endif %}
   {% if place.note %}<p>{{ place.note }}</p>{% endif %}
   <form method="post" action="/places/{{ place.id }}/edit">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label>Name <input name="name" value="{{ place.name }}" required></label>
     <label>Other names <input name="aliases" value="{{ place.aliases }}" placeholder="Stanford Hospital"></label>
     <label>Address <input name="address" value="{{ place.address }}" required></label>
-    <label>Note <input name="note" value="{{ place.note }}" placeholder="Visiting hours 6:30–8:30 pm weekdays"></label>
+    <label>Hours <input name="hours" value="{{ place.hours_text }}" placeholder="Weekdays 6:30-8:30 pm, weekends 12-8:30 pm"></label>
+    <label>Note <input name="note" value="{{ place.note }}" placeholder="Visitors sign in at the front desk"></label>
     <label>Get there early (minutes) <input name="arrive_early" type="number" min="0" max="120" value="{{ place.arrive_early }}"></label>
     <button>Save</button>
   </form>
@@ -128,7 +130,8 @@ Themi drives to the address, keeps the note in mind (visiting hours) and has you
     <label>Name <input name="name" required placeholder="Stanford"></label>
     <label>Other names <input name="aliases" placeholder="Stanford Hospital"></label>
     <label>Address <input name="address" required placeholder="The visitor parking lot's address"></label>
-    <label>Note <input name="note" placeholder="Visiting hours 6:30–8:30 pm weekdays"></label>
+    <label>Hours <input name="hours" placeholder="Weekdays 6:30-8:30 pm, weekends 12-8:30 pm"></label>
+    <label>Note <input name="note" placeholder="Visitors sign in at the front desk"></label>
     <label>Get there early (minutes) <input name="arrive_early" type="number" min="0" max="120" value="0"></label>
     <label>For <select name="about"><option value="household">The household</option><option value="personal">Just me</option></select></label>
     <button>Save</button>

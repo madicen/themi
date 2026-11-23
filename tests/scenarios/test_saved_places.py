@@ -5,11 +5,14 @@ home → Stanford is about 35 min."""
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.travel import FakeTravel
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_travel import ask, at, local, ready, tool_result
 from tests.scenarios.test_triage import ERIN
+from themi import clock
 from themi.core import keys
 from themi.standard.memory import Memory
 
@@ -33,6 +36,7 @@ async def tell_themi_about_stanford(scenario: Scenario) -> str:
             "address": LOT,
             "aliases": "Stanford Hospital",
             "note": HOURS,
+            "hours": "",  # F58e: the tool's argument, left empty as before
             "arrive_early_minutes": 10,
             "about": "household",
         },
@@ -115,3 +119,72 @@ async def test_search_memory_finds_a_place(scenario: Scenario) -> None:
     scenario.primary.queue_text("6:30 to 8:30.")
     await scenario.say("Erin", "when can I visit?")
     assert f"Place: Stanford means {LOT}. {HOURS}." in tool_result(scenario)
+
+
+# ----- F58e (bug #251): a place's hours by day ----------------------------------------------
+
+WEEK_HOURS = "weekdays 6:30-8:30 pm, weekends 12-8:30 pm"
+
+
+def tool_results(scenario: Scenario) -> list[str]:
+    from themi.ai.types import ToolResult
+
+    return [
+        str(block.content)
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult)
+    ]
+
+
+def visit(start: str, end: str, **more: str) -> dict[str, str]:
+    return {
+        "title": "Visit Erin at Stanford",
+        "date": "2026-10-26",  # Monday
+        "start": start,
+        "end": end,
+        "location": LOT,
+        "calendar": "mine",
+        "details": "",
+        "unread": "",
+    } | more
+
+
+async def test_mondays_visit_keeps_to_mondays_hours_not_the_weekends(
+    scenario: Scenario, ready: FakeGcal
+) -> None:
+    """Reply 534: on a Sunday evening, "I want to visit Erin at Stanford tomorrow" took the
+    weekend's 12-8:30 for Monday. Monday's hours refuse it; 6:30-8:30 pm goes through."""
+    scenario.primary.queue_tool_call(
+        "remember_place",
+        {
+            "name": "Stanford",
+            "address": LOT,
+            "aliases": "",
+            "note": "",
+            "hours": WEEK_HOURS,
+            "arrive_early_minutes": 10,
+            "about": "household",
+        },
+    )
+    scenario.primary.queue_text("Saved.")
+    await scenario.say("Erin", f"When I say Stanford, take me to {LOT}. Visiting hours are ...")
+    assert "Hours: Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm." in tool_result(scenario)
+
+    clock.advance(timedelta(days=4, hours=8, minutes=50))  # Sun 25 Oct, 5:50 pm
+    scenario.primary.queue_tool_call(
+        "add_calendar_event", visit("12:00", "20:30", arrive_by="11:50")
+    )
+    scenario.primary.queue_tool_call(
+        "add_calendar_event", visit("18:30", "20:30", arrive_by="18:20")
+    )
+    scenario.primary.queue_text("Visit Erin at Stanford tomorrow from 6:30 to 8:30 pm?")
+    replies = await scenario.say("Erin", "I want to visit Erin at Stanford tomorrow")
+    context = scenario.primary.last_request.messages[0].content[0].text  # type: ignore[union-attr]
+    assert "On Mon 26 Oct: 6:30-8:30 pm." in context  # tomorrow's hours, in front of it
+    refused, staged = tool_results(scenario)[-2:]
+    assert refused.startswith(
+        "Stanford's hours on Mon 26 Oct are 6:30-8:30 pm, so that time is outside them."
+    )
+    assert "Visit Erin at Stanford, Mon 26 Oct, 6:30-8:30 pm" in staged
+    assert any("6:30-8:30 pm" in r for r in replies)

@@ -29,18 +29,19 @@ import logging
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
+from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.accounts import Member, NotFound
 from themi.core import keys
 from themi.core.tools import ToolContext, ToolFailed, tool
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.modules.groups import BEHIND_THE_SCENES
 from themi.modules.prompt import PromptFragment
-from themi.standard.places import Places
+from themi.standard.places import Places, day_named, read_hours
 
 if TYPE_CHECKING:
     from themi.core.rules import Rulebook
@@ -163,7 +164,15 @@ class Memory:
         their `earlier` messages)."""
         pinned, retrieved = self.for_prompt(member, message, earlier)
         places = self.places.mentioned(member, " ".join([message, *earlier]))  # F57b
-        return [f.fact for f in pinned], [f.fact for f in retrieved] + [p.line() for p in places]
+        # F58e: the day the message names ("tomorrow"), so a place's line has its hours then.
+        day = day_named(message, self._today(member)) if places else None
+        lines = [p.line(day if p.hours else None) for p in places]
+        return [f.fact for f in pinned], [f.fact for f in retrieved] + lines
+
+    def _today(self, member: Member) -> date:
+        row = self.db.one("SELECT timezone FROM family LIMIT 1")
+        zone = ZoneInfo(str(row["timezone"]) if row and row["timezone"] else "UTC")
+        return member_day(member, clock.now(), zone)
 
     # ----- writing ------------------------------------------------------------
 
@@ -426,6 +435,12 @@ def _subject_of(text: str) -> str:
             "description": "Worth knowing whenever they go, e.g. visiting or opening hours. "
             "Empty if none.",
         },
+        "hours": {
+            "type": "string",
+            "description": "Its opening or visiting hours by day, as said, e.g. 'weekdays "
+            "6:30-8:30 pm, weekends 12-8:30 pm' or 'Mon-Fri 9-5, Sat 10-2'. Empty if none were "
+            "said (an empty one keeps what was saved).",
+        },
         "arrive_early_minutes": {
             "type": "integer",
             "description": "Minutes before an event there they want to arrive (to park and "
@@ -441,7 +456,9 @@ def _subject_of(text: str) -> str:
 async def remember_place(ctx: ToolContext, args: dict[str, Any]) -> str:
     memory = ctx.services.maybe(keys.memory)
     assert memory is not None
+    said_hours = " ".join(str(args.get("hours") or "").split())
     try:
+        hours = read_hours(said_hours) if said_hours else None  # F58e
         place = memory.places.save(
             ctx.member,
             str(args["name"]),
@@ -450,6 +467,7 @@ async def remember_place(ctx: ToolContext, args: dict[str, Any]) -> str:
             note=str(args.get("note") or ""),
             arrive_early=int(args.get("arrive_early_minutes") or 0),
             scope="member" if args.get("about") == "personal" else "family",
+            hours=hours,
         )
     except ValueError as exc:
         raise ToolFailed(f"Nothing was saved: {exc}.") from exc
@@ -482,9 +500,9 @@ PROMPT_RULES = (
         76,
         """\
 - "When I say Stanford, take me to the parking lot at ..." or "X's address is ..." is a
-  place: remember_place, with its hours as the note and how early they like to arrive.
-  For an event at a saved place, use its address as the event's location, and keep to
-  its note's hours.""",
+  place: remember_place, with its hours by day in hours and how early they like to
+  arrive. For an event at a saved place, use its address as the event's location, and
+  keep to that day's hours (weekdays and weekends can differ).""",
     ),
     PromptFragment(
         "memory.after-answering-a-general",

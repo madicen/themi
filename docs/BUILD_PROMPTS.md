@@ -344,7 +344,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F58b | Feedback: litter box error 6 is "out of sani-solution"; the A.I. counts cleans too | Feedback | [x] 2026-11-22 |
 | F58c | Feedback: the wall fits the frame, nothing cut off at the bottom | Feedback | [x] 2026-11-22 |
 | F58d | Feedback: [Fixed it] clears the vacuum's alert, so its chore ticks off | Feedback | [x] 2026-11-22 |
-| F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [ ] |
+| F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [x] 2026-11-22 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -17200,7 +17200,7 @@ Notes:
 - **Setup:** none beyond updating the Pi.
 
 ### F58e · Feedback (2026-11-22): a saved place's hours are by day, so Monday's visit uses Monday's hours
-Status: [ ]
+Status: [x] 2026-11-22
 Depends on: F57b
 Read first: `themi/standard/places.py` (`SavedPlace`, `line`, `mentioned`, `save`);
 `themi/standard/memory.py` (`remember_place`, `for_prompt`'s places, the
@@ -17255,6 +17255,38 @@ Data/Setup: after the update, Michael says once: "Stanford's visiting hours are 
 weekdays and 12–8:30 pm weekends", or sets them under Places on the Rules & memory page.
 Decided here, not with Michael yet: a time outside a place's hours is refused at the tool,
 not just warned about. Mark #251 reviewed once live.
+
+Notes:
+- Changes from the prompt:
+  - The Places form has one "Hours" text field ("Weekdays 6:30-8:30 pm, weekends 12-8:30
+    pm"), read back as "Mon-Fri 6:30-8:30 pm; Sat-Sun 12-8:30 pm", rather than seven rows of
+    open/close. It reads the same words the tool takes, and the read-back reads back in.
+    Blank clears the hours; unreadable hours are refused and the place is left as it was.
+  - `business_hours._span` now reads an unmarked opening time by the closing time's half:
+    "6:30-8:30 pm" is 6:30 pm (it was 6:30 am), "12-8:30 pm" opens at noon, "9-5 pm" still
+    opens at 9 am. Shops' hours (F33) parse through the same function; their tests pass.
+- Migration 0183: `places.hours` (JSON in `place_hours`' form, '' for none). `SavedPlace`
+  has `hours`, `hours_on(day)`, `hours_text`, and `line(day)`. `places.py` also has
+  `read_hours`, `hours_words`, `span_words`, `day_label` and `day_named` (today, tomorrow,
+  or the next such weekday). Saving a place again with no hours keeps the ones it has.
+- `remember_place` has an `hours` argument; unreadable hours fail with what to say instead.
+  `Memory.prompt_facts` gives a mentioned place's line the hours of the day the message
+  names ("On Mon 26 Oct: 6:30-8:30 pm."), in the family's timezone through `themi.clock`.
+  Travel's data block adds "Hours on <day>: …" for the event's day.
+- `add_calendar_event` (`_keep_to_hours` in `themi_google/events.py`) refuses an event at a
+  saved place with hours whose start or end falls outside that day's ("Stanford's hours on
+  Mon 26 Oct are 6:30-8:30 pm, so that time is outside them. Use those hours, or ask the
+  person."), or on a closed day. `arrive_by` isn't checked, so arriving early is fine.
+  `change_calendar_event` isn't checked (not asked for).
+- Goldens: `system_prompt.txt` (the `memory.remember-place` line) and `tools.json`
+  (`remember_place` gained `hours`).
+- Tests: 4 in `tests/unit/test_saved_places.py`, reply 534's turn in
+  `tests/scenarios/test_saved_places.py`, and a page test in
+  `tests/integration/test_admin_pages.py`. F57b's scenario now passes `"hours": ""` to
+  `remember_place` (every argument is required in the tool schema).
+- **Setup:** update the Pi. Then Michael says once: "Stanford's visiting hours are
+  6:30–8:30 pm weekdays and 12–8:30 pm weekends", or types them into the Hours box for
+  Stanford under Places on the Rules & memory page. The old note can then be cleared.
 
 ## Conversation mode
 

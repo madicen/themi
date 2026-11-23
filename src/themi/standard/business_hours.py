@@ -142,6 +142,10 @@ def _span(m: re.Match[str]) -> tuple[time, time] | None:
     ch, cm, ca = _clock(m.group(6), m.group(7), m.group(8))
     if not (0 < oh <= 24 and 0 < ch <= 24 and om < 60 and cm < 60):
         return None
+    if not oa and ca and oh <= 12 and ch <= 12:
+        # F58e: "6:30-8:30 pm" is both pm, "12-8:30 pm" opens at noon, "9-5 pm" opens at 9 am:
+        # an unmarked opening takes the closing's half when it comes earlier on the clock.
+        oa = ca if (oh % 12, om) < (ch % 12, cm) else ("a" if ca == "p" else "p")
     opens = oh % 12 + (12 if oa == "p" else 0) if oa else (oh if oh != 12 else 12)
     closes = ch % 12 + (12 if ca == "p" else 0) if ca else ch
     if not ca and closes <= opens:
