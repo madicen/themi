@@ -1,0 +1,10 @@
+{#- F59g: the exchange in the Talk sheet, polled while it's open. -#}
+{% if lines %}
+<ol class="talk-lines">
+  {% for l in lines %}
+  <li class="talk-line{% if l.mine %} mine{% endif %}">{{ l.text }}{% if l.card %}<span class="wall-sub">I've sent {{ member.name }} the card in Telegram.</span>{% endif %}</li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="wall-empty">Nothing said today yet.</p>
+{% endif %}

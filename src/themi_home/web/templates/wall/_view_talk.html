@@ -1,0 +1,31 @@
+{#- F59g (idea #257): talk to Themi from the wall. "Who's this?" first; then a text box, a mic
+    (shown by wall.js only when the frame can record), and the exchange today. Answers come
+    here and in Telegram. -#}
+{% from "wall/_sheet.html" import sheet, head with context %}
+{% call sheet("Talk to Themi") %}
+{% if not member %}
+{{ head("Talk to Themi", "Who's this?") }}
+<div class="sheet-actions talk-who">
+  {% for id, name, tone in people %}
+  <button type="button" class="sheet-button tone-{{ tone }}" hx-get="/wall/talk?member={{ id }}" hx-target="#wall-view" hx-swap="innerHTML">{{ name }}</button>
+  {% endfor %}
+</div>
+{% else %}
+<div class="talk-head">
+  {{ head("Talk to Themi", "Hi, " ~ member.name, "Themi answers here and in Telegram.") }}
+  <button type="button" class="talk-not" hx-get="/wall/talk?member=0" hx-target="#wall-view" hx-swap="innerHTML">Not {{ member.name }}?</button>
+</div>
+<div class="talk-log" hx-get="/wall/talk/lines?member={{ member.id }}" hx-trigger="every 3s" hx-swap="innerHTML">
+  {% include "wall/_talk_lines.html" %}
+</div>
+<form class="sheet-add talk-form" hx-post="/wall/talk" hx-target="#wall-view" hx-swap="innerHTML">
+  <input type="hidden" name="member" value="{{ member.id }}">
+  <label class="sr-only" for="wall-talk">Say something to Themi</label>
+  <input id="wall-talk" name="text" maxlength="4000" autocomplete="off" placeholder="Say something to Themi">
+  <button class="sheet-button primary">Send</button>
+  <button type="button" class="sheet-button talk-mic" data-talk-mic data-member="{{ member.id }}" aria-label="Hold a thought: tap to talk, tap again to send" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="talk-mic-words">Talk</span>
+  </button>
+</form>
+{% endif %}
+{% endcall %}

@@ -353,7 +353,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F59d | Idea: the note at the top of the wall has a ✕ to dismiss it in place | Feedback | [x] 2026-11-23 |
 | F59e | Idea: any household list's card on the wall opens, to see it all and tick things off | Feedback | [x] 2026-11-23 |
 | F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [x] 2026-11-23 |
-| F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [ ] |
+| F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [x] 2026-11-23 |
 | F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -17782,7 +17782,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F59g · Idea (2026-11-23): talk to Themi from the wall, typed or said
-Status: [ ]
+Status: [x] 2026-11-23
 Depends on: WL1, CK5, CK8
 Read first: `themi_home/web/session_pages.py` (`cook_chat`, `cook_say`);
 `themi_home/cooking.py` (`page_chat_event`); `themi_home/cooking_voice.py`;
@@ -17828,6 +17828,27 @@ Data/Setup: update the Pi. On the frame, the first mic tap asks for the micropho
 it. If the Cozyla frame has no microphone or its WebView doesn't offer one, the button
 doesn't appear and typing still works (note which it was in Notes). Mark #257 reviewed once
 live.
+
+Notes:
+- New `themi_home/wall_talk.py`: `Talking` (who's talking, by the frame's or phone's CSRF
+  token, kept 5 minutes after its last use, in memory, so a restart asks again), `lines`
+  (the last 10 of that person's `message_log` lines since their day began; an approval
+  card's line adds "I've sent <name> the card in Telegram."), `typed` and `said`.
+- Routes: `GET /wall/talk` (`?member=<id>` chooses, `?member=0` is "Not <name>?"),
+  `GET /wall/talk/lines?member=` (the sheet polls it every 3 s), `POST /wall/talk`
+  (`member`, `text`), `POST /wall/say` (multipart `member`, `audio`, up to 2 MB). A
+  stranger's member id gets 404, no member 400. A frame that's signed out gets 401 with
+  `HX-Redirect` (the wall's `gone()`, not the 410 the prompt said).
+- A typed line is logged (`kind` "wall") and handed to the channel's handler as a `text`
+  event with `from_page=True`. A clip goes as a `voice` event: the agent transcribes it
+  through the router as for Telegram, logs what was heard, and answers. Answers go through
+  the outbox to Telegram and show in the sheet from the log.
+- "Talk to Themi" is in the top bar (`_top.html`). The mic button is rendered `hidden`;
+  `wall.js` shows it only with `getUserMedia` and `MediaRecorder`, records until a second
+  tap or 30 s, and posts the clip. If the frame refuses the microphone the button hides again.
+- Not checked on the Cozyla frame yet: whether it has a microphone its WebView offers.
+- Tests: `tests/integration/test_wall_talk.py` (6).
+- **Setup:** update the Pi. On the frame, the first mic tap asks for the microphone: allow it.
 
 ### F59h · Idea (2026-11-23): the cook screen's timers keep their buttons in line, and any timer can go to the oven
 Status: [ ]

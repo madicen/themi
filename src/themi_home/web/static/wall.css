@@ -431,3 +431,17 @@ body.night:not(.awake) { background: var(--night-bg); }
 .cal-day.today { box-shadow: inset 0 0 0 0.2rem var(--tone, var(--fg)); }
 .cal-num { font-size: 1.3rem; font-weight: 700; }
 .cal-ev { font-size: 0.95rem; padding: 0.1rem 0.4rem; border-radius: 0.4rem; background: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* F59g (idea #257): talk to Themi from the wall */
+.wall-talk { display: inline-flex; align-items: center; gap: 0.6rem; min-height: 4rem; padding: 0 1.4rem; border: 0; border-radius: 2rem;
+  background: var(--card); color: var(--fg); font: inherit; font-size: 1.25rem; font-weight: 600; cursor: pointer; }
+.wall-talk svg, .talk-mic svg { width: 1.6rem; height: 1.6rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.talk-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.talk-not { min-height: 3.25rem; padding: 0 1.1rem; border: 0; border-radius: 2rem; background: var(--soft); color: var(--fg); font: inherit; cursor: pointer; }
+.talk-log { max-height: 40vh; overflow-y: auto; }
+.talk-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.talk-line { align-self: flex-start; max-width: 85%; padding: 0.7rem 1rem; border-radius: 1.1rem; background: var(--soft); font-size: 1.25rem; white-space: pre-line; }
+.talk-line.mine { align-self: flex-end; background: var(--field); border: 0.12rem solid var(--edge); }
+.talk-line .wall-sub { display: block; margin-top: 0.3rem; }
+.talk-mic { display: inline-flex; align-items: center; gap: 0.4rem; }
+.talk-mic.on { background: var(--soft); border-color: var(--fg); }

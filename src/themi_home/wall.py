@@ -38,6 +38,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
+from themi_home import wall_talk
 from themi_home.wall_calendars import WallCalendars
 from themi_home.wall_columns import TONES, BadLayout, WallColumns, moved
 from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
@@ -546,6 +547,93 @@ def routes(kit: Kit) -> APIRouter:
         response = sheet(request, "_view_calendar.html", view=found)
         response.headers["HX-Trigger"] = "wall-refresh"
         return response
+
+    # ----- F59g (idea #257): talk to Themi from the wall --------------------------------
+
+    talking = wall_talk.Talking()
+
+    def talk_sheet(request: Request, token: str, member_id: int | None = None) -> Response:
+        """The sheet: "Who's this?" until someone's chosen, then their exchange today."""
+        view = WallView(kit.app.services)
+        people = view.people()
+        chosen = member_id if member_id is not None else talking.who(token)
+        member = next((m for m in people if m.id == chosen), None)
+        if member is not None:
+            talking.keep(token, member.id)
+        found = wall_talk.lines(kit.app.services, member, view.tz()) if member else ()
+        return sheet(
+            request, "_view_talk.html", member=member, lines=found,
+            people=[(m.id, m.name, view.tone_of(m)) for m in people],
+        )  # fmt: skip
+
+    async def hand_over(event: Any) -> None:
+        handler = getattr(kit.app.channel, "handler", None)
+        if event is not None and handler is not None:
+            await handler.handle(event, kit.app.channel)
+
+    def speaker(member_id: str) -> Member | None:
+        people = {m.id: m for m in WallView(kit.app.services).people()}
+        return people.get(int(member_id)) if member_id.isdigit() else None
+
+    @router.get("/wall/talk", response_class=HTMLResponse)
+    def talk_page(request: Request, member: str = "") -> Response:
+        token = viewer(request)
+        if token is None:
+            return gone()
+        if member == "0":  # "Not you?": ask again
+            talking.forget(token)
+            return talk_sheet(request, token)
+        if member:
+            chosen = speaker(member)
+            if chosen is None:
+                return HTMLResponse("", status_code=404)
+            return talk_sheet(request, token, chosen.id)
+        return talk_sheet(request, token)
+
+    @router.get("/wall/talk/lines", response_class=HTMLResponse)
+    def talk_lines(request: Request, member: str = "") -> Response:
+        """The exchange alone, for the open sheet's poll."""
+        if viewer(request) is None:
+            return gone()
+        chosen = speaker(member)
+        if chosen is None:
+            return HTMLResponse("", status_code=404)
+        found = wall_talk.lines(kit.app.services, chosen, WallView(kit.app.services).tz())
+        return kit.page(request, "wall/_talk_lines.html", member=chosen, lines=found)
+
+    @router.post("/wall/talk", response_class=HTMLResponse)
+    async def talk(request: Request) -> Response:
+        form = await posted(request)
+        token = viewer(request)
+        if form is None or token is None:
+            return gone()
+        if not form.get("member"):
+            return HTMLResponse("Who's talking?", status_code=400)
+        member = speaker(form["member"])
+        if member is None:
+            return HTMLResponse("", status_code=404)
+        await hand_over(wall_talk.typed(kit.app.services, member, form.get("text", "")))
+        return talk_sheet(request, token, member.id)
+
+    @router.post("/wall/say", response_class=HTMLResponse)
+    async def say(request: Request) -> Response:
+        """A clip from the sheet's mic (multipart: `member`, `audio`)."""
+        token = viewer(request)
+        if token is None:
+            return gone()
+        form = await request.form()
+        submitted = str(form.get("csrf") or request.headers.get("X-CSRF-Token") or "")
+        if not submitted or not hmac.compare_digest(token, submitted):
+            raise PermissionError("missing or wrong CSRF token")
+        member = speaker(str(form.get("member", "")))
+        if member is None:
+            return HTMLResponse("Who's talking?", status_code=400)
+        clip = form.get("audio")
+        if clip is None or isinstance(clip, str):
+            return HTMLResponse("No sound came through.", status_code=400)
+        audio = await clip.read()
+        await hand_over(wall_talk.said(member, audio, clip.content_type or "audio/webm"))
+        return talk_sheet(request, token, member.id)
 
     @router.get("/wall/view/weather", response_class=HTMLResponse)
     def weather_view(request: Request) -> Response:
