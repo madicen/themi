@@ -37,6 +37,16 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+REPEATED_TEXT = (
+    "Already tried this turn and refused, with these same arguments; don't call it again. "
+    "Answer what they asked from what you have, or ask them. Nothing was changed."
+)
+
+
+def _call_key(name: str, arguments: dict[str, Any]) -> str:
+    return f"{name} {json.dumps(arguments, sort_keys=True, default=str)}"
+
+
 @dataclass(frozen=True)
 class ToolContext:
     member: Member
@@ -93,6 +103,11 @@ class ToolContext:
     # after the one before), in order, ending with it; and the group sent before those.
     images: tuple[Picture, ...] = ()
     images_before: tuple[Picture, ...] = ()
+    # F61b (reply 563): calls refused this turn (tool and arguments), and how many times one
+    # was asked for again: an identical call isn't run twice, and the agent stops offering
+    # tools once the model keeps repeating one.
+    refused: set[str] = field(default_factory=set)
+    repeats: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -523,7 +538,13 @@ class ToolRegistry:
             return ToolResult(
                 call.id, f"{ctx.member.name} can't use {t.spec.name} here.", is_error=True
             )
+        key = _call_key(t.spec.name, call.arguments)
+        if key in ctx.refused:  # F61b: asked again, it would be refused again
+            ctx.repeats.append(t.spec.name)
+            return ToolResult(call.id, REPEATED_TEXT, is_error=True)
         result, outcome = await self._run(t, call, ctx)
+        if outcome == "failed":
+            ctx.refused.add(key)
         ctx.outcomes.append(outcome)
         ctx.calls.append((call.name, outcome, result.content))
         task_id = call.arguments.get("task_id")

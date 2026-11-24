@@ -121,7 +121,7 @@ async def test_plan_scenario_3_overloaded_primary_falls_back_once(scenario: Scen
 
 
 async def test_the_step_limit_stops_runaway_tool_loops(scenario: Scenario) -> None:
-    for _ in range(9):  # the last word asks for tools too
+    for _ in range(10):  # the last word asks for tools too, and so does the tool-less one
         scenario.primary.queue_tool_call("list_open_items", {})
     assert await scenario.say("Erin", "loop please") == [TANGLED_TEXT]
 

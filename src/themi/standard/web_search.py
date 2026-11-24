@@ -406,6 +406,9 @@ def _around(shown: list[Shown], digits: str) -> list[tuple[str, str]]:
     return found
 
 
+WEB_TOOLS = ("search_web", "read_web_page")
+
+
 def _personal(query: str, said: str) -> str | None:
     """Something personal in the query that isn't in their message, or None."""
     for pattern, what in ((EMAIL, "an email address"), (DIGITS, "a number or address")):
@@ -445,7 +448,12 @@ async def search_web(ctx: ToolContext, args: dict[str, Any]) -> str:
     web = _web(ctx)
     area = web.home_area()
     said = f"{ctx.request_text} {ctx.previous_text}"
-    personal = _personal(query, f"{said} {area or ''}")  # the home's ZIP may go (#165)
+    # F61b (reply 561): a number the web gave this turn (a store's street number) is the
+    # web's, not the family's.
+    found = " ".join(
+        text for name, outcome, text in ctx.calls if name in WEB_TOOLS and outcome == "ok"
+    )
+    personal = _personal(query, f"{said} {area or ''} {found}")  # the home's ZIP may go (#165)
     if personal is not None:
         raise ToolFailed(PERSONAL_TEXT.format(what=personal))
     wanted = bool(args.get("near_home")) or bool(NEAR.search(query) or NEAR.search(said))
