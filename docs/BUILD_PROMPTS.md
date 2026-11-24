@@ -358,7 +358,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F60a | Feedback: "check off take meds" ticks the routine item, not "couldn't find" | Feedback | [x] 2026-11-24 |
 | F60b | Feedback: litter box code 3 is a drainage issue; Themi learns a code's words | Feedback | [x] 2026-11-24 |
 | F60c | Idea: the wall's top bar has Talk to Themi before the weather | Feedback | [x] 2026-11-24 |
-| F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [ ] |
+| F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [x] 2026-11-24 |
 | F60e | Idea: the body double on the wall: start a session and run it there | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -18087,7 +18087,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F60d · Idea (2026-11-24): the wall's mic says when it's listening and when it's working
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: F59g
 Read first: `themi_home/web/static/wall.js` (F59g's mic: `canRecord`, `sendClip`, the click
 handler); `themi_home/web/templates/wall/_view_talk.html` (`.talk-mic`);
@@ -18130,6 +18130,27 @@ transcript answers with the "didn't catch that" words.
 
 Data/Setup: update the Pi. Michael checks it on the frame (and notes in Notes whether the
 frame's WebView shows the mic at all). Mark #264 reviewed once live.
+
+Notes:
+- `_view_talk.html`: a status line (`data-talk-status`, `aria-live="polite"`) above the text
+  box, a stop-square icon and a spinner in the mic button beside the mic icon (CSS shows
+  one), `aria-pressed`, and a hidden "✕ Cancel" (`data-talk-cancel`).
+- `wall.js`: listening turns the button red ("Send", the stop square), shows "Listening…
+  tap Send when you're done · 0:07 of 0:30" with a pulsing dot ("5 s left" at the end),
+  disables the text box and Send, and shows Cancel. Send (or 30 s) shows "Working it out…"
+  with the button disabled and spinning until the sheet comes back. A refused post or no
+  sound: "I didn't catch that. Try again, or type it." A refused microphone says "The frame
+  didn't let Themi use the microphone. Typing works." and hides the button. Reduced motion
+  stops the pulse and spinner.
+- `/wall/say` checks whether a transcript was logged for that person during the hand-over;
+  if not (an empty or failed transcription), the sheet comes back with `missed` and the
+  status line says "I didn't catch that" (Telegram still gets `VOICE_FAILED_TEXT`).
+- Tests: `tests/integration/test_wall_mic_browser.py` (3, headless Chrome with a stand-in
+  microphone, recorder and `/wall/say`; Chrome's fake media flags weren't needed), 2 in
+  `tests/integration/test_wall_talk.py`.
+- Not checked on the frame: whether the Cozyla WebView offers the microphone (Michael's
+  idea suggests it does).
+- **Setup:** update the Pi; try the mic on the frame.
 
 ### F60e · Idea (2026-11-24): the body double on the wall: start a session and run it there
 Status: [ ]

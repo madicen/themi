@@ -552,7 +552,9 @@ def routes(kit: Kit) -> APIRouter:
 
     talking = wall_talk.Talking()
 
-    def talk_sheet(request: Request, token: str, member_id: int | None = None) -> Response:
+    def talk_sheet(
+        request: Request, token: str, member_id: int | None = None, missed: bool = False
+    ) -> Response:
         """The sheet: "Who's this?" until someone's chosen, then their exchange today."""
         view = WallView(kit.app.services)
         people = view.people()
@@ -562,7 +564,7 @@ def routes(kit: Kit) -> APIRouter:
             talking.keep(token, member.id)
         found = wall_talk.lines(kit.app.services, member, view.tz()) if member else ()
         return sheet(
-            request, "_view_talk.html", member=member, lines=found,
+            request, "_view_talk.html", member=member, lines=found, missed=missed,
             people=[(m.id, m.name, view.tone_of(m)) for m in people],
         )  # fmt: skip
 
@@ -632,8 +634,14 @@ def routes(kit: Kit) -> APIRouter:
         if clip is None or isinstance(clip, str):
             return HTMLResponse("No sound came through.", status_code=400)
         audio = await clip.read()
+        db = kit.app.services.store.db
+        mark = db.scalar("SELECT COALESCE(MAX(id), 0) FROM message_log")
         await hand_over(wall_talk.said(member, audio, clip.content_type or "audio/webm"))
-        return talk_sheet(request, token, member.id)
+        heard = db.one(  # F60d: nothing heard says so on the sheet, not only in Telegram
+            "SELECT 1 FROM message_log WHERE id > ? AND member_id = ? AND kind = 'transcript'",
+            (mark, member.id),
+        )
+        return talk_sheet(request, token, member.id, missed=heard is None)
 
     @router.get("/wall/view/weather", response_class=HTMLResponse)
     def weather_view(request: Request) -> Response:

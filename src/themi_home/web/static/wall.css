@@ -444,4 +444,20 @@ body.night:not(.awake) { background: var(--night-bg); }
 .talk-line.mine { align-self: flex-end; background: var(--field); border: 0.12rem solid var(--edge); }
 .talk-line .wall-sub { display: block; margin-top: 0.3rem; }
 .talk-mic { display: inline-flex; align-items: center; gap: 0.4rem; }
-.talk-mic.on { background: var(--soft); border-color: var(--fg); }
+/* F60d (idea #264): listening is red with a stop square and a pulsing dot; working spins */
+.talk-mic .stop-icon, .talk-mic .talk-spin { display: none; }
+.talk-mic.on { background: #c62828; border-color: #c62828; color: #fff; }
+.talk-mic.on .mic-icon { display: none; }
+.talk-mic.on .stop-icon { display: inline; fill: currentColor; }
+.talk-mic.busy .mic-icon { display: none; }
+.talk-mic.busy .talk-spin { display: inline-block; width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 0.2rem solid currentColor; border-right-color: transparent; animation: talk-spin 0.9s linear infinite; }
+.talk-status { min-height: 1.6rem; margin: 0.6rem 0 0; font-size: 1.25rem; display: flex; align-items: center; gap: 0.6rem; }
+.talk-status:empty { display: none; }
+.talk-status.listening::before { content: ""; width: 0.9rem; height: 0.9rem; border-radius: 50%; background: #c62828; animation: talk-pulse 1.2s ease-in-out infinite; }
+.talk-status.missed { color: var(--fg); font-weight: 600; }
+.talk-cancel { min-height: 3.25rem; }
+@keyframes talk-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.75); } }
+@keyframes talk-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .talk-status.listening::before, .talk-mic.busy .talk-spin { animation: none; }
+}
