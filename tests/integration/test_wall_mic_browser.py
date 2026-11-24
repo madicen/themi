@@ -89,7 +89,9 @@ async def test_listening_then_working_then_the_answer(wall: Scenario) -> None:
         assert await until(lambda: tab.value("window.__said.length === 1"))
         assert await status(tab) == "Working it out…"
         assert await tab.value("document.querySelector('[data-talk-mic]').disabled")
-        assert await tab.value("document.querySelector('[data-talk-mic]').classList.contains('busy')")
+        assert await tab.value(
+            "document.querySelector('[data-talk-mic]').classList.contains('busy')"
+        )
         await tab.value(
             "window.__answer({ ok: true, text: function () {"
             " return Promise.resolve('<p class=\"talk-line\">Heard you</p>'); } }); true"

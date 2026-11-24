@@ -317,10 +317,6 @@ body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top:
   font-size: 1.25rem; padding: var(--space-1) var(--space-3); }
 .session-chat-open[hidden] { display: none; }
 
-@media (prefers-reduced-motion: reduce) {
-  .session-scene *, .session-scene *::after, .session-scene .cham { animation: none !important; transition: none !important; }
-}
-
 /* BD4b: each guided step's picture, in the step's bubble */
 .session-picture { margin: 0; border-radius: var(--radius); overflow: hidden; background: var(--soft);
   aspect-ratio: 1 / 1; max-height: 45vh; display: flex; align-items: center; justify-content: center; }

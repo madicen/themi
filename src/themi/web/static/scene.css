@@ -130,3 +130,7 @@
 @keyframes dab { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-18deg); } }
 @keyframes stretch { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.06, .94); } }
 @keyframes hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .session-scene *, .session-scene *::after, .session-scene .cham { animation: none !important; transition: none !important; }
+}

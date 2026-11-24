@@ -10,7 +10,9 @@ from themi_home.body_double_scene import FLAGS
 
 SRC = Path(__file__).parents[2] / "src"
 STATIC = SRC / "themi_home" / "web" / "static"  # CR17b: the home pack's
-CSS = (SRC / "themi" / "web" / "static" / "themi.css").read_text()
+# F60e: the scene's rules moved to scene.css; the site's tokens stay in themi.css.
+SITE_CSS = (SRC / "themi" / "web" / "static" / "themi.css").read_text()
+CSS = (SRC / "themi" / "web" / "static" / "scene.css").read_text()
 CHAMELEON = (STATIC / "chameleon" / "chameleon.svg").read_text()
 SCENES = (STATIC / "chameleon" / "scenes.svg").read_text()
 
@@ -109,8 +111,8 @@ def test_every_chameleon_class_the_css_moves_is_drawn() -> None:
 def test_the_chameleon_has_its_own_colours_in_both_themes() -> None:
     """BD3c: Themi is teal with a mint belly (BD4d's look) whatever the site's accent is,
     with its colours as tokens set for light and for dark."""
-    light = CSS.split("@media (prefers-color-scheme: dark)")[0]
-    dark = CSS.split("@media (prefers-color-scheme: dark)")[1].split("\n}\n")[0]
+    light = SITE_CSS.split("@media (prefers-color-scheme: dark)")[0]
+    dark = SITE_CSS.split("@media (prefers-color-scheme: dark)")[1].split("\n}\n")[0]
     for token in CHAM_TOKENS:
         assert f"{token}:" in light, token
         assert f"{token}:" in dark, token

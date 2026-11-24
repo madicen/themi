@@ -26,9 +26,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from collections.abc import Mapping
 from typing import Any
 
 ERROR, ALERT, SOLUTION, GRANULES = "error", "alert", "solution", "granules"
@@ -106,9 +106,7 @@ class LitterBoxEvent:
     gone: bool = False  # it stopped showing it
 
 
-def read_device(
-    raw: dict[str, Any], named: Mapping[str, str] | None = None
-) -> LitterBoxReading:
+def read_device(raw: dict[str, Any], named: Mapping[str, str] | None = None) -> LitterBoxReading:
     status = raw.get("operationStatus")
     status = status if isinstance(status, dict) else {}
     config = raw.get("configuration")

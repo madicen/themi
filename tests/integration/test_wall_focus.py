@@ -86,10 +86,11 @@ async def test_an_old_tap_or_someone_elses_session_does_nothing(wall: Scenario) 
 
 async def test_a_session_from_telegram_shows_in_her_column_and_opens(wall: Scenario) -> None:
     erin = wall.member("Erin")
-    await start(wall, "Sit with me while I do the dishes", mode="quiet", minutes=30,
-                what="the dishes")
+    await start(
+        wall, "Sit with me while I do the dishes", mode="quiet", minutes=30, what="the dishes"
+    )
     page = await screen(wall)
-    chip = re.search(r'<button[^>]*wall-focus-chip[^>]*>([^<]+)</button>', page)
+    chip = re.search(r"<button[^>]*wall-focus-chip[^>]*>([^<]+)</button>", page)
     assert chip is not None and chip[1].startswith("Body double · ")
     assert f"/wall/focus?member={erin.id}" in page
     running = (await get(wall, f"/wall/focus?member={erin.id}")).text

@@ -359,7 +359,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F60b | Feedback: litter box code 3 is a drainage issue; Themi learns a code's words | Feedback | [x] 2026-11-24 |
 | F60c | Idea: the wall's top bar has Talk to Themi before the weather | Feedback | [x] 2026-11-24 |
 | F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [x] 2026-11-24 |
-| F60e | Idea: the body double on the wall: start a session and run it there | Feedback | [ ] |
+| F60e | Idea: the body double on the wall: start a session and run it there | Feedback | [x] 2026-11-24 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -18153,7 +18153,7 @@ Notes:
 - **Setup:** update the Pi; try the mic on the frame.
 
 ### F60e · Idea (2026-11-24): the body double on the wall: start a session and run it there
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: BD2, BD3a, BD3b, F59g
 Read first: `themi_home/body_double.py` (`start`, `current`, `state`, `page_buttons`,
 `page_line`, `scene`, `act_from_page`, `page_open`); `themi_home/web/session_pages.py`
@@ -18205,6 +18205,40 @@ and the Telegram message is edited to say so. A session Erin started in Telegram
 column's chip and opens on the wall.
 
 Data/Setup: update the Pi. Mark #263 reviewed once live.
+
+Notes:
+- New `themi_home/wall_focus.py`: `choices` (their open tasks, due by today first, up to 5,
+  then their routines with something still open today), `MODES` (Themi picks, Quiet company,
+  Sprints, Step by step), `LENGTHS` (until done, 25, 50, 90 min) and `chip` ("Body double ·
+  12 min left" in a sprint's block, else "· 20 min in").
+- `BodyDouble.begin_from_page`: what `start_body_double` does from chat (burnout refuses; a
+  routine goes step by step unless a mode's chosen; their words find a task or routine),
+  then sends the start message to Telegram and keeps it as the session's card.
+- Routes in `wall.py`: `GET /wall/focus` (`?member=`; `0` is "Not <name>?", sharing Talk's
+  `Talking`), `GET /wall/focus/live?member=` (the running part, polled every 5 s),
+  `POST /wall/focus/start` (`member`, `what` = `task:<id>`, `routine:<id>` or `typed` with
+  `typed`, `mode`, `minutes`) and `POST /wall/focus/act` (`member`, `session`, `seq`,
+  `action`, `mode`, through `act_from_page`). Someone else's session is 404; no member 400;
+  a signed-out frame 401 as the other wall routes. 404 when the body double isn't loaded.
+- Templates: `wall/_view_focus.html`, `wall/_focus_live.html`; a "Body double" button beside
+  Talk to Themi in the top bar (both in `.wall-asks`), only with the module; the column chip
+  (`WallColumn.focus`) opens it.
+- While a session runs the sheet has `data-close-after="0"` (wall.js now never closes that
+  one by itself) and the night mode doesn't dim the screen. A finished session ("Nice work")
+  or one ended elsewhere closes after 10 s. The timer counts each second between redraws.
+- The chameleon's scene CSS moved from `themi.css` into a new `static/scene.css` (linked by
+  `base.html`, `session.html`, `cook.html` and the wall), so the wall draws the same scene,
+  with its reduced-motion rule. No rule changed. The chameleon's colour tokens stay in
+  `themi.css`, and `wall.css` has a copy in its light and dark blocks. The mic's red (F60d)
+  is a token too (`--rec`, `--on-rec`): the wall keeps colours in its token blocks.
+- Tests changed because the rules moved: `tests/unit/test_session_page_assets.py` and
+  `tests/unit/test_cook_company.py` read the scene's rules from `scene.css` (its tokens
+  still from `themi.css`).
+- Not on the wall: music (a shared room), the Guided step pictures (they load through
+  `/session`'s signed-in header), the break chat, and switching mode (still in chat and on
+  `/session`).
+- Tests: `tests/integration/test_wall_focus.py` (9).
+- **Setup:** update the Pi.
 
 ## Conversation mode
 

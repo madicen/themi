@@ -202,11 +202,7 @@ def names_title(said: str, title: str) -> bool:
     missing = [w for w in wanted if not any(_same_word(w, h) for h in have)]
     if not missing:
         return True
-    return (
-        len(wanted) >= 2
-        and len(missing) == 1
-        and any(_misheard(missing[0], h) for h in have)
-    )
+    return len(wanted) >= 2 and len(missing) == 1 and any(_misheard(missing[0], h) for h in have)
 
 
 def near_twin(words: str, title: str) -> bool:

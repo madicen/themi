@@ -749,7 +749,9 @@ def routes(kit: Kit) -> APIRouter:
                                form.get("mode", ""))  # fmt: skip
         after = bd.get(session_id)
         if after is not None and after.ended_at is not None and bd.current(member) is None:
-            return focus_sheet(request, token, member.id, finished=f"The session for {after.label} is over.")
+            return focus_sheet(
+                request, token, member.id, finished=f"The session for {after.label} is over."
+            )
         return focus_sheet(request, token, member.id)
 
     @router.get("/wall/view/weather", response_class=HTMLResponse)

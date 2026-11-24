@@ -36,10 +36,10 @@ from themi import clock
 from themi.accounts import Device, Member
 from themi.channels.outbox import Button, Priority
 from themi.core import keys
-from themi.core.services import Services
-from themi.localtime import in_quiet_hours, to_local, to_utc_iso
 from themi.core.prompts import OpenItem
+from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.localtime import in_quiet_hours, to_local, to_utc_iso
 from themi.standard.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi_home.connectors.catgenie import (
     ALERT,
@@ -81,6 +81,7 @@ WAIT = timedelta(minutes=10)  # a problem's first nudge waits this long
 LATER_FOR = 60  # minutes: Later asks again in an hour
 URGENT = (ERROR, ALERT)  # with OUT: it can't clean
 EFFORT = -0.5  # a small chore, for the energy model
+QUOTES = " \"'\u201c\u201d\u2018\u2019.!"  # trimmed from what they said the app shows
 UNKNOWN_ASK = " What does the CatGenie app call it?"  # F60b: so a reply is expected
 LEARNED_TEXT = "Got it: code {code} is {words}. I'll say that from now on."
 ENDS_IN_A_KIND = re.compile(
@@ -388,9 +389,7 @@ class LitterBox:
         if code in self.unnamed_codes():
             return True
         return bool(
-            self.db.one(
-                "SELECT 1 FROM litter_problems WHERE detail LIKE ?", (f"%yet ({code})%",)
-            )
+            self.db.one("SELECT 1 FROM litter_problems WHERE detail LIKE ?", (f"%yet ({code})%",))
         )
 
     def learn(self, member: Member, code: str, said: str) -> str:
@@ -411,8 +410,7 @@ class LitterBox:
         after = named_words(words)
         for table, column in (("litter_problems", "detail"), ("litter_states", "alert")):
             self.db.execute(
-                f"UPDATE {table} SET {column} = replace({column}, ?, ?) "  # noqa: S608
-                f"WHERE {column} LIKE ?",
+                f"UPDATE {table} SET {column} = replace({column}, ?, ?) WHERE {column} LIKE ?",
                 (before, after, f"%{before}%"),
             )
         return LEARNED_TEXT.format(code=code, words=words)
@@ -500,7 +498,7 @@ def code_words(said: str) -> str:
     waste error". Short, their words, no quotes or "Error:"."""
     text = re.sub(r"^\s*(?:it says|says)\s+", "", said.strip(), flags=re.IGNORECASE)
     text = re.sub(r"^\s*error\s*[:\-]?\s*", "", text, flags=re.IGNORECASE)
-    text = text.strip(" \"'“”‘’.!").strip()
+    text = text.strip(QUOTES).strip()
     text = re.sub(r"\s+", " ", text)[:60].strip()
     if not text:
         return ""

@@ -516,7 +516,7 @@ async def test_bug_260_couldnt_find_before_looking_looks_first(scenario: Scenari
     gets the routine tools and one more round to look."""
     add(scenario, "Husband", "Evening", "Take Meds")
     scenario.primary.queue_tool_call("search_memory", {"query": "meds"})
-    scenario.primary.queue_text("I couldn't find a task called \"my pills\".")
+    scenario.primary.queue_text('I couldn\'t find a task called "my pills".')
     scenario.primary.queue_tool_call("tick_routine_item", {"title": "take meds"})
     scenario.primary.queue_text("Ticked Take Meds.")
     await scenario.say("Husband", "I did my pills")

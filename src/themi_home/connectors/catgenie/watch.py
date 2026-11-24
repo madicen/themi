@@ -117,7 +117,9 @@ class CatGenieWatcher:
 
     def named(self) -> dict[str, str]:
         """F60b: the codes the family told Themi the words for (`litter_codes`)."""
-        return {r["code"]: r["words"] for r in self.db.query("SELECT code, words FROM litter_codes")}
+        return {
+            r["code"]: r["words"] for r in self.db.query("SELECT code, words FROM litter_codes")
+        }
 
     # ----- the job --------------------------------------------------------------------
 
