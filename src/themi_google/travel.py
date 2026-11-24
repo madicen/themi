@@ -48,7 +48,7 @@ from themi.connectors.travel import (
 from themi.core import keys
 from themi.core.calendar_view import CalendarPreferences, Entry
 from themi.core.prompts import as_data
-from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.tools import ToolAsks, ToolContext, ToolFailed, tool
 from themi.core.wording import untitled
 from themi.localtime import to_utc_iso
 from themi.standard.lists import name_key
@@ -383,6 +383,8 @@ class TravelHeadsUps:
             return as_data("calendars", line) + "\nThat one is a video call: no drive."
         own = await self._event_place(owner, entry, found[1])
         note = ""
+        if address and start_from and self._same_place(viewer, address, start_from):
+            address = ""  # F59b (reply 549): where they leave from isn't where they're going
         if address:
             given = await self._given_place(viewer, address, found[1])
             if isinstance(given, str):
@@ -421,7 +423,11 @@ class TravelHeadsUps:
             )
         early = early if new_early is None else new_early
         arrive = entry.starts_at - timedelta(minutes=early)
+        if start.place == place:  # F59b: a place to itself is never asked of the map
+            raise TravelError(SAME_PLACE)
         route = await self._route(start.place, place, arrive)
+        if route.minutes < 1:
+            raise TravelError(SAME_PLACE)
         leave_by = arrive - timedelta(minutes=route.minutes)
         ready = leave_by - timedelta(
             minutes=self.services.store.preferences(
@@ -731,6 +737,11 @@ class TravelHeadsUps:
             return location
         return named.address
 
+    def _same_place(self, member: Member, a: str, b: str) -> bool:
+        """F59b: two things they said are one place (the same address once looked up)."""
+        first, second = self.address_for(member, a), self.address_for(member, b)
+        return first is not None and name_key(first) == name_key(second or "")
+
     def saved_place(self, member: Member, location: str) -> SavedPlace | None:
         """F57b: the saved place an event's location is (by name or address), or None."""
         home = self.home()
@@ -957,12 +968,32 @@ def _duration(minutes: int) -> str:
     return f"{hours} hr {rest} min" if rest else f"{hours} hr"
 
 
+WHICH_TEXT = "Which event, or which address?"
+SAME_PLACE = (
+    "where they leave from and where they're going came out the same place on the map; check "
+    "the address"
+)
+NOT_SURE = re.compile(r"Not sure where '(.+?)' is: ")
+ASK_WHERE_TEXT = "I don't have an address for {phrase} yet. What is it?"
+ASK_WHICH_TEXT = "Which event or address do you mean?"
+
+
+def _asks(result: str) -> str:
+    """F59a (reply 547): "Not sure where 'in-laws' is" needs an answer from them: the call
+    is `asked`, not done, so an empty reply asks it instead of saying "Done."."""
+    if (found := NOT_SURE.search(result)) is not None:
+        raise ToolAsks(result, ASK_WHERE_TEXT.format(phrase=found.group(1)))
+    return result
+
+
 @tool(
     "drive_time",
     "How long the drive takes, and when to leave: to their next event whose title has these "
     "words (event: 'pediatrics'; timed for arriving at its start, with traffic where it can), "
     "or to an address (address; leaving now). One of the two, the other ''; but with an "
-    "event, address is where it is when they gave one (it wins over the event's place). "
+    "event, address is where the event is, only when the calendar doesn't say or they gave "
+    "a different one (it wins over the event's place); never where they leave from (that's "
+    "from). "
     "from: where they'll leave from, when it isn't home: a place they named ('in-laws'), an "
     "address, or an event's words; '' for home or what they said before for that event (an "
     "event of theirs ending just before is used then); 'home' when they'll leave from home "
@@ -977,6 +1008,17 @@ def _duration(minutes: int) -> str:
     },
 )
 async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
+    try:
+        return _asks(await _drive_time(ctx, args))
+    except ToolFailed as exc:
+        if NOT_SURE.search(str(exc)):
+            _asks(str(exc))
+        if str(exc) == WHICH_TEXT:
+            raise ToolAsks(WHICH_TEXT, ASK_WHICH_TEXT) from exc
+        raise
+
+
+async def _drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
     travel = ctx.services.maybe(keys.travel)
     if travel is None:
         raise ToolFailed("Travel times aren't set up.")
@@ -1009,4 +1051,4 @@ async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
             return await travel.drive_to_address(address, ctx.member, start_from)
     except TravelError as exc:
         raise ToolFailed(f"No drive time: {exc}.") from exc
-    raise ToolFailed("Which event, or which address?")
+    raise ToolFailed(WHICH_TEXT)

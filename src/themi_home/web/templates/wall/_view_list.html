@@ -10,6 +10,7 @@
 {% call sheet(view.title, tone=view.tone, foot=foot) %}
 <div class="tone-{{ view.tone }} sheet-list{% if view.groceries %} sheet-groceries{% endif %}">
   {% if view.groceries %}{{ head("Household", view.title, "A short list for your next shop.") }}
+  {% elif view.named %}{{ head("Household list", view.title, "Tap one to tick it off.") }}
   {% else %}{{ head("To-do", view.title, "In Themi's order. Tap the words for more.") }}{% endif %}
   <form class="sheet-add" hx-post="{{ base }}" hx-target="#wall-view" hx-swap="innerHTML">
     <input type="hidden" name="op" value="add">
@@ -21,8 +22,8 @@
   <ul class="sheet-rows">
     {% for r in view.rows %}
     <li class="sheet-row{% if r.open %} open{% endif %}" id="row-{{ r.id }}">
-      {% if view.groceries %}
-      <button type="button" class="wall-item" hx-post="{{ base }}" hx-vals='{"op": "bought", "id": "{{ r.id }}"}' hx-target="#wall-view" hx-swap="innerHTML">
+      {% if view.groceries or view.named %}
+      <button type="button" class="wall-item" hx-post="{{ base }}" hx-vals='{"op": "{{ 'tick' if view.named else 'bought' }}", "id": "{{ r.id }}"}' hx-target="#wall-view" hx-swap="innerHTML">
         <span class="ring" aria-hidden="true"></span><span class="wall-words"><span class="wall-title">{{ r.title }}</span></span>
       </button>
       {% else %}
@@ -50,6 +51,11 @@
     {% endfor %}
   </ul>
   {% if not view.rows %}<p class="wall-empty">Nothing on the list</p>{% endif %}
+  {% if view.ticked %}
+  <details class="sheet-lately" open><summary>Ticked off lately ({{ view.ticked | length }})</summary>
+    <ul class="sheet-rows">{% for r in view.ticked %}<li class="sheet-row"><button type="button" class="wall-item done" aria-label="Put {{ r.title }} back" hx-post="{{ base }}" hx-vals='{"op": "untick", "id": "{{ r.id }}"}' hx-target="#wall-view" hx-swap="innerHTML"><span class="ring" aria-hidden="true"></span><span class="wall-words"><span class="wall-title">{{ r.title }}</span></span></button></li>{% endfor %}</ul>
+  </details>
+  {% endif %}
   {% if view.lately %}
   <details class="sheet-lately"><summary>Ticked off lately ({{ view.lately | length }})</summary>
     <ul>{% for t in view.lately %}<li>{{ t }}</li>{% endfor %}</ul>

@@ -63,6 +63,71 @@
   });
   document.addEventListener("pointerdown", function () { if (idle) watchView(); });
 
+  // F59g (idea #257): the Talk sheet's mic, only where the frame can record. A tap starts,
+  // a second (or 30 s) stops and sends the clip; the answer replaces the sheet.
+  var recorder = null;
+  function canRecord() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  }
+  function showMics(root) {
+    if (!canRecord()) return;
+    root.querySelectorAll("[data-talk-mic]").forEach(function (b) { b.hidden = false; });
+  }
+  function sendClip(button, blob) {
+    var form = new FormData();
+    form.append("member", button.getAttribute("data-member"));
+    form.append("audio", blob, "clip.webm");
+    var token = (JSON.parse(document.body.getAttribute("hx-headers") || "{}"))["X-CSRF-Token"] || "";
+    fetch("/wall/say", { method: "POST", body: form, headers: { "X-CSRF-Token": token, "HX-Request": "true" } })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var view = document.getElementById("wall-view");
+        if (!view) return;
+        view.innerHTML = html;
+        if (window.htmx) window.htmx.process(view);
+        showMics(view);
+      });
+  }
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest && event.target.closest("[data-talk-mic]");
+    if (!button) return;
+    event.preventDefault();
+    if (recorder) { recorder.stop(); return; }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var chunks = [];
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = function (e) { if (e.data.size) chunks.push(e.data); };
+      recorder.onstop = function () {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        button.classList.remove("on");
+        var type = recorder.mimeType || "audio/webm";
+        recorder = null;
+        if (chunks.length) sendClip(button, new Blob(chunks, { type: type }));
+      };
+      recorder.start();
+      button.classList.add("on");
+      setTimeout(function () { if (recorder) recorder.stop(); }, 30000);
+    }).catch(function () { button.hidden = true; });
+  });
+  document.addEventListener("htmx:afterSwap", function (event) { showMics(event.target); });
+
+  // F59f (idea #258): on the calendar screen, a swipe left or right is › or ‹.
+  var swipeFrom = null;
+  document.addEventListener("touchstart", function (event) {
+    var area = event.target.closest && event.target.closest("[data-swipe]");
+    swipeFrom = area && event.touches.length === 1
+      ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+  }, { passive: true });
+  document.addEventListener("touchend", function (event) {
+    if (!swipeFrom || !event.changedTouches.length) return;
+    var dx = event.changedTouches[0].clientX - swipeFrom.x;
+    var dy = event.changedTouches[0].clientY - swipeFrom.y;
+    swipeFrom = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    var go = document.querySelector(dx < 0 ? "[data-swipe-next]" : "[data-swipe-prev]");
+    if (go) go.click();
+  });
+
   document.addEventListener("htmx:sendError", function () { stale(true); });
   document.addEventListener("htmx:responseError", function () { stale(true); });
   // F58c: the columns give up what doesn't fit on the frame ("+N more", wall-fit.js).

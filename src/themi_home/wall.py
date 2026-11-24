@@ -38,12 +38,14 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
+from themi_home import wall_talk
 from themi_home.wall_calendars import WallCalendars
 from themi_home.wall_columns import TONES, BadLayout, WallColumns, moved
 from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
 from themi_home.wall_views import (
     WallViews,
     _recipe,
+    calendar_view,
     dish_view,
     dishes_view,
     list_view,
@@ -253,6 +255,8 @@ class WallTaps:
         """Tomorrow, Next week, Give to, Make it a family to-do, Change the words, Add, and
         (on the grocery list) Bought."""
         op, text = str(payload["op"]), str(payload.get("text", "")).strip()
+        if op.startswith("list_"):
+            return self._list_change(op, payload, by, text)
         if op == "bought":
             groceries = self.services.get(keys.groceries)
             groceries.finish(text, "bought")
@@ -282,6 +286,23 @@ class WallTaps:
             task = await board.update(task_id, by, title=text)
             return f"It reads {task.title} now."
         raise ValueError(f"not a change the wall makes: {op}")
+
+    def _list_change(self, op: str, payload: dict[str, Any], by: Member, text: str) -> str:
+        """F59e: a household list's tick, put back or add, from its List view."""
+        lists = self.services.get(keys.lists)
+        nl = lists.get(int(payload["list"]), by)
+        if nl is None:
+            return "That list isn't there any more."
+        if op == "list_add":
+            added = lists.add(nl, [text], by)
+            return f"Added {text} to {nl.name}." if added else f"{text} is on {nl.name} already."
+        item = next((i for i in nl.items if i.id == int(payload["item"])), None)
+        if item is None:
+            return "That one isn't on the list any more."
+        lists.tick(item, op == "list_tick", by)
+        if op == "list_tick":
+            return f"Ticked {item.name} off {nl.name}."
+        return f"{item.name} is back on {nl.name}."
 
     def _tz(self) -> ZoneInfo:
         family = self.services.store.get_family()
@@ -499,6 +520,121 @@ def routes(kit: Kit) -> APIRouter:
         found = WallViews(WallView(kit.app.services)).day(_day(day))
         return sheet(request, "_view_day.html", view=found) if found else HTMLResponse("")
 
+    @router.get("/wall/calendar", response_class=HTMLResponse)
+    async def calendar_screen(request: Request, day: str = "", month: str = "") -> Response:
+        """F59f (idea #258): the calendar on its own screen: `day` (ISO, "" for today) a
+        day at a time, or `month` ("2026-11") as a month. 404 outside what it goes to."""
+        if viewer(request) is None:
+            return gone()
+        found = await calendar_view(views(), day=day, month=month)
+        if found is None:
+            return HTMLResponse("", status_code=404)
+        return sheet(request, "_view_calendar.html", view=found)
+
+    @router.post("/wall/calendar/calendar", response_class=HTMLResponse)
+    async def calendar_toggle(request: Request) -> Response:
+        """F59f: a calendar's chip on the calendar screen, as in the week ahead (F55f)."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        day, month = form.get("day", ""), form.get("month", "")
+        found = await calendar_view(views(), day=day, month=month)
+        if found is None:
+            return HTMLResponse("", status_code=404)
+        if form.get("calendar", "") in {c.key for c in found.calendars}:
+            WallCalendars(kit.app.services.store.db).toggle(form["calendar"])
+            found = await calendar_view(views(), day=day, month=month)
+        response = sheet(request, "_view_calendar.html", view=found)
+        response.headers["HX-Trigger"] = "wall-refresh"
+        return response
+
+    # ----- F59g (idea #257): talk to Themi from the wall --------------------------------
+
+    talking = wall_talk.Talking()
+
+    def talk_sheet(request: Request, token: str, member_id: int | None = None) -> Response:
+        """The sheet: "Who's this?" until someone's chosen, then their exchange today."""
+        view = WallView(kit.app.services)
+        people = view.people()
+        chosen = member_id if member_id is not None else talking.who(token)
+        member = next((m for m in people if m.id == chosen), None)
+        if member is not None:
+            talking.keep(token, member.id)
+        found = wall_talk.lines(kit.app.services, member, view.tz()) if member else ()
+        return sheet(
+            request, "_view_talk.html", member=member, lines=found,
+            people=[(m.id, m.name, view.tone_of(m)) for m in people],
+        )  # fmt: skip
+
+    async def hand_over(event: Any) -> None:
+        handler = getattr(kit.app.channel, "handler", None)
+        if event is not None and handler is not None:
+            await handler.handle(event, kit.app.channel)
+
+    def speaker(member_id: str) -> Member | None:
+        people = {m.id: m for m in WallView(kit.app.services).people()}
+        return people.get(int(member_id)) if member_id.isdigit() else None
+
+    @router.get("/wall/talk", response_class=HTMLResponse)
+    def talk_page(request: Request, member: str = "") -> Response:
+        token = viewer(request)
+        if token is None:
+            return gone()
+        if member == "0":  # "Not you?": ask again
+            talking.forget(token)
+            return talk_sheet(request, token)
+        if member:
+            chosen = speaker(member)
+            if chosen is None:
+                return HTMLResponse("", status_code=404)
+            return talk_sheet(request, token, chosen.id)
+        return talk_sheet(request, token)
+
+    @router.get("/wall/talk/lines", response_class=HTMLResponse)
+    def talk_lines(request: Request, member: str = "") -> Response:
+        """The exchange alone, for the open sheet's poll."""
+        if viewer(request) is None:
+            return gone()
+        chosen = speaker(member)
+        if chosen is None:
+            return HTMLResponse("", status_code=404)
+        found = wall_talk.lines(kit.app.services, chosen, WallView(kit.app.services).tz())
+        return kit.page(request, "wall/_talk_lines.html", member=chosen, lines=found)
+
+    @router.post("/wall/talk", response_class=HTMLResponse)
+    async def talk(request: Request) -> Response:
+        form = await posted(request)
+        token = viewer(request)
+        if form is None or token is None:
+            return gone()
+        if not form.get("member"):
+            return HTMLResponse("Who's talking?", status_code=400)
+        member = speaker(form["member"])
+        if member is None:
+            return HTMLResponse("", status_code=404)
+        await hand_over(wall_talk.typed(kit.app.services, member, form.get("text", "")))
+        return talk_sheet(request, token, member.id)
+
+    @router.post("/wall/say", response_class=HTMLResponse)
+    async def say(request: Request) -> Response:
+        """A clip from the sheet's mic (multipart: `member`, `audio`)."""
+        token = viewer(request)
+        if token is None:
+            return gone()
+        form = await request.form()
+        submitted = str(form.get("csrf") or request.headers.get("X-CSRF-Token") or "")
+        if not submitted or not hmac.compare_digest(token, submitted):
+            raise PermissionError("missing or wrong CSRF token")
+        member = speaker(str(form.get("member", "")))
+        if member is None:
+            return HTMLResponse("Who's talking?", status_code=400)
+        clip = form.get("audio")
+        if clip is None or isinstance(clip, str):
+            return HTMLResponse("No sound came through.", status_code=400)
+        audio = await clip.read()
+        await hand_over(wall_talk.said(member, audio, clip.content_type or "audio/webm"))
+        return talk_sheet(request, token, member.id)
+
     @router.get("/wall/view/weather", response_class=HTMLResponse)
     def weather_view(request: Request) -> Response:
         if viewer(request) is None:
@@ -600,6 +736,24 @@ def routes(kit: Kit) -> APIRouter:
         if by is None:
             return HTMLResponse("")
         payload: dict[str, Any] = {"op": op, "by": by.id}
+        if found.named:  # F59e (idea #254): a household list: tick, put back, add
+            list_id = int(which.removeprefix("list/"))
+            back = next((r for r in found.ticked if str(r.id) == form.get("id")), None)
+            if op == "add" and text:
+                payload.update(op="list_add", list=list_id, text=text)
+                summary = f"Add {text} to {found.title} {WHERE}"
+            elif op == "tick" and row is not None:
+                payload.update(op="list_tick", list=list_id, item=row.id)
+                summary = f"{row.title} ticked off {found.title} {WHERE}"
+            elif op == "untick" and back is not None:
+                payload.update(op="list_untick", list=list_id, item=back.id)
+                summary = f"{back.title} back on {found.title} {WHERE}"
+            else:
+                return list_sheet(request, which)
+            outcome = await kit.app.services.autonomy.stage(
+                TAP, by, summary, payload, TAP, requested=True
+            )
+            return list_sheet(request, which, said=outcome.message)
         if op == "add" and text:
             if found.groceries:  # the grocery list's own way in, through its own category
                 outcome = await stage_groceries(by, [text])
@@ -702,7 +856,8 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/wall/view/note", response_class=HTMLResponse)
     async def note_answer(request: Request) -> Response:
         """They're in (asks who; Both of us), Later tonight (back at 9 pm), In the morning
-        (off the wall until then: the morning message has it), Got it (an alert)."""
+        (off the wall until then: the morning message has it), Got it (an alert); F59d: the
+        card's ✕ ("dismiss"), quiet as In the morning or Got it, with no sheet."""
         form = await posted(request)
         if form is None:
             return gone()
@@ -740,6 +895,15 @@ def routes(kit: Kit) -> APIRouter:
         elif answer == "ok":
             view.quiet(note.key, now + timedelta(hours=QUIET_ALERT_HOURS))
             said = "Got it."
+        elif answer == "dismiss":  # F59d (idea #256): the note's ✕, with no sheet
+            if note.task_id is not None:  # as "In the morning": the morning message has it
+                until = (now + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
+            else:  # as "Got it"
+                until = now + timedelta(hours=QUIET_ALERT_HOURS)
+            view.quiet(note.key, until)
+            response = HTMLResponse("")
+            response.headers["HX-Trigger"] = "wall-refresh"
+            return response
         else:
             return sheet(request, "_view_note.html", view=found)
         response = sheet(request, "_view_note.html", view=replace(found, said=said))

@@ -11,4 +11,8 @@
   </span>
 </button>
 {% endif %}
+{#- F59g (idea #257): talk to Themi, typed or said -#}
+<button type="button" class="wall-talk" hx-get="/wall/talk" hx-target="#wall-view" hx-swap="innerHTML">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Talk to Themi</span>
+</button>
 <span class="wall-stamp" data-at="{{ screen.time }} {{ screen.meridiem }}" hidden></span>

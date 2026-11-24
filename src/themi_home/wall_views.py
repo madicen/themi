@@ -17,7 +17,9 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from themi import clock
 from themi.core import keys
+from themi.localtime import to_utc_iso
 from themi_home.wall_view import (
     COOKING,
     Chip,
@@ -359,7 +361,7 @@ class WallViews:
         schedule = tuple(_schedule_row(e, now) for e in mine)
         ahead = any(not e.all_day and e.end > now for e in mine)
         routines = self._routine_parts(member, opened)
-        chores, todos = self._tasks(member, today)
+        chores, todos = self._tasks(member, self.view.day_of(member))  # F59c: their day
         count = self.view._done_today(member)
         return PersonView(
             member_id=member.id,
@@ -433,7 +435,7 @@ class WallViews:
         people = view.people()
         names = {m.id: m.name for m in people}
         now = view.now()
-        today = now.date()
+        today = view.household_day()  # F59c
         both = [t for t in view._open_tasks(people) if _for_both(t)]
         either = sorted(
             (t for t in both if t.repeats and t.due_on is not None and t.due_on <= today),
@@ -442,7 +444,7 @@ class WallViews:
         family = sorted((t for t in both if not t.repeats), key=lambda t: _rank(t, today))
         done = tuple(
             _done_item(t, f"{names[by]} did it" if by in names else "", emoji=view.emoji_of(t))
-            for t, by, _ in view._done_tasks(people)
+            for t, by, _ in view._done_tasks(people, view.since(None))
             if _for_both(t)
         )
 
@@ -474,7 +476,14 @@ class WallViews:
         tasks = self.view._open_tasks([member])
         mine = [t for t in tasks if t.assignee == member.id and not _for_both(t)]
         chores = sorted(
-            (t for t in mine if t.repeats and t.due_on is not None and t.due_on <= today),
+            (
+                t
+                for t in mine
+                if t.repeats
+                and t.due_on is not None
+                and t.due_on <= today
+                and not self.view.held(t, member)  # F59c: as their chart shows
+            ),
             key=lambda t: _rank(t, today),
         )
         todos = sorted(
@@ -483,7 +492,7 @@ class WallViews:
         )
         done = [
             t
-            for t, _, _ in self.view._done_tasks([member])
+            for t, _, _ in self.view._done_tasks([member], self.view.since(member))
             if t.assignee == member.id and not _for_both(t)
         ]
         shown = {t.id for t in chores} | {t.id for t in todos}
@@ -602,6 +611,8 @@ class ListView:
     groceries: bool = False
     said: str = ""  # what the last change did
     shared_with: tuple[str, ...] = ()  # WL9a: the household, for the Groceries foot
+    named: bool = False  # F59e: a household list ("list/<id>"): tick, untick, add
+    ticked: tuple[ListRow, ...] = ()  # F59e: its items ticked off in the last week
 
 
 @dataclass(frozen=True)
@@ -648,6 +659,8 @@ def list_view(views: WallViews, which: str, opened: int = 0, said: str = "") -> 
             said=said,
             shared_with=tuple(m.name for m in people),
         )
+    if which.startswith("list/"):
+        return _named_list(views, which, said)
     whose = which.removeprefix("todo/")
     tasks = view._open_tasks(people)
     if whose == "family":
@@ -659,6 +672,7 @@ def list_view(views: WallViews, which: str, opened: int = 0, said: str = "") -> 
         title, tone = f"{owner.name}'s to-do list", view.tone_of(owner)
     else:
         return None
+    today = view.day_of(owner) if owner is not None else view.household_day()  # F59c
     rows = tuple(
         ListRow(
             t.id, t.title, since(t.due_on, today) or _due_words(t.due_on, today), t.id == opened
@@ -668,6 +682,35 @@ def list_view(views: WallViews, which: str, opened: int = 0, said: str = "") -> 
     lately = _lately(views, people, owner)
     others = tuple((m.id, m.name) for m in people if owner is None or m.id != owner.id)
     return ListView(which, title, tone, rows, lately, others, family=owner is not None, said=said)
+
+
+def _named_list(views: WallViews, which: str, said: str) -> ListView | None:
+    """F59e (idea #254): a household list from the wall's bottom strip, all of it: tap to
+    tick off, the last week's ticks to put back, and an add box. Not a personal list, nor
+    one with a purpose of its own (Things to Buy)."""
+    lists = views.services.maybe(keys.lists)
+    people = views.view.people()
+    list_id = which.removeprefix("list/")
+    if lists is None or not people or not list_id.isdigit():
+        return None
+    nl = lists.get(int(list_id), people[0])
+    if nl is None or nl.personal or nl.purpose is not None:
+        return None
+    since = to_utc_iso(clock.now() - LATELY)
+    rows = views.services.store.db.query(
+        "SELECT id, name FROM list_items WHERE list_id = ? AND done = 1 AND done_at >= ? "
+        "ORDER BY done_at DESC",
+        (nl.id, since),
+    )
+    return ListView(
+        which,
+        nl.name,
+        views.view.together_tone(),
+        tuple(ListRow(i.id, i.name) for i in nl.open_items),
+        said=said,
+        named=True,
+        ticked=tuple(ListRow(int(r["id"]), str(r["name"])) for r in rows),
+    )
 
 
 def _index(people: list[Member], member_id: int) -> int | None:
@@ -789,4 +832,157 @@ def note_view(views: WallViews, asking: bool = False, said: str = "") -> NoteVie
         people=tuple((m.id, m.name) for m in views.view.people()),
         asking=asking,
         said=said,
+    )
+
+
+# ----- F59f: the calendar screen ---------------------------------------------------------
+
+MONTHS_BACK, MONTHS_AHEAD = 6, 12  # how far the calendar screen goes
+MONTH_EVENTS = 3  # chips in a month's day, then "+N"
+
+
+@dataclass(frozen=True)
+class MonthDay:
+    iso: str
+    number: int
+    chips: tuple[Chip, ...]
+    more: int
+    today: bool
+    inside: bool  # in the month shown (the grid's first and last weeks run over)
+
+
+@dataclass(frozen=True)
+class CalendarView:
+    """F59f (idea #258): the calendar on its own screen, a day or a month at a time."""
+
+    mode: str  # "day" or "month"
+    month: str  # "2026-11": the month shown, or the day's
+    month_label: str  # "November 2026"
+    day: DayView | None  # Day mode
+    past: bool  # Day mode: before today (no weather)
+    weeks: tuple[tuple[MonthDay, ...], ...]  # Month mode: Monday first
+    before: str  # the day or month before, or "" past the limit
+    after: str
+    months: tuple[tuple[str, str], ...]  # the month picker: ("2026-11", "November 2026")
+    calendars: tuple[Any, ...]  # F55f's chips, for what's shown
+    tone: str = ""
+    jump: str = ""  # Month mode's [Day]: today in this month, else its first day
+
+
+def add_months(day: date, months: int) -> date:
+    """The same day `months` later (or earlier), the month's last day when it's shorter."""
+    year, zero_based = divmod(day.year * 12 + day.month - 1 + months, 12)
+    first = date(year, zero_based + 1, 1)
+    following = date(year + (zero_based == 11), (zero_based + 1) % 12 + 1, 1)
+    return min(first + timedelta(days=day.day - 1), following - timedelta(days=1))
+
+
+def calendar_range(today: date) -> tuple[date, date]:
+    """The first and last day the calendar screen goes to."""
+    first = add_months(today, -MONTHS_BACK).replace(day=1)
+    last = add_months(today.replace(day=1), MONTHS_AHEAD + 1) - timedelta(days=1)
+    return first, last
+
+
+def _month_of(text: str) -> date | None:
+    try:
+        return date.fromisoformat(f"{text}-01")
+    except ValueError:
+        return None
+
+
+async def calendar_view(views: WallViews, *, day: str = "", month: str = "") -> CalendarView | None:
+    """Day mode for `day` (ISO, or "" for today), Month mode for `month` ("2026-11"). None
+    for a day or month outside what the screen goes to, or nonsense."""
+    view = views.view
+    today = view.now().date()
+    lo, hi = calendar_range(today)
+    months = tuple(
+        (f"{m:%Y-%m}", f"{m:%B %Y}")
+        for n in range(MONTHS_BACK + MONTHS_AHEAD + 1)
+        if (m := add_months(lo, n)) <= hi
+    )
+    from themi_home.wall_calendars import WallCalendars
+
+    hidden = WallCalendars(views.services.store.db).hidden()
+
+    def shown(events: list[WallEvent]) -> list[WallEvent]:
+        return [e for e in events if not e.calendar_id or e.calendar_id not in hidden]
+
+    if month:
+        first = _month_of(month)
+        if first is None or not lo <= first <= hi:
+            return None
+        start = first - timedelta(days=first.weekday())
+        last = add_months(first, 1) - timedelta(days=1)
+        end = last + timedelta(days=6 - last.weekday())
+        found = await view.range_events(start, end)
+        cells = []
+        for offset in range((end - start).days + 1):
+            d = start + timedelta(days=offset)
+            events = sorted(shown(found[d]), key=lambda e: (not e.all_day, e.start))
+            chips = tuple(Chip(e.title, e.tone) for e in events)
+            cells.append(
+                MonthDay(d.isoformat(), d.day, chips[:MONTH_EVENTS],
+                         max(0, len(chips) - MONTH_EVENTS), d == today, d.month == first.month)
+            )  # fmt: skip
+        before, after = add_months(first, -1), add_months(first, 1)
+        return CalendarView(
+            mode="month",
+            month=f"{first:%Y-%m}",
+            month_label=f"{first:%B %Y}",
+            day=None,
+            past=False,
+            weeks=tuple(tuple(cells[i : i + 7]) for i in range(0, len(cells), 7)),
+            before=f"{before:%Y-%m}" if before >= lo else "",
+            after=f"{after:%Y-%m}" if after <= hi else "",
+            months=months,
+            calendars=view.calendar_chips([found[d] for d in found]),
+            tone=view.together_tone(),
+            jump=(
+                today if (today.year, today.month) == (first.year, first.month) else first
+            ).isoformat(),
+        )
+    try:
+        when = date.fromisoformat(day) if day else today
+    except ValueError:
+        return None
+    if not lo <= when <= hi:
+        return None
+    found = await view.range_events(when, when)
+    events = shown(found[when])
+    live = when == today
+    now = view.now()
+    moment = now if live else datetime.combine(when, now.time().min, tzinfo=now.tzinfo)
+    line = lay_out_today(moment, view.timeline_rows(), events, [], live=live)
+    weather, icon = views._day_weather(when) if when >= today else ("", "")
+    offset = (when - today).days
+    near = (
+        "Today" if offset == 0 else "Tomorrow" if offset == 1 else "Yesterday" if offset == -1
+        else f"In {offset} days" if offset > 0 else f"{-offset} days ago"
+    )  # fmt: skip
+    before, after = when - timedelta(days=1), when + timedelta(days=1)
+    return CalendarView(
+        mode="day",
+        month=f"{when:%Y-%m}",
+        month_label=f"{when:%B %Y}",
+        day=DayView(
+            day=when,
+            heading=f"{when:%A}, {when:%B} {when.day}",
+            near=near,
+            line=line,
+            due=views._due(when),
+            weather=weather,
+            icon=icon,
+            before=before.isoformat() if before >= lo else "",
+            after=after.isoformat() if after <= hi else "",
+            tone=view.together_tone(),
+        ),
+        past=when < today,
+        weeks=(),
+        before=before.isoformat() if before >= lo else "",
+        after=after.isoformat() if after <= hi else "",
+        months=months,
+        calendars=view.calendar_chips([found[when]]),
+        tone=view.together_tone(),
     )

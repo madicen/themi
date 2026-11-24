@@ -60,17 +60,18 @@ async def test_nothing_on_groceries_says_so(wall: Scenario) -> None:
     assert words(groceries) == "Groceries Nothing needed Open list"
 
 
-async def test_another_household_list_is_a_card_with_its_count_and_no_link(
+async def test_another_household_list_is_a_card_with_its_count_that_opens_it(
     wall: Scenario,
 ) -> None:
+    # F59e (idea #254) changed this: the card opens its List view (it had no link in WL9b).
     lists = wall.app.services.get(keys.lists)
     erin = wall.member("Erin")
     store = lists.create(erin, "Hardware store", personal=False)
     lists.add(store, ["Hinges", "Glue", "Sandpaper", "Bulbs", "Screws"], erin)
     _, hardware = cards(await screen(wall))
-    assert hardware.startswith('<section class="wall-card wall-small')
-    assert words(hardware) == "Hardware store Hinges Glue Sandpaper Bulbs +1 more 5 items"
-    assert "hx-get" not in hardware
+    assert hardware.startswith('<button type="button" class="wall-card wall-small')
+    assert words(hardware) == "Hardware store Hinges Glue Sandpaper Bulbs +1 more 5 items Open list"
+    assert f'hx-get="/wall/view/list/list/{store.id}"' in hardware
 
 
 # ----- the Things to cook view ----------------------------------------------------------

@@ -44,8 +44,12 @@ class ToolContext:
     request_text: str = ""  # what the person wrote this turn, for "did they ask for it?"
     previous_text: str = ""  # their message before it, for a follow-up like "and limes"
     said_before: str = ""  # Themi's last message to them, for an answer like "Yes please"
-    # Each tool call this turn: "ok", "declined" (nothing to do) or "failed".
+    # Each tool call this turn: "ok", "declined" (nothing to do), "asked" (it needs something
+    # from them first, F59a) or "failed".
     outcomes: list[str] = field(default_factory=list)
+    # F59a (reply 547): what a tool needs to ask them, in Themi's words; an empty reply says
+    # it instead of "Done.".
+    questions: list[str] = field(default_factory=list)
     # A tool sent the answer itself, word for word (a day summary): the model's reply is
     # kept only as a short line (bug #89: it wrote the day out again).
     answered: list[str] = field(default_factory=list)
@@ -143,6 +147,16 @@ class ToolFailed(Exception):
         super().__init__(message)
         self.reply = reply
         self.refused = refused
+
+
+class ToolAsks(Exception):
+    """F59a (reply 547): a tool can't go on without something from them ("Not sure where
+    'in-laws' is"). The message goes back to the model as the tool's result; `question` is
+    what Themi asks if the model says nothing. Nothing was changed."""
+
+    def __init__(self, message: str, question: str) -> None:
+        super().__init__(message)
+        self.question = question
 
 
 class ToolDeclined(Exception):
@@ -546,6 +560,9 @@ class ToolRegistry:
                 raise TypeError(f"tool {call.name} returned {type(output).__name__}, not text")
         except ToolDeclined as exc:
             return ToolResult(call.id, str(exc)), "declined"
+        except ToolAsks as exc:
+            ctx.questions.append(exc.question)
+            return ToolResult(call.id, str(exc)), "asked"
         except ToolFailed as exc:
             if exc.reply:
                 ctx.replies.append(exc.reply)

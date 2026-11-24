@@ -401,3 +401,11 @@ body.cook-page[data-theme="dark"] .cook-new > summary { color: var(--accent); }
   .cook-music.session-music select { flex: 1 1 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .cook-music.is-playing .cook-now-mark path { animation: none; } }
+/* F59h (idea #259): a timer's time and its buttons on one row, wrapping under on a narrow rail */
+.cook-timer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: var(--space-3); row-gap: var(--space-1); }
+.cook-timer-row .cook-timer-left { flex: 0 0 auto; }
+.cook-timer-row .cook-timer-moves { flex: 0 1 auto; margin-top: 0; }
+.cook-timer-row .cook-timer-moves form { flex: 0 0 auto; }
+.cook-timer-row .cook-timer-moves button { width: auto; min-width: var(--cook-tap, 48px); min-height: var(--cook-tap, 48px); padding: 0 var(--space-2); }
+.cook-timer-oven { margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: 999px; background: var(--soft); color: var(--accent); font-size: .8rem; font-weight: 600; }
+.cook-check { display: flex; align-items: center; gap: var(--space-2); }

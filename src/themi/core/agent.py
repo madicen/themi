@@ -768,6 +768,8 @@ class Agent:
                         continue
                     if ctx.answered and not reply:  # F22b: the tool's message said it
                         return _done_first(ctx.done, _unsaid_failure(ctx))
+                    if not reply and ctx.questions:  # F59a (reply 547): ask, never "Done."
+                        return _done_first(ctx.done, ctx.questions[-1])
                     reply = reply or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return _unsaid_failure(ctx)  # the tool's message was the answer (#89)
@@ -789,8 +791,9 @@ class Agent:
                         ""
                         if ctx.done
                         else "Done."
-                        if "ok" in ctx.outcomes
-                        else reply  # F42c (reply 443): nothing done is never "Done."
+                        if "ok" in ctx.outcomes and not ctx.questions
+                        else reply or (ctx.questions[-1] if ctx.questions else "")
+                        # F42c (reply 443): nothing done is never "Done."; F59a: nor a question
                     )
                     return _done_first(ctx.done, reply)
                 if step > self.max_steps:

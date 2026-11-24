@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
@@ -125,12 +126,15 @@ class DaySummary:
         viewer: Member | None = None,
         tasks: bool = True,
         scope: str = "all",
+        entries: Callable[[Member, datetime, datetime], list[Entry]] | None = None,
     ) -> list[tuple[Entry, str]]:
         """The day's calendar events, each with whose it is when it isn't `member`'s own
         (" (Erin)", " (on the Madicen Family calendar)"); theirs first. `tasks=False`: not
         the events Themi put there for tasks. The day card (DC3) draws from these.
         `scope` (F42d, idea #200): "all"; "mine", their own and the family calendar's
-        (calendars more than one person reads); "own", their own without the family's."""
+        (calendars more than one person reads); "own", their own without the family's.
+        `entries` (F59f): where a person's events come from, when not the kept ones (a
+        range read straight from the calendar)."""
         viewer = viewer or member
         start = datetime(day.year, day.month, day.day, tzinfo=self._tz())
         out: list[tuple[Entry, str]] = []
@@ -140,7 +144,7 @@ class DaySummary:
         shared, seen = self._shared_calendars(), set()
         owners = [m for m in reader.visible_to(viewer) if m.id == member.id or partner]
         for owner in sorted(owners, key=lambda m: m.id != member.id):  # theirs first
-            for e in reader.entries(owner, start, start + timedelta(days=1)):
+            for e in (entries or reader.entries)(owner, start, start + timedelta(days=1)):
                 if e.event_id and (e.calendar_id, e.event_id) in seen:
                     continue  # one calendar both read (bug #43)
                 if not tasks and str(e.source or "").startswith("task"):

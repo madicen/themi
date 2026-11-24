@@ -168,7 +168,20 @@ class CookingTimers:
         minutes: float,
         label: str | None = None,
     ) -> datetime:
-        """A timer for `step`; its label is theirs (CK3) or the step's ("Sauce, step 3")."""
+        """A timer for `step`; its label is theirs (CK3) or the step's ("Sauce, step 3").
+        Returns when it ends."""
+        return self.begin(member, session, recipe, step, minutes, label)[1]
+
+    def begin(
+        self,
+        member: Member,
+        session: Session,
+        recipe: Recipe,
+        step: str,
+        minutes: float,
+        label: str | None = None,
+    ) -> tuple[int, datetime]:
+        """`start`, returning the new timer's id too (F59h: the oven's timer is tied to it)."""
         now = clock.now()
         ends = now + timedelta(minutes=minutes)
         label = " ".join((label or "").split())[:LABEL] or default_label(recipe, step)
@@ -179,7 +192,7 @@ class CookingTimers:
              int(session.in_group), to_utc_iso(now), label),
         )  # fmt: skip
         self.jobs.enqueue(JOB, {"timer": timer_id}, run_after=ends)
-        return ends
+        return int(timer_id), ends
 
     # ----- one timer, from the cook screen (CK3) -------------------------------------------
 

@@ -99,6 +99,7 @@ class SavedPlace:
     arrive_early: int
     hours: Hours = field(default_factory=dict)  # F58e: weekday (Monday 0) -> span; {} unsaid
     hours_set: bool = False  # F58f: set for it, not read from its note
+    created_by: int | None = None  # F59a: whose "my mom's" or "in-laws" its name means
 
     def names(self) -> list[str]:
         """Its name and other names, in `_words` form."""
@@ -147,6 +148,7 @@ def _saved_from_row(row: dict[str, Any]) -> SavedPlace:
         # pm weekdays and 12-8:30 pm weekends").
         hours=hours_from_json(row["hours"]) if row.get("hours") else parse_hours(row["note"]),
         hours_set=bool(row.get("hours")),
+        created_by=row.get("created_by"),
     )
 
 
@@ -365,7 +367,24 @@ class Places:
                     best is None or len(name) > best[0]
                 ):
                     best = (len(name), place)
-        return best[1] if best else None
+        return best[1] if best else self._by_kin(member, phrase)
+
+    def _by_kin(self, member: Member, phrase: str) -> SavedPlace | None:
+        """F59a (reply 547): a kin phrase ("in-laws", "Erin's parents", "my mom's") is the
+        saved place whose name or other name says the same kin of the same person
+        ("Erin's Parent's House" is Michael's in-laws)."""
+        family = [
+            (int(r["id"]), str(r["name"])) for r in self.db.query("SELECT id, name FROM members")
+        ]
+        wanted = _kin_of(phrase, member.id, family)
+        if wanted is None:
+            return None
+        for place in self.visible(member):
+            saver = place.member_id or place.created_by or member.id
+            names = [place.name, *place.aliases.split(",")]
+            if any(_kin_of(n, saver, family) == wanted for n in names if n.strip()):
+                return place
+        return None
 
     def mentioned(self, member: Member, text: str) -> list[SavedPlace]:
         """The places `text` names, as whole words."""
@@ -386,6 +405,8 @@ class Places:
             )
             if wanted & words:
                 found.append(place)
+        if not found and (kin := self._by_kin(member, query)) is not None:
+            found.append(kin)  # F59a: "in-laws" finds "Erin's Parent's House"
         return found
 
 
@@ -401,6 +422,22 @@ def _kin(phrase: str) -> str | None:
         if word in KIN:
             return KIN[word]
     return None
+
+
+def _kin_of(
+    text: str, speaker: int, family: list[tuple[int, str]]
+) -> tuple[str, int | None] | None:
+    """F59a: the kin a phrase says, and whose: "in-laws" is the partner's parents, "Erin's
+    parents" Erin's, "my mom" the speaker's."""
+    kin = _kin(text)
+    if kin is None:
+        return None
+    if kin == "in-laws":
+        others = [i for i, _ in family if i != speaker]
+        return "parent", (others[0] if len(others) == 1 else None)
+    lower = text.lower()
+    named = [i for i, name in family if re.search(rf"\b{re.escape(name.lower())}\b", lower)]
+    return kin, (named[0] if len(named) == 1 else speaker)
 
 
 def named_place(
@@ -447,9 +484,15 @@ def named_place(
 
 
 def _words(text: str) -> str:
-    """Lower-case words only: "Stanford's visitor parking" → "stanford visitor parking"."""
+    """Lower-case words only: "Stanford's visitor parking" → "stanford visitor parking".
+    F59a: a plural or possessive "s" is dropped from a word of 4 letters or more, so
+    "in-laws", "in-law's" and "in laws" are all "in law"."""
     text = text.lower().replace("\N{RIGHT SINGLE QUOTATION MARK}", "'").replace("'s", "")
-    return " ".join(WORD.findall(text))
+    return " ".join(_one(w) for w in WORD.findall(text))
+
+
+def _one(word: str) -> str:
+    return word[:-1] if len(word) >= 4 and word.endswith("s") and not word.endswith("ss") else word
 
 
 def _address_words(text: str) -> str:

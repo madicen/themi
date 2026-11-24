@@ -176,8 +176,9 @@ async def test_the_day_view_goes_from_today_to_two_weeks_out(calendar: Scenario)
 
 
 async def test_a_day_in_the_week_ahead_opens_its_view(calendar: Scenario) -> None:
+    # F59f (idea #258) changed this: a day opens the calendar screen on it (was its Day view).
     page = (await get(calendar, "/wall")).text
-    assert 'hx-get="/wall/view/day/2026-10-22" hx-target="#wall-view"' in page
+    assert 'hx-get="/wall/calendar?day=2026-10-22" hx-target="#wall-view"' in page
 
 
 # ----- Weather -------------------------------------------------------------------------

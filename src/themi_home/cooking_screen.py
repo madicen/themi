@@ -235,6 +235,10 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     if cooking_oven.has_timer(cooking):  # OV5: a step's timer can be the oven's too
         out["offers"] = [{**o, "oven": True} for o in out["offers"]]
     out["timers"] = timers(cooking, session)
+    out["oven_timer"] = cooking_oven.has_timer(cooking)  # F59h: any timer can be the oven's
+    if out["oven_timer"]:
+        for timer in out["timers"]:
+            timer["oven"] = cooking_oven.followed(cooking, timer["id"])
     running = [t for t in out["timers"] if not t["fired"]]
     out["ended"] = session.ended_at is not None
     out["outcome"] = session.outcome or ""
@@ -518,13 +522,25 @@ async def act(
     if action == "oven_timer" and cooking.timers is not None:  # OV5: Themi's and the oven's
         from themi_home import cooking_oven
 
+        owner = cooking._owner(session)
+        if str(form.get("timer", "")).isdigit():  # F59h: a timer already running
+            timer_id = int(str(form["timer"]))
+            mine = cooking.db.scalar(
+                "SELECT COUNT(*) FROM cooking_timers WHERE id = ? AND member_id = ? "
+                "AND cancelled_at IS NULL AND fired_at IS NULL",
+                (timer_id, owner.id),
+            )
+            if not mine:
+                return Tapped(False)
+            said = await cooking_oven.oven_timer(cooking, member, timer_id, fresh=False)
+            await cooking.show(session)
+            return Tapped(True, said)
         minutes = _float(form.get("minutes"))
         if not 0 < minutes < 8 * 60:
             return Tapped(False)
         step = str(form.get("step", "")) or _step_label(session, recipe)
-        owner = cooking._owner(session)
-        cooking.timers.start(owner, session, recipe, step, minutes)
-        said = await cooking_oven.oven_timer(cooking, member, session, minutes)
+        timer_id, _ = cooking.timers.begin(owner, session, recipe, step, minutes)
+        said = await cooking_oven.oven_timer(cooking, member, timer_id)
         await cooking.show(session)
         return Tapped(True, said)
     if action == "oven_heat":  # OV4: [Preheat] on the look-ahead strip
@@ -579,7 +595,12 @@ async def act(
             return Tapped(False)
         step = str(form.get("step", "")) or _step_label(session, recipe)
         label = str(form.get("label", "")).strip() or None
-        cooking.timers.start(cooking._owner(session), session, recipe, step, minutes, label)
+        owner = cooking._owner(session)
+        timer_id, _ = cooking.timers.begin(owner, session, recipe, step, minutes, label)
+        if form.get("oven"):  # F59h: [+ Add]'s "Oven timer too"
+            from themi_home import cooking_oven
+
+            said = await cooking_oven.oven_timer(cooking, member, timer_id)
         await cooking.show(session)
     elif action in MOVES:
         await cooking.advance(session, action)
