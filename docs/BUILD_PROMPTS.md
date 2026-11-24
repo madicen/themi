@@ -355,6 +355,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [x] 2026-11-23 |
 | F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [x] 2026-11-23 |
 | F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [x] 2026-11-23 |
+| F60a | Feedback: "check off take meds" ticks the routine item, not "couldn't find" | Feedback | [ ] |
+| F60b | Feedback: litter box code 3 is a drainage issue; Themi learns a code's words | Feedback | [ ] |
+| F60c | Idea: the wall's top bar has Talk to Themi before the weather | Feedback | [ ] |
+| F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [ ] |
+| F60e | Idea: the body double on the wall: start a session and run it there | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -17906,6 +17911,226 @@ Notes:
   mark beside its label, no button).
 - Tests: 5 scenarios in `tests/scenarios/test_oven_timers.py`.
 - **Setup:** update the Pi.
+
+### F60a · Feedback (2026-11-24): "check off take meds" ticks the routine item, not "couldn't find a task"
+Status: [ ]
+Depends on: CR8b, F33a, F42g
+Read first: `themi/core/agent.py` (the group choice: `choose_groups`, `services.group_sources`);
+`themi/core/groups.py` (`LISTS`'s and `WALL`'s words, `ROUTINES = WALL`);
+`themi/standard/routines.py` (`_item_for`, `tick_routine_item`, `Routines.today`);
+`themi/standard/tasks.py` (`complete_task`'s description); F33a's and F42g's notes. From
+Michael's bug #260 (2026-11-23, 11:33 pm, "I have a chore that is explicitly titled take
+meds").
+
+What the Pi shows: at 8:45 pm the evening routine message listed "Take Meds" (routine item 4,
+Michael's Evening routine). At 11:26 pm he sent two voice notes, heard as "Check off take
+meds." and "Check off tick meds." (replies 554, 555). Each turn was offered core, calendar
+and lists: "check off" is in `LISTS`'s words, and nothing in either message is in `WALL`'s
+(`chore|routine|...`), so `tick_routine_item` was never sent. The model ran only
+`search_memory` ("tick meds", "meds"), found nothing, and said "I couldn't find a task called
+'take meds'." without looking at tasks or routines. "Take Meds" isn't a task (the only
+`tasks` row with "med" is Erin's "Britney flea meds").
+
+Build:
+- A message that names one of the person's routine items still open today brings the
+  routines group (`groups.ROUTINES`), whatever its other words. "Names" is what `_item_for`
+  accepts plus a little give for a mishearing: the item's words with one word changed by one
+  or two letters ("tick meds" for "take meds"), case and punctuation ignored. Only today's,
+  still-open items of their own routines are checked, so a stray word doesn't drag the group
+  in all day. The check is a group source that sees the message (today's `group_sources`
+  only take the member); the routines module registers it.
+- The same for an item on their chore chart today (the wall group again).
+- `complete_task`'s description says that an item on a routine or the chore chart isn't a
+  task: tick it with `tick_routine_item` (or the chart's tool), and if that isn't offered, ask
+  for the wall group with `more_tools` before saying it can't be found.
+- No reply says it couldn't find something it never looked for: when a reply says "couldn't
+  find" (or "no task called") and no task, routine or list tool ran in the turn, the turn asks
+  for `more_tools` once with the wall and lists groups, in the way `agent._honest` checks
+  work. If that's too broad, keep the first two bullets and say so in Notes.
+
+Tests: `choose` (with the new source) for "Check off take meds" with Michael's Evening routine
+holding an open "Take Meds" includes the routines group; "Check off tick meds" too; once
+it's ticked today, neither does; Erin's message "check off take meds" with only Michael's
+routine holding it doesn't. A chore-chart item works the same way. Golden `tools.json`
+changes for `complete_task`'s description (expected).
+Scenario: Michael's Evening routine has "Take Meds"; at 11:26 pm he says (fake transcriber)
+"Check off take meds."; the routine item is ticked for today, the wall shows it ticked, and
+the reply says so.
+
+Data/Setup: none (routine item 4 on the Pi is the case). Mark #260 reviewed once live.
+
+### F60b · Feedback (2026-11-24): litter box code 3 is a drainage issue, and Themi learns a code's words from what the app says
+Status: [ ]
+Depends on: CG1a, F41a, F58b
+Read first: `themi_home/connectors/catgenie/events.py` (`CODES`, `error_words`, `unknown`);
+`themi_home/connectors/catgenie/watch.py` (where an unknown code is logged);
+`themi_home/litter_box.py` (`litter_problems`, its task, the alert message);
+`tests/fixtures/catgenie/README.md`; F58b's notes. From Michael's bug #261 (2026-11-24,
+9:30 am, "CatGenie error 3 drainage issue").
+
+What the Pi shows: at 8:36 am the Whoosh reported `3` ("The litter box reported '3', which
+Themi has no words for"); `litter_problems` 6 is open with "it's showing a code Themi doesn't
+know yet (3), which the CatGenie app can explain", and task 139 "Check the Whoosh -
+SFU8011679h". At 9:02 am Themi said so. Michael answered "It says Error: Drainage issue"
+twice (the first got "the AI service is busy"). Reply 558 asked for the devices tools, tried
+`complete_task` 139 (refused, rightly: he hadn't said it was done) and then logged it as bug
+#261. Nothing could keep the words he gave. (Also on the Pi: code `80`, problem 5, open for
+11 minutes last night and cleared by itself; still unknown.)
+
+Decided (Michael, 2026-11-24, bug #261): Themi learns a code's words when someone says what
+the app shows for it, and uses them from then on.
+
+Build:
+- `CODES["3"]`: "it's showing a drainage issue", in the words the app uses (F58b's comment
+  style: where it came from, the date, `litter_problems` 6).
+- Learned codes: a new table (`litter_codes`: code, words, member, when, the box's model),
+  read by `error_words` after `CODES` (and before the "doesn't know yet" words). A code in
+  `CODES` is never relearned.
+- A new tool in the devices group, `name_litter_code` ("what the CatGenie app calls a code
+  Themi didn't know"), with `code` and `words`. Only for a code a box has reported that has no
+  words yet (otherwise it says which words it has); `words` are their words, trimmed of
+  "Error:" and quotes, kept short (data, as the family's own text is). It's Themi's own note,
+  not a change to anything outside, so it runs at once and says "Got it: code 3 is a drainage
+  issue. I'll say that from now on."
+- When a code gets words, every open problem with that code gets the new detail, its task's
+  notes say it, and the wall shows it. A code that comes back later uses the words at once.
+- The litter box's "a code Themi doesn't know yet" message adds "What does the app call it?"
+  so a reply is expected, and its open item tells the model a reply naming the error is for
+  `name_litter_code`, not `complete_task`.
+- The fixtures README lists code 3 (from the Pi, 2026-11-24) beside code 6.
+
+Tests: `error_words("3")` is the drainage words. A learned code's words are used by
+`error_words` and the reading's `problems`; a code in `CODES` can't be learned; a code never
+reported is refused. Learning updates open problem rows and the task's notes. Golden
+`tools.json` gains the tool (expected).
+Scenario: the fake Whoosh reports code 80; Themi's message asks what the app calls it;
+Michael says "It says Error: Clogged waste"; the reply confirms, problem's detail and the
+wall card say "it's showing a clogged waste error"; the box reports 80 again the next day
+and the alert uses those words.
+
+Data/Setup: migration (new table). After the update, problem 6's detail reads the drainage
+words on the next check. Mark #261 reviewed once live.
+
+### F60c · Idea (2026-11-24): the wall's top bar has Talk to Themi before the weather
+Status: [ ]
+Depends on: F59g
+Read first: `themi_home/web/templates/wall/_top.html`; `themi_home/web/static/wall.css`
+(`.wall-top`, `.wall-weather`, `.wall-talk`); `themi_home/web/static/wall-fit.js` (F58c). From
+Michael's idea #262 (2026-11-24, 9:32 am, "swap the weather and the Talk to Themi sections on
+the wall frame").
+
+What the Pi shows: the top bar is the date and time, then the weather, then "Talk to Themi"
+at the far right (`_top.html`'s order since F59g).
+
+Build:
+- The order is the date and time, "Talk to Themi", then the weather at the far right. The
+  weather's tap (its view) and the talk sheet are unchanged; spacing stays even with
+  `space-between`, and the bar still fits the frame (F58c) with no weather (the Talk button
+  then sits at the right).
+
+Tests: the rendered top bar has `.wall-talk` before `.wall-weather`; with no weather the Talk
+button is still there. The wall's fit test (if it measures the top bar) still passes.
+
+Data/Setup: update the Pi. Mark #262 reviewed once live.
+
+### F60d · Idea (2026-11-24): the wall's mic says when it's listening and when it's working
+Status: [ ]
+Depends on: F59g
+Read first: `themi_home/web/static/wall.js` (F59g's mic: `canRecord`, `sendClip`, the click
+handler); `themi_home/web/templates/wall/_view_talk.html` (`.talk-mic`);
+`themi_home/web/static/wall.css` (`.talk-mic`, `.talk-mic.on`); `themi_home/wall_talk.py`
+(`said`); `tests/integration/test_session_page_browser.py` (headless Chrome). From Michael's
+idea #264 (2026-11-24, 9:55 am, "some sort of indicator of when it is listening with the mic
+and if I need to press the button again to stop listening and start processing then we should
+change the icon or something").
+
+What the Pi shows: the mic is a "Talk" button with a mic icon. While it records, the button
+only gets a soft background (`.talk-mic.on`); the icon and "Talk" stay, nothing says a second
+tap sends, nothing counts toward the 30 s cut-off, and nothing shows while the clip is sent
+and transcribed (the sheet just swaps when the answer comes). A refused microphone hides the
+button without a word.
+
+Decided (Michael, 2026-11-24, idea #264): a second tap sends at once (no listen-back); while
+listening there's a way to throw the clip away.
+
+Build:
+- Listening: the button turns red with a stop square in place of the mic and reads "Send";
+  a pulsing dot and "Listening… tap Send when you're done" show above the text box with the
+  seconds counting ("0:07 of 0:30"); a ✕ "Cancel" beside it throws the clip away. The text
+  box and Send are disabled meanwhile. In the last 5 seconds the count says so ("5 s left").
+  The pulse respects `prefers-reduced-motion` (a steady dot).
+- Working: after Send (or the 30 s), the button is disabled with a small spinner and the line
+  says "Working it out…" until what was heard shows in the sheet. If the post fails or nothing
+  was heard, the line says "I didn't catch that. Try again, or type it." and the mic is ready
+  again (check what `/wall/say` answers for an empty transcript, and make it say this).
+- A refused or missing microphone says "The frame didn't let Themi use the microphone. Typing
+  works." once, then hides the button, as now.
+- The status line is `aria-live="polite"`; the button's `aria-pressed` and label follow the
+  state.
+
+Tests: a headless Chrome test (skipped without Chrome, as the session page's) with Chrome's
+fake media device (`--use-fake-ui-for-media-stream --use-fake-device-for-media-stream`):
+tapping the mic shows "Listening…" and the stop icon, the count moves, Send posts to a
+stubbed `/wall/say` and shows "Working it out…" until it answers; Cancel posts nothing. A
+unit test that the template has the status line with `aria-live`. `/wall/say` with an empty
+transcript answers with the "didn't catch that" words.
+
+Data/Setup: update the Pi. Michael checks it on the frame (and notes in Notes whether the
+frame's WebView shows the mic at all). Mark #264 reviewed once live.
+
+### F60e · Idea (2026-11-24): the body double on the wall: start a session and run it there
+Status: [ ]
+Depends on: BD2, BD3a, BD3b, F59g
+Read first: `themi_home/body_double.py` (`start`, `current`, `state`, `page_buttons`,
+`page_line`, `scene`, `act_from_page`, `page_open`); `themi_home/web/session_pages.py`
+(`/session`, `/session/state`, `/session/{id}/act`); `templates/session.html` and
+`static/session.js`; `themi_home/wall_talk.py` (`Talking`, who's talking on a frame);
+`themi_home/web/static/wall.js` (`watchView`, the night mode); `templates/wall/_columns.html`;
+BD3a's notes (the page's state and taps); the Wall Plan for the sheet and colour rules. From
+Michael's idea #263 (2026-11-24, 9:47 am, "have the body double interface accessible and
+usable on the wall frame view").
+
+What the Pi shows: a body double session starts only from chat (`start_body_double`) and runs
+in Telegram or on `/session` (a signed-in person's own page). The wall has no way to start
+one or to see one going on.
+
+Decided (Michael, 2026-11-24, idea #263): start and run. The wall can start a session and run
+it all the way through; a session already going (from Telegram or `/session`) shows on the
+wall too, and a tap in one place shows in the others.
+
+Build:
+- A "Body double" button in the wall's top bar, beside Talk to Themi, opens a sheet that asks
+  "Who's this?" with the same choice as Talk (`Talking`, kept 5 minutes; choosing on one
+  sheet counts for the other).
+- No session going: a short pick of what to work on: their tasks due today or overdue and
+  their routines (first few, then "Something else" to type it), a mode (Silent Anchor, Sprint
+  Partner, Guided Step-Through, or "Themi picks", BD2's choice) and for a sprint its length.
+  Start goes through `BodyDouble.start` as the tool does, so Telegram gets the start message
+  (with [Open]) as usual.
+- A session going: the sheet is the session at wall size: the scene (BD3b/BD3c's chameleon),
+  the mode and task, the timer (from the server's end and now, as `/session` does), the step
+  and its picture in Guided, and the same buttons (`page_buttons`), which post through
+  `act_from_page`, so the chat message is edited too. State is polled every 5 s from a wall
+  route giving `BodyDouble.state` for that member. No music on the wall (it's a shared room);
+  `/session` keeps its own.
+- While a session is going, the sheet doesn't close on its own (`data-close-after` off) and
+  the night mode doesn't dim the screen; closing it by hand leaves the session running, and
+  that person's column shows a chip ("Body double · 12 min left") that reopens it. When the
+  session ends, the finish line shows for 10 s and the sheet closes.
+- The wall's device token and CSRF guard the routes; a member id not in the family is 404, a
+  session that isn't that member's is 404. Nothing about energy.
+
+Tests: wall routes: start for a member starts a session (fake task) and sends the chat start
+message; state for a member with a session is `BodyDouble.state`'s; an act with an old `seq`
+does nothing; another member's session id is 404; no token is 401 as the other wall routes.
+The column chip shows only while a session's going. The sheet has no `data-close-after` while
+a session runs.
+Scenario: Michael picks his chip on the wall, chooses "Cover the birdcage" and Silent Anchor,
+taps Start; Telegram has the start message; he taps Done on the wall; the session is finished
+and the Telegram message is edited to say so. A session Erin started in Telegram shows in her
+column's chip and opens on the wall.
+
+Data/Setup: update the Pi. Mark #263 reviewed once live.
 
 ## Conversation mode
 
