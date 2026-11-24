@@ -347,7 +347,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [x] 2026-11-22 |
 | F58f | Feedback: "6:30–8:30 pm weekdays" is read, and hours in a place's note or a fact count | Feedback | [x] 2026-11-23 |
 | SW1 | Feedback: the Safeway helper's popup shows Themi's grocery list, an icon, no old fills | Feedback | [x] 2026-11-23 |
-| F59a | Feedback: "in-laws" finds the saved in-laws' house; "Not sure where" never ends "Done." | Feedback | [ ] |
+| F59a | Feedback: "in-laws" finds the saved in-laws' house; "Not sure where" never ends "Done." | Feedback | [x] 2026-11-24 |
 | F59b | Feedback: where they leave from is never also where they're going (no "0 min") | Feedback | [ ] |
 | F59c | Idea: the wall keeps each person's day until their rollover, and their chart's limit | Feedback | [ ] |
 | F59d | Idea: the note at the top of the wall has a ✕ to dismiss it in place | Feedback | [ ] |
@@ -17428,7 +17428,7 @@ Notes (2026-11-23):
   extension on `chrome://extensions` and the Safeway tab.
 
 ### F59a · Feedback (2026-11-23): "in-laws" finds the saved in-laws' house, and "Not sure where" never ends "Done."
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: F57b, F45e
 Read first: `themi/standard/places.py` (`_words`, `Places.find`, `mentioned`, `search`, `_kin`,
 `named_place`, `IN_LAWS`, `KIN`); `themi_google/travel.py` (`_named_origin`, `address_for`,
@@ -17482,6 +17482,27 @@ address, not "Done.".
 
 Data/Setup: update the Pi. Label reply 547 `themi feedback --wrong-tool 547 drive_time`
 (it ran, and should have found the place). Nothing to save: place 2 is right.
+
+Notes:
+- `places._words` drops a plural or possessive "s" from words of 4+ letters (not "ss"), so
+  "in-laws", "in-law's", "in-law’s" and "in laws" are all "in law". `_words` is only used
+  in places.py.
+- `Places.find` (and `search`, when no word matches) falls back to `_by_kin`: the phrase's
+  kin and whose (`_kin_of`: in-laws = the partner's parents; a named member's; else the
+  speaker's) against each saved place's name and other names, read as their saver
+  (`SavedPlace.created_by`, new, from the row) would mean them. So "Erin's Parent's House"
+  is "in-laws" for Michael and "my parents" for Erin.
+- Deviation: the prompt said Erin asking "in-laws" finds nothing. With the Pi's literal
+  other name "in-law’s", Erin's "in-laws" matches by name, as any other name does. With no
+  such alias it's None (tested).
+- New `ToolAsks(message, question)` in `themi.core.tools`, outcome `asked`, kept in
+  `ctx.questions`. `drive_time` raises it for "Not sure where '…' is" (in a result or a
+  failure) and "Which event, or which address?". The agent's empty reply then says the
+  question ("I don't have an address for grandma's yet. What is it?"), never "Done.".
+  An unknown name with no kin word ("the cabin") still goes to the map, as before.
+- Tests: 3 in `tests/unit/test_saved_places.py`, 2 scenarios in
+  `tests/scenarios/test_saved_places.py`.
+- **Setup:** update the Pi; label reply 547 as above.
 
 ### F59b · Feedback (2026-11-23): where they leave from is never also where they're going, so no "0 min"
 Status: [ ]

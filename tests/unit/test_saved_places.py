@@ -223,3 +223,52 @@ def test_a_fact_with_a_saved_places_hours_sets_them(places: Places, family: Seed
     assert places.get(saved.id).hours[0] == (time(18, 30), time(20, 30))
     assert places.hours_from(family.erin, "Stanford's hours are daily 9-5") is None  # set: kept
     assert places.hours_from(family.erin, "The library's hours are daily 9-5") is None
+
+
+# ----- F59a (reply 547): "in-laws" finds the saved in-laws' house ---------------------------
+
+LA_PARA = "790 La Para Ave, Palo Alto, CA 94306"
+
+
+def _in_laws(places: Places, family: SeededFamily) -> object:
+    """Place 2 as on the Pi: saved by Michael for the household."""
+    return places.save(
+        family.husband,
+        f"{family.erin.name}'s Parent's House",
+        LA_PARA,
+        aliases="In-Law's House, in-law\N{RIGHT SINGLE QUOTATION MARK}s",
+    )
+
+
+def test_in_laws_said_any_way_is_the_saved_in_laws_house(
+    places: Places, family: SeededFamily
+) -> None:
+    saved = _in_laws(places, family)
+    for phrase in (
+        "in-laws",
+        "in-law's",
+        "my in-laws",
+        "the in laws",
+        "In-Law's House",
+        "my in-law\N{RIGHT SINGLE QUOTATION MARK}s house",
+        f"{family.erin.name}'s parents",
+    ):
+        assert places.find(family.husband, phrase) == saved, phrase
+    assert places.search(family.husband, "in-laws") == [saved]
+    assert named(family, "Michael", "in-laws") == LA_PARA
+
+
+def test_a_kin_place_is_found_by_kin_when_no_name_matches(
+    places: Places, family: SeededFamily
+) -> None:
+    saved = places.save(family.husband, f"{family.erin.name}'s Parent's House", LA_PARA)
+    assert places.find(family.husband, "in-laws") == saved  # Erin's parents: his in-laws
+    assert places.find(family.erin, "my parents") == saved  # and hers
+    assert places.find(family.husband, "my parents") is None  # his own aren't saved
+    assert places.find(family.erin, "in-laws") is None  # hers are Michael's parents
+
+
+def test_short_words_keep_their_s(places: Places, family: SeededFamily) -> None:
+    saved = places.save(family.erin, "Bus stop", "1 Main St")
+    assert places.find(family.erin, "the bus stop") == saved
+    assert places.find(family.erin, "the bu stop") is None

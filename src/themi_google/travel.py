@@ -48,7 +48,7 @@ from themi.connectors.travel import (
 from themi.core import keys
 from themi.core.calendar_view import CalendarPreferences, Entry
 from themi.core.prompts import as_data
-from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.tools import ToolAsks, ToolContext, ToolFailed, tool
 from themi.core.wording import untitled
 from themi.localtime import to_utc_iso
 from themi.standard.lists import name_key
@@ -957,6 +957,20 @@ def _duration(minutes: int) -> str:
     return f"{hours} hr {rest} min" if rest else f"{hours} hr"
 
 
+WHICH_TEXT = "Which event, or which address?"
+NOT_SURE = re.compile(r"Not sure where '(.+?)' is: ")
+ASK_WHERE_TEXT = "I don't have an address for {phrase} yet. What is it?"
+ASK_WHICH_TEXT = "Which event or address do you mean?"
+
+
+def _asks(result: str) -> str:
+    """F59a (reply 547): "Not sure where 'in-laws' is" needs an answer from them: the call
+    is `asked`, not done, so an empty reply asks it instead of saying "Done."."""
+    if (found := NOT_SURE.search(result)) is not None:
+        raise ToolAsks(result, ASK_WHERE_TEXT.format(phrase=found.group(1)))
+    return result
+
+
 @tool(
     "drive_time",
     "How long the drive takes, and when to leave: to their next event whose title has these "
@@ -977,6 +991,17 @@ def _duration(minutes: int) -> str:
     },
 )
 async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
+    try:
+        return _asks(await _drive_time(ctx, args))
+    except ToolFailed as exc:
+        if NOT_SURE.search(str(exc)):
+            _asks(str(exc))
+        if str(exc) == WHICH_TEXT:
+            raise ToolAsks(WHICH_TEXT, ASK_WHICH_TEXT) from exc
+        raise
+
+
+async def _drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
     travel = ctx.services.maybe(keys.travel)
     if travel is None:
         raise ToolFailed("Travel times aren't set up.")
@@ -1009,4 +1034,4 @@ async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
             return await travel.drive_to_address(address, ctx.member, start_from)
     except TravelError as exc:
         raise ToolFailed(f"No drive time: {exc}.") from exc
-    raise ToolFailed("Which event, or which address?")
+    raise ToolFailed(WHICH_TEXT)
