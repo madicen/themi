@@ -351,7 +351,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F59b | Feedback: where they leave from is never also where they're going (no "0 min") | Feedback | [x] 2026-11-23 |
 | F59c | Idea: the wall keeps each person's day until their rollover, and their chart's limit | Feedback | [x] 2026-11-23 |
 | F59d | Idea: the note at the top of the wall has a ✕ to dismiss it in place | Feedback | [x] 2026-11-23 |
-| F59e | Idea: any household list's card on the wall opens, to see it all and tick things off | Feedback | [ ] |
+| F59e | Idea: any household list's card on the wall opens, to see it all and tick things off | Feedback | [x] 2026-11-23 |
 | F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [ ] |
 | F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [ ] |
 | F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [ ] |
@@ -17658,7 +17658,7 @@ Notes:
 - **Setup:** update the Pi. The frame picks up the new template on its next refresh.
 
 ### F59e · Idea (2026-11-23): any household list's card on the wall opens it, to see it all and tick things off
-Status: [ ]
+Status: [x] 2026-11-23
 Depends on: WL9b, WL5b
 Read first: `themi_home/wall_view.py` (`smalls`, `_small`, `SmallList`, `COOKING`);
 `themi_home/web/templates/wall/_smalls.html`, `_view_list.html`; `themi_home/wall_views.py`
@@ -17692,6 +17692,24 @@ Scenario: Michael, on the wall, opens "Things to bring Erin in the psych ward", 
 "pillow" and "pajamas", and Telegram's `show_lists` for it then shows the other five.
 
 Data/Setup: update the Pi. Mark #254 reviewed once live.
+
+Notes:
+- `smalls`: a household list other than Things to cook gets `opens="list"`, `ids=(its id,)`
+  and the household's tone; `_smalls.html` makes it a button to `/wall/view/list/list/<id>`
+  with "Open list".
+- `wall_views._named_list` (`which` = `list/<id>`): only a household list with no purpose
+  (not personal, not Things to Buy). `ListView` gains `named` and `ticked` (items ticked in
+  the last week, from `list_items.done_at`).
+- `list_change` for a named list: `tick`, `untick` (from "Ticked off lately") and `add`, staged
+  as `wall_tap` (automatic) with ops `list_tick`, `list_untick`, `list_add`, run by
+  `WallTaps._list_change` as the first person on the wall, as Groceries' changes are.
+- Deviation: an emptied list stays open, saying "Nothing on the list" with its add box, not
+  "That list is empty now.". A list that's gone or became personal closes the sheet.
+- WL9b's `test_another_household_list_is_a_card_with_its_count_and_no_link`
+  (`tests/integration/test_wall_dishes.py`) now checks the card opens the list: that's the
+  change this prompt asks for.
+- Tests: `tests/integration/test_wall_named_lists.py` (5).
+- **Setup:** update the Pi.
 
 ### F59f · Idea (2026-11-23): the calendar on the wall opens its own screen: day by day, and a month to jump around
 Status: [ ]

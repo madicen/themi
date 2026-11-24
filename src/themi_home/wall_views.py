@@ -17,7 +17,9 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from themi import clock
 from themi.core import keys
+from themi.localtime import to_utc_iso
 from themi_home.wall_view import (
     COOKING,
     Chip,
@@ -609,6 +611,8 @@ class ListView:
     groceries: bool = False
     said: str = ""  # what the last change did
     shared_with: tuple[str, ...] = ()  # WL9a: the household, for the Groceries foot
+    named: bool = False  # F59e: a household list ("list/<id>"): tick, untick, add
+    ticked: tuple[ListRow, ...] = ()  # F59e: its items ticked off in the last week
 
 
 @dataclass(frozen=True)
@@ -655,6 +659,8 @@ def list_view(views: WallViews, which: str, opened: int = 0, said: str = "") -> 
             said=said,
             shared_with=tuple(m.name for m in people),
         )
+    if which.startswith("list/"):
+        return _named_list(views, which, said)
     whose = which.removeprefix("todo/")
     tasks = view._open_tasks(people)
     if whose == "family":
@@ -676,6 +682,35 @@ def list_view(views: WallViews, which: str, opened: int = 0, said: str = "") -> 
     lately = _lately(views, people, owner)
     others = tuple((m.id, m.name) for m in people if owner is None or m.id != owner.id)
     return ListView(which, title, tone, rows, lately, others, family=owner is not None, said=said)
+
+
+def _named_list(views: WallViews, which: str, said: str) -> ListView | None:
+    """F59e (idea #254): a household list from the wall's bottom strip, all of it: tap to
+    tick off, the last week's ticks to put back, and an add box. Not a personal list, nor
+    one with a purpose of its own (Things to Buy)."""
+    lists = views.services.maybe(keys.lists)
+    people = views.view.people()
+    list_id = which.removeprefix("list/")
+    if lists is None or not people or not list_id.isdigit():
+        return None
+    nl = lists.get(int(list_id), people[0])
+    if nl is None or nl.personal or nl.purpose is not None:
+        return None
+    since = to_utc_iso(clock.now() - LATELY)
+    rows = views.services.store.db.query(
+        "SELECT id, name FROM list_items WHERE list_id = ? AND done = 1 AND done_at >= ? "
+        "ORDER BY done_at DESC",
+        (nl.id, since),
+    )
+    return ListView(
+        which,
+        nl.name,
+        views.view.together_tone(),
+        tuple(ListRow(i.id, i.name) for i in nl.open_items),
+        said=said,
+        named=True,
+        ticked=tuple(ListRow(int(r["id"]), str(r["name"])) for r in rows),
+    )
 
 
 def _index(people: list[Member], member_id: int) -> int | None:

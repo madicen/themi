@@ -113,7 +113,7 @@ class SmallList:
     items: tuple[str, ...]
     more: int = 0
     # WL5b: what a tap opens: "groceries" (its List view), or "dishes" (each item its Dish
-    # view, by `ids`), or "" (nothing)
+    # view, by `ids`), or "list" (F59e: a household list's List view, `ids` its one id)
     opens: str = ""
     ids: tuple[int, ...] = ()
     count: int = 0  # WL9b: everything on it, for the card's "2 items" / "4 ideas"
@@ -1005,6 +1005,8 @@ class WallView:
                 if COOKING.search(nl.name):  # "Things to cook": each one a dish (WL5b)
                     ids = tuple(i.id for i in nl.open_items[:SMALL_ITEMS])
                     small = replace(small, opens="dishes", ids=ids, tone=self.together_tone())
+                else:  # F59e (idea #254): any other household list opens, to tick things off
+                    small = replace(small, opens="list", ids=(nl.id,), tone=self.together_tone())
                 found.append(small)
         return tuple(found)
 

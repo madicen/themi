@@ -253,6 +253,8 @@ class WallTaps:
         """Tomorrow, Next week, Give to, Make it a family to-do, Change the words, Add, and
         (on the grocery list) Bought."""
         op, text = str(payload["op"]), str(payload.get("text", "")).strip()
+        if op.startswith("list_"):
+            return self._list_change(op, payload, by, text)
         if op == "bought":
             groceries = self.services.get(keys.groceries)
             groceries.finish(text, "bought")
@@ -282,6 +284,23 @@ class WallTaps:
             task = await board.update(task_id, by, title=text)
             return f"It reads {task.title} now."
         raise ValueError(f"not a change the wall makes: {op}")
+
+    def _list_change(self, op: str, payload: dict[str, Any], by: Member, text: str) -> str:
+        """F59e: a household list's tick, put back or add, from its List view."""
+        lists = self.services.get(keys.lists)
+        nl = lists.get(int(payload["list"]), by)
+        if nl is None:
+            return "That list isn't there any more."
+        if op == "list_add":
+            added = lists.add(nl, [text], by)
+            return f"Added {text} to {nl.name}." if added else f"{text} is on {nl.name} already."
+        item = next((i for i in nl.items if i.id == int(payload["item"])), None)
+        if item is None:
+            return "That one isn't on the list any more."
+        lists.tick(item, op == "list_tick", by)
+        if op == "list_tick":
+            return f"Ticked {item.name} off {nl.name}."
+        return f"{item.name} is back on {nl.name}."
 
     def _tz(self) -> ZoneInfo:
         family = self.services.store.get_family()
@@ -600,6 +619,24 @@ def routes(kit: Kit) -> APIRouter:
         if by is None:
             return HTMLResponse("")
         payload: dict[str, Any] = {"op": op, "by": by.id}
+        if found.named:  # F59e (idea #254): a household list: tick, put back, add
+            list_id = int(which.removeprefix("list/"))
+            back = next((r for r in found.ticked if str(r.id) == form.get("id")), None)
+            if op == "add" and text:
+                payload.update(op="list_add", list=list_id, text=text)
+                summary = f"Add {text} to {found.title} {WHERE}"
+            elif op == "tick" and row is not None:
+                payload.update(op="list_tick", list=list_id, item=row.id)
+                summary = f"{row.title} ticked off {found.title} {WHERE}"
+            elif op == "untick" and back is not None:
+                payload.update(op="list_untick", list=list_id, item=back.id)
+                summary = f"{back.title} back on {found.title} {WHERE}"
+            else:
+                return list_sheet(request, which)
+            outcome = await kit.app.services.autonomy.stage(
+                TAP, by, summary, payload, TAP, requested=True
+            )
+            return list_sheet(request, which, said=outcome.message)
         if op == "add" and text:
             if found.groceries:  # the grocery list's own way in, through its own category
                 outcome = await stage_groceries(by, [text])

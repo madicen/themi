@@ -1,8 +1,8 @@
 {#- WL9b: the small lists as cards. A few items, then the count and an Open link; the whole
-    card is the tap (Groceries its List view, Things to cook its dishes). Another household
-    list is a card with its count and nothing to open. -#}
+    card is the tap (Groceries its List view, Things to cook its dishes, F59e: any other
+    household list its own List view). -#}
 {% for small in screen.smalls %}
-{% set opens = {"groceries": "/wall/view/list/groceries", "dishes": "/wall/view/dishes"}.get(small.opens, "") %}
+{% set opens = {"groceries": "/wall/view/list/groceries", "dishes": "/wall/view/dishes", "list": "/wall/view/list/list/" ~ (small.ids[0] if small.ids else "")}.get(small.opens, "") %}
 {% set ideas = small.opens == "dishes" %}
 {% if opens %}<button type="button" class="wall-card wall-small{% if small.tone %} tone-{{ small.tone }}{% endif %}" aria-label="{{ small.name }}" hx-get="{{ opens }}" hx-target="#wall-view" hx-swap="innerHTML">
 {% else %}<section class="wall-card wall-small" aria-label="{{ small.name }}">{% endif %}
