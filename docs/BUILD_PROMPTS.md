@@ -352,7 +352,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F59c | Idea: the wall keeps each person's day until their rollover, and their chart's limit | Feedback | [x] 2026-11-23 |
 | F59d | Idea: the note at the top of the wall has a ✕ to dismiss it in place | Feedback | [x] 2026-11-23 |
 | F59e | Idea: any household list's card on the wall opens, to see it all and tick things off | Feedback | [x] 2026-11-23 |
-| F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [ ] |
+| F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [x] 2026-11-23 |
 | F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [ ] |
 | F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -17712,7 +17712,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F59f · Idea (2026-11-23): the calendar on the wall opens its own screen: day by day, and a month to jump around
-Status: [ ]
+Status: [x] 2026-11-23
 Depends on: WL3, WL5a, F55f
 Read first: `themi_home/wall_views.py` (`day`, `DayView`, `DAYS_AHEAD`, `_due`,
 `_day_weather`); `themi_home/wall_view.py` (`events`, `today_line`, `week`,
@@ -17752,6 +17752,34 @@ a month twice inside 5 minutes calls the fake calendar once.
 Scenario: none (the frame). Michael's look on the frame is the check.
 
 Data/Setup: update the Pi. Mark #258 reviewed once live.
+
+Notes:
+- `GET /wall/calendar?day=` (ISO, "" for today) or `?month=YYYY-MM`, drawn by
+  `wall/_view_calendar.html` with WL9d's whole-page macro. `wall_views.calendar_view` builds
+  `CalendarView` (Day mode reuses `DayView`; Month mode `MonthDay` cells, Monday first, up to
+  three chips and "+N"). The range is the first of the month six months back to the end of
+  the month a year ahead (`calendar_range`); outside it, or nonsense, is 404.
+- The month name is a `<details>` picker of every month in range. Day mode has [Today]
+  (not on today), and Month mode's [Day] goes to today in this month, else its 1st (`jump`).
+  The ‹ › buttons carry `data-swipe-prev/next`, and a horizontal swipe on `[data-swipe]`
+  clicks them (`wall.js`).
+- Events: `WallView.range_events(first, last)`. Inside the kept window (`CalendarBusy.stored`:
+  last week to two weeks ahead) they're the stored ones. Otherwise
+  `CalendarBusy.entries_between` reads Google for the range, nothing stored, held 5 min
+  (`LIVE_KEEP`) per person and range. `DaySummary.events` and `WallView.events` take an
+  `entries` source for it.
+- Calendar chips: `WallView.calendar_chips` (split out of `week_calendars`) for what's
+  shown. `POST /wall/calendar/calendar` toggles one (shared with the week ahead) and
+  answers with the screen.
+- Taps: today's card opens the screen (`hx-trigger` skips clicks on a `.tl-block`, which
+  still open the Event view). A day in the week ahead opens the screen on that day. The old
+  `/wall/view/day/` route stays.
+- Past days have no weather box. An event on a far day opens the Event view only when it's
+  in the kept window (the Event view reads the stored events). Follow-up if wanted.
+- WL5a's `test_a_day_in_the_week_ahead_opens_its_view` now expects `/wall/calendar?day=`
+  (the change this prompt asks for).
+- Tests: `tests/integration/test_wall_calendar_screen.py` (7).
+- **Setup:** update the Pi.
 
 ### F59g · Idea (2026-11-23): talk to Themi from the wall, typed or said
 Status: [ ]

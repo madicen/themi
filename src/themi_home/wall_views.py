@@ -833,3 +833,156 @@ def note_view(views: WallViews, asking: bool = False, said: str = "") -> NoteVie
         asking=asking,
         said=said,
     )
+
+
+# ----- F59f: the calendar screen ---------------------------------------------------------
+
+MONTHS_BACK, MONTHS_AHEAD = 6, 12  # how far the calendar screen goes
+MONTH_EVENTS = 3  # chips in a month's day, then "+N"
+
+
+@dataclass(frozen=True)
+class MonthDay:
+    iso: str
+    number: int
+    chips: tuple[Chip, ...]
+    more: int
+    today: bool
+    inside: bool  # in the month shown (the grid's first and last weeks run over)
+
+
+@dataclass(frozen=True)
+class CalendarView:
+    """F59f (idea #258): the calendar on its own screen, a day or a month at a time."""
+
+    mode: str  # "day" or "month"
+    month: str  # "2026-11": the month shown, or the day's
+    month_label: str  # "November 2026"
+    day: DayView | None  # Day mode
+    past: bool  # Day mode: before today (no weather)
+    weeks: tuple[tuple[MonthDay, ...], ...]  # Month mode: Monday first
+    before: str  # the day or month before, or "" past the limit
+    after: str
+    months: tuple[tuple[str, str], ...]  # the month picker: ("2026-11", "November 2026")
+    calendars: tuple[Any, ...]  # F55f's chips, for what's shown
+    tone: str = ""
+    jump: str = ""  # Month mode's [Day]: today in this month, else its first day
+
+
+def add_months(day: date, months: int) -> date:
+    """The same day `months` later (or earlier), the month's last day when it's shorter."""
+    year, zero_based = divmod(day.year * 12 + day.month - 1 + months, 12)
+    first = date(year, zero_based + 1, 1)
+    following = date(year + (zero_based == 11), (zero_based + 1) % 12 + 1, 1)
+    return min(first + timedelta(days=day.day - 1), following - timedelta(days=1))
+
+
+def calendar_range(today: date) -> tuple[date, date]:
+    """The first and last day the calendar screen goes to."""
+    first = add_months(today, -MONTHS_BACK).replace(day=1)
+    last = add_months(today.replace(day=1), MONTHS_AHEAD + 1) - timedelta(days=1)
+    return first, last
+
+
+def _month_of(text: str) -> date | None:
+    try:
+        return date.fromisoformat(f"{text}-01")
+    except ValueError:
+        return None
+
+
+async def calendar_view(views: WallViews, *, day: str = "", month: str = "") -> CalendarView | None:
+    """Day mode for `day` (ISO, or "" for today), Month mode for `month` ("2026-11"). None
+    for a day or month outside what the screen goes to, or nonsense."""
+    view = views.view
+    today = view.now().date()
+    lo, hi = calendar_range(today)
+    months = tuple(
+        (f"{m:%Y-%m}", f"{m:%B %Y}")
+        for n in range(MONTHS_BACK + MONTHS_AHEAD + 1)
+        if (m := add_months(lo, n)) <= hi
+    )
+    from themi_home.wall_calendars import WallCalendars
+
+    hidden = WallCalendars(views.services.store.db).hidden()
+
+    def shown(events: list[WallEvent]) -> list[WallEvent]:
+        return [e for e in events if not e.calendar_id or e.calendar_id not in hidden]
+
+    if month:
+        first = _month_of(month)
+        if first is None or not lo <= first <= hi:
+            return None
+        start = first - timedelta(days=first.weekday())
+        last = add_months(first, 1) - timedelta(days=1)
+        end = last + timedelta(days=6 - last.weekday())
+        found = await view.range_events(start, end)
+        cells = []
+        for offset in range((end - start).days + 1):
+            d = start + timedelta(days=offset)
+            events = sorted(shown(found[d]), key=lambda e: (not e.all_day, e.start))
+            chips = tuple(Chip(e.title, e.tone) for e in events)
+            cells.append(
+                MonthDay(d.isoformat(), d.day, chips[:MONTH_EVENTS],
+                         max(0, len(chips) - MONTH_EVENTS), d == today, d.month == first.month)
+            )  # fmt: skip
+        before, after = add_months(first, -1), add_months(first, 1)
+        return CalendarView(
+            mode="month",
+            month=f"{first:%Y-%m}",
+            month_label=f"{first:%B %Y}",
+            day=None,
+            past=False,
+            weeks=tuple(tuple(cells[i : i + 7]) for i in range(0, len(cells), 7)),
+            before=f"{before:%Y-%m}" if before >= lo else "",
+            after=f"{after:%Y-%m}" if after <= hi else "",
+            months=months,
+            calendars=view.calendar_chips([found[d] for d in found]),
+            tone=view.together_tone(),
+            jump=(
+                today if (today.year, today.month) == (first.year, first.month) else first
+            ).isoformat(),
+        )
+    try:
+        when = date.fromisoformat(day) if day else today
+    except ValueError:
+        return None
+    if not lo <= when <= hi:
+        return None
+    found = await view.range_events(when, when)
+    events = shown(found[when])
+    live = when == today
+    now = view.now()
+    moment = now if live else datetime.combine(when, now.time().min, tzinfo=now.tzinfo)
+    line = lay_out_today(moment, view.timeline_rows(), events, [], live=live)
+    weather, icon = views._day_weather(when) if when >= today else ("", "")
+    offset = (when - today).days
+    near = (
+        "Today" if offset == 0 else "Tomorrow" if offset == 1 else "Yesterday" if offset == -1
+        else f"In {offset} days" if offset > 0 else f"{-offset} days ago"
+    )  # fmt: skip
+    before, after = when - timedelta(days=1), when + timedelta(days=1)
+    return CalendarView(
+        mode="day",
+        month=f"{when:%Y-%m}",
+        month_label=f"{when:%B %Y}",
+        day=DayView(
+            day=when,
+            heading=f"{when:%A}, {when:%B} {when.day}",
+            near=near,
+            line=line,
+            due=views._due(when),
+            weather=weather,
+            icon=icon,
+            before=before.isoformat() if before >= lo else "",
+            after=after.isoformat() if after <= hi else "",
+            tone=view.together_tone(),
+        ),
+        past=when < today,
+        weeks=(),
+        before=before.isoformat() if before >= lo else "",
+        after=after.isoformat() if after <= hi else "",
+        months=months,
+        calendars=view.calendar_chips([found[when]]),
+        tone=view.together_tone(),
+    )

@@ -63,6 +63,23 @@
   });
   document.addEventListener("pointerdown", function () { if (idle) watchView(); });
 
+  // F59f (idea #258): on the calendar screen, a swipe left or right is › or ‹.
+  var swipeFrom = null;
+  document.addEventListener("touchstart", function (event) {
+    var area = event.target.closest && event.target.closest("[data-swipe]");
+    swipeFrom = area && event.touches.length === 1
+      ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+  }, { passive: true });
+  document.addEventListener("touchend", function (event) {
+    if (!swipeFrom || !event.changedTouches.length) return;
+    var dx = event.changedTouches[0].clientX - swipeFrom.x;
+    var dy = event.changedTouches[0].clientY - swipeFrom.y;
+    swipeFrom = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    var go = document.querySelector(dx < 0 ? "[data-swipe-next]" : "[data-swipe-prev]");
+    if (go) go.click();
+  });
+
   document.addEventListener("htmx:sendError", function () { stale(true); });
   document.addEventListener("htmx:responseError", function () { stale(true); });
   // F58c: the columns give up what doesn't fit on the frame ("+N more", wall-fit.js).

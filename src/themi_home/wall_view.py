@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import Field, field_validator
@@ -867,11 +867,12 @@ class WallView:
             and self.services.maybe(keys.day_summary) is not None
         )
 
-    def events(self, day: date) -> list[WallEvent]:
+    def events(self, day: date, entries: Any = None) -> list[WallEvent]:
         """A day's events, each once: a person's own in their row, the family calendar's in
         Family's. Titles only from someone who shares their calendar's details with their
         partner (K1's "partner"); anyone else's events are "Busy". Themi's copies of tasks
-        are left out: those are tasks, not plans."""
+        are left out: those are tasks, not plans. `entries` (F59f): where each person's
+        events come from, when not the kept ones (`range_events`)."""
         from themi.core.calendar_view import CalendarPreferences
 
         summary = self.services.maybe(keys.day_summary)
@@ -883,7 +884,9 @@ class WallView:
         for member in self.people():
             prefs = self.services.store.preferences(member.id, CalendarPreferences)
             shares = prefs.calendar_details == "partner"
-            for entry, whose in summary.events(member, day, tasks=False, scope="mine"):
+            for entry, whose in summary.events(
+                member, day, tasks=False, scope="mine", entries=entries
+            ):
                 if entry.event_id and (entry.calendar_id, entry.event_id) in seen:
                     continue
                 seen.add((entry.calendar_id, entry.event_id))
@@ -906,6 +909,31 @@ class WallView:
                     )
                 )
         return out
+
+    async def range_events(self, first: date, last: date) -> dict[date, list[WallEvent]]:
+        """F59f (idea #258): each day's events from `first` to `last` (the calendars turned
+        off on the wall too: the screen leaves them out, and offers them back). Outside what's kept (last week to two weeks ahead) they're
+        read from Google, held for a few minutes."""
+        days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
+        reader = self.services.maybe(keys.calendars)
+        if reader is None or not self.has_calendar():
+            return {d: [] for d in days}
+        tz = self.tz()
+        start = datetime(first.year, first.month, first.day, tzinfo=tz)
+        end = datetime(last.year, last.month, last.day, tzinfo=tz) + timedelta(days=1)
+        source = None
+        if not reader.stored(start, end):
+            got = {
+                m.id: await reader.entries_between(m, start, end)
+                for m in self.services.store.list_members()
+            }
+
+            def source(owner: Member, since: datetime, until: datetime) -> list[Any]:
+                return [
+                    e for e in got.get(owner.id, []) if e.ends_at > since and e.starts_at < until
+                ]
+
+        return {d: self.events(d, source) for d in days}
 
     def today_line(self) -> TodayLine | None:
         if not self.has_calendar():
@@ -952,6 +980,10 @@ class WallView:
         not, in the wall's order of people, then the shared ones. None with fewer than two."""
         if not self.has_calendar():
             return ()
+        return self.calendar_chips([events for _, events in self._week_events()])
+
+    def calendar_chips(self, groups: list[list[WallEvent]]) -> tuple[WeekCalendar, ...]:
+        """F55f's chips for these events' calendars (F59f: the calendar screen's too)."""
         from themi_home.wall_calendars import WallCalendars, label
 
         calendars = WallCalendars(self.services.store.db)
@@ -960,7 +992,7 @@ class WallView:
         people = {m.id: m for m in self.people()}
         order = {m.id: i for i, m in enumerate(self.people())}
         found: dict[str, tuple[tuple[int, str], WeekCalendar]] = {}
-        for _, events in self._week_events():
+        for events in groups:
             for event in events:
                 key = event.calendar_id
                 if not key or key in found:

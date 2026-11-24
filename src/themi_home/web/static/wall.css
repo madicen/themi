@@ -406,3 +406,28 @@ body.night:not(.awake) { background: var(--night-bg); }
 .page-home-title { display: block; font-size: 1.5rem; font-weight: 600; }
 .page-home-sub { display: block; font-size: 1.15rem; color: var(--tone); margin-top: 0.2rem; }
 .page-home svg { color: var(--tone); }
+
+/* F59f (idea #258): the calendar screen, a day or a month */
+.cal { display: flex; flex-direction: column; gap: 1.2rem; flex: 1; min-height: 0; overflow-y: auto; touch-action: pan-y; }
+.cal-bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.cal-modes { display: inline-flex; background: var(--card); border-radius: 2rem; padding: 0.3rem; }
+.cal-mode, .cal-today { min-height: 3.5rem; padding: 0 1.6rem; border: 0; border-radius: 2rem; background: none; color: var(--fg);
+  font: inherit; font-size: 1.25rem; font-weight: 600; cursor: pointer; }
+.cal-mode.on { background: var(--tone, var(--fg)); color: var(--bg); }
+.cal-today { background: var(--card); }
+.cal-picker { position: relative; text-align: center; }
+.cal-picker > summary { list-style: none; cursor: pointer; }
+.cal-picker > summary::-webkit-details-marker { display: none; }
+.cal-months { position: absolute; z-index: 5; left: 50%; transform: translateX(-50%); top: calc(100% + 0.5rem);
+  display: grid; grid-template-columns: repeat(3, max-content); gap: 0.4rem; padding: 0.8rem; background: var(--card);
+  border-radius: 1.25rem; border: 0.12rem solid var(--edge); }
+.cal-month { min-height: 3.25rem; padding: 0 1rem; border: 0; border-radius: 1rem; background: none; color: var(--fg); font: inherit; font-size: 1.1rem; cursor: pointer; }
+.cal-month.on { background: var(--soft); font-weight: 700; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.5rem; }
+.cal-head { text-align: center; font-size: 1rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.cal-day { min-height: 7.5rem; display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; padding: 0.5rem;
+  border: 0; border-radius: 1rem; background: var(--card); color: var(--fg); font: inherit; text-align: left; cursor: pointer; overflow: hidden; }
+.cal-day.out { opacity: 0.45; }
+.cal-day.today { box-shadow: inset 0 0 0 0.2rem var(--tone, var(--fg)); }
+.cal-num { font-size: 1.3rem; font-weight: 700; }
+.cal-ev { font-size: 0.95rem; padding: 0.1rem 0.4rem; border-radius: 0.4rem; background: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

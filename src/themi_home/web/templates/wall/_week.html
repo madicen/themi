@@ -7,7 +7,7 @@
   </div>
   <div class="wk">
     {% for d in screen.week %}
-    <button type="button" class="wk-day" hx-get="/wall/view/day/{{ d.iso }}" hx-target="#wall-view" hx-swap="innerHTML">
+    <button type="button" class="wk-day" hx-get="/wall/calendar?day={{ d.iso }}" hx-target="#wall-view" hx-swap="innerHTML">
       <span class="wk-head"><b>{{ d.weekday }}</b> {{ d.date }}</span>
       {% for c in d.events %}<span class="wk-ev tone-{{ c.tone }}">{{ c.title }}</span>{% endfor %}
       {% if d.more %}<span class="wall-sub">+{{ d.more }} more</span>{% endif %}

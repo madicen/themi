@@ -52,6 +52,7 @@ log = logging.getLogger(__name__)
 LOOK_AHEAD = timedelta(days=14)
 LOOK_BACK = timedelta(days=7)  # from midnight: today's earlier events, and the week before
 CONTEXT_DAYS = 2  # today and tomorrow, for the model
+LIVE_KEEP = timedelta(minutes=5)  # F59f: a range read for the wall's calendar, kept this long
 TASK_BLOCK = "task-block:"  # K5: time Themi blocked for a task; never busy
 MAX_TEXT = 200
 MAX_NOTES = 600  # WL7: an event's notes, kept for the wall (which shortens them again)
@@ -128,6 +129,67 @@ class CalendarBusy:
         self.sync = sync
         # F34e: told after a person's calendars are read (the same event twice, F34f's copies)
         self.listeners: list[Callable[[Member], Awaitable[object]]] = []
+        # F59f: ranges read straight from Google (the wall's month), by person and range
+        self._live: dict[tuple[int, str, str], tuple[datetime, list[Entry]]] = {}
+
+    def stored(self, start: datetime, end: datetime) -> bool:
+        """F59f: whether [start, end) is inside what the regular read keeps (last week to two
+        weeks ahead), so `entries` has it."""
+        tz = self._tz()
+        local = clock.now().astimezone(tz)
+        since = datetime(local.year, local.month, local.day, tzinfo=tz) - LOOK_BACK
+        return start >= since and end <= clock.now() + LOOK_AHEAD
+
+    async def entries_between(self, member: Member, start: datetime, end: datetime) -> list[Entry]:
+        """F59f (idea #258): a person's events in [start, end), read from Google when it's
+        outside what's kept, and held for LIVE_KEEP so moving about the wall's month doesn't
+        call Google each tap. Nothing is stored."""
+        if self.stored(start, end) or not member.tracks("calendar"):
+            return self.entries(member, start, end)
+        key = (member.id, to_utc_iso(start), to_utc_iso(end))
+        now = clock.now()
+        held = self._live.get(key)
+        if held is not None and now - held[0] < LIVE_KEEP:
+            return held[1]
+        tz = self._tz()
+        rows: list[Entry] = []
+        for account in self.store.linked_accounts(member.id):
+            if not account.enabled or not account.allows(CALENDAR_SCOPE):
+                continue
+            client = self.sync.client(account.id)
+            try:
+                for calendar_id, _ in self.calendars(account.id):
+                    for event in await client.list_events(
+                        calendar_id, to_utc_iso(start), to_utc_iso(end)
+                    ):
+                        if (e := _entry(event, tz)) is not None:
+                            rows.append(
+                                Entry(
+                                    member.id,
+                                    e["title"],
+                                    e["location"],
+                                    e["starts_at"],
+                                    e["ends_at"],
+                                    e["all_day"],
+                                    e["video"],
+                                    e["source"],
+                                    calendar_id,
+                                    e["event_id"],
+                                    e["notes"],
+                                )  # fmt: skip
+                            )
+            except Exception as exc:  # what's kept still shows
+                log.warning("Couldn't read a range for account %s (%s)", account.id,
+                            type(exc).__name__)  # fmt: skip
+                continue
+        own = {f"copy:{r.event_id}" for r in rows}
+        rows = sorted(
+            (r for r in rows if r.source not in own),
+            key=lambda r: (r.starts_at, not r.all_day),
+        )
+        self._live = {k: v for k, v in self._live.items() if now - v[0] < LIVE_KEEP}
+        self._live[key] = (now, rows)
+        return rows
 
     # ----- reading Google ---------------------------------------------------------------
 

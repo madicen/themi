@@ -1,7 +1,7 @@
 {% from "wall/_timeline.html" import timeline %}
 {% set t = screen.today %}
 {% if t %}
-<section class="wall-card wall-today" aria-label="Today" data-start="{{ t.start.isoformat() }}" data-end="{{ t.end.isoformat() }}">
+<section class="wall-card wall-today" aria-label="Today" hx-get="/wall/calendar" hx-trigger="click[!event.target.closest('.tl-block')]" hx-target="#wall-view" hx-swap="innerHTML" data-start="{{ t.start.isoformat() }}" data-end="{{ t.end.isoformat() }}">
   <div class="wall-card-head">
     <h2>Today</h2>
     {% if t.all_day %}<div class="wall-chips"><span class="wall-label">All day</span>{% for c in t.all_day %}<span class="pill tone-{{ c.tone }}">{{ c.title }}</span>{% endfor %}</div>{% endif %}

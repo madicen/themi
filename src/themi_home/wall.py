@@ -44,6 +44,7 @@ from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
 from themi_home.wall_views import (
     WallViews,
     _recipe,
+    calendar_view,
     dish_view,
     dishes_view,
     list_view,
@@ -517,6 +518,34 @@ def routes(kit: Kit) -> APIRouter:
             return gone()
         found = WallViews(WallView(kit.app.services)).day(_day(day))
         return sheet(request, "_view_day.html", view=found) if found else HTMLResponse("")
+
+    @router.get("/wall/calendar", response_class=HTMLResponse)
+    async def calendar_screen(request: Request, day: str = "", month: str = "") -> Response:
+        """F59f (idea #258): the calendar on its own screen: `day` (ISO, "" for today) a
+        day at a time, or `month` ("2026-11") as a month. 404 outside what it goes to."""
+        if viewer(request) is None:
+            return gone()
+        found = await calendar_view(views(), day=day, month=month)
+        if found is None:
+            return HTMLResponse("", status_code=404)
+        return sheet(request, "_view_calendar.html", view=found)
+
+    @router.post("/wall/calendar/calendar", response_class=HTMLResponse)
+    async def calendar_toggle(request: Request) -> Response:
+        """F59f: a calendar's chip on the calendar screen, as in the week ahead (F55f)."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        day, month = form.get("day", ""), form.get("month", "")
+        found = await calendar_view(views(), day=day, month=month)
+        if found is None:
+            return HTMLResponse("", status_code=404)
+        if form.get("calendar", "") in {c.key for c in found.calendars}:
+            WallCalendars(kit.app.services.store.db).toggle(form["calendar"])
+            found = await calendar_view(views(), day=day, month=month)
+        response = sheet(request, "_view_calendar.html", view=found)
+        response.headers["HX-Trigger"] = "wall-refresh"
+        return response
 
     @router.get("/wall/view/weather", response_class=HTMLResponse)
     def weather_view(request: Request) -> Response:
