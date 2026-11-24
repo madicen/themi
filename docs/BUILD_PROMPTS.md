@@ -361,9 +361,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [x] 2026-11-24 |
 | F60e | Idea: the body double on the wall: start a session and run it there | Feedback | [x] 2026-11-24 |
 | F60f | Feedback: a wall column shows as many to-dos as fit, not three | Feedback | [x] 2026-11-24 |
-| F61a | Feedback: the washer's nudge gets through a work day, and the wet load is on the wall | Feedback | [ ] |
-| F61b | Feedback: "when does the CVS close?" looks it up and answers, without looping | Feedback | [ ] |
-| F61c | Feedback: a fallback model that no longer exists is said once to the admin | Feedback | [ ] |
+| F61a | Feedback: the washer's nudge gets through a work day, and the wet load is on the wall | Feedback | [x] 2026-11-24 |
+| F61b | Feedback: "when does the CVS close?" looks it up and answers, without looping | Feedback | [x] 2026-11-24 |
+| F61c | Feedback: a fallback model that no longer exists is said once to the admin | Feedback | [x] 2026-11-24 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -18284,7 +18284,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F61a · Feedback (2026-11-24): the washer's "into the dryer?" gets through a work day, and the wet load shows on the wall
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: 31, F40b, WL9c
 Read first: `themi_home/laundry.py` (`_washed`, `_nudge`, `MOVE_AFTER`, `off_displays`);
 `themi/channels/outbox.py` (`_earliest`, `BREAKTHROUGH_KINDS`, `free_from`); 31's notes. From
@@ -18329,8 +18329,19 @@ Tests:
 
 Data/Setup: update the Pi. Mark #266 reviewed once live.
 
+Notes:
+- `Outbox.past_busy`: kinds busy times and calendar events don't hold (the laundry module
+  adds `laundry` as it installs, so the core names no module's kind). Quiet hours, a pause,
+  the receptivity check and gates still apply.
+- The wet load's task is made without `off_displays`, so it's on its owner's wall column;
+  once the dryer starts it's ticked there like anything done today (and folds as they do),
+  and a load washed again is cancelled, so it goes. The rewash is the same task renamed,
+  so it shows the same way.
+- No existing test asserted the task stayed off the wall, so none changed.
+- **Setup:** update the Pi.
+
 ### F61b · Feedback (2026-11-24): "when does the CVS close?" looks it up and answers, without looping
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: F31c, F45e, F60a
 Read first: `themi/core/groups.py` (`WEB` words); `themi/standard/web_search.py`
 (`PERSONAL_TEXT`, `DIGITS`); `themi/core/agent.py` (the step loop, `LAST_WORD`,
@@ -18378,8 +18389,25 @@ Tests:
 
 Data/Setup: update the Pi. Mark #267 reviewed once live.
 
+Notes:
+- Routing: "when does … open/close", "open(s)/close(s) today/tonight/tomorrow/at/on <day>",
+  "store/shop/business/closing/pharmacy/holiday hours" and "hours for/of/today/…" offer web.
+  A bare "hours" doesn't ("quiet hours").
+- The guard allows a number found in this turn's `search_web`/`read_web_page` results only.
+  A later turn's "Continue" doesn't carry the last turn's results, as the prompt says.
+- The repeat guard is in `ToolRegistry.run`: a call identical to one that `failed` this
+  turn gets `REPEATED_TEXT` unrun (not counted in `outcomes`). After two repeats, the agent
+  stops offering tools.
+- The tool-less last word (`_last_word`) sends the person's message plus the tool results
+  as plain text, so no backend sees tool blocks without tools. Its text goes through the
+  same checks as any reply (`_honest`, `_not_again`…). That's how "Marked done" after
+  refused calls is still corrected (`test_a_refused_done_isnt_said_to_be_done`).
+- Changed: `test_conversation.py::test_the_step_limit_stops_runaway_tool_loops` queues a
+  tenth tool call, because there's now one more (tool-less) attempt before "tangled".
+- **Setup:** update the Pi.
+
 ### F61c · Feedback (2026-11-24): a fallback model that no longer exists is said once to the admin
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: 06, UC1
 Read first: `themi/ai/router.py` (fallback, `PermanentError`); the AI settings on the
 member's page. From the log in Michael's bug #267.
@@ -18402,6 +18430,19 @@ once, and saving a new model clears it.
 Data/Setup: **Michael:** change the Gemini fallback model on the website now (for example
 to `gemini-3.5-flash-lite` or another current model); this doesn't wait for the build.
 Mark #267 reviewed once live (with F61b).
+
+Notes:
+- `ai_models_gone` (migration 0185), keyed by backend and model (`""` for the backend's
+  default), so changing the model clears it with no extra step. Only a `PermanentError`
+  with status 404 counts. The router skips a gone entry as a `PermanentError`, so a chain
+  that's all gone reads as "needs setup".
+- `themi.core.model_gone.ModelGone` (a router `gone_listeners` hook) tells the backend's
+  owner ("Your …") and each admin ("Michael's …") once (`ai-model-gone:<backend>:<model>`).
+  It's worded without "pick another…", which gentle phrasing rewrote.
+- The AI page's backend row shows "Not found: <model>" (warn chip). A model set only on a
+  chain slot shows on its backend's row too.
+- **Michael:** change the Gemini fallback model now; after the update, the Pi will say so on
+  its next 404 anyway.
 
 ## Conversation mode
 
