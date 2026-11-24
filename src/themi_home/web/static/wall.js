@@ -207,6 +207,78 @@
   document.addEventListener("htmx:afterSwap", function () {
     if (document.querySelector("#wall-view [data-focus-finished], #wall-view [data-focus-over]")) {
       if (!ending) ending = setTimeout(function () { ending = null; closeView(); }, 10000);
+      stopMusic();  // the session's over: its loop stops with it
+    }
+    // Closed by hand and then ended elsewhere: the columns' redraw has no chip left.
+    if (!document.querySelector(".wall-focus-chip, #wall-view [data-focus-running]")) stopMusic();
+    musicShown();
+  });
+
+  // F60e: the built-in loop plays from the frame through #wall-music, which lives outside
+  // the sheet so a tap or a redraw doesn't stop it. Nothing plays until Play is tapped.
+  // The choice and volume are kept as /session keeps them (POST /wall/focus/music).
+  function player() { return document.getElementById("wall-music"); }
+  function musicBox() { return document.querySelector("#wall-view [data-focus-music]"); }
+  function saveMusic(fields) {
+    var box = musicBox();
+    if (!box) return;
+    fields.member = box.getAttribute("data-member");
+    var token = (JSON.parse(document.body.getAttribute("hx-headers") || "{}"))["X-CSRF-Token"] || "";
+    fetch("/wall/focus/music", {
+      method: "POST",
+      headers: { "X-CSRF-Token": token, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(fields).toString()
+    }).then(function () {}, function () {});
+  }
+  function chosenSrc(box) {
+    var sound = box.querySelector("[data-music-sound]");
+    return sound ? sound.options[sound.selectedIndex].getAttribute("data-src") : "";
+  }
+  function musicShown() {
+    var box = musicBox(), audio = player();
+    if (!box || !audio) return;
+    var on = !audio.paused;
+    var play = box.querySelector("[data-music-play]");
+    play.textContent = on ? "Pause" : "Play";
+    play.setAttribute("aria-pressed", on ? "true" : "false");
+    var volume = box.querySelector("[data-music-volume]");
+    if (volume) audio.volume = Number(volume.value) / 100;
+  }
+  function stopMusic() {
+    var audio = player();
+    if (audio && !audio.paused) audio.pause();
+  }
+  document.addEventListener("click", function (event) {
+    var play = event.target.closest && event.target.closest("[data-music-play]");
+    if (!play) return;
+    var box = musicBox(), audio = player();
+    if (!box || !audio) return;
+    if (audio.paused) {
+      var src = chosenSrc(box);
+      if (src && audio.getAttribute("src") !== src) audio.setAttribute("src", src);
+      audio.play().then(function () { musicShown(); saveMusic({ played: "1" }); },
+                        function () { musicShown(); });
+    } else {
+      audio.pause();
+      musicShown();
+    }
+  });
+  document.addEventListener("change", function (event) {
+    var box = musicBox(), audio = player();
+    if (!box || !audio || !box.contains(event.target)) return;
+    if (event.target.matches("[data-music-sound]")) {
+      var playing = !audio.paused;
+      audio.setAttribute("src", chosenSrc(box));
+      if (playing) audio.play().then(function () {}, function () { musicShown(); });
+      saveMusic(playing ? { sound: event.target.value, played: "1" } : { sound: event.target.value });
+    } else if (event.target.matches("[data-music-volume]")) {
+      saveMusic({ volume: event.target.value });
+    }
+  });
+  document.addEventListener("input", function (event) {
+    var audio = player();
+    if (audio && event.target.matches && event.target.matches("#wall-view [data-music-volume]")) {
+      audio.volume = Number(event.target.value) / 100;
     }
   });
 

@@ -8,6 +8,13 @@
 </div>
 {% if state.part %}<p class="wall-sub">{{ state.part }}</p>{% endif %}
 {% if state.of %}<p class="wall-sub">Step {{ state.step }} of {{ state.of }}</p>{% endif %}
+{% if state.picture %}{#- F60e: the step's picture, through the wall's own route -#}
+<figure class="focus-picture" data-status="{{ state.picture.status }}">
+  {% if state.picture.status == "ready" %}<img src="{{ state.picture.url }}" alt="">
+  {% elif state.picture.status == "making" %}<span class="wall-sub">Drawing this step…</span>{% endif %}
+</figure>
+{% endif %}
+{% if state.note %}<p class="wall-sub">{{ state.note }}</p>{% endif %}
 <p class="focus-line">{{ state.line }}</p>
 <div class="sheet-actions focus-moves">
   {% for b in state.buttons %}

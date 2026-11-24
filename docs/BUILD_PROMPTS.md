@@ -18234,10 +18234,20 @@ Notes:
 - Tests changed because the rules moved: `tests/unit/test_session_page_assets.py` and
   `tests/unit/test_cook_company.py` read the scene's rules from `scene.css` (its tokens
   still from `themi.css`).
-- Not on the wall: music (a shared room), the Guided step pictures (they load through
-  `/session`'s signed-in header), the break chat, and switching mode (still in chat and on
-  `/session`).
-- Tests: `tests/integration/test_wall_focus.py` (9).
+- Added after (Michael, 2026-11-24): the built-in loop and the step pictures.
+  - Music: the loops play from the frame through one `<audio id="wall-music">` on the wall
+    page, outside the sheet, so a tap or a redraw doesn't stop it. The sheet has Play, the
+    sound and the volume; they're kept as `/session` keeps them (`POST /wall/focus/music`:
+    `member`, `sound`, `volume`, `played`, which notes the session's music). The loop stops
+    when the session ends, or once the columns' redraw has no session chip left.
+  - Step pictures: `GET /wall/focus/picture/{session}/{index}?member=` serves them to the
+    frame, for the session's own person only (`/session`'s route needs that person signed
+    in). `wall_focus.on_the_wall` points the state's picture address at it; "Drawing this
+    step…" while it's made, and the cap's note.
+- Not on the wall: Spotify (it plays on the person's own device, through the trust tiers),
+  the break chat, and switching mode (still in chat and on `/session`).
+- Tests: `tests/integration/test_wall_focus.py` (12) and
+  `tests/integration/test_wall_focus_browser.py` (1, headless Chrome, playing stood in for).
 - **Setup:** update the Pi.
 
 ## Conversation mode

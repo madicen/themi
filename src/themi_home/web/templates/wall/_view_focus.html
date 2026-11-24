@@ -21,6 +21,16 @@
 <div class="focus-live" data-focus-running hx-get="/wall/focus/live?member={{ member.id }}" hx-trigger="every 5s" hx-swap="innerHTML">
   {% include "wall/_focus_live.html" %}
 </div>
+{% if state.music %}{#- F60e: the built-in loop, from the frame. The player is on the wall
+    itself (#wall-music), so a tap or a redraw here doesn't stop it. -#}
+<section class="focus-music" aria-label="Music" data-focus-music data-member="{{ member.id }}">
+  <button type="button" class="sheet-button" data-music-play aria-pressed="false">Play</button>
+  <select name="sound" aria-label="Which sound" data-music-sound>
+    {% for track in state.music.loops %}<option value="{{ track.key }}" data-src="{{ asset('home/audio/' ~ track.file) }}"{% if track.key == state.music.sound %} selected{% endif %}>{{ track.name }}</option>{% endfor %}
+  </select>
+  <input type="range" min="0" max="100" value="{{ state.music.volume }}" aria-label="Volume" data-music-volume>
+</section>
+{% endif %}
 {% else %}
 <div class="talk-head">
   {{ head("Body double", "Hi, " ~ member.name, "Themi keeps you company while you do it.") }}

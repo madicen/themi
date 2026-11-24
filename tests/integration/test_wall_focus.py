@@ -141,3 +141,62 @@ async def test_a_routine_with_something_open_is_offered_and_goes_step_by_step(
     (row,) = session_rows(wall)
     assert row["mode"] == "guided" and row["routine_id"] == evening.id
     assert "Take Meds" in running
+
+
+# ----- step pictures and the built-in loop on the wall -----------------------------------
+
+
+async def guided_kitchen(wall: Scenario, owner: str = "Husband") -> int:
+    member = wall.member(owner)
+    board = wall.app.services.get(keys.taskboard)
+    made = await board.create(member, "Clean the kitchen", "physical", 3)
+    await board.update(made.id, member, steps=["Clear the counter", "Sweep"])
+    bd = wall.app.services.get(keys.body_double)
+    session, _, _ = await bd.start(member, mode="guided", task=board.get(made.id))
+    await wall.run_jobs()  # the step pictures (the scripted model's PNG)
+    return session.id
+
+
+async def test_the_steps_picture_shows_through_the_walls_own_route(wall: Scenario) -> None:
+    from tests.fakes.scripted_provider import TINY_PNG
+
+    husband, erin = wall.member("Husband"), wall.member("Erin")
+    session_id = await guided_kitchen(wall)
+    live = (await get(wall, f"/wall/focus/live?member={husband.id}")).text
+    found = re.search(r'<img src="(/wall/focus/picture/[^"]+)"', live)
+    assert found is not None and f"member={husband.id}" in found[1]
+    got = await get(wall, found[1].replace("&amp;", "&"))
+    assert got.status_code == 200 and got.content == TINY_PNG
+    theirs = await get(wall, f"/wall/focus/picture/{session_id}/0?member={erin.id}")
+    assert theirs.status_code == 404  # only for the session's own person
+    assert (await get(wall, f"/wall/focus/picture/{session_id}/0")).status_code == 404
+
+
+async def test_the_running_sheet_has_the_loop_and_the_wall_its_player(wall: Scenario) -> None:
+    husband = wall.member("Husband")
+    await post(wall, "/wall/focus/start", member=str(husband.id), what="typed",
+               typed="the dishes", mode="silent", minutes="0")  # fmt: skip
+    sheet = (await get(wall, f"/wall/focus?member={husband.id}")).text
+    assert "data-focus-music" in sheet and "data-music-play" in sheet
+    assert re.search(r'<option value="[a-z]+" data-src="[^"]+\.(?:mp3|ogg|m4a|opus)', sheet)
+    # the player is the wall's, outside the sheet, so a redraw doesn't stop it
+    assert '<audio id="wall-music"' in await screen(wall)
+    assert "<audio" not in sheet
+
+
+async def test_the_walls_loop_choice_is_kept_and_noted_once_it_plays(wall: Scenario) -> None:
+    from themi_home.body_double import BodyDoublePreferences
+
+    husband = wall.member("Husband")
+    await post(wall, "/wall/focus/start", member=str(husband.id), what="typed",
+               typed="the dishes", mode="silent", minutes="0")  # fmt: skip
+    kept = await post(wall, "/wall/focus/music", member=str(husband.id), sound="rain",
+                      volume="30", played="1")  # fmt: skip
+    assert kept.status_code == 204
+    prefs = wall.app.store.preferences(husband.id, BodyDoublePreferences)
+    assert prefs.body_double_sound == "rain" and prefs.body_double_volume == 30
+    (row,) = session_rows(wall)
+    assert row["music"] == "builtin:rain"
+    bad = await post(wall, "/wall/focus/music", member=str(husband.id), volume="loud")
+    assert bad.status_code == 400
+    assert (await post(wall, "/wall/focus/music", member="999")).status_code == 404

@@ -94,3 +94,14 @@ def chip(services: Services, member: Member) -> str:
         return f"Body double · {max(1, math.ceil(left.total_seconds() / 60))} min left"
     gone = now - datetime.fromisoformat(timer["from"])
     return f"Body double · {int(gone.total_seconds() // 60)} min in"
+
+
+def on_the_wall(state: dict[str, Any], member_id: int) -> dict[str, Any]:
+    """The session page's state with its step picture's address turned into the wall's,
+    which the frame may load for this person (/session's needs them signed in)."""
+    picture = state.get("picture")
+    if not picture or not picture.get("url"):
+        return state
+    url = str(picture["url"]).replace("/session/pictures/", "/wall/focus/picture/", 1)
+    url += ("&" if "?" in url else "?") + f"member={member_id}"
+    return {**state, "picture": {**picture, "url": url}}

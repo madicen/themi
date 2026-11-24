@@ -27,7 +27,13 @@ from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
 
 from themi import clock
 from themi.accounts import Member
@@ -662,6 +668,8 @@ def routes(kit: Kit) -> APIRouter:
             talking.keep(token, member.id)
         bd = wall_focus.body_double(kit.app.services)
         state = bd.state(member) if bd is not None and member is not None else None
+        if state is not None and member is not None:
+            state = wall_focus.on_the_wall(state, member.id)
         running = bool(state and state.get("active")) and not finished
         return kit.page(
             request, "wall/_view_focus.html", member=member, state=state, finished=finished,
@@ -697,7 +705,54 @@ def routes(kit: Kit) -> APIRouter:
         bd = wall_focus.body_double(kit.app.services)
         if chosen is None or bd is None:
             return HTMLResponse("", status_code=404)
-        return kit.page(request, "wall/_focus_live.html", member=chosen, state=bd.state(chosen))
+        state = wall_focus.on_the_wall(bd.state(chosen), chosen.id)
+        return kit.page(request, "wall/_focus_live.html", member=chosen, state=state)
+
+    @router.get("/wall/focus/picture/{session_id:int}/{index:int}")
+    def focus_picture(request: Request, session_id: int, index: int, member: str = "") -> Response:
+        """A step's picture on the wall: the frame's, for the session's own person only
+        (the session page's route needs that person signed in)."""
+        if viewer(request) is None:
+            return gone()
+        chosen = speaker(member)
+        bd = wall_focus.body_double(kit.app.services)
+        pictures = getattr(bd, "pictures", None)
+        found = bd.get(session_id) if bd is not None else None
+        if chosen is None or pictures is None or found is None or found.member_id != chosen.id:
+            return Response(status_code=404)
+        row = pictures.row(session_id, index)
+        path = pictures.path(row) if row is not None else None
+        if row is None or path is None:
+            return Response(status_code=404)
+        return FileResponse(path, media_type=row["mime_type"] or "image/png",
+                            headers={"Cache-Control": "private, max-age=3600"})  # fmt: skip
+
+    @router.post("/wall/focus/music")
+    async def focus_music(request: Request) -> Response:
+        """The built-in loop on the wall: their choice and volume, kept as /session keeps
+        them, and noted as the session's music once it plays."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        chosen = speaker(form.get("member", ""))
+        bd = wall_focus.body_double(kit.app.services)
+        if chosen is None or bd is None:
+            return Response(status_code=404)
+        from themi.accounts.store import InvalidValue
+        from themi_home.body_double import BodyDoublePreferences
+        from themi_home.body_double_music import LOOPS, set_sound
+
+        store = kit.app.services.store
+        try:
+            volume = int(form["volume"]) if form.get("volume", "") != "" else None
+            set_sound(store, chosen, form.get("sound") or None, volume)
+        except (ValueError, InvalidValue):
+            return Response(status_code=400)
+        if form.get("played"):
+            member = store.get_member(chosen.id)
+            loop = LOOPS[store.preferences(member.id, BodyDoublePreferences).body_double_sound]
+            bd.note_music(member, f"builtin:{loop.key}", loop.name)
+        return Response(status_code=204)
 
     @router.post("/wall/focus/start", response_class=HTMLResponse)
     async def focus_start(request: Request) -> Response:
