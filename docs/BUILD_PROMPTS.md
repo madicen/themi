@@ -347,6 +347,14 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [x] 2026-11-22 |
 | F58f | Feedback: "6:30–8:30 pm weekdays" is read, and hours in a place's note or a fact count | Feedback | [x] 2026-11-23 |
 | SW1 | Feedback: the Safeway helper's popup shows Themi's grocery list, an icon, no old fills | Feedback | [x] 2026-11-23 |
+| F59a | Feedback: "in-laws" finds the saved in-laws' house; "Not sure where" never ends "Done." | Feedback | [ ] |
+| F59b | Feedback: where they leave from is never also where they're going (no "0 min") | Feedback | [ ] |
+| F59c | Idea: the wall keeps each person's day until their rollover, and their chart's limit | Feedback | [ ] |
+| F59d | Idea: the note at the top of the wall has a ✕ to dismiss it in place | Feedback | [ ] |
+| F59e | Idea: any household list's card on the wall opens, to see it all and tick things off | Feedback | [ ] |
+| F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [ ] |
+| F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [ ] |
+| F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -17418,6 +17426,342 @@ Notes (2026-11-23):
   helper as a ZIP itself, so it always matches the running version.
 - **Setup:** update the Pi (for `/api/safeway/list` and the guide), then reload the
   extension on `chrome://extensions` and the Safeway tab.
+
+### F59a · Feedback (2026-11-23): "in-laws" finds the saved in-laws' house, and "Not sure where" never ends "Done."
+Status: [ ]
+Depends on: F57b, F45e
+Read first: `themi/standard/places.py` (`_words`, `Places.find`, `mentioned`, `search`, `_kin`,
+`named_place`, `IN_LAWS`, `KIN`); `themi_google/travel.py` (`_named_origin`, `address_for`,
+`NOT_SURE_TEXT` uses); `themi/core/agent.py` (the "Done." fallback, `_honest`, F42c's and
+F45e's notes); F57b's Notes. From Michael's 👎 on reply 547 (2026-11-23, 4:52 pm, "It's one
+of the places in your memory" → "Done.").
+
+What the Pi shows: place 2 is family-wide, "Erin's Parent's House", aliases "In-Law's House,
+in-law’s", at 790 La Para Ave. At 4:52 pm Michael asked "When should I leave if I'm at my
+in-law's?". Reply 546 ran `drive_time {"from": "in-laws"}` → "Not sure where 'in-laws' is"
+and `search_memory "in-laws"` → nothing, so Themi asked "Where are your in-laws?". He said it
+was in memory (reply 547): `search_memory` for "in-laws", "parents", "Stanford", then
+`drive_time` from "in-laws" again, and the reply was "Done.". Reply 548 asked again; only
+"My in-law's house" (reply 549) got through. Three gaps:
+- `_words` keeps the plural: "in-laws" is "in laws", while "In-Law's House" and "in-law’s"
+  are "in law house" and "in law". `find` and `mentioned` need whole words, and `search`
+  needs a shared word longer than 2 letters ("laws" ≠ "law"), so none of them match.
+- A kin phrase that misses `find` goes to `named_place`'s kin path, which reads only facts.
+  A saved place named for kin ("Erin's Parent's House": parent, of Erin, Michael's partner)
+  is never tried.
+- `drive_time` returning `NOT_SURE_TEXT` counts as `ok`, so an empty model reply after it
+  falls back to "Done.".
+
+Build:
+- Bug fix: start with the failing tests below.
+- Names compare as words with a plural or possessive "s" dropped from either side ("in-laws",
+  "in-law's", "in-law’s", "in laws" are one name; "Stanford's" stays "stanford"), in
+  `find`, `mentioned` and `search`. Short words ("bus", "gas") keep their "s": only words
+  of 4 or more letters lose it.
+- A kin phrase ("in-laws", "my in-law's", "Erin's parents", "my mom's") is matched against
+  saved places by kin as well as by name: a place whose name or other name says the same
+  kin, for the same person (in-laws = the partner's parents, as `named_place` has it), is
+  that place. It's tried before the facts.
+- `search_memory` finds such a place for a kin query, the way it finds Stanford.
+- A tool result that asks for something (`NOT_SURE_TEXT`, "Which event, or which address?")
+  makes the outcome `asked`, not `ok`. An empty reply after it says the question in
+  Themi's words ("I don't have an address for in-laws yet. What is it?"), never "Done.".
+
+Tests (start with failing ones): with place 2 as on the Pi, `Places.find(michael, x)` is
+place 2 for "in-laws", "in-law's", "my in-laws", "the in laws", "In-Law's House" and
+"Erin's parents"; it's None for Erin asking "in-laws" (they're her parents: "my parents" is
+hers). `search(michael, "in-laws")` has place 2. `named_place` for "in-laws" gives 790 La
+Para Ave with no facts at all. Every existing places, travel and memory test keeps passing.
+Agent: a turn whose only tool result is `NOT_SURE_TEXT` and whose model text is empty never
+ends "Done.".
+Scenario: reply 546's turn, faked: place 2 saved; Michael on Mon 23 Nov at 4:52 pm asks
+"When should I leave if I'm at my in-law's?"; the model calls `drive_time {"from":
+"in-laws", "event": "Visit Erin at Stanford"}` and the answer has a leave time from 790 La
+Para Ave. A second scenario: an unknown "the cabin" with an empty model reply asks for its
+address, not "Done.".
+
+Data/Setup: update the Pi. Label reply 547 `themi feedback --wrong-tool 547 drive_time`
+(it ran, and should have found the place). Nothing to save: place 2 is right.
+
+### F59b · Feedback (2026-11-23): where they leave from is never also where they're going, so no "0 min"
+Status: [ ]
+Depends on: F46b, F46c
+Read first: `themi_google/travel.py` (`drive_time`, `drive_to_event`, `_given_place`,
+`_named_origin`, `_duration`); F46b's and F46c's Notes. From the conversation saved with
+Michael's ideas #255–#258 (2026-11-23, 4:53 pm, "There's no way it's 0 minutes").
+
+What the Pi shows: reply 549, "My in-law's house": `drive_time {"event": "Visit Erin at
+Stanford", "from": "790 La Para Ave, Palo Alto, CA 94306", "address": "790 La Para Ave,
+Palo Alto, CA 94306"}`. The model put the starting point in `address` too. Since F46b,
+`address` is where the event is, so the route was 790 La Para Ave to itself: "about 0 min
+… leave there around 6:20 pm". Reply 550 had the event's address and gave 19 min.
+
+Build:
+- Bug fix: start with the failing tests below.
+- In `drive_time` with an event: when `address` is the same place as `from` (same address
+  after `address_for`, or the same saved place), `address` is dropped and the event's own
+  location is used. Nothing is remembered from it (F46b's "remember for that place" doesn't
+  run).
+- A route of under a minute between two different addresses is not said as "0 min": the
+  tool fails with "Those two addresses came out the same place on the map; check the
+  address." A route from a place to itself is never asked of the map.
+- The `address` parameter's description says: where the event is, only when the calendar
+  doesn't say or they gave a different one; never where they leave from (that's `from`).
+
+Tests (start with failing ones): reply 549's arguments, faked (fake maps, the Stanford event
+at 200 S Pasteur Dr): the result uses 200 S Pasteur Dr and the fake's 19 min, and nothing is
+saved for the event's place. A fake route of 0 min between two different addresses fails
+with the "same place" words. Existing travel tests keep passing; the tool schema golden
+changes for the description.
+Scenario: none beyond the tool test (the 4:53 pm turn is the same call).
+
+Data/Setup: update the Pi. Nothing else.
+
+### F59c · Idea (2026-11-23): the wall keeps each person's day until their rollover, and their chore chart's limit
+Status: [ ]
+Depends on: WL9d, F34j, C2d
+Read first: `themi_home/wall_view.py` (`columns`, `_person`, `_together`, `_done_tasks`,
+`_done_today`, `today_line`, `week`, `note`'s `_chore_note`); `themi_home/wall_views.py`
+(`person`, `_tasks`, `together`, `day`, `list_view`); `themi_home/chore_chart.py`
+(`ChartQueue.chart_for`, `up_for`, `held`, `ChartPreferences.chart_limit`);
+`themi/localtime.py` (`member_day`, `member_day_start`); F34j's and C2d's Notes. From
+Michael's idea #255 (2026-11-23, 9:00 pm, "our wall frame doesn't follow the same rules
+we've set up for cozyla").
+
+What the Pi shows: Michael's `day_ends` is 4 (his day rolls over at 4 am), Erin's is 0.
+Erin's chart limit is 1 (one pick in `cozyla_chart_picks`). The wall ignores both:
+- `columns` uses `self.now().date()`, and `_done_tasks` and `_done_today` count from
+  midnight. After midnight, tomorrow's chores come up in Michael's column and what he did
+  that evening drops out of "done", though Telegram and the chore chart still treat it as
+  his day (F34j). Routines already use `routines.today(member)`, so the routine section is
+  right and the rest isn't.
+- `_person` shows every chore due today or before. The chore chart shows Erin one at a time
+  (`chart_for`: the picks plus the important ones), and the rest wait in Themi without
+  nudges. The wall lists them all.
+
+Build:
+- Each person's column, Person page (WL9d) and List view count their day as `member_day`:
+  chores due "today", "since" words, done today, the fold, and "N done tonight".
+- The Together column and the top (Today, the week ahead, the note's "still open from
+  before today") use the household's day: the latest rollover among the people on the
+  wall, so nothing of the day closes before everyone's day has ended. A tick on the wall
+  after midnight and before the rollover counts for that day, as a tick in Telegram does
+  (F34j).
+- A person with a chart limit sees on the wall exactly what the chart shows:
+  `ChartQueue.chart_for(member, their day)` in their column and Person page, in its order.
+  The rest aren't shown or counted (no "+N waiting": the wall stays calm). Without a limit,
+  or without the chore chart module, it stays as today.
+- The night view's "a few things from today" uses each person's day too.
+
+Tests: with the clock at Tue 24 Nov 00:30 and Michael's `day_ends` 4: a chore of his due Tue
+isn't in his column, his Mon evening tick still shows as done, and the summary still counts
+it; Erin's column (`day_ends` 0) has Tuesday's. At 04:30 Michael's has Tuesday's. Ticking
+his Monday chore at 00:30 completes it for Monday. Erin with a limit of 1 and three chores
+due: her column shows the pick only, plus a high-importance one; with limit 0, all three.
+Existing wall tests keep passing (those that build a day at noon don't move).
+Scenario: Michael at 1:15 am on the wall ticks "Cycle Dishwasher" from Monday's evening
+routine and "Take out trash" (a Monday chore); both count for Monday, and Tuesday's chores
+come up at 4 am.
+
+Data/Setup: update the Pi. Mark #255 reviewed once live.
+
+### F59d · Idea (2026-11-23): the note at the top of the wall has a ✕ to dismiss it in place
+Status: [ ]
+Depends on: WL8, F55e
+Read first: `themi_home/web/templates/wall/_note.html`, `_view_note.html`;
+`themi_home/wall.py` (`note_answer`, `QUIET_ALERT_HOURS`, `LATER_TONIGHT`);
+`themi_home/wall_view.py` (`note`, `quiet`, `_quiet`); `wall.css` (`.wall-note`). From
+Michael's idea #256 (2026-11-23, 9:01 pm, "dismiss the messages at the top without having
+to tap into them").
+
+What the Pi shows: the note is one big `<button>` that opens the Note view. Its answers
+(They're in / Later tonight / In the morning / Got it) are only in the view, so putting a
+note away takes two taps and a sheet.
+
+Build:
+- The note card gets a ✕ at its right end (a separate button, a tap target of at least
+  48 px, `aria-label="Dismiss"`). Tapping the rest of the card still opens the Note view.
+- ✕ posts `answer=dismiss` to `/wall/view/note`, which quiets the note without asking
+  anything: a chore note until the next morning (as "In the morning": it's in the morning
+  message, nothing is marked done); a parcel or alert note for `QUIET_ALERT_HOURS` (as "Got
+  it"). No sheet opens; the note fades out and the next note, if any, takes its place on the
+  next refresh (`wall-refresh`).
+- It's a quiet, not a done: nothing goes through the trust tiers, nothing is sent.
+
+Tests: `_note.html` renders the ✕ with its label, outside the open button.
+`POST /wall/view/note` with `answer=dismiss` quiets a chore note until 6 am tomorrow and a
+parcel note for `QUIET_ALERT_HOURS`, returns no sheet, and sends `HX-Trigger: wall-refresh`;
+`/wall/part/note` then shows the next note or nothing. Nothing is staged.
+Scenario: none (the frame's look). Michael's tap on the frame is the check.
+
+Data/Setup: update the Pi. Mark #256 reviewed once live.
+
+### F59e · Idea (2026-11-23): any household list's card on the wall opens it, to see it all and tick things off
+Status: [ ]
+Depends on: WL9b, WL5b
+Read first: `themi_home/wall_view.py` (`smalls`, `_small`, `SmallList`, `COOKING`);
+`themi_home/web/templates/wall/_smalls.html`, `_view_list.html`; `themi_home/wall_views.py`
+(`list_view`, `ListView`, `ListRow`); `themi_home/wall.py` (`list_page`, `list_change`,
+`stage_groceries`); `themi/standard/lists.py` (`tick`, `remove`, `tick_list_items`). From
+Michael's idea #254 (2026-11-23, 4:05 pm, with a photo of the frame).
+
+What the Pi shows: report-254-1 is the wall's bottom strip: the card "THINGS TO BRING ERIN IN
+THE PSYCH WARD", four items "+…" and "7 items", with no "Open list" (the card next to it,
+Things to cook, has "Open ideas →"). `_smalls.html` makes a household list other than
+Groceries and Things to cook a plain `<section>` with nothing to open (WL9b's "a card with
+its count and nothing to open"). So the list can't be read in full or ticked off.
+
+Build:
+- Every small list's card opens: a household list's card is a button with "Open list →", as
+  Groceries' is, opening a List view `list/<id>`.
+- The List view for a named list: its title, every open item as a row with a tick box, and
+  "Ticked lately" (the last week's ticks, as the to-do lists have). Tapping a box ticks the
+  item off for everyone (`lists.tick`, through the trust tiers as the wall's other ticks go,
+  by the person chosen the way Groceries' changes are); tapping a ticked one in "Ticked
+  lately" puts it back. An add box at the foot adds an item to that list.
+- Only household lists open (not personal ones, as `smalls` already picks). A list removed
+  or emptied since the screen drew closes the view with "That list is empty now."
+- The card's "+N more" stays as it is.
+
+Tests: `smalls` gives the named list `opens="list"` with its id, and `_smalls.html` renders it
+as a button to `/wall/view/list/list/<id>`. `GET` that view lists all 7 items of a list like
+the Pi's. `POST` a tick stages and ticks the item; the view moves it to "Ticked lately"; an
+un-tick puts it back; an add adds it. A personal list's id gives 404.
+Scenario: Michael, on the wall, opens "Things to bring Erin in the psych ward", ticks
+"pillow" and "pajamas", and Telegram's `show_lists` for it then shows the other five.
+
+Data/Setup: update the Pi. Mark #254 reviewed once live.
+
+### F59f · Idea (2026-11-23): the calendar on the wall opens its own screen: day by day, and a month to jump around
+Status: [ ]
+Depends on: WL3, WL5a, F55f
+Read first: `themi_home/wall_views.py` (`day`, `DayView`, `DAYS_AHEAD`, `_due`,
+`_day_weather`); `themi_home/wall_view.py` (`events`, `today_line`, `week`,
+`week_calendars`, `lay_out_today`); `themi_home/web/templates/wall/_today.html`,
+`_week.html`, `_view_day.html`, `_timeline.html`, `_sheet.html`; `themi_home/wall_calendars.py`.
+From Michael's idea #258 (2026-11-23, 9:03 pm, "tapping the calendar for today or the week
+ahead should go to a dedicated screen").
+
+What the Pi shows: today's card isn't a tap target as a whole (only its events open the Event
+view). A day in the week ahead opens the Day view, a sheet over the wall, from today to 13
+days out (`DAYS_AHEAD`) and never back before today. There is no month.
+
+Build:
+- A calendar screen, `/wall/calendar`, full screen over the wall (as a sheet, with a close
+  button and the wall's dark or light look), with two modes:
+  - **Day**: the whole day's timeline (all hours with events, not only the wall's window),
+    all-day chips, "Due that day" and the weather, as the Day view has them. ‹ and › move a
+    day at a time; a swipe left or right does too. "Today" comes back to today.
+  - **Month**: a month grid, Monday first, each day with up to three coloured event chips
+    and "+N", today ringed. ‹ and › move a month; tapping the month's name opens a short
+    picker of months (the past 6 to the next 12). Tapping a day opens it in Day mode.
+- Tapping today's card (anywhere but an event) opens the screen on today in Day mode; tapping
+  a day in the week ahead opens that day; a "Month" toggle switches modes.
+- Days from 6 months back to 12 months ahead can be shown. Past days show their events and
+  no weather; days past the forecast say "Not in the forecast yet", as now.
+- The week ahead's calendar chips (F55f) apply here too: a hidden calendar is hidden on the
+  calendar screen, and the screen has the same chips.
+- Tapping an event opens the Event view, as today.
+- The events come from the calendars the wall already reads; a month's are fetched once and
+  kept for 5 minutes, so moving around doesn't call Google each tap.
+
+Tests: `GET /wall/calendar?day=2026-11-23` lists the day's events in order, with ‹ and › to
+the 22nd and 24th; `?day=` 7 months back is refused (404) and 5 months back works.
+`?month=2026-11` gives a grid starting Mon 26 Oct, with "+N" past three events. A hidden
+calendar's events are left out of both. `_today.html` and `_week.html` link to it. Fetching
+a month twice inside 5 minutes calls the fake calendar once.
+Scenario: none (the frame). Michael's look on the frame is the check.
+
+Data/Setup: update the Pi. Mark #258 reviewed once live.
+
+### F59g · Idea (2026-11-23): talk to Themi from the wall, typed or said
+Status: [ ]
+Depends on: WL1, CK5, CK8
+Read first: `themi_home/web/session_pages.py` (`cook_chat`, `cook_say`);
+`themi_home/cooking.py` (`page_chat_event`); `themi_home/cooking_voice.py`;
+`themi/channels/events.py` (`InboundEvent.from_page`); `themi/ai/router.py` (`transcribe`);
+the Telegram voice-note path that calls it; `themi_home/wall.py` (`viewer`, `posted`,
+`sheet`); `themi_home/web/templates/wall/home.html`, `_top.html`. From Michael's idea #257
+(2026-11-23, 9:02 pm, "a way to send messages to themi via voice or text").
+
+What the Pi shows: nothing on the wall sends a message; the frame is shared, so the wall
+doesn't know who's talking. The cook screen's Ask Themi (CK5) is the same idea for one
+signed-in person: the line goes to their own chat with Themi, and answers show on the page
+and in Telegram.
+
+Build:
+- A "Talk to Themi" button in the wall's top bar opens a sheet: "Who's this?" with each
+  person's chip in their colour. The choice is kept for 5 minutes of use, then asked again
+  (a chip in the sheet's corner changes it).
+- A text box and Send. The line goes in as that person's own message to Themi
+  (`InboundEvent` with `from_page=True`, as CK5's), so it does everything a Telegram
+  message does, through the same agent, trust tiers and outbox. Themi's answer (and any
+  approval card's text) shows in the sheet under the line as it comes, and in Telegram as
+  usual. Approval cards are answered in Telegram; the sheet says "I've sent Michael the
+  card in Telegram." for one.
+- A mic button, shown only when the frame's WebView has `getUserMedia` and `MediaRecorder`:
+  press to record (up to 30 s; a second press stops), the clip goes to a new
+  `POST /wall/say` and is transcribed through `router.transcribe` as Telegram voice notes
+  are, then sent as the typed line would be. What was heard shows first. No always-on
+  listening; the first use asks the frame for the microphone.
+- The wall's device token and CSRF guard both endpoints; a revoked frame gets 410, as now.
+- The sheet's history is the last 10 lines of that person's exchange today, from what
+  Telegram has (so it matches), and clears when the sheet closes.
+
+Tests: `POST /wall/talk` with a member and text hands the handler an `InboundEvent` for that
+member with `from_page=True`; without a member, 400; a stranger's member id, 404; no token,
+410. `POST /wall/say` with a fake clip calls the fake transcriber and sends its words the
+same way. The sheet shows a fake agent's reply. The mic button is rendered hidden and the JS
+shows it only with `getUserMedia`.
+Scenario: Michael on the wall picks his chip and types "add oat milk to groceries"; the
+grocery list has oat milk and the sheet shows Themi's answer. A said "when should I leave
+for Stanford" (fake transcriber) gets the drive-time answer.
+
+Data/Setup: update the Pi. On the frame, the first mic tap asks for the microphone: allow
+it. If the Cozyla frame has no microphone or its WebView doesn't offer one, the button
+doesn't appear and typing still works (note which it was in Notes). Mark #257 reviewed once
+live.
+
+### F59h · Idea (2026-11-23): the cook screen's timers keep their buttons in line, and any timer can go to the oven
+Status: [ ]
+Depends on: CK12, OV5
+Read first: `themi_home/web/templates/cook/_rail.html`; `themi_home/web/static/cook.css` (the
+`.cook-timer*` rules, CK12's block); `themi_home/cooking_screen.py` (the `timer` and
+`oven_timer` actions); `themi_home/cooking_oven.py` (`has_timer`, `oven_timer`);
+`themi_home/oven.py` (`set_timer`, `oven_timers`); OV5's Notes. From Michael's idea #259
+(2026-11-23, 9:16 pm, with a screenshot of "On the stove").
+
+What the Pi shows: report-259-1 is "On the stove" with one timer: "Step 3", "14:46", "of 15:00
+· remaining", the bar, and [+1] [+5] [×] on a row of their own under it (in the screenshot
+they're beside the time; treat the screenshot as the look wanted). Two things:
+- The buttons take a row of their own under the time and the bar, so a timer is taller than
+  it needs to be.
+- [Oven timer] (OV5) is offered only with a step's timer chip. A timer started from [+ Add]
+  (presets or typed) can't be sent to the oven afterwards, nor can any running timer.
+
+Build:
+- Layout: the label on top, then the time with [+1] [+5] [×] on the same row (time left,
+  buttons right), then "of 15:00 · remaining" and the bar. The buttons keep 48 px tap
+  targets. When the rail is narrower than the time and buttons side by side, they wrap
+  under the time as today.
+- Any timer the oven isn't already following (no `oven_timers` row linked to it) has a small
+  oven button with the others, shown only when `has_timer`. It sets the oven's timer to that
+  timer's time left, rounded up to a whole minute, linked to it (OV5's link, so +1, +5 and
+  cancel follow), and the screen says "The oven's timer is set too." A timer the oven
+  follows shows a small oven mark instead.
+- [+ Add] also has "Oven timer too" when `has_timer`: starting the timer sets the oven's too.
+- `cooking_oven.oven_timer` takes the cooking timer's id instead of reading `MAX(id)`.
+
+Tests: `_rail.html` puts the time and the three buttons in one row element. An `oven_timer`
+action for an existing running timer id sets the fake oven's timer to its rounded-up time
+left and links it; the same for one already linked does nothing more. [+ Add] with "Oven
+timer too" starts both. Without the oven, no oven button. The cook screen browser test (if
+it runs) finds the time and buttons on one line at the tablet width.
+Scenario: a cook session with the oven linked; Michael starts a 15-min timer from [+ Add],
+taps its oven button with 14:46 left, and the fake oven's timer is 15 min, linked; +5 on
+Themi's timer moves the oven's to 20.
+
+Data/Setup: update the Pi. Mark #259 reviewed once live.
 
 ## Conversation mode
 
