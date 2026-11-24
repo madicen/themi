@@ -1,6 +1,11 @@
+{#- Themi's note: a tap opens the Note view; F59d (idea #256): the ✕ puts it away in place
+    (a chore's until the morning, anything else for a while), with no sheet. -#}
 {% if screen.note %}
-<button type="button" class="wall-card wall-note" hx-get="/wall/view/note" hx-target="#wall-view" hx-swap="innerHTML">
-  <img class="wall-t" src="{{ asset('home/icons/icon.svg') }}" alt="">
-  <span class="wall-note-text">{{ screen.note.text }}</span>
-</button>
+<div class="wall-card wall-note">
+  <button type="button" class="wall-note-open" hx-get="/wall/view/note" hx-target="#wall-view" hx-swap="innerHTML">
+    <img class="wall-t" src="{{ asset('home/icons/icon.svg') }}" alt="">
+    <span class="wall-note-text">{{ screen.note.text }}</span>
+  </button>
+  <button type="button" class="wall-note-x" aria-label="Dismiss" hx-post="/wall/view/note" hx-vals='{"answer": "dismiss"}' hx-swap="none"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</div>
 {% endif %}

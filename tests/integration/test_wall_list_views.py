@@ -8,7 +8,10 @@ from datetime import timedelta
 
 import httpx
 
+from tests.fakes.telegram_api import FakeTelegram
+from tests.fakes.weather import FakeWeather
 from tests.fixtures.cookbook import TITLE, load, recipe
+from tests.fixtures.family import SeededFamily
 from tests.fixtures.web import web_client
 from tests.integration.test_wall_screen import frame, task, wall, words
 from tests.scenarios.harness import Scenario
@@ -254,3 +257,54 @@ async def test_in_the_morning_leaves_it_for_the_morning_message(wall: Scenario) 
     erin = wall.member("Erin")
     assert task_id in [t.id for t in summary.due(erin, summary.today(erin))]
     assert board(wall).get(task_id).status == "open"
+
+
+# ----- F59d (idea #256): the note's ✕ -------------------------------------------------------
+
+
+async def test_the_notes_x_is_its_own_button_outside_the_open_one(wall: Scenario) -> None:
+    await bins(wall)
+    note = (await get(wall, "/wall/part/note")).text
+    opener = note[note.index('class="wall-note-open"') : note.index("</button>")]
+    assert "Bring bins in" in opener and "wall-note-x" not in opener
+    assert re.search(r'class="wall-note-x" aria-label="Dismiss"[^>]*"answer": "dismiss"', note)
+
+
+async def test_the_x_puts_a_chore_note_away_until_the_morning_with_no_sheet(
+    wall: Scenario,
+) -> None:
+    task_id = await bins(wall)
+    put_away = await post(wall, "/wall/view/note", answer="dismiss")
+    assert put_away.text == "" and put_away.headers["HX-Trigger"] == "wall-refresh"
+    assert "still waiting" not in (await get(wall, "/wall/part/note")).text
+    assert board(wall).runs(task_id) == []  # a quiet, not a done
+    assert wall.app.db.scalar("SELECT COUNT(*) FROM pending_actions") == 0
+    clock.advance(timedelta(hours=20))  # 5 am tomorrow: still away
+    assert "still waiting" not in (await get(wall, "/wall/part/note")).text
+    clock.advance(timedelta(hours=1, minutes=1))  # just after 6 am
+    assert "still waiting" in (await get(wall, "/wall/part/note")).text
+
+
+async def test_the_x_puts_an_alert_away_for_a_while(
+    family: SeededFamily, fake_telegram: FakeTelegram, fake_weather: FakeWeather
+) -> None:
+    from tests.integration.test_wall_screen import with_wall
+    from themi_home.wall import QUIET_ALERT_HOURS
+
+    s = with_wall(family, fake_telegram, weather=fake_weather)
+    await s.start()
+    try:
+        s.app.db.execute(
+            "INSERT INTO family_home (id, address, lat, lon, set_at) VALUES (1, ?, ?, ?, ?)",
+            ("12 Main St", 37.70, -122.40, "2026-10-01T00:00:00+00:00"),
+        )
+        fake_weather.alert("Wind Advisory", 6, None)
+        await s.app.services.get(keys.weather).refresh()
+        assert "Wind Advisory" in (await get(s, "/wall/part/note")).text
+        await post(s, "/wall/view/note", answer="dismiss")
+        assert "Wind Advisory" not in (await get(s, "/wall/part/note")).text
+        clock.advance(timedelta(hours=QUIET_ALERT_HOURS, minutes=1))
+        await s.app.services.get(keys.weather).refresh()
+        assert "Wind Advisory" in (await get(s, "/wall/part/note")).text
+    finally:
+        await s.stop()

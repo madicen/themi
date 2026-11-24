@@ -702,7 +702,8 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/wall/view/note", response_class=HTMLResponse)
     async def note_answer(request: Request) -> Response:
         """They're in (asks who; Both of us), Later tonight (back at 9 pm), In the morning
-        (off the wall until then: the morning message has it), Got it (an alert)."""
+        (off the wall until then: the morning message has it), Got it (an alert); F59d: the
+        card's ✕ ("dismiss"), quiet as In the morning or Got it, with no sheet."""
         form = await posted(request)
         if form is None:
             return gone()
@@ -740,6 +741,15 @@ def routes(kit: Kit) -> APIRouter:
         elif answer == "ok":
             view.quiet(note.key, now + timedelta(hours=QUIET_ALERT_HOURS))
             said = "Got it."
+        elif answer == "dismiss":  # F59d (idea #256): the note's ✕, with no sheet
+            if note.task_id is not None:  # as "In the morning": the morning message has it
+                until = (now + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
+            else:  # as "Got it"
+                until = now + timedelta(hours=QUIET_ALERT_HOURS)
+            view.quiet(note.key, until)
+            response = HTMLResponse("")
+            response.headers["HX-Trigger"] = "wall-refresh"
+            return response
         else:
             return sheet(request, "_view_note.html", view=found)
         response = sheet(request, "_view_note.html", view=replace(found, said=said))

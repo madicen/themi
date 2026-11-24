@@ -350,7 +350,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F59a | Feedback: "in-laws" finds the saved in-laws' house; "Not sure where" never ends "Done." | Feedback | [x] 2026-11-23 |
 | F59b | Feedback: where they leave from is never also where they're going (no "0 min") | Feedback | [x] 2026-11-23 |
 | F59c | Idea: the wall keeps each person's day until their rollover, and their chart's limit | Feedback | [x] 2026-11-23 |
-| F59d | Idea: the note at the top of the wall has a ✕ to dismiss it in place | Feedback | [ ] |
+| F59d | Idea: the note at the top of the wall has a ✕ to dismiss it in place | Feedback | [x] 2026-11-23 |
 | F59e | Idea: any household list's card on the wall opens, to see it all and tick things off | Feedback | [ ] |
 | F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [ ] |
 | F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [ ] |
@@ -17616,7 +17616,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F59d · Idea (2026-11-23): the note at the top of the wall has a ✕ to dismiss it in place
-Status: [ ]
+Status: [x] 2026-11-23
 Depends on: WL8, F55e
 Read first: `themi_home/web/templates/wall/_note.html`, `_view_note.html`;
 `themi_home/wall.py` (`note_answer`, `QUIET_ALERT_HOURS`, `LATER_TONIGHT`);
@@ -17645,6 +17645,17 @@ parcel note for `QUIET_ALERT_HOURS`, returns no sheet, and sends `HX-Trigger: wa
 Scenario: none (the frame's look). Michael's tap on the frame is the check.
 
 Data/Setup: update the Pi. Mark #256 reviewed once live.
+
+Notes:
+- `_note.html`: the card is now a `<div class="wall-card wall-note">` holding
+  `.wall-note-open` (the old button: tap to open) and `.wall-note-x` (`aria-label="Dismiss"`,
+  `hx-swap="none"`). CSS in `wall.css`; the ✕ is 3.5rem (at least 48 px).
+- `note_answer` `answer=dismiss`: a chore note quiet until 6 am tomorrow, anything else for
+  `QUIET_ALERT_HOURS`. It returns an empty body with `HX-Trigger: wall-refresh`. Nothing is
+  staged or marked done.
+- Tests: 3 in `tests/integration/test_wall_list_views.py` (the button's place, a chore note
+  until the morning, a weather alert for 12 hours).
+- **Setup:** update the Pi. The frame picks up the new template on its next refresh.
 
 ### F59e · Idea (2026-11-23): any household list's card on the wall opens it, to see it all and tick things off
 Status: [ ]
