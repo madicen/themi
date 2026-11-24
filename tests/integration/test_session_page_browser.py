@@ -14,10 +14,12 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -105,7 +107,14 @@ async def page_in_chrome(
     has `.cook-moves`). `width` and `height`: the window's size (CK7). `before`: a script run
     before the page's own (CK10's faked Telegram); `hash`: added to the address (`#...`)."""
     assert CHROME is not None and member.telegram_user_id is not None
-    port = free_port()
+    # CI 2026-11-24: a port from `free_port` could be taken by another worker before uvicorn
+    # bound it, and uvicorn's `sys.exit` then broke that worker. The socket is bound here and
+    # handed over, so there's no gap.
+    listening = socket.socket()
+    listening.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listening.bind(("127.0.0.1", 0))
+    listening.listen()
+    port = int(listening.getsockname()[1])
     web = create_app(
         HealthSources(scenario.app.db, None, clock.now()),
         SiteContext(scenario.app, base_url=f"http://127.0.0.1:{port}", secure_cookies=False),
@@ -113,8 +122,14 @@ async def page_in_chrome(
     server = uvicorn.Server(
         uvicorn.Config(web, host="127.0.0.1", port=port, log_level="warning", lifespan="off")
     )
-    serving = asyncio.create_task(server.serve())
-    debug = free_port()
+
+    async def serve() -> None:
+        try:
+            await server.serve(sockets=[listening])
+        except SystemExit as exc:  # never let uvicorn end the test worker
+            raise RuntimeError(f"the test server didn't start (exit {exc.code})") from None
+
+    serving = asyncio.create_task(serve())
     errors = tempfile.TemporaryFile()  # noqa: SIM115 - closed in the finally below
     # Each Chrome gets its own profile, deleted when it exits (they were left behind, tens
     # of MB each, and filled the disk on 2026-11-10). Chrome's own temp files go in it too.
@@ -124,7 +139,7 @@ async def page_in_chrome(
     chrome = subprocess.Popen(
         [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
          "--no-first-run", "--disable-breakpad", "--disk-cache-size=1",
-         f"--remote-debugging-port={debug}", f"--user-data-dir={profile}",
+         "--remote-debugging-port=0", f"--user-data-dir={profile}",
          *([f"--window-size={width},{height}"] if width else []), "about:blank"],
         stdout=subprocess.DEVNULL, stderr=errors, env={**os.environ, "TMPDIR": profile},
         start_new_session=True,  # its own process group: its helpers are stopped with it
@@ -138,6 +153,11 @@ async def page_in_chrome(
         ticket = signed.json()["ticket"]
 
         async def targets() -> list[dict[str, Any]] | None:
+            # Chrome picks its own debugging port and writes it here (port 0: no race).
+            try:
+                debug = int(Path(profile, "DevToolsActivePort").read_text().split()[0])
+            except (OSError, ValueError, IndexError):
+                return None
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{debug}/json") as answer:
                     return [t for t in json.loads(answer.read()) if t["type"] == "page"]
@@ -169,7 +189,29 @@ async def page_in_chrome(
         stop_chrome(chrome, profile)
         errors.close()
         server.should_exit = True
-        await serving
+        try:
+            await serving
+        finally:
+            listening.close()
+
+
+async def test_a_port_taken_by_another_worker_doesnt_stop_the_page(
+    scenario: Scenario, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CI 2026-11-24: `free_port` closed its socket before uvicorn bound the port, another
+    worker's Chrome test took it in between, and uvicorn's `sys.exit(3)` broke that worker's
+    later tests. Here every port `free_port` gives is already taken."""
+    clock.unfreeze()
+    taken = socket.socket()
+    taken.bind(("127.0.0.1", 0))
+    taken.listen()
+    try:
+        monkeypatch.setattr(sys.modules[__name__], "free_port", lambda: taken.getsockname()[1])
+        await start(scenario, "Sit with me while I do the dishes", mode="quiet", minutes=30)
+        async with page_in_chrome(scenario, scenario.member("Erin"), ".session") as tab:
+            assert await tab.value("!!document.querySelector('.session')")
+    finally:
+        taken.close()
 
 
 async def test_chrome_leaves_no_profile_behind(scenario: Scenario) -> None:
