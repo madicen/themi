@@ -349,7 +349,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SW1 | Feedback: the Safeway helper's popup shows Themi's grocery list, an icon, no old fills | Feedback | [x] 2026-11-23 |
 | F59a | Feedback: "in-laws" finds the saved in-laws' house; "Not sure where" never ends "Done." | Feedback | [x] 2026-11-23 |
 | F59b | Feedback: where they leave from is never also where they're going (no "0 min") | Feedback | [x] 2026-11-23 |
-| F59c | Idea: the wall keeps each person's day until their rollover, and their chart's limit | Feedback | [ ] |
+| F59c | Idea: the wall keeps each person's day until their rollover, and their chart's limit | Feedback | [x] 2026-11-23 |
 | F59d | Idea: the note at the top of the wall has a ✕ to dismiss it in place | Feedback | [ ] |
 | F59e | Idea: any household list's card on the wall opens, to see it all and tick things off | Feedback | [ ] |
 | F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [ ] |
@@ -17552,7 +17552,7 @@ Notes:
 - Tests: 2 scenarios in `tests/scenarios/test_saved_places.py`.
 
 ### F59c · Idea (2026-11-23): the wall keeps each person's day until their rollover, and their chore chart's limit
-Status: [ ]
+Status: [x] 2026-11-23
 Depends on: WL9d, F34j, C2d
 Read first: `themi_home/wall_view.py` (`columns`, `_person`, `_together`, `_done_tasks`,
 `_done_today`, `today_line`, `week`, `note`'s `_chore_note`); `themi_home/wall_views.py`
@@ -17598,6 +17598,22 @@ routine and "Take out trash" (a Monday chore); both count for Monday, and Tuesda
 come up at 4 am.
 
 Data/Setup: update the Pi. Mark #255 reviewed once live.
+
+Notes:
+- `WallView.day_of(member)` (`member_day`), `household_day()` (the earliest of everyone's
+  days, i.e. the latest rollover) and `since(member | None)` (when that day began).
+  `_done_tasks` takes the start; each person's column, Person page, List view and "N done"
+  use theirs; Together and the note's "still open from before today" use the household's.
+- Deviation: the Today timeline, the week ahead and the night view's plan stay on the
+  clock's date. The timeline has a "now" line and the calendar is by date, so at 1 am it
+  shows the new day's events. Only the chores, to-dos and done counts follow the rollover.
+- `WallView.held(task, member)`: `ChartQueue.held` and not high importance. Held chores
+  aren't in the column, the Person page or the note's "still waiting" (the chart doesn't
+  nudge about them either). No "+N waiting".
+- Tests: `tests/integration/test_wall_days.py` (5: the rollover, the evening's done count,
+  a tick after midnight, the chart limit with an important one, the Person page). The
+  1:15 am scenario is covered by those at the WallView level, with no separate scenario.
+- **Setup:** update the Pi.
 
 ### F59d · Idea (2026-11-23): the note at the top of the wall has a ✕ to dismiss it in place
 Status: [ ]

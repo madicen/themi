@@ -27,7 +27,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.accounts.household import HouseholdSettings
 from themi.core import keys
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day, member_day_start, to_utc_iso
 from themi_google import parcel_words
 from themi_google.deliveries import Parcel
 from themi_home.wall_columns import TOGETHER, TOGETHER_TONE, Place, WallColumns, key_of
@@ -413,6 +413,32 @@ class WallView:
         rows = [(key_of(m), m.name, self.tone_of(m)) for m in self.people()]
         return [*rows, ("family", "Family", self.together_tone())]
 
+    # ----- F59c (idea #255): each person's day, and their chart's limit -------------------
+
+    def day_of(self, member: Member) -> date:
+        """The day it is for this person: still the day before until their rollover (F34j)."""
+        return member_day(member, self.now(), self.tz())
+
+    def household_day(self) -> date:
+        """The household's day: the latest rollover among the people on the wall, so nothing
+        of the day closes before everyone's day has ended."""
+        return min((self.day_of(m) for m in self.people()), default=self.now().date())
+
+    def since(self, member: Member | None) -> datetime:
+        """When the day began for this person, or (None) for the household."""
+        if member is None:
+            late = max(self.people(), key=lambda m: int(m.day_ends or 0), default=None)
+            if late is None:
+                return self.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            return member_day_start(late, self.household_day(), self.tz())
+        return member_day_start(member, self.day_of(member), self.tz())
+
+    def held(self, task: Task, member: Member) -> bool:
+        """A chore waiting its turn on this person's chart (their limit, C2d): not on the
+        wall, as it isn't on the chart. An important one always shows."""
+        queue = self.services.maybe(keys.chart_queue)
+        return queue is not None and task.importance != "high" and queue.held(task, member)
+
     def tone_of(self, member: Member) -> str:
         """F53: the colour class a person is drawn in."""
         return next((p.tone for p in self.places() if p.member and p.member.id == member.id), "p0")
@@ -421,15 +447,17 @@ class WallView:
 
     def columns(self, ask: str = "") -> tuple[WallColumn, ...]:
         people = self.people()
-        today = self.now().date()
         tasks = self._open_tasks(people)
-        done = self._done_tasks(people)
         columns = []
         for place in self.places():
-            if place.member is not None:
-                columns.append(self._person(place.member, place.tone, tasks, done, today))
+            if (member := place.member) is not None:
+                done = self._done_tasks(people, self.since(member))
+                columns.append(self._person(member, place.tone, tasks, done, self.day_of(member)))
                 continue
-            together = self._together(tasks, done, today, {m.id: m.name for m in people})
+            done = self._done_tasks(people, self.since(None))
+            together = self._together(
+                tasks, done, self.household_day(), {m.id: m.name for m in people}
+            )
             if ask:
                 together = _asking(together, ask)
             columns.append(replace(together, tone=place.tone))
@@ -445,14 +473,17 @@ class WallView:
                         return column, item
         return None
 
-    def _done_tasks(self, people: list[Member]) -> list[tuple[Task, int | None, datetime]]:
+    def _done_tasks(
+        self, people: list[Member], start: datetime | None = None
+    ) -> list[tuple[Task, int | None, datetime]]:
         """Tasks (or a chore's round) done today, each once, with who did it and when: they
-        stay on the wall, ticked, until FOLD_AFTER and then folded, until the day ends."""
+        stay on the wall, ticked, until FOLD_AFTER and then folded, until the day ends.
+        `start`: when the day began (F59c: a person's rollover); the household's if None."""
         board = self.services.maybe(keys.taskboard)
         if board is None:
             return []
         now = self.now()
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = start or self.since(None)
         seen: dict[int, tuple[Task, int | None, datetime]] = {}
         for member in people:
             for done in board.done_between(member, start, now + timedelta(seconds=1)):
@@ -485,7 +516,14 @@ class WallView:
             sections.append(routine_section)
         mine = [t for t in tasks if t.assignee == member.id and not _for_both(t)]
         chores = sorted(
-            (t for t in mine if t.repeats and t.due_on is not None and t.due_on <= today),
+            (
+                t
+                for t in mine
+                if t.repeats
+                and t.due_on is not None
+                and t.due_on <= today
+                and not self.held(t, member)
+            ),
             key=lambda t: _rank(t, today),
         )
         todos = sorted((t for t in mine if not t.repeats), key=lambda t: _rank(t, today))
@@ -601,7 +639,7 @@ class WallView:
         board = self.services.maybe(keys.taskboard)
         routines = self.services.maybe(keys.routines)
         now = self.now()
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = self.since(member)  # F59c: from their rollover
         count = len(board.done_between(member, start, now + timedelta(seconds=1))) if board else 0
         if routines is not None:
             day = routines.today(member)
@@ -704,7 +742,7 @@ class WallView:
         for parcel_note in (trouble, came, moved):  # PT6a: a problem first, after weather
             if parcel_note is not None:
                 return parcel_note
-        chore = self._chore_note(today, quiet)
+        chore = self._chore_note(self.household_day(), quiet)  # F59c
         return chore if chore is not None else due
 
     def _deliveries(self, today: date, quiet: set[str]) -> tuple[WallNote | None, ...]:
@@ -774,6 +812,7 @@ class WallView:
         return trouble, came, moved, due
 
     def _chore_note(self, today: date, quiet: set[str]) -> WallNote | None:
+        people = {m.id: m for m in self.people()}
         waiting = sorted(
             (
                 t
@@ -782,6 +821,8 @@ class WallView:
                 and t.due_on is not None
                 and t.due_on < today
                 and f"task-{t.id}" not in quiet
+                # F59c: one waiting its turn on a chart isn't nudged about
+                and not (t.assignee in people and self.held(t, people[t.assignee]))
             ),
             # either of you first: an offer suits a shared screen best
             key=lambda t: (not _for_both(t), IMPORTANCE.get(t.importance, 1), t.due_on, t.id),

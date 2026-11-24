@@ -359,7 +359,7 @@ class WallViews:
         schedule = tuple(_schedule_row(e, now) for e in mine)
         ahead = any(not e.all_day and e.end > now for e in mine)
         routines = self._routine_parts(member, opened)
-        chores, todos = self._tasks(member, today)
+        chores, todos = self._tasks(member, self.view.day_of(member))  # F59c: their day
         count = self.view._done_today(member)
         return PersonView(
             member_id=member.id,
@@ -433,7 +433,7 @@ class WallViews:
         people = view.people()
         names = {m.id: m.name for m in people}
         now = view.now()
-        today = now.date()
+        today = view.household_day()  # F59c
         both = [t for t in view._open_tasks(people) if _for_both(t)]
         either = sorted(
             (t for t in both if t.repeats and t.due_on is not None and t.due_on <= today),
@@ -442,7 +442,7 @@ class WallViews:
         family = sorted((t for t in both if not t.repeats), key=lambda t: _rank(t, today))
         done = tuple(
             _done_item(t, f"{names[by]} did it" if by in names else "", emoji=view.emoji_of(t))
-            for t, by, _ in view._done_tasks(people)
+            for t, by, _ in view._done_tasks(people, view.since(None))
             if _for_both(t)
         )
 
@@ -474,7 +474,14 @@ class WallViews:
         tasks = self.view._open_tasks([member])
         mine = [t for t in tasks if t.assignee == member.id and not _for_both(t)]
         chores = sorted(
-            (t for t in mine if t.repeats and t.due_on is not None and t.due_on <= today),
+            (
+                t
+                for t in mine
+                if t.repeats
+                and t.due_on is not None
+                and t.due_on <= today
+                and not self.view.held(t, member)  # F59c: as their chart shows
+            ),
             key=lambda t: _rank(t, today),
         )
         todos = sorted(
@@ -483,7 +490,7 @@ class WallViews:
         )
         done = [
             t
-            for t, _, _ in self.view._done_tasks([member])
+            for t, _, _ in self.view._done_tasks([member], self.view.since(member))
             if t.assignee == member.id and not _for_both(t)
         ]
         shown = {t.id for t in chores} | {t.id for t in todos}
@@ -659,6 +666,7 @@ def list_view(views: WallViews, which: str, opened: int = 0, said: str = "") -> 
         title, tone = f"{owner.name}'s to-do list", view.tone_of(owner)
     else:
         return None
+    today = view.day_of(owner) if owner is not None else view.household_day()  # F59c
     rows = tuple(
         ListRow(
             t.id, t.title, since(t.due_on, today) or _due_words(t.due_on, today), t.id == opened
