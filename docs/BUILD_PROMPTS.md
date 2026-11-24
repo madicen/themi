@@ -356,7 +356,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [x] 2026-11-23 |
 | F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [x] 2026-11-23 |
 | F60a | Feedback: "check off take meds" ticks the routine item, not "couldn't find" | Feedback | [x] 2026-11-24 |
-| F60b | Feedback: litter box code 3 is a drainage issue; Themi learns a code's words | Feedback | [ ] |
+| F60b | Feedback: litter box code 3 is a drainage issue; Themi learns a code's words | Feedback | [x] 2026-11-24 |
 | F60c | Idea: the wall's top bar has Talk to Themi before the weather | Feedback | [ ] |
 | F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [ ] |
 | F60e | Idea: the body double on the wall: start a session and run it there | Feedback | [ ] |
@@ -17983,7 +17983,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F60b · Feedback (2026-11-24): litter box code 3 is a drainage issue, and Themi learns a code's words from what the app says
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: CG1a, F41a, F58b
 Read first: `themi_home/connectors/catgenie/events.py` (`CODES`, `error_words`, `unknown`);
 `themi_home/connectors/catgenie/watch.py` (where an unknown code is logged);
@@ -18033,6 +18033,29 @@ and the alert uses those words.
 
 Data/Setup: migration (new table). After the update, problem 6's detail reads the drainage
 words on the next check. Mark #261 reviewed once live.
+
+Notes:
+- `CODES["3"]` = "it's showing a drainage issue". Learned codes: migration
+  `0184_litter_codes.sql` (code, words, member, said_at; the box's model left out, since a
+  code's words are the app's and the same for both boxes). `read_device(raw, named)` puts
+  them on the reading (`LitterBoxReading.named`), so `problems` and `unknown` use them;
+  `error_words(code, named)`. `CatGenieWatcher.named()` reads the table on each read.
+- `LitterBox.learn` (tool `name_litter_code`, devices group): refuses a code in `CODES` or
+  already named, and one no box has shown (showing now, or in a problem's words). Their
+  words go through `code_words` ("Error: Drainage issue" -> "a drainage issue"; a name
+  without issue/error/fault... gets " error"). Open problems' details and `litter_states`'
+  alert are rewritten at once; a code that comes back uses the words.
+- While a box shows a bare-number code with no words (`unnamed_codes`), every turn gets the
+  devices group (a `group_sources` entry: "It says Error: Drainage issue" has none of its
+  words, so reply 558 needed more_tools) and an open item pointing at `name_litter_code`,
+  not `complete_task`. Its "needs a look" message adds "What does the CatGenie app call it?".
+  A wordy code ("HEATER_FAULT") isn't asked about.
+- Deviation: tasks have no notes, so a litter chore's problem shows in the model's task list
+  through `TaskBoard.display_notes` ("(The box: it's showing a drainage issue.)").
+- Tests: 3 in `tests/unit/test_catgenie_events.py`, `tests/unit/test_litter_code_words.py`
+  (6), 2 scenarios in `tests/scenarios/test_litter_box.py`. Goldens: `tools.json` (the new
+  tool) and `handlers.json` (the open item source), as expected.
+- **Setup:** update the Pi (migration). Problem 6 reads the drainage words on its next read.
 
 ### F60c · Idea (2026-11-24): the wall's top bar has Talk to Themi before the weather
 Status: [ ]

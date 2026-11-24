@@ -28,6 +28,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from collections.abc import Mapping
 from typing import Any
 
 ERROR, ALERT, SOLUTION, GRANULES = "error", "alert", "solution", "granules"
@@ -41,6 +42,9 @@ CODES: dict[str, str] = {
     # F58b (bug #248): the Whoosh on 11 Nov and the A.I. on 22 Nov each showed error 6 while
     # out of sani-solution, and both cleared with the new cartridge (`litter_problems` 1-4).
     "6": OUT,
+    # F60b (bug #261): the Whoosh showed 3 on 24 Nov (`litter_problems` 6); the app said
+    # "Error: Drainage issue".
+    "3": "it's showing a drainage issue",
 }
 # A notification's `type` -> what it is, once captures show which are errors. Until then a
 # notification is an error only when its `errorType` says one.
@@ -58,6 +62,8 @@ class LitterBoxReading:
     sani_unit: str = CLEANS  # always CLEANS since F58b (kept: `litter_states` stores it)
     cycles: int | None = None  # cleaning cycles ever
     errors: tuple[str, ...] = ()  # codes, as it reports them
+    # F60b: codes the family told Themi the words for (`litter_codes`), as (code, words)
+    named: tuple[tuple[str, str], ...] = ()
 
     @property
     def problems(self) -> dict[str, str]:
@@ -67,7 +73,7 @@ class LitterBoxReading:
         # error of its own (no second message, chore or wall item).
         errors = [e for e in self.errors if CODES.get(e) != OUT]
         if errors:
-            found[ERROR] = "; ".join(error_words(e) for e in errors)
+            found[ERROR] = "; ".join(error_words(e, dict(self.named)) for e in errors)
         if len(errors) < len(self.errors) or (self.sani_left is not None and self.sani_left <= 0):
             found[SOLUTION] = OUT
         elif self.sani_left is not None and self.sani_left <= LOW_CLEANS:
@@ -76,7 +82,8 @@ class LitterBoxReading:
 
     @property
     def unknown(self) -> tuple[str, ...]:
-        return tuple(e for e in self.errors if e not in CODES)
+        named = dict(self.named)
+        return tuple(e for e in self.errors if e not in CODES and e not in named)
 
 
 @dataclass(frozen=True)
@@ -99,7 +106,9 @@ class LitterBoxEvent:
     gone: bool = False  # it stopped showing it
 
 
-def read_device(raw: dict[str, Any]) -> LitterBoxReading:
+def read_device(
+    raw: dict[str, Any], named: Mapping[str, str] | None = None
+) -> LitterBoxReading:
     status = raw.get("operationStatus")
     status = status if isinstance(status, dict) else {}
     config = raw.get("configuration")
@@ -119,6 +128,7 @@ def read_device(raw: dict[str, Any]) -> LitterBoxReading:
         sani_left=sani if sani is None or sani >= 0 else None,
         cycles=_int(activation.get("count")),
         errors=tuple(dict.fromkeys(e for e in errors if e.lower() not in NOT_AN_ERROR)),
+        named=tuple(sorted((named or {}).items())),
     )
 
 
@@ -146,11 +156,19 @@ def sani_words(left: int, unit: str = CLEANS) -> str:
     return f"{left} clean{'' if left == 1 else 's'} of sani-solution left"
 
 
-def error_words(code: str) -> str:
+def named_words(words: str) -> str:
+    """F60b: what the family said the app shows, as the words a message uses."""
+    return f"it's showing {words}"
+
+
+def error_words(code: str, named: Mapping[str, str] | None = None) -> str:
     """ "it shows an error (heater fault)" until a capture gives the code its words. A bare
-    number says nothing to a person, so it's called a code Themi doesn't know (F58b)."""
+    number says nothing to a person, so it's called a code Themi doesn't know (F58b), until
+    someone tells Themi what the app calls it (F60b, `named`)."""
     if code in CODES:
         return CODES[code]
+    if named and code in named:
+        return named_words(named[code])
     if code.strip().isdigit():
         return (
             f"it's showing a code Themi doesn't know yet ({code.strip()}), "

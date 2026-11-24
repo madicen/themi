@@ -164,3 +164,23 @@ def test_a_bare_number_nobody_has_named_is_a_code_themi_doesnt_know() -> None:
         "it's showing a code Themi doesn't know yet (7), which the CatGenie app can explain"
     )
     assert reading.unknown == ("7",)
+
+
+# ----- F60b, bug #261: code 3, and codes the family names -----------------------------------
+
+
+def test_error_three_is_a_drainage_issue() -> None:
+    reading = read_device(box(operationStatus={"error": "3"}))
+    assert reading.problems[ERROR] == "it's showing a drainage issue"
+    assert reading.unknown == ()
+
+
+def test_a_named_code_uses_the_familys_words() -> None:
+    reading = read_device(box(operationStatus={"error": "80"}), {"80": "a clogged waste error"})
+    assert reading.problems[ERROR] == "it's showing a clogged waste error"
+    assert reading.unknown == ()
+
+
+def test_a_named_code_never_overrides_a_known_one() -> None:
+    reading = read_device(box(operationStatus={"error": "3"}), {"3": "a cat in the dome"})
+    assert reading.problems[ERROR] == "it's showing a drainage issue"

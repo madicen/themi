@@ -263,6 +263,10 @@
     "group": "core",
     "spec": "96728c58869f"
   },
+  "name_litter_code": {
+    "group": "devices",
+    "spec": "ef5ee391acd6"
+  },
   "parcel_status": {
     "group": "email",
     "spec": "b27d3e84d318"

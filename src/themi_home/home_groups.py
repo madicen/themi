@@ -153,7 +153,7 @@ DEVICES = ToolGroup(
         "Is the litter box working?",
         "How much sani-solution is left?",
     ),
-    tools=("appliance_status", "feed_pet"),
+    tools=("appliance_status", "feed_pet", "name_litter_code"),  # F60b
     order=100,
 )
 

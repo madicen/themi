@@ -144,7 +144,8 @@
     "Recipes.open_items",
     "Cooking.open_items",
     "VendorCalls.open_items",
-    "BodyDouble.open_items"
+    "BodyDouble.open_items",
+    "LitterBox._unnamed_items"
   ],
   "reaction_handlers": [
     "ApprovalsUI.on_reaction",
