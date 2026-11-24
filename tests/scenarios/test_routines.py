@@ -462,3 +462,67 @@ async def test_a_check_whose_answer_was_lost_comes_once(
     assert checks_seen == ["Morning routine, still open:\n- Vitamins\nDone already?"]
     await scenario.tap("Erin", "✓ Vitamins")  # its buttons still work
     assert scenario.edits("Erin")[-1]["text"].startswith("Marked done: Vitamins.")
+
+
+def offered_tools(scenario: Scenario, index: int = -1) -> set[str]:
+    return {t.name for t in scenario.primary.requests[index].tools}
+
+
+async def test_bug_260_a_named_item_brings_the_routine_tools(scenario: Scenario) -> None:
+    """F60a: "check off" is the lists group's word, so the routine tools weren't sent and
+    the reply was "I couldn't find a task called 'take meds'"."""
+    add(scenario, "Husband", "Evening", "Take Meds")
+    for said in ("Check off take meds.", "Check off tick meds."):
+        scenario.primary.queue_text("Sure.")
+        await scenario.say("Husband", said)
+        assert "tick_routine_item" in offered_tools(scenario), said
+    scenario.primary.queue_text("Sure.")
+    await scenario.say("Erin", "Check off take meds.")  # not on Erin's routines
+    assert "tick_routine_item" not in offered_tools(scenario)
+
+
+async def test_bug_260_a_ticked_item_no_longer_brings_them(scenario: Scenario) -> None:
+    add(scenario, "Husband", "Evening", "Take Meds")
+    r = routines(scenario)
+    evening = r.find(scenario.member("Husband"), "Evening")
+    assert evening is not None
+    r.tick(r.items(evening)[0], r.today(scenario.member("Husband")))
+    scenario.primary.queue_text("Sure.")
+    await scenario.say("Husband", "Check off take meds.")
+    assert "tick_routine_item" not in offered_tools(scenario)
+
+
+async def test_bug_260_a_message_never_makes_the_default_routines(scenario: Scenario) -> None:
+    scenario.primary.queue_text("Sure.")
+    await scenario.say("Erin", "Check off take meds.")
+    erin = scenario.member("Erin")
+    assert not scenario.app.db.one("SELECT 1 FROM routines WHERE member_id = ?", (erin.id,))
+
+
+async def test_bug_260_said_by_voice_the_item_is_ticked(scenario: Scenario) -> None:
+    add(scenario, "Husband", "Evening", "Take Meds")
+    await at(scenario, WED, 23, 26)
+    scenario.primary.queue_transcription("Check off take meds.")
+    scenario.primary.queue_tool_call("tick_routine_item", {"title": "take meds"})
+    assert await scenario.voice("Husband") == ['Ticked "Take Meds" for today.']
+    r = routines(scenario)
+    evening = r.find(scenario.member("Husband"), "Evening")
+    assert evening is not None
+    assert r.ticked(r.items(evening)[0], r.today(scenario.member("Husband")))
+
+
+async def test_bug_260_couldnt_find_before_looking_looks_first(scenario: Scenario) -> None:
+    """Reply 555: only search_memory ran before "I couldn't find a task called". The turn
+    gets the routine tools and one more round to look."""
+    add(scenario, "Husband", "Evening", "Take Meds")
+    scenario.primary.queue_tool_call("search_memory", {"query": "meds"})
+    scenario.primary.queue_text("I couldn't find a task called \"my pills\".")
+    scenario.primary.queue_tool_call("tick_routine_item", {"title": "take meds"})
+    scenario.primary.queue_text("Ticked Take Meds.")
+    await scenario.say("Husband", "I did my pills")
+    assert "tick_routine_item" not in offered_tools(scenario, 0)  # the words didn't bring it
+    assert "tick_routine_item" in offered_tools(scenario, 2)  # the second look did
+    r = routines(scenario)
+    evening = r.find(scenario.member("Husband"), "Evening")
+    assert evening is not None
+    assert r.ticked(r.items(evening)[0], r.today(scenario.member("Husband")))

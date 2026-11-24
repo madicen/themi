@@ -355,7 +355,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [x] 2026-11-23 |
 | F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [x] 2026-11-23 |
 | F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [x] 2026-11-23 |
-| F60a | Feedback: "check off take meds" ticks the routine item, not "couldn't find" | Feedback | [ ] |
+| F60a | Feedback: "check off take meds" ticks the routine item, not "couldn't find" | Feedback | [x] 2026-11-24 |
 | F60b | Feedback: litter box code 3 is a drainage issue; Themi learns a code's words | Feedback | [ ] |
 | F60c | Idea: the wall's top bar has Talk to Themi before the weather | Feedback | [ ] |
 | F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [ ] |
@@ -17913,7 +17913,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F60a · Feedback (2026-11-24): "check off take meds" ticks the routine item, not "couldn't find a task"
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: CR8b, F33a, F42g
 Read first: `themi/core/agent.py` (the group choice: `choose_groups`, `services.group_sources`);
 `themi/core/groups.py` (`LISTS`'s and `WALL`'s words, `ROUTINES = WALL`);
@@ -17958,6 +17958,29 @@ Scenario: Michael's Evening routine has "Take Meds"; at 11:26 pm he says (fake t
 the reply says so.
 
 Data/Setup: none (routine item 4 on the Pi is the case). Mark #260 reviewed once live.
+
+Notes:
+- `wording.names_title(said, title)`: every word of the title (bar fillers) in the message,
+  give or take its ending; a title of two words or more may have one misheard. Deviation:
+  "tick" for "take" is three letters off, not one or two, so a misheard word is one letter
+  off or has the same first letter and the same consonants (vowels and doubles dropped, c/k/q
+  alike). One-word titles are never guessed.
+- `Services.text_group_sources` (member, message) beside `group_sources`; the routines
+  module adds `Routines.named_groups`: the routines group when the message names an item of
+  theirs still open today. A member with no routines yet gets nothing (`of` would make the
+  defaults).
+- Chore chart: no separate source. A chart's items are tasks (`complete_task` is core) or
+  routine items (the source above), so both are covered.
+- `complete_task`'s description says a routine's item is ticked with `tick_routine_item`.
+  It says "routines", not "chore chart": core tools go to the work template, which keeps out
+  household words.
+- `agent._looked_nowhere`: a reply saying it couldn't find a task, routine, item or chore
+  (or "no task called ...") with no task, routine, list or chore tool run gets the wall and
+  lists groups and one more round with `NOT_LOOKED_NOTE` (like F45e's).
+- Tests: `tests/unit/test_names_title.py` (11); 5 scenarios in
+  `tests/scenarios/test_routines.py`. Golden `tools.json` (`complete_task`'s spec), as
+  expected.
+- **Setup:** update the Pi.
 
 ### F60b · Feedback (2026-11-24): litter box code 3 is a drainage issue, and Themi learns a code's words from what the app says
 Status: [ ]

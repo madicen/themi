@@ -46,7 +46,13 @@ from themi.core.tools import (
     staged_tool,
     tool,
 )
-from themi.core.wording import and_list, near_twin, title_matches, words_in_common
+from themi.core.wording import (
+    and_list,
+    names_title,
+    near_twin,
+    title_matches,
+    words_in_common,
+)
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.modules.groups import TASKS
@@ -314,6 +320,18 @@ class Routines:
                 (item.id, day.isoformat()),
             )
         )
+
+    def named_groups(self, member: Member, text: str) -> set[str]:
+        """F60a (bug #260): "Check off take meds" names an item of their routines still open
+        today, so the routines' tools come with it, whatever the other words call for."""
+        if not self.db.one("SELECT 1 FROM routines WHERE member_id = ?", (member.id,)):
+            return set()  # `of` would make the defaults: a message mustn't
+        day = self.today(member)
+        for routine in self.of(member):
+            for item in self._still(routine, day):
+                if names_title(text, item.title):
+                    return {groups.ROUTINES.name}
+        return set()
 
     def today_items(self, routine: Routine, day: date) -> list[Item]:
         return [i for i in self.items(routine) if i.applies(day)]
@@ -794,4 +812,5 @@ class RoutinesModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         routines = ctx.provide(Routines(ctx.services))
         routines.install()
+        ctx.services.text_group_sources.append(routines.named_groups)
         ctx.periodic("routines.check", timedelta(minutes=15), routines.check)
