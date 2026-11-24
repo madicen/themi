@@ -359,3 +359,44 @@ async def test_error_six_while_out_is_one_message_and_one_chore_then_a_new_cartr
     watcher = scenario.app.services.maybe(keys.catgenie)
     assert watcher is not None
     assert list(watcher.states().values()) == ["ready, 239 cleans of sani-solution left"]
+
+
+# ----- F60b, bug #261: code 3, and codes the family names -----------------------------------
+
+
+async def test_bug_261_an_unknown_code_is_asked_about_then_named_from_chat(
+    scenario: Scenario, litter_box: FakeCatGenie
+) -> None:
+    tired(scenario)
+    await seen(scenario, litter_box, error="80")
+    said = await scenario.advance(minutes=10)
+    asked = "What does the CatGenie app call it?"
+    assert any("doesn't know yet (80)" in s and asked in s for s in said)
+    scenario.primary.queue_tool_call(
+        "name_litter_code", {"code": "80", "words": "Error: Clogged waste"}
+    )
+    scenario.primary.queue_text("Got it: code 80 is a clogged waste error.")
+    await scenario.say("Husband", "It says Error: Clogged waste")
+    assert "name_litter_code" in {t.name for t in scenario.primary.requests[-2].tools}
+    detail = scenario.app.db.scalar("SELECT detail FROM litter_problems ORDER BY id DESC")
+    assert detail == "it's showing a clogged waste error"
+    assert tasks(scenario)[0][1] == "open"  # naming it isn't sorting it
+
+    await seen(scenario, litter_box, error="")
+    clock.advance(timedelta(days=1))
+    await seen(scenario, litter_box, error="80")  # back the next day: the words at once
+    said = await scenario.advance(minutes=10)
+    assert any("it's showing a clogged waste error" in s for s in said)
+    assert not any(asked in s for s in said)
+
+
+async def test_bug_261_a_known_or_never_seen_code_isnt_named(
+    scenario: Scenario, litter_box: FakeCatGenie
+) -> None:
+    box = scenario.app.services.get(keys.litter_box)
+    erin = scenario.member("Erin")
+    assert "already has its words" in box.learn(erin, "3", "a cat")
+    from themi.core.tools import ToolFailed
+
+    with pytest.raises(ToolFailed, match="No litter box has shown code 99"):
+        box.learn(erin, "99", "Error: Anything")

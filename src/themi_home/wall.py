@@ -27,7 +27,13 @@ from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
 
 from themi import clock
 from themi.accounts import Member
@@ -38,7 +44,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
-from themi_home import wall_talk
+from themi_home import wall_focus, wall_talk
 from themi_home.wall_calendars import WallCalendars
 from themi_home.wall_columns import TONES, BadLayout, WallColumns, moved
 from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
@@ -552,7 +558,9 @@ def routes(kit: Kit) -> APIRouter:
 
     talking = wall_talk.Talking()
 
-    def talk_sheet(request: Request, token: str, member_id: int | None = None) -> Response:
+    def talk_sheet(
+        request: Request, token: str, member_id: int | None = None, missed: bool = False
+    ) -> Response:
         """The sheet: "Who's this?" until someone's chosen, then their exchange today."""
         view = WallView(kit.app.services)
         people = view.people()
@@ -562,7 +570,7 @@ def routes(kit: Kit) -> APIRouter:
             talking.keep(token, member.id)
         found = wall_talk.lines(kit.app.services, member, view.tz()) if member else ()
         return sheet(
-            request, "_view_talk.html", member=member, lines=found,
+            request, "_view_talk.html", member=member, lines=found, missed=missed,
             people=[(m.id, m.name, view.tone_of(m)) for m in people],
         )  # fmt: skip
 
@@ -632,8 +640,174 @@ def routes(kit: Kit) -> APIRouter:
         if clip is None or isinstance(clip, str):
             return HTMLResponse("No sound came through.", status_code=400)
         audio = await clip.read()
+        db = kit.app.services.store.db
+        mark = db.scalar("SELECT COALESCE(MAX(id), 0) FROM message_log")
         await hand_over(wall_talk.said(member, audio, clip.content_type or "audio/webm"))
-        return talk_sheet(request, token, member.id)
+        heard = db.one(  # F60d: nothing heard says so on the sheet, not only in Telegram
+            "SELECT 1 FROM message_log WHERE id > ? AND member_id = ? AND kind = 'transcript'",
+            (mark, member.id),
+        )
+        return talk_sheet(request, token, member.id, missed=heard is None)
+
+    # ----- F60e (idea #263): the body double on the wall ---------------------------------
+
+    def focus_sheet(
+        request: Request,
+        token: str,
+        member_id: int | None = None,
+        *,
+        refused: str = "",
+        finished: str = "",
+    ) -> Response:
+        """ "Who's this?" (the same choice as Talk), then the pick, or the session going."""
+        view = WallView(kit.app.services)
+        people = view.people()
+        chosen = member_id if member_id is not None else talking.who(token)
+        member = next((m for m in people if m.id == chosen), None)
+        if member is not None:
+            talking.keep(token, member.id)
+        bd = wall_focus.body_double(kit.app.services)
+        state = bd.state(member) if bd is not None and member is not None else None
+        if state is not None and member is not None:
+            state = wall_focus.on_the_wall(state, member.id)
+        running = bool(state and state.get("active")) and not finished
+        return kit.page(
+            request, "wall/_view_focus.html", member=member, state=state, finished=finished,
+            refused=refused, modes=wall_focus.MODES, lengths=wall_focus.LENGTHS,
+            choices=wall_focus.choices(kit.app.services, member, view.tz()) if member else (),
+            people=[(m.id, m.name, view.tone_of(m)) for m in people],
+            close_after=0 if running else (10 if finished else CLOSE_AFTER),
+        )  # fmt: skip
+
+    @router.get("/wall/focus", response_class=HTMLResponse)
+    def focus_page(request: Request, member: str = "") -> Response:
+        token = viewer(request)
+        if token is None:
+            return gone()
+        if wall_focus.body_double(kit.app.services) is None:
+            return HTMLResponse("", status_code=404)
+        if member == "0":
+            talking.forget(token)
+            return focus_sheet(request, token)
+        if member:
+            chosen = speaker(member)
+            if chosen is None:
+                return HTMLResponse("", status_code=404)
+            return focus_sheet(request, token, chosen.id)
+        return focus_sheet(request, token)
+
+    @router.get("/wall/focus/live", response_class=HTMLResponse)
+    def focus_live(request: Request, member: str = "") -> Response:
+        """The session alone, for the open sheet's poll."""
+        if viewer(request) is None:
+            return gone()
+        chosen = speaker(member)
+        bd = wall_focus.body_double(kit.app.services)
+        if chosen is None or bd is None:
+            return HTMLResponse("", status_code=404)
+        state = wall_focus.on_the_wall(bd.state(chosen), chosen.id)
+        return kit.page(request, "wall/_focus_live.html", member=chosen, state=state)
+
+    @router.get("/wall/focus/picture/{session_id:int}/{index:int}")
+    def focus_picture(request: Request, session_id: int, index: int, member: str = "") -> Response:
+        """A step's picture on the wall: the frame's, for the session's own person only
+        (the session page's route needs that person signed in)."""
+        if viewer(request) is None:
+            return gone()
+        chosen = speaker(member)
+        bd = wall_focus.body_double(kit.app.services)
+        pictures = getattr(bd, "pictures", None)
+        found = bd.get(session_id) if bd is not None else None
+        if chosen is None or pictures is None or found is None or found.member_id != chosen.id:
+            return Response(status_code=404)
+        row = pictures.row(session_id, index)
+        path = pictures.path(row) if row is not None else None
+        if row is None or path is None:
+            return Response(status_code=404)
+        return FileResponse(path, media_type=row["mime_type"] or "image/png",
+                            headers={"Cache-Control": "private, max-age=3600"})  # fmt: skip
+
+    @router.post("/wall/focus/music")
+    async def focus_music(request: Request) -> Response:
+        """The built-in loop on the wall: their choice and volume, kept as /session keeps
+        them, and noted as the session's music once it plays."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        chosen = speaker(form.get("member", ""))
+        bd = wall_focus.body_double(kit.app.services)
+        if chosen is None or bd is None:
+            return Response(status_code=404)
+        from themi.accounts.store import InvalidValue
+        from themi_home.body_double import BodyDoublePreferences
+        from themi_home.body_double_music import LOOPS, set_sound
+
+        store = kit.app.services.store
+        try:
+            volume = int(form["volume"]) if form.get("volume", "") != "" else None
+            set_sound(store, chosen, form.get("sound") or None, volume)
+        except (ValueError, InvalidValue):
+            return Response(status_code=400)
+        if form.get("played"):
+            member = store.get_member(chosen.id)
+            loop = LOOPS[store.preferences(member.id, BodyDoublePreferences).body_double_sound]
+            bd.note_music(member, f"builtin:{loop.key}", loop.name)
+        return Response(status_code=204)
+
+    @router.post("/wall/focus/start", response_class=HTMLResponse)
+    async def focus_start(request: Request) -> Response:
+        form = await posted(request)
+        token = viewer(request)
+        if form is None or token is None:
+            return gone()
+        bd = wall_focus.body_double(kit.app.services)
+        if bd is None:
+            return HTMLResponse("", status_code=404)
+        if not form.get("member"):
+            return HTMLResponse("Who's this?", status_code=400)
+        member = speaker(form["member"])
+        if member is None:
+            return HTMLResponse("", status_code=404)
+        what = form.get("what", "")
+        kind, _, number = what.partition(":")
+        try:
+            await bd.begin_from_page(
+                member,
+                task_id=int(number) if kind == "task" and number.isdigit() else 0,
+                routine_id=int(number) if kind == "routine" and number.isdigit() else 0,
+                what=form.get("typed", "") if kind == "typed" else "",
+                mode=form.get("mode", "") if form.get("mode", "") in ("silent", "sprint",
+                                                                       "guided") else "",
+                minutes=int(form["minutes"]) if form.get("minutes", "").isdigit() else 0,
+            )  # fmt: skip
+        except ValueError as exc:
+            return focus_sheet(request, token, member.id, refused=str(exc))
+        return focus_sheet(request, token, member.id)
+
+    @router.post("/wall/focus/act", response_class=HTMLResponse)
+    async def focus_act(request: Request) -> Response:
+        """A tap on the wall's session: as on /session (`act_from_page`)."""
+        form = await posted(request)
+        token = viewer(request)
+        if form is None or token is None:
+            return gone()
+        bd = wall_focus.body_double(kit.app.services)
+        member = speaker(form.get("member", ""))
+        if bd is None or member is None:
+            return HTMLResponse("", status_code=404)
+        session_id = int(form["session"]) if form.get("session", "").isdigit() else 0
+        found = bd.get(session_id)
+        if found is None or found.member_id != member.id:
+            return HTMLResponse("", status_code=404)
+        seq = int(form["seq"]) if form.get("seq", "").lstrip("-").isdigit() else -1
+        await bd.act_from_page(member, session_id, form.get("action", ""), seq,
+                               form.get("mode", ""))  # fmt: skip
+        after = bd.get(session_id)
+        if after is not None and after.ended_at is not None and bd.current(member) is None:
+            return focus_sheet(
+                request, token, member.id, finished=f"The session for {after.label} is over."
+            )
+        return focus_sheet(request, token, member.id)
 
     @router.get("/wall/view/weather", response_class=HTMLResponse)
     def weather_view(request: Request) -> Response:

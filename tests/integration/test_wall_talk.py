@@ -93,3 +93,33 @@ async def test_the_mic_is_hidden_until_the_frame_says_it_can_record(wall: Scenar
     assert script is not None
     js = (await get(wall, script[1])).text
     assert "getUserMedia" in js and "MediaRecorder" in js
+
+
+# ----- F60d, idea #264: what the mic is doing ------------------------------------------------
+
+
+async def test_idea_264_the_sheet_has_a_status_line_and_a_cancel(wall: Scenario) -> None:
+    husband = wall.member("Husband")
+    sheet = (await get(wall, f"/wall/talk?member={husband.id}")).text
+    assert re.search(r'<p class="talk-status"[^>]*data-talk-status[^>]*aria-live="polite"', sheet)
+    assert re.search(r"<button[^>]*data-talk-cancel[^>]*hidden>", sheet)
+    assert 'aria-pressed="false"' in sheet
+    assert "catch that" not in sheet
+
+
+async def test_idea_264_nothing_heard_says_so_on_the_sheet(wall: Scenario) -> None:
+    husband = wall.member("Husband")
+    wall.primary.queue_transcription("")
+    async with web_client(wall) as client:
+        await frame(wall, client)
+        token = await csrf(client)
+        sheet = (
+            await client.post(
+                "/wall/say",
+                data={"member": str(husband.id)},
+                files={"audio": ("clip.webm", b"\x1aE\xdf\xa3 quiet", "audio/webm")},
+                headers={"X-CSRF-Token": token, "HX-Request": "true"},
+            )
+        ).text
+    assert "I didn't catch that. Try again, or type it." in sheet
+    assert re.search(r'class="talk-status missed"', sheet)

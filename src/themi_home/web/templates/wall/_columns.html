@@ -11,6 +11,9 @@
     </span>
     <span class="wall-col-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8"/></svg></span>
   </button>
+  {% if c.focus %}{#- F60e: their session going on, reopened on the wall -#}
+  <button type="button" class="wall-focus-chip" hx-get="/wall/focus?member={{ c.member_id }}" hx-target="#wall-view" hx-swap="innerHTML">{{ c.focus }}</button>
+  {% endif %}
   <div class="wall-col-body">
   {% for sec in c.sections %}{% if sec.items or sec.empty or sec.folded %}
     <h3>{{ sec.title }}</h3>

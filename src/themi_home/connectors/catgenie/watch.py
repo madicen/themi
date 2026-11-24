@@ -113,7 +113,13 @@ class CatGenieWatcher:
 
     def reading(self, device: Device) -> LitterBoxReading | None:
         raw = self.raw(device)
-        return read_device(raw) if raw is not None else None
+        return read_device(raw, self.named()) if raw is not None else None
+
+    def named(self) -> dict[str, str]:
+        """F60b: the codes the family told Themi the words for (`litter_codes`)."""
+        return {
+            r["code"]: r["words"] for r in self.db.query("SELECT code, words FROM litter_codes")
+        }
 
     # ----- the job --------------------------------------------------------------------
 
@@ -159,7 +165,7 @@ class CatGenieWatcher:
         if raw is None:
             raise CatGenieError("The litter box isn't on the CatGenie account any more.")
         await self._saw(device, raw)
-        return read_device(raw)
+        return read_device(raw, self.named())
 
     async def capture(self) -> dict[str, Any]:
         """Each box's report read now and the notifications, for fixtures: nothing that says
@@ -183,7 +189,7 @@ class CatGenieWatcher:
             "ON CONFLICT(device_id) DO UPDATE SET raw = excluded.raw, read_at = excluded.read_at",
             (device.id, json.dumps(raw), to_utc_iso(now)),
         )
-        reading = read_device(raw)
+        reading = read_device(raw, self.named())
         for code in reading.unknown:
             if code not in self._logged:
                 self._logged.add(code)
@@ -275,12 +281,13 @@ class CatGenieWatcher:
             )
             if first or device is None or not alert.error:
                 continue
-            if alert.error not in self._logged and alert.error not in CODES:
+            named = self.named()
+            if alert.error not in self._logged and alert.error not in {**CODES, **named}:
                 self._logged.add(alert.error)
                 log.warning("The litter box alerted %r, which Themi has no words for", alert.error)
             self.db.execute(
                 "UPDATE litter_states SET alert = ?, alert_at = ? WHERE device_id = ?",
-                (error_words(alert.error), to_utc_iso(alert.at or clock.now()), device.id),
+                (error_words(alert.error, named), to_utc_iso(alert.at or clock.now()), device.id),
             )
         if first:
             self.db.execute("UPDATE catgenie_account SET alerts_read = 1 WHERE id = 1")

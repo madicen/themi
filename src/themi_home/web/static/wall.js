@@ -55,6 +55,8 @@
     if (idle) clearTimeout(idle);
     var sheet = document.querySelector("#wall-view .wall-sheet");
     if (!sheet) { idle = null; return; }
+    // F60e: "0" is a body double session going on: it stays until closed by hand.
+    if (sheet.getAttribute("data-close-after") === "0") { idle = null; return; }
     var seconds = Number(sheet.getAttribute("data-close-after")) || 120;
     idle = setTimeout(closeView, seconds * 1000);
   }
@@ -65,7 +67,11 @@
 
   // F59g (idea #257): the Talk sheet's mic, only where the frame can record. A tap starts,
   // a second (or 30 s) stops and sends the clip; the answer replaces the sheet.
-  var recorder = null;
+  // F60d (idea #264): it says what it's doing: listening (red, a stop square, "Send", a
+  // pulsing dot and the seconds), working ("Working it out…") and what went wrong. Cancel
+  // throws a clip away.
+  var LIMIT = 30;
+  var recorder = null, cancelled = false, counting = null, busy = false;
   function canRecord() {
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
   }
@@ -73,43 +79,208 @@
     if (!canRecord()) return;
     root.querySelectorAll("[data-talk-mic]").forEach(function (b) { b.hidden = false; });
   }
+  function talkStatus(text, kind) {
+    var line = document.querySelector("[data-talk-status]");
+    if (!line) return;
+    line.textContent = text;
+    line.className = "talk-status" + (kind ? " " + kind : "");
+  }
+  function mmss(seconds) {
+    return Math.floor(seconds / 60) + ":" + ("0" + (seconds % 60)).slice(-2);
+  }
+  function micState(button, state) {
+    var form = button.closest("form");
+    var words = button.querySelector(".talk-mic-words");
+    var cancel = form && form.querySelector("[data-talk-cancel]");
+    button.classList.toggle("on", state === "listening");
+    button.classList.toggle("busy", state === "working");
+    button.disabled = state === "working";
+    button.setAttribute("aria-pressed", state === "listening" ? "true" : "false");
+    button.setAttribute("aria-label", state === "listening" ? "Send: tap when you're done"
+      : state === "working" ? "Working it out" : "Talk: tap to start, tap again to send");
+    if (words) words.textContent = state === "listening" ? "Send" : "Talk";
+    if (cancel) cancel.hidden = state !== "listening";
+    if (form) {
+      form.querySelectorAll("input[name=text], button.primary").forEach(function (el) {
+        el.disabled = state !== "idle";
+      });
+    }
+  }
+  function listening(seconds) {
+    var left = LIMIT - seconds;
+    talkStatus("Listening… tap Send when you're done · " +
+      (left <= 5 ? left + " s left" : mmss(seconds) + " of " + mmss(LIMIT)), "listening");
+  }
+  function missed() {
+    talkStatus("I didn't catch that. Try again, or type it.", "missed");
+  }
   function sendClip(button, blob) {
     var form = new FormData();
     form.append("member", button.getAttribute("data-member"));
     form.append("audio", blob, "clip.webm");
     var token = (JSON.parse(document.body.getAttribute("hx-headers") || "{}"))["X-CSRF-Token"] || "";
+    busy = true;
+    micState(button, "working");
+    talkStatus("Working it out…", "working");
     fetch("/wall/say", { method: "POST", body: form, headers: { "X-CSRF-Token": token, "HX-Request": "true" } })
-      .then(function (r) { return r.text(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error("refused " + r.status);
+        return r.text();
+      })
       .then(function (html) {
+        busy = false;
         var view = document.getElementById("wall-view");
         if (!view) return;
         view.innerHTML = html;
         if (window.htmx) window.htmx.process(view);
         showMics(view);
+      })
+      .catch(function () {
+        busy = false;
+        micState(button, "idle");
+        missed();
       });
   }
   document.addEventListener("click", function (event) {
+    var cancel = event.target.closest && event.target.closest("[data-talk-cancel]");
+    if (cancel) {
+      event.preventDefault();
+      if (recorder) { cancelled = true; recorder.stop(); }
+      return;
+    }
     var button = event.target.closest && event.target.closest("[data-talk-mic]");
     if (!button) return;
     event.preventDefault();
+    if (busy) return;
     if (recorder) { recorder.stop(); return; }
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-      var chunks = [];
+      var chunks = [], seconds = 0;
+      cancelled = false;
       recorder = new MediaRecorder(stream);
       recorder.ondataavailable = function (e) { if (e.data.size) chunks.push(e.data); };
       recorder.onstop = function () {
         stream.getTracks().forEach(function (t) { t.stop(); });
-        button.classList.remove("on");
+        if (counting) { clearInterval(counting); counting = null; }
         var type = recorder.mimeType || "audio/webm";
         recorder = null;
+        micState(button, "idle");
+        if (cancelled) { talkStatus("", ""); return; }
         if (chunks.length) sendClip(button, new Blob(chunks, { type: type }));
+        else missed();
       };
       recorder.start();
-      button.classList.add("on");
-      setTimeout(function () { if (recorder) recorder.stop(); }, 30000);
-    }).catch(function () { button.hidden = true; });
+      micState(button, "listening");
+      listening(0);
+      counting = setInterval(function () {
+        seconds += 1;
+        if (seconds >= LIMIT) { if (recorder) recorder.stop(); return; }
+        listening(seconds);
+      }, 1000);
+    }).catch(function () {
+      talkStatus("The frame didn't let Themi use the microphone. Typing works.", "missed");
+      button.hidden = true;
+    });
   });
   document.addEventListener("htmx:afterSwap", function (event) { showMics(event.target); });
+
+  // F60e (idea #263): the body double's timer counts between the server's redraws (from
+  // its end or start and the server's now), and a finished session closes after 10 s.
+  var skew = 0;
+  function focusTimers() {
+    document.querySelectorAll(".focus-timer[data-timer]").forEach(function (el) {
+      var now = el.getAttribute("data-now");
+      if (now && !el.hasAttribute("data-skew")) {
+        skew = Date.parse(now) - Date.now();
+        el.setAttribute("data-skew", "1");
+      }
+      var at = Date.now() + skew;
+      var down = el.getAttribute("data-timer") === "down";
+      var mark = Date.parse(el.getAttribute(down ? "data-to" : "data-from"));
+      if (isNaN(mark)) return;
+      var s = Math.max(0, Math.round((down ? mark - at : at - mark) / 1000));
+      var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      el.textContent = (h ? h + ":" + ("0" + m).slice(-2) : m) + ":" + ("0" + sec).slice(-2);
+    });
+  }
+  setInterval(focusTimers, 1000);
+  var ending = null;
+  document.addEventListener("htmx:afterSwap", function () {
+    if (document.querySelector("#wall-view [data-focus-finished], #wall-view [data-focus-over]")) {
+      if (!ending) ending = setTimeout(function () { ending = null; closeView(); }, 10000);
+      stopMusic();  // the session's over: its loop stops with it
+    }
+    // Closed by hand and then ended elsewhere: the columns' redraw has no chip left.
+    if (!document.querySelector(".wall-focus-chip, #wall-view [data-focus-running]")) stopMusic();
+    musicShown();
+  });
+
+  // F60e: the built-in loop plays from the frame through #wall-music, which lives outside
+  // the sheet so a tap or a redraw doesn't stop it. Nothing plays until Play is tapped.
+  // The choice and volume are kept as /session keeps them (POST /wall/focus/music).
+  function player() { return document.getElementById("wall-music"); }
+  function musicBox() { return document.querySelector("#wall-view [data-focus-music]"); }
+  function saveMusic(fields) {
+    var box = musicBox();
+    if (!box) return;
+    fields.member = box.getAttribute("data-member");
+    var token = (JSON.parse(document.body.getAttribute("hx-headers") || "{}"))["X-CSRF-Token"] || "";
+    fetch("/wall/focus/music", {
+      method: "POST",
+      headers: { "X-CSRF-Token": token, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(fields).toString()
+    }).then(function () {}, function () {});
+  }
+  function chosenSrc(box) {
+    var sound = box.querySelector("[data-music-sound]");
+    return sound ? sound.options[sound.selectedIndex].getAttribute("data-src") : "";
+  }
+  function musicShown() {
+    var box = musicBox(), audio = player();
+    if (!box || !audio) return;
+    var on = !audio.paused;
+    var play = box.querySelector("[data-music-play]");
+    play.textContent = on ? "Pause" : "Play";
+    play.setAttribute("aria-pressed", on ? "true" : "false");
+    var volume = box.querySelector("[data-music-volume]");
+    if (volume) audio.volume = Number(volume.value) / 100;
+  }
+  function stopMusic() {
+    var audio = player();
+    if (audio && !audio.paused) audio.pause();
+  }
+  document.addEventListener("click", function (event) {
+    var play = event.target.closest && event.target.closest("[data-music-play]");
+    if (!play) return;
+    var box = musicBox(), audio = player();
+    if (!box || !audio) return;
+    if (audio.paused) {
+      var src = chosenSrc(box);
+      if (src && audio.getAttribute("src") !== src) audio.setAttribute("src", src);
+      audio.play().then(function () { musicShown(); saveMusic({ played: "1" }); },
+                        function () { musicShown(); });
+    } else {
+      audio.pause();
+      musicShown();
+    }
+  });
+  document.addEventListener("change", function (event) {
+    var box = musicBox(), audio = player();
+    if (!box || !audio || !box.contains(event.target)) return;
+    if (event.target.matches("[data-music-sound]")) {
+      var playing = !audio.paused;
+      audio.setAttribute("src", chosenSrc(box));
+      if (playing) audio.play().then(function () {}, function () { musicShown(); });
+      saveMusic(playing ? { sound: event.target.value, played: "1" } : { sound: event.target.value });
+    } else if (event.target.matches("[data-music-volume]")) {
+      saveMusic({ volume: event.target.value });
+    }
+  });
+  document.addEventListener("input", function (event) {
+    var audio = player();
+    if (audio && event.target.matches && event.target.matches("#wall-view [data-music-volume]")) {
+      audio.volume = Number(event.target.value) / 100;
+    }
+  });
 
   // F59f (idea #258): on the calendar screen, a swipe left or right is › or ‹.
   var swipeFrom = null;
@@ -150,7 +321,8 @@
   var awake = null;
   function nightMode() {
     var mode = document.querySelector("#wall-night .wall-night-mode");
-    var night = mode && mode.getAttribute("data-night") === "1";
+    var night = mode && mode.getAttribute("data-night") === "1" &&
+      !document.querySelector("#wall-view [data-focus-running]");  // F60e: not mid-session
     document.body.classList.toggle("night", !!night);
     if (!night) wake(false);
     if (mode) applyLook(mode.getAttribute("data-look"));

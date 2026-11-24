@@ -18,6 +18,9 @@ html.wall-root { font-size: calc(100vw / 67.5); }
   --p4: #1f6b6b; --p4-tint: #dcefee; --p4-bg: #eef7f6; --p4-ring: #8cc1bd;
   --p5: #7a3474; --p5-tint: #f2e1f0; --p5-bg: #f9f0f8; --p5-ring: #c99ac4;
   --p6: #4a5566; --p6-tint: #e4e8ee; --p6-bg: #f2f4f7; --p6-ring: #a9b2c0;
+  --rec: #b3261e; --on-rec: #ffffff;  /* F60d: the mic while it listens */
+  /* F60e: Themi the chameleon's own colours (themi.css's), for the body double's scene */
+  --cham: #3aa79b; --cham-belly: #b4ead6; --cham-stripe: #23857a; --cham-line: #1b4b46; --cham-eye: #ffffff;
 }
 /* F52b: the dark look. Every token above, redrawn for a dark room: the people keep their
    hues, lighter on dark tints, with dark text on their blocks. On <html> when the look is
@@ -39,6 +42,8 @@ html.dark, body.night {
   --p4: #7fcfc8; --p4-tint: #1d3533; --p4-bg: #192a29; --p4-ring: #5a9c96;
   --p5: #e49bdc; --p5-tint: #3a2237; --p5-bg: #2d1c2b; --p5-ring: #ad6aa5;
   --p6: #b4c0d2; --p6-tint: #2a3039; --p6-bg: #21262d; --p6-ring: #7d8a9c;
+  --rec: #f2b8b5; --on-rec: #601410;
+  --cham: #46b2a6; --cham-belly: #a3dcc7; --cham-stripe: #2a8a80; --cham-line: #0d2624; --cham-eye: #f4f4f0;
   color-scheme: dark;
 }
 /* The night view keeps its own colours, whatever the look. */
@@ -444,4 +449,44 @@ body.night:not(.awake) { background: var(--night-bg); }
 .talk-line.mine { align-self: flex-end; background: var(--field); border: 0.12rem solid var(--edge); }
 .talk-line .wall-sub { display: block; margin-top: 0.3rem; }
 .talk-mic { display: inline-flex; align-items: center; gap: 0.4rem; }
-.talk-mic.on { background: var(--soft); border-color: var(--fg); }
+/* F60d (idea #264): listening is red with a stop square and a pulsing dot; working spins */
+.talk-mic .stop-icon, .talk-mic .talk-spin { display: none; }
+.talk-mic.on { background: var(--rec); border-color: var(--rec); color: var(--on-rec); }
+.talk-mic.on .mic-icon { display: none; }
+.talk-mic.on .stop-icon { display: inline; fill: currentColor; }
+.talk-mic.busy .mic-icon { display: none; }
+.talk-mic.busy .talk-spin { display: inline-block; width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 0.2rem solid currentColor; border-right-color: transparent; animation: talk-spin 0.9s linear infinite; }
+.talk-status { min-height: 1.6rem; margin: 0.6rem 0 0; font-size: 1.25rem; display: flex; align-items: center; gap: 0.6rem; }
+.talk-status:empty { display: none; }
+.talk-status.listening::before { content: ""; width: 0.9rem; height: 0.9rem; border-radius: 50%; background: var(--rec); animation: talk-pulse 1.2s ease-in-out infinite; }
+.talk-status.missed { color: var(--fg); font-weight: 600; }
+.talk-cancel { min-height: 3.25rem; }
+@keyframes talk-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.75); } }
+@keyframes talk-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .talk-status.listening::before, .talk-mic.busy .talk-spin { animation: none; }
+}
+
+/* F60e (idea #263): the body double on the wall */
+.wall-asks { display: flex; gap: 0.8rem; align-items: center; }
+.wall-focus-chip { display: block; margin: 0.4rem 0.8rem 0; padding: 0.5rem 1rem; min-height: 3rem; border: 0; border-radius: 2rem;
+  background: var(--tone, var(--soft)); color: var(--on-tone, var(--fg)); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+.focus-pick fieldset { border: 0; margin: 0 0 1rem; padding: 0; }
+.focus-pick legend { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.5rem; }
+.focus-options { display: flex; flex-direction: column; gap: 0.5rem; }
+.focus-row { flex-direction: row; flex-wrap: wrap; }
+.focus-option { display: flex; align-items: center; gap: 0.6rem; min-height: 3.25rem; padding: 0 1rem; border-radius: 1rem; background: var(--soft); font-size: 1.2rem; cursor: pointer; }
+.focus-option input[type=radio] { width: 1.4rem; height: 1.4rem; }
+.focus-option:has(input:checked) { outline: 0.15rem solid var(--fg); }
+.focus-other input[name=typed] { flex: 1; min-height: 2.6rem; font: inherit; border-radius: 0.6rem; border: 0.1rem solid var(--edge); background: var(--field); color: var(--fg); padding: 0 0.6rem; }
+.focus-start { min-width: 10rem; }
+.focus-live { --muted: var(--sub); --line: var(--edge); --radius: 1.2rem; --space-2: 0.6rem; --space-3: 1rem; }
+.focus-scene { min-height: 16rem; margin: 0.6rem 0; border-radius: 1.2rem; background: var(--soft); display: flex; align-items: center; justify-content: center; }
+.focus-timer { font-size: 3.5rem; font-variant-numeric: tabular-nums; margin: 0; }
+.focus-line { font-size: 1.4rem; line-height: 1.45; white-space: pre-line; }
+.focus-moves .sheet-button { min-height: 4rem; font-size: 1.25rem; }
+.focus-picture { margin: 0.6rem 0; border-radius: 1.2rem; overflow: hidden; background: var(--soft); max-height: 40vh; display: flex; align-items: center; justify-content: center; min-height: 6rem; }
+.focus-picture img { width: 100%; height: 100%; max-height: 40vh; object-fit: contain; }
+.focus-music { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; margin-top: 1rem; }
+.focus-music select { min-height: 3.25rem; font: inherit; font-size: 1.15rem; border-radius: 0.8rem; background: var(--field); color: var(--fg); border: 0.1rem solid var(--edge); padding: 0 0.6rem; }
+.focus-music input[type=range] { flex: 1; min-width: 10rem; height: 2.5rem; }

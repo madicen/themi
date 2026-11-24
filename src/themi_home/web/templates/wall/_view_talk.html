@@ -18,14 +18,17 @@
 <div class="talk-log" hx-get="/wall/talk/lines?member={{ member.id }}" hx-trigger="every 3s" hx-swap="innerHTML">
   {% include "wall/_talk_lines.html" %}
 </div>
+{#- F60d (idea #264): what the mic is doing, said where it's seen and to a screen reader -#}
+<p class="talk-status{% if missed %} missed{% endif %}" data-talk-status aria-live="polite">{% if missed %}I didn't catch that. Try again, or type it.{% endif %}</p>
 <form class="sheet-add talk-form" hx-post="/wall/talk" hx-target="#wall-view" hx-swap="innerHTML">
   <input type="hidden" name="member" value="{{ member.id }}">
   <label class="sr-only" for="wall-talk">Say something to Themi</label>
   <input id="wall-talk" name="text" maxlength="4000" autocomplete="off" placeholder="Say something to Themi">
   <button class="sheet-button primary">Send</button>
-  <button type="button" class="sheet-button talk-mic" data-talk-mic data-member="{{ member.id }}" aria-label="Hold a thought: tap to talk, tap again to send" hidden>
-    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="talk-mic-words">Talk</span>
+  <button type="button" class="sheet-button talk-mic" data-talk-mic data-member="{{ member.id }}" aria-label="Talk: tap to start, tap again to send" aria-pressed="false" hidden>
+    <svg class="mic-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><svg class="stop-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span class="talk-spin" aria-hidden="true"></span><span class="talk-mic-words">Talk</span>
   </button>
+  <button type="button" class="sheet-button talk-cancel" data-talk-cancel aria-label="Cancel: throw the recording away" hidden>✕ Cancel</button>
 </form>
 {% endif %}
 {% endcall %}

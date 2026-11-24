@@ -2421,7 +2421,9 @@ def _not_settled(task: Task) -> None:
 @tool(
     "complete_task",
     "Mark a task done when someone says it's been taken care of. Themi tells them it's done "
-    "itself, its warm word included.",
+    "itself, its warm word included. An item on one of their routines isn't a task: tick "
+    "it with tick_routine_item (ask more_tools for it if it isn't here) before saying it "
+    "can't be found.",
     {"task_id": {"type": "integer"}},
 )
 async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:

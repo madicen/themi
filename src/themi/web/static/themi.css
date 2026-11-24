@@ -262,135 +262,7 @@ body.session-page { min-height: 100vh; min-height: 100dvh; }
 .session-moves form { flex: 1 1 8rem; }
 .session-moves button.big { width: 100%; font-size: 1.1rem; padding: var(--space-3); min-height: var(--tap); }
 
-/* BD3b: Themi the chameleon and the scenes. Original art (static/chameleon/); colours from
-   the tokens above. The animation state comes from the server as data-state. */
-.session-scene { position: relative; overflow: hidden; }
-.scene-art { position: absolute; inset: 0; width: 100%; height: 100%; }
-.scene { display: none; }
-.session-scene[data-mode="silent"] .scene-silent,
-.session-scene[data-mode="sprint"] .scene-sprint,
-.session-scene[data-mode="guided"] .scene-guided,
-.session-scene[data-mode="cooking"] .scene-cooking { display: inline; }
-.scene-wall { fill: var(--soft); }
-.scene-window { fill: var(--info-bg); stroke: var(--line); stroke-width: 4; }
-.scene-frame, .scene-branch { fill: none; stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
-.scene-branch { stroke: var(--warn); stroke-width: 7; }
-.scene-leaf { fill: var(--good); opacity: .7; }
-.scene-rain path { stroke: var(--info); stroke-width: 2; stroke-linecap: round; opacity: .5; }
-.scene-desk, .scene-floor { fill: var(--line); }
-.scene-lamp { fill: var(--muted); }
-.scene-lampshade { fill: var(--warn-bg); stroke: var(--warn); stroke-width: 2; }
-
-.cham { position: absolute; height: 78%; max-height: 15rem; width: auto; left: 4%; bottom: 6%; overflow: visible; }
-.cham path, .cham rect, .cham circle { stroke-linecap: round; stroke-linejoin: round; }
-.cham-skin { fill: var(--cham); stroke: var(--cham-line); stroke-width: 1.8; }
-.cham-belly { fill: var(--cham-belly); }
-.cham-stripe { fill: none; stroke: var(--cham-stripe); stroke-width: 4; opacity: .5; }
-.cham-outline { fill: none; stroke: var(--cham-line); stroke-width: 9.6; }
-.cham-limb { fill: none; stroke: var(--cham); stroke-width: 6; }
-.cham-tail .cham-outline { stroke-width: 11.6; }
-.cham-tail .cham-limb { stroke-width: 8; }
-/* the tail's bands: dashes along it, cut square */
-.cham-tail .cham-stripe { stroke-width: 8; stroke-dasharray: 3 6; stroke-linecap: butt; opacity: .55; }
-.cham-mouth, .cham-crease, .cham-lash { fill: none; stroke: var(--cham-line); stroke-width: 1.6; }
-.cham-crease { opacity: .5; }
-.cham-eyeball { fill: var(--cham-eye); stroke: var(--cham-line); stroke-width: 1.6; }
-.cham-pupil { fill: var(--cham-line); }
-.cham-glint { fill: var(--cham-eye); }
-.cham-lid { opacity: 0; }
-.cham-lid circle { fill: var(--cham); stroke: var(--cham-line); stroke-width: 1.6; }
-.prop, .cham-zz { display: none; }
-.prop rect, .prop > path:not(.prop-line):not(.prop-paint) { fill: var(--warn-bg); stroke: var(--fg); stroke-width: 1.4; }
-.prop-line, .cham-zz path { fill: none; stroke: var(--fg); stroke-width: 2; }
-.prop-paint { fill: none; stroke: var(--bad); stroke-width: 3; }
-.prop-paper { fill: var(--card) !important; }
-.cham g { transform-box: fill-box; transform-origin: center; }
-.cham .cham-hand-front { transform-origin: top left; }
-.cham .cham-hand-back { transform-origin: top right; }
-.cham .cham-body { transform-origin: bottom; }
-
-/* each mode's place for the chameleon */
-.session-scene[data-mode="silent"] .prop-book,
-.session-scene[data-mode="silent"] .prop-mug { display: inline; }
-.session-scene[data-mode="sprint"] { flex-direction: column; justify-content: flex-end; padding-bottom: 2.5rem; }
-/* perched on the timer: its feet on the timer's top edge */
-.session-scene[data-mode="sprint"] .cham { z-index: 2; height: 8.5rem; width: 6.8rem; left: calc(50% - 3.4rem);
-  bottom: calc(2.5rem + clamp(2.5rem, 16vw, 4.5rem) * 1.1 + 22px - 7px); }
-.session-scene[data-mode="sprint"] .session-timer { position: relative; z-index: 1; line-height: 1.1; background: var(--card);
-  border: 3px solid var(--line); border-radius: var(--radius); padding: var(--space-2) var(--space-4); }
-.session-scene[data-mode="guided"] { min-height: 7rem; flex: 0 0 auto; }
-.session-scene[data-mode="guided"] .cham { height: 80%; left: 4%; bottom: 7%; }
-.session-scene[data-mode="silent"] .session-timer,
-.session-scene[data-mode="guided"] .session-timer { position: absolute; top: var(--space-2); right: var(--space-3); }
-.session[data-mode="guided"] .session-line { position: relative; background: var(--card); border: 2px solid var(--line);
-  border-radius: var(--radius); padding: var(--space-4); font-size: 1.5rem; }
-.session[data-mode="guided"] .session-line::before { content: ""; position: absolute; left: 1.5rem; top: -12px;
-  border: 10px solid transparent; border-top: 0; border-bottom-color: var(--line); }
-
-/* a slow breathing pulse by Silent Anchor's timer */
-.session-scene[data-mode="silent"] .session-timer::after { content: ""; display: inline-block; width: .5rem;
-  height: .5rem; margin-left: var(--space-2); border-radius: 50%; background: var(--accent);
-  vertical-align: middle; animation: breathe 6s ease-in-out infinite; }
-
-/* the animation states (themi.core.body_double_scene.FLAGS) */
-.session-scene[data-state="idle"] .cham-body { animation: breathe-body 5s ease-in-out infinite; }
-.session-scene[data-state="idle"] .cham-lid { animation: blink 7s infinite; }
-.session-scene[data-state="sweeping"] .prop-broom { display: inline; }
-.session-scene[data-state="sweeping"] .prop-book, .session-scene[data-state="sweeping"] .prop-mug { display: none; }
-.session-scene[data-state="sweeping"] .prop-broom { animation: sweep 1.2s ease-in-out infinite; transform-origin: top; }
-.session-scene[data-state="dozing"] .prop-blanket, .session-scene[data-state="dozing"] .cham-zz { display: inline; }
-.session-scene[data-state="dozing"] .cham-lid { opacity: 1; }
-.session-scene[data-state="dozing"] .cham-zz { animation: float 3s ease-in-out infinite; }
-.session-scene[data-state="painting"] .prop-easel { display: inline; }
-.session-scene[data-state="painting"] .cham-hand-front { animation: dab 1.6s ease-in-out infinite; }
-.session-scene[data-state="stretching"] .cham-body { animation: stretch 4s ease-in-out infinite; }
-.session-scene[data-state="stretching"] .cham-hand-front { transform: rotate(-60deg); }
-.session-scene[data-state="doodling"] .prop-pencil { display: inline; }
-.session-scene[data-state="doodling"] .cham-hand-front { animation: dab 0.9s ease-in-out infinite; }
-/* CK5: the cooking scene: Themi in an apron on a stool by the counter, watching, or
-   stirring while a timer runs */
-.scene-tiles { fill: var(--card); }
-.scene-counter { fill: var(--line); }
-.scene-hob { fill: var(--muted); }
-.scene-pot { fill: var(--muted); stroke: var(--fg); stroke-width: 2; }
-/* F49f: the counter by phase (the cook screen sets data-phase): gather, prep, else the pot */
-.scene-at-gather, .scene-at-prep { display: none; }
-.session-scene[data-phase="gather"] .scene-at-gather,
-.session-scene[data-phase="prep"] .scene-at-prep { display: inline; }
-.session-scene[data-phase="gather"] .scene-at-cook,
-.session-scene[data-phase="prep"] .scene-at-cook { display: none; }
-.scene-cupboard { fill: var(--card); stroke: var(--line); stroke-width: 4; }
-.scene-door { fill: var(--soft); stroke: var(--line); stroke-width: 3; }
-.scene-shelf, .scene-lid, .scene-handle { fill: none; stroke: var(--fg); stroke-width: 3; stroke-linecap: round; }
-.scene-jar { fill: var(--warn-bg); stroke: var(--fg); stroke-width: 2; }
-.scene-bowl { fill: var(--info-bg); stroke: var(--fg); stroke-width: 2; }
-.scene-board { fill: var(--warn-bg); stroke: var(--warn); stroke-width: 2; }
-.scene-blade { fill: var(--card); stroke: var(--fg); stroke-width: 2; }
-.scene-bits circle { fill: var(--good); }
-.scene-steam path, .scene-stool { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
-.scene-stool { stroke: var(--warn); stroke-width: 6; }
-.scene-steam { opacity: 0; }
-.session-scene[data-mode="cooking"] .prop-apron { display: inline; }
-.session-scene[data-mode="cooking"] .prop-apron > path:not(.prop-line) { fill: var(--card); }
-.session-scene[data-mode="cooking"] .cham { height: 74%; left: 8%; bottom: 17%; }
-.session-scene[data-state="watching"] .cham-body { animation: breathe-body 5s ease-in-out infinite; }
-.session-scene[data-state="watching"] .cham-pupil { transform: translateX(2px); }
-.session-scene[data-state="watching"] .cham-lid { animation: blink 7s infinite; }
-.session-scene[data-state="stirring"] .prop-spoon { display: inline; animation: dab 1.4s ease-in-out infinite; transform-origin: bottom left; }
-.session-scene[data-state="stirring"] .cham-hand-front { animation: dab 1.4s ease-in-out infinite; }
-.session-scene[data-state="stirring"] .scene-steam { opacity: .7; animation: float 3s ease-in-out infinite; }
-.session-scene[data-state="cheering"] .cham { animation: hop .6s ease-in-out 3; }
-.session-scene[data-state="cheering"] .cham-hand-front { transform: rotate(-80deg); }
-.session-scene[data-state="cheering"] .prop { display: none; }
-
-@keyframes breathe { 0%, 100% { opacity: .35; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.1); } }
-@keyframes breathe-body { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.03); } }
-@keyframes blink { 0%, 94%, 100% { opacity: 0; } 96% { opacity: 1; } }
-@keyframes sweep { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(10deg); } }
-@keyframes float { 0%, 100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(-6px); opacity: 1; } }
-@keyframes dab { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-18deg); } }
-@keyframes stretch { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.06, .94); } }
-@keyframes hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10%); } }
+/* BD3b's chameleon and scenes are in scene.css (F60e), linked after this file. */
 
 /* WC1: the website chat (/chat): theirs on the right, Themi's on the left, buttons and
    reactions under Themi's, the box kept at the bottom of the screen */
@@ -444,10 +316,6 @@ a.chat-reply:hover, a.chat-reply:focus-visible { color: var(--fg); text-decorati
 body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top: var(--space-2); right: var(--space-3);
   font-size: 1.25rem; padding: var(--space-1) var(--space-3); }
 .session-chat-open[hidden] { display: none; }
-
-@media (prefers-reduced-motion: reduce) {
-  .session-scene *, .session-scene *::after, .session-scene .cham { animation: none !important; transition: none !important; }
-}
 
 /* BD4b: each guided step's picture, in the step's bubble */
 .session-picture { margin: 0; border-radius: var(--radius); overflow: hidden; background: var(--soft);

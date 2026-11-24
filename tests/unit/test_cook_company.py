@@ -42,7 +42,7 @@ def test_the_cooking_states() -> None:
 def test_the_kitchen_scene_is_drawn() -> None:
     scenes = (STATIC / "chameleon" / "scenes.svg").read_text()
     chameleon = (STATIC / "chameleon" / "chameleon.svg").read_text()
-    css = (SRC / "themi" / "web" / "static" / "themi.css").read_text()
+    css = (SRC / "themi" / "web" / "static" / "scene.css").read_text()  # F60e: moved here
     assert 'class="scene scene-cooking"' in scenes
     assert '.session-scene[data-mode="cooking"] .scene-cooking' in css
     for prop in ("apron", "spoon"):

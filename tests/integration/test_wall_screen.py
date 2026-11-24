@@ -169,9 +169,11 @@ async def test_chores_due_by_today_and_to_dos_in_the_walls_order(wall: Scenario)
     assert "Refill pet feeders" in erin and "Declutter the kitchen from yesterday" in erin
     assert "Clean the oven" not in erin  # not due yet
     todo = erin[erin.index("To-do") :]
-    # due or overdue first (important before the rest), then the soonest; three shown
+    # due or overdue first (important before the rest), then the soonest, then undated
+    # (F60f: all sent; the frame shows what fits)
     assert todo.index("Call the vet") < todo.index("Split the cat box") < todo.index("Vacuum")
-    assert "since Oct 9" in todo and "Someday shelf" not in todo and "+1 more" in todo  # WL9c
+    assert todo.index("Vacuum") < todo.index("Someday shelf")
+    assert "since Oct 9" in todo and "more" not in todo
 
 
 async def test_together_has_either_chores_and_the_family_to_dos(wall: Scenario) -> None:
@@ -579,3 +581,14 @@ async def test_the_note_wears_themi_not_a_t(wall: Scenario) -> None:
     assert served.status_code == 200 and "svg" in served.headers["content-type"]
     view = (await get(wall, "/wall/view/note")).text
     assert '<img class="wall-t"' in view and ">T<" not in view
+
+
+async def test_bug_265_every_to_do_goes_to_the_frame_to_show_what_fits(wall: Scenario) -> None:
+    """F60f: three to-dos and "+6 more" left half of Michael's column empty. The frame
+    shows what fits (wall-fit.js, F58c), so the server sends them all, up to TODOS_SHOWN."""
+    titles = [f"Job {n}" for n in range(1, 10)]
+    for title in titles:
+        await task(wall, "Husband", title)
+    mine = words(column(await screen(wall), f"m{wall.member('Husband').id}"))
+    assert all(t in mine for t in titles)
+    assert "more" not in mine.split("To-do", 1)[1].split("View full day")[0]

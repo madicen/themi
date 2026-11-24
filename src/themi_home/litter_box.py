@@ -27,6 +27,7 @@ showing it.
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Any
@@ -35,7 +36,9 @@ from themi import clock
 from themi.accounts import Device, Member
 from themi.channels.outbox import Button, Priority
 from themi.core import keys
+from themi.core.prompts import OpenItem
 from themi.core.services import Services
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import in_quiet_hours, to_local, to_utc_iso
 from themi.standard.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi_home.connectors.catgenie import (
@@ -48,6 +51,7 @@ from themi_home.connectors.catgenie import (
     LitterBoxEvent,
     LitterBoxReading,
 )
+from themi_home.connectors.catgenie.events import CODES, error_words, named_words
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +81,12 @@ WAIT = timedelta(minutes=10)  # a problem's first nudge waits this long
 LATER_FOR = 60  # minutes: Later asks again in an hour
 URGENT = (ERROR, ALERT)  # with OUT: it can't clean
 EFFORT = -0.5  # a small chore, for the energy model
+QUOTES = " \"'\u201c\u201d\u2018\u2019.!"  # trimmed from what they said the app shows
+UNKNOWN_ASK = " What does the CatGenie app call it?"  # F60b: so a reply is expected
+LEARNED_TEXT = "Got it: code {code} is {words}. I'll say that from now on."
+ENDS_IN_A_KIND = re.compile(
+    r"\b(?:issue|error|problem|fault|jam(?:med)?|block(?:ed|age)|fail(?:ure|ed)|warning)$"
+)
 
 
 class LitterBox:
@@ -95,6 +105,10 @@ class LitterBox:
         self.board.own_nudges.append(self._nudge)
         self.board.change_listeners.append(self._task_changed)
         self.board.done_hooks.append(self._done)
+        self.board.display_notes.append(self._task_note)
+        self.services.group_sources.append(self._unnamed_groups)  # F60b
+        self.services.open_item_sources.append(self._unnamed_items)
+        self.services.tools.register(name_litter_code)
 
     # ----- the box --------------------------------------------------------------------
 
@@ -229,6 +243,8 @@ class LitterBox:
             text = GRANULES_TEXT.format(The=_cap(the), used=detail)
         else:
             text = TEXTS[kind].format(The=_cap(the), detail=detail)
+            if self.unnamed_codes(int(row["device_id"] or 0)):
+                text += UNKNOWN_ASK
         if kind in URGENT or detail == OUT:
             deadline = not_before  # due when it may go: the daily limit doesn't hold it
         self._withdraw(task, member)  # one nudge per problem waiting for them
@@ -333,6 +349,80 @@ class LitterBox:
             lines.append(f"Open chore: {task.title}, {whose}, {when}.")
         return lines
 
+    # ----- codes the family names (F60b) ------------------------------------------------
+
+    def unnamed_codes(self, device_id: int | None = None) -> list[str]:
+        """Bare-number codes a box shows now with no words yet, while its problem is open."""
+        found: list[str] = []
+        for row in self.db.query(
+            "SELECT DISTINCT device_id FROM litter_problems WHERE status = 'open' "
+            "AND problem IN (?, ?)",
+            (ERROR, ALERT),
+        ):
+            if device_id is not None and row["device_id"] != device_id:
+                continue
+            device = self._device(int(row["device_id"])) if row["device_id"] else None
+            reading = self.watcher.reading(device) if device else None
+            codes = reading.unknown if reading else ()
+            # A code in words ("HEATER_FAULT") says itself; a bare number needs naming.
+            found += [c for c in codes if c.strip().isdigit() and c not in found]
+        return found
+
+    def _unnamed_groups(self, member: Member) -> set[str]:
+        return {"devices"} if self.unnamed_codes() else set()
+
+    def _unnamed_items(self, member: Member) -> list[OpenItem]:
+        codes = self.unnamed_codes()
+        if not codes:
+            return []
+        listed = ", ".join(codes)
+        return [
+            OpenItem(
+                f"The litter box shows a code Themi has no words for ({listed}). If they say "
+                "what the CatGenie app calls it ('it says Error: Drainage issue'), that's "
+                "name_litter_code, not complete_task: they haven't said it's sorted."
+            )
+        ]
+
+    def seen_code(self, code: str) -> bool:
+        """A code a box has reported: showing now, or in a problem's words."""
+        if code in self.unnamed_codes():
+            return True
+        return bool(
+            self.db.one("SELECT 1 FROM litter_problems WHERE detail LIKE ?", (f"%yet ({code})%",))
+        )
+
+    def learn(self, member: Member, code: str, said: str) -> str:
+        code = code.strip()
+        named = self.watcher.named()
+        if code in CODES or code in named:
+            return f"Code {code} already has its words: {error_words(code, named)}."
+        if not self.seen_code(code):
+            raise ToolFailed(f"No litter box has shown code {code}, so there's nothing to name.")
+        words = code_words(said)
+        if not words:
+            raise ToolFailed("Say what the CatGenie app calls it, in a few words.")
+        before = error_words(code, named)
+        self.db.execute(
+            "INSERT INTO litter_codes (code, words, member_id, said_at) VALUES (?, ?, ?, ?)",
+            (code, words, member.id, to_utc_iso(clock.now())),
+        )
+        after = named_words(words)
+        for table, column in (("litter_problems", "detail"), ("litter_states", "alert")):
+            self.db.execute(
+                f"UPDATE {table} SET {column} = replace({column}, ?, ?) WHERE {column} LIKE ?",
+                (before, after, f"%{before}%"),
+            )
+        return LEARNED_TEXT.format(code=code, words=words)
+
+    def _task_note(self, task: Task) -> str | None:
+        row = self.db.one(
+            "SELECT detail FROM litter_problems WHERE task_id = ? AND status = 'open' "
+            "AND problem IN (?, ?)",
+            (task.id, ERROR, ALERT),
+        )
+        return f"(The box: {row['detail']}.)" if row else None
+
     # ----- small things -------------------------------------------------------------------
 
     def _withdraw(self, task: Task, member: Member) -> None:
@@ -401,3 +491,36 @@ def _possessive(the: str) -> str:
 
 def _cap(words: str) -> str:
     return words[0].upper() + words[1:]
+
+
+def code_words(said: str) -> str:
+    """F60b: "Error: Drainage issue" -> "a drainage issue"; "Clogged waste" -> "a clogged
+    waste error". Short, their words, no quotes or "Error:"."""
+    text = re.sub(r"^\s*(?:it says|says)\s+", "", said.strip(), flags=re.IGNORECASE)
+    text = re.sub(r"^\s*error\s*[:\-]?\s*", "", text, flags=re.IGNORECASE)
+    text = text.strip(QUOTES).strip()
+    text = re.sub(r"\s+", " ", text)[:60].strip()
+    if not text:
+        return ""
+    acronym = len(text) > 1 and text[:2].isupper()  # "UV lamp fault" stays, and is "a UV"
+    if not acronym:
+        text = text[0].lower() + text[1:]
+    if not ENDS_IN_A_KIND.search(text.lower()):
+        text += " error"
+    if re.match(r"(?:an?|the)\b", text):
+        return text
+    return ("an " if not acronym and text[0] in "aeiou" else "a ") + text
+
+
+@tool(
+    "name_litter_code",
+    "What the CatGenie app calls a litter box code Themi didn't know, when they say it ('It "
+    "says Error: Drainage issue' for code 3). code: the number Themi said; words: their words "
+    "for it. Themi uses them from then on. It doesn't mark the chore done.",
+    {"code": {"type": "string"}, "words": {"type": "string"}},
+)
+async def name_litter_code(ctx: ToolContext, args: dict[str, Any]) -> str:
+    box = ctx.services.maybe(keys.litter_box)
+    if box is None:
+        raise ToolFailed("The litter box isn't linked.")
+    return box.learn(ctx.member, str(args.get("code") or ""), str(args.get("words") or ""))

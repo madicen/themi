@@ -85,7 +85,7 @@
   },
   "complete_task": {
     "group": "core",
-    "spec": "05d8381db79d"
+    "spec": "610947d64327"
   },
   "cookbook_recipes_we_can_make": {
     "group": "recipes",
@@ -262,6 +262,10 @@
   "move_list_item": {
     "group": "core",
     "spec": "96728c58869f"
+  },
+  "name_litter_code": {
+    "group": "devices",
+    "spec": "ef5ee391acd6"
   },
   "parcel_status": {
     "group": "email",

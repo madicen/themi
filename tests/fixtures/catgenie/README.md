@@ -25,3 +25,9 @@ left out), ideally while the box shows each state it can: cleaning, the cartridg
 out, the dome off, any error. Then each real code gets its words in
 `themi.connectors.catgenie.events.CODES` (and notification types in `ALERT_TYPES`), with a
 test.
+
+Codes read from the family's boxes so far (in `CODES`): `6`, out of sani-solution (F58b, the
+Whoosh and the A.I., 2026-11-11 and 2026-11-22); `3`, "Error: Drainage issue" as the app
+says it (F60b, the Whoosh, 2026-11-24, `litter_problems` 6). A code someone names in chat
+is kept in the Pi's `litter_codes` (F60b), not here: copy it into `CODES` with a test once
+it's confirmed.

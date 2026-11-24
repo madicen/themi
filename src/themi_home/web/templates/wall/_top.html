@@ -2,6 +2,17 @@
   <p class="wall-date">{{ screen.weekday }}</p>
   <p class="wall-time">{{ screen.time }}<span>{{ screen.meridiem }}</span></p>
 </div>
+{#- F59g (idea #257): talk to Themi, typed or said; F60c (idea #262): before the weather -#}
+<div class="wall-asks">
+<button type="button" class="wall-talk" hx-get="/wall/talk" hx-target="#wall-view" hx-swap="innerHTML">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Talk to Themi</span>
+</button>
+{% if screen.focus %}{#- F60e (idea #263): the body double, started and run on the wall -#}
+<button type="button" class="wall-talk wall-focus" hx-get="/wall/focus" hx-target="#wall-view" hx-swap="innerHTML">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9v4l2.5 2M9 3h6"/></svg><span>Body double</span>
+</button>
+{% endif %}
+</div>
 {% if screen.weather %}
 <button type="button" class="wall-weather" hx-get="/wall/view/weather" hx-target="#wall-view" hx-swap="innerHTML">
   <img src="{{ screen.weather.icon }}" alt="" width="72" height="72">
@@ -11,8 +22,4 @@
   </span>
 </button>
 {% endif %}
-{#- F59g (idea #257): talk to Themi, typed or said -#}
-<button type="button" class="wall-talk" hx-get="/wall/talk" hx-target="#wall-view" hx-swap="innerHTML">
-  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Talk to Themi</span>
-</button>
 <span class="wall-stamp" data-at="{{ screen.time }} {{ screen.meridiem }}" hidden></span>

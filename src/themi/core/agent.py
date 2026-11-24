@@ -130,6 +130,29 @@ def _kept_nothing(reply: str, ctx: ToolContext) -> bool:
     )
 
 
+# F60a (bug #260, reply 555): "I couldn't find a task called 'take meds'." after only a
+# memory search. Said before any task, routine or list tool ran, it's looked for first.
+NOT_FOUND = re.compile(
+    r"\b(?:couldn'?t|could not|can'?t|cannot|didn'?t|don'?t)\s+(?:find|see)\s+"
+    r"(?:a |an |any |the |that )?(?:task|routine|item|chore|to.?do)"
+    r"|\bno (?:task|routine|item|chore|to.?do)s? (?:called|named|like)\b",
+    re.IGNORECASE,
+)
+LOOKED_IN = re.compile(r".*(?:task|routine|list|chore)", re.IGNORECASE)
+LOOK_GROUPS = ("wall", "lists")
+NOT_LOOKED_NOTE = (
+    "(Themi's note: you said it couldn't be found, but no task, routine or list tool has "
+    "looked. Those tools are here now: look with them (an item on a routine is ticked with "
+    "tick_routine_item), then answer.)"
+)
+
+
+def _looked_nowhere(reply: str, ctx: ToolContext) -> bool:
+    return bool(NOT_FOUND.search(reply)) and not any(
+        LOOKED_IN.match(name) for name, _, _ in ctx.calls
+    )
+
+
 JUST_ADDED = re.compile(
     r"\b(?:i|we)(?:'ve| have)?\s+(?:just\s+)?(?:added|put|made|created|booked|scheduled)\b"
     r"[^.?!]{0,80}\b(?:calendar|appointment|appt|event|from the app)\b",
@@ -710,6 +733,8 @@ class Agent:
             groups |= PICTURE_GROUPS  # F34l: "this" or no words picks no group
         for source in services.group_sources:  # BD1a: a session going on brings its tools
             groups |= source(member)
+        for named in services.text_group_sources:  # F60a: "check off take meds"
+            groups |= named(member, text)
         if routing == "embeddings" and services.group_router is not None:
             # P7b: by meaning too, over this message and the person's last two; and the
             # groups used lately, which short follow-ups lean on.
@@ -737,6 +762,7 @@ class Agent:
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         acked = False  # F45e: one more step after a bare "Got it." over look-ups alone
+        looked = False  # F60a: one more step after "couldn't find" with nothing looked in
         try:
             for step in range(1, self.max_steps + 2):
                 # F34gb: a picture with no words is only described, and asked about.
@@ -765,6 +791,13 @@ class Agent:
                         acked = True
                         messages.append(response.message)
                         messages.append(Message.user(NOTHING_KEPT_NOTE))
+                        continue
+                    if not looked and _looked_nowhere(reply, ctx):  # F60a (reply 555)
+                        looked = True
+                        known = set(services.tools.group_names())
+                        ctx.groups.update(g for g in LOOK_GROUPS if g in known)
+                        messages.append(response.message)
+                        messages.append(Message.user(NOT_LOOKED_NOTE))
                         continue
                     if ctx.answered and not reply:  # F22b: the tool's message said it
                         return _done_first(ctx.done, _unsaid_failure(ctx))

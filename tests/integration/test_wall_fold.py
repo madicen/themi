@@ -65,8 +65,10 @@ async def test_together_folds_too_never_saying_who_did_more(wall: Scenario) -> N
 
 
 async def test_past_the_top_few_one_line_says_how_many_more(wall: Scenario) -> None:
-    for title in ("Vet", "Mail", "Gate", "Shelf", "Tyres"):
-        await task(wall, "Erin", title)
+    from themi_home.wall_view import TODOS_SHOWN  # F60f: 12 now, the frame fits fewer
+
+    for n in range(TODOS_SHOWN + 2):
+        await task(wall, "Erin", f"Job {n}")
     erin = wall.member("Erin")
     shown = column(await screen(wall), f"m{erin.id}")
     more = re.search(r'<button type="button" class="wall-more"([^>]*)>([^<]*)</button>', shown)

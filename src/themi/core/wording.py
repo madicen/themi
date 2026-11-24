@@ -166,6 +166,45 @@ def title_matches(words: str, title: str) -> bool:
     return bool(wanted) and all(any(_same_word(w, h) for h in have) for w in wanted)
 
 
+def _skeleton(word: str) -> str:
+    """A word's consonants as said: vowels and a doubled letter dropped, c/k/q as one."""
+    out = ""
+    for ch in word.translate(str.maketrans("cq", "kk")):
+        if ch in "aeiouy" or (out and out[-1] == ch):
+            continue
+        out += ch
+    return out
+
+
+def _misheard(a: str, b: str) -> bool:
+    """F60a (bug #260): a transcriber's slip, "tick" for "take": one letter off, or the same
+    first letter and the same consonants. Words under three letters never are."""
+    if len(a) < 3 or len(b) < 3 or a[0] != b[0]:
+        return False
+    if _skeleton(a) == _skeleton(b):
+        return True
+    if abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return sum(x != y for x, y in zip(a, b, strict=True)) == 1
+    short, long_ = sorted((a, b), key=len)
+    return any(long_[:i] + long_[i + 1 :] == short for i in range(len(long_)))
+
+
+def names_title(said: str, title: str) -> bool:
+    """F60a (bug #260): does this message name the item? Every word of its title (bar
+    fillers) is in the message, give or take its ending; a title of two words or more may
+    have one of them misheard ("Check off tick meds" names "Take Meds")."""
+    have = name_key(said).split()
+    wanted = [w for w in name_key(title).split() if w not in FILLER]
+    if not wanted:
+        return False
+    missing = [w for w in wanted if not any(_same_word(w, h) for h in have)]
+    if not missing:
+        return True
+    return len(wanted) >= 2 and len(missing) == 1 and any(_misheard(missing[0], h) for h in have)
+
+
 def near_twin(words: str, title: str) -> bool:
     """Most likely the same job under other words ("Refill cat feeders" and "Refill auto
     feeders", bug #132): two or more words in common, and every word of the longer title

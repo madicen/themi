@@ -141,6 +141,8 @@ class Services(Registry):
     facts_source: Callable[[Member, str, Sequence[str]], tuple[list[str], list[str]]] | None = None
     # BD1a: tool groups a member's state calls for, whatever the words (a session going on).
     group_sources: list[Callable[[Member], set[str]]] = field(default_factory=list)
+    # F60a (bug #260): the same, from what the message names (a routine item still open).
+    text_group_sources: list[Callable[[Member, str], set[str]]] = field(default_factory=list)
     # RC1b onwards: what each action on a "recipe" button does (show, cook, grocery card...).
     recipe_buttons: dict[str, EventHandler] = field(default_factory=dict)
     text_handlers: list[TextHandler] = field(default_factory=list)  # RC3a
