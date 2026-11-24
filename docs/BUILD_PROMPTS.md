@@ -361,6 +361,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [x] 2026-11-24 |
 | F60e | Idea: the body double on the wall: start a session and run it there | Feedback | [x] 2026-11-24 |
 | F60f | Feedback: a wall column shows as many to-dos as fit, not three | Feedback | [x] 2026-11-24 |
+| F61a | Feedback: the washer's nudge gets through a work day, and the wet load is on the wall | Feedback | [ ] |
+| F61b | Feedback: "when does the CVS close?" looks it up and answers, without looping | Feedback | [ ] |
+| F61c | Feedback: a fallback model that no longer exists is said once to the admin | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -18279,6 +18282,126 @@ Notes:
 - Built at once, without a separate prompt-writing step (Michael asked to look at it in the
   same session). 12 is a ceiling for a tall frame, not a count anyone sees.
 - **Setup:** update the Pi.
+
+### F61a · Feedback (2026-11-24): the washer's "into the dryer?" gets through a work day, and the wet load shows on the wall
+Status: [ ]
+Depends on: 31, F40b, WL9c
+Read first: `themi_home/laundry.py` (`_washed`, `_nudge`, `MOVE_AFTER`, `off_displays`);
+`themi/channels/outbox.py` (`_earliest`, `BREAKTHROUGH_KINDS`, `free_from`); 31's notes. From
+Michael's bug #266 (2026-11-24, 2:26 pm, "the washer went off ages ago and Themi never sent
+a reminder to transfer the load to the dryer, nor did an item get added to the family about
+it").
+
+What the Pi shows: the washer (device 4) finished at 12:40 pm (load 8, task 140 "Move the
+wet load to the dryer", given to Michael as the roomiest). The nudge was queued at once
+(outbox 2414, logged "Queued normal message 2414 for member 2 until 17:00 -08:00"): it was
+due at 1:10 pm, but Michael's busy time (weekdays 9:00-17:00) held it to 5 pm. The dryer
+started at 2:25 pm, so the nudge was withdrawn unsent. The earlier nudges that did go out
+(31 Oct, 2 Nov) were on a Saturday and an evening. The task has `off_displays = 1`, as 31
+built it, so nothing showed on the wall either.
+
+Decided (Michael, 2026-11-24, bug #266):
+- The laundry nudge gets through busy times (a work day at home is when loads finish).
+  Quiet hours and "/pause laundry" still hold it.
+- While the load is wet, "Move the wet load to the dryer" is on the wall's To-do List; it
+  goes when the dryer starts, the load is rewashed, or it's marked done.
+
+Build:
+- The outbox lets the `laundry` kind through busy times and calendar blocks, but not quiet
+  hours or a pause (a new kind set beside `BREAKTHROUGH_KINDS`, which skips everything).
+  The daily limit already doesn't hold it (its deadline is its send time).
+- `_washed` makes the task without `off_displays`, so the wall's To-do List shows it under
+  whoever has it. The rewash task ("Rewash the washer load") shows the same way. Closing
+  the load (dried, superseded, done) already completes or removes the task, which takes it
+  off the wall.
+- `_hold_reason` and the log line stay as they are.
+
+Tests:
+- A weekday wash ending at 12:40 inside a 9-17 busy time: the nudge goes at 1:10 pm.
+- Inside quiet hours it still waits for them to end; under "/pause laundry" it waits for
+  the pause.
+- The wet load's task is on the wall's To-do List for its owner, and gone once the dryer
+  starts.
+- Scenario: Michael at work, the washer finishes, the nudge comes half an hour later, and
+  the wall shows the to-do until the dryer runs.
+- Changed, if one asserts it: a test that the laundry task stays off the wall (31's
+  `off_displays` choice, which this bug changes).
+
+Data/Setup: update the Pi. Mark #266 reviewed once live.
+
+### F61b · Feedback (2026-11-24): "when does the CVS close?" looks it up and answers, without looping
+Status: [ ]
+Depends on: F31c, F45e, F60a
+Read first: `themi/core/groups.py` (`WEB` words); `themi/standard/web_search.py`
+(`PERSONAL_TEXT`, `DIGITS`); `themi/core/agent.py` (the step loop, `LAST_WORD`,
+`TANGLED_TEXT`); the bug #110 notes. From Michael's bug #267 (2026-11-24, 2:34 pm, "all of
+the above", about the CVS conversation just before it).
+
+What the Pi shows (replies 560-563, 2:32-2:34 pm):
+1. "When does the CVS on showers drive close today?" offered core, lists and schedules, not
+   web: no `WEB` word matches "when does ... close". It searched memory only and asked him
+   for the hours.
+2. "Look them up" (reply 561) added web and ran eight searches. The first already named
+   555 Showers Dr; the three that put that address in the query were refused by the
+   personal-details guard ("a number or address they didn't say in this message"), though
+   it came from a web result, not from the family. At the step limit, the model still asked
+   for a tool, so the reply was "I got a bit tangled up working on that".
+3. "Continue" (reply 563): one search (Yelp says Mon-Fri 10 am-6 pm), then
+   `complete_task(141)` ("Complete open enrollment", unrelated) six times in a row, each
+   refused the same way, until the step limit and "tangled" again.
+
+Build:
+- `WEB` words also match asking when a place opens or closes, or its hours: "when does ...
+  (open|close)", "(open|close)s? (today|tonight|tomorrow|on ...)", "hours" for a named place.
+  Examples: "When does the CVS on Showers Drive close today?", "Is Trader Joe's open
+  tomorrow?".
+- The personal-details guard lets through a number or address that appeared in this turn's
+  web results (it's the web's, not the family's). Anything else stays refused.
+- A tool call identical to one already refused this turn (same name and arguments) isn't
+  run again: the result says "Already tried and refused; don't call it again." A second
+  identical repeat ends the tools for the turn (the next call gets none), so the model
+  answers from what it has.
+- At the step limit, if the model asks for a tool anyway, one more call with no tools at
+  all writes the reply from the results; "tangled" only if that fails too (bug #110's notes
+  said this; the code still passes the tools).
+
+Tests:
+- Routing: "When does the CVS on showers drive close today?" offers web.
+- The guard: "555 Showers Dr" in a query passes when an earlier search this turn returned
+  it; refused when it came only from memory or the person's open items.
+- Six identical refused `complete_task` calls: the second gets the "already tried" result,
+  the third isn't offered tools, and the reply answers the question.
+- The step limit with a tool call asked anyway: the reply is the tool-less answer, not
+  `TANGLED_TEXT`.
+- Scenario: Michael asks when the CVS on Showers Drive closes and hears "6 pm today" (from
+  a fake search result) in one reply.
+
+Data/Setup: update the Pi. Mark #267 reviewed once live.
+
+### F61c · Feedback (2026-11-24): a fallback model that no longer exists is said once to the admin
+Status: [ ]
+Depends on: 06, UC1
+Read first: `themi/ai/router.py` (fallback, `PermanentError`); the AI settings on the
+member's page. From the log in Michael's bug #267.
+
+What the Pi shows: every fallback since at least 24 Nov fails with "gemini returned 404
+NOT_FOUND: models/gemini-3.1-flash-lite-preview is not found". When the free tier hit its
+429 at 2:33 pm, nothing answered ("The AI service is busy"). The fallback has been dead
+without anyone knowing.
+
+Build:
+- A 404 (model not found) from a backend marks that backend's model as gone: the router
+  skips it until its settings change, and the admin gets one message ("Michael's fallback
+  model gemini-3.1-flash-lite-preview no longer exists; pick another on the website"),
+  with a link to the AI settings. Once per model, not per call.
+- The member's AI settings show "not found" beside a model that is gone.
+
+Tests: a fake backend answering 404 is skipped on the next call, the admin message goes out
+once, and saving a new model clears it.
+
+Data/Setup: **Michael:** change the Gemini fallback model on the website now (for example
+to `gemini-3.5-flash-lite` or another current model); this doesn't wait for the build.
+Mark #267 reviewed once live (with F61b).
 
 ## Conversation mode
 
