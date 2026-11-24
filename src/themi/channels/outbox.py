@@ -39,7 +39,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any, Literal, Protocol
@@ -234,6 +234,9 @@ class Outbox:
         self._unreachable_at: datetime | None = None
         # Holds a feature puts on its own kind ("task": one nudge at a time, idea #11).
         self.gates: dict[str, Gate] = {}
+        # F61a (bug #266): kinds busy times and calendar events don't hold (the washer's
+        # "into the dryer?" on a work day at home). Quiet hours and a pause still do.
+        self.past_busy: set[str] = set()
         self.orders: dict[str, Order] = {}
         # Several of a kind waiting at once, sent as one (the morning list, bug #49).
         self.bundlers: dict[str, Bundler] = {}
@@ -850,9 +853,11 @@ class Outbox:
         overdue = deadline is not None and deadline <= now
         blocks = (
             self.calendar_blocks(member, now, now + timedelta(days=8))
-            if self.calendar_blocks
+            if self.calendar_blocks and kind not in self.past_busy
             else []
         )
+        if kind in self.past_busy:
+            member = replace(member, busy_times=())  # quiet hours still hold it
         when = free_from(member, now, tz, blocks)
         if not overdue and self.sent_today(member.id, now) >= member.daily_limit:
             when = max(when, next_waking_start(member, now, tz))
