@@ -357,7 +357,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [x] 2026-11-23 |
 | F60a | Feedback: "check off take meds" ticks the routine item, not "couldn't find" | Feedback | [x] 2026-11-24 |
 | F60b | Feedback: litter box code 3 is a drainage issue; Themi learns a code's words | Feedback | [x] 2026-11-24 |
-| F60c | Idea: the wall's top bar has Talk to Themi before the weather | Feedback | [ ] |
+| F60c | Idea: the wall's top bar has Talk to Themi before the weather | Feedback | [x] 2026-11-24 |
 | F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [ ] |
 | F60e | Idea: the body double on the wall: start a session and run it there | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -18058,7 +18058,7 @@ Notes:
 - **Setup:** update the Pi (migration). Problem 6 reads the drainage words on its next read.
 
 ### F60c · Idea (2026-11-24): the wall's top bar has Talk to Themi before the weather
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: F59g
 Read first: `themi_home/web/templates/wall/_top.html`; `themi_home/web/static/wall.css`
 (`.wall-top`, `.wall-weather`, `.wall-talk`); `themi_home/web/static/wall-fit.js` (F58c). From
@@ -18078,6 +18078,13 @@ Tests: the rendered top bar has `.wall-talk` before `.wall-weather`; with no wea
 button is still there. The wall's fit test (if it measures the top bar) still passes.
 
 Data/Setup: update the Pi. Mark #262 reviewed once live.
+
+Notes:
+- `_top.html`: the time, then "Talk to Themi", then the weather (when there is any) at the
+  right; no CSS change (`.wall-top`'s `space-between` puts Talk in the middle, or at the right
+  with no weather).
+- Tests: 2 in `tests/integration/test_wall_views.py`.
+- **Setup:** update the Pi.
 
 ### F60d · Idea (2026-11-24): the wall's mic says when it's listening and when it's working
 Status: [ ]

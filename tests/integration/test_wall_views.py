@@ -215,6 +215,17 @@ async def test_the_weather_view_is_the_rest_of_today_by_the_hour(rainy: Scenario
     assert 'hx-get="/wall/view/weather"' in page
 
 
+async def test_idea_262_talk_to_themi_comes_before_the_weather(rainy: Scenario) -> None:
+    """F60c: the top bar is the time, Talk to Themi, then the weather at the right."""
+    page = (await get(rainy, "/wall")).text
+    assert 0 < page.index('class="wall-talk"') < page.index('class="wall-weather"')
+
+
+async def test_idea_262_with_no_weather_talk_is_still_there(wall: Scenario) -> None:
+    page = (await get(wall, "/wall")).text
+    assert 'class="wall-talk"' in page and 'class="wall-weather"' not in page
+
+
 async def test_a_day_ahead_has_its_weather_once_its_in_range(rainy: Scenario) -> None:
     view = await get(rainy, "/wall/view/day/2026-10-23")
     assert "High 61°, low 50°" in view.text
