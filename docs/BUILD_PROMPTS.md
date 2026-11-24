@@ -354,7 +354,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F59e | Idea: any household list's card on the wall opens, to see it all and tick things off | Feedback | [x] 2026-11-23 |
 | F59f | Idea: the wall's calendar screen: day by day, and a month to jump around | Feedback | [x] 2026-11-23 |
 | F59g | Idea: talk to Themi from the wall, typed or said | Feedback | [x] 2026-11-23 |
-| F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [ ] |
+| F59h | Idea: cook screen timers' buttons in line; any timer can go to the oven | Feedback | [x] 2026-11-23 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -17851,7 +17851,7 @@ Notes:
 - **Setup:** update the Pi. On the frame, the first mic tap asks for the microphone: allow it.
 
 ### F59h · Idea (2026-11-23): the cook screen's timers keep their buttons in line, and any timer can go to the oven
-Status: [ ]
+Status: [x] 2026-11-23
 Depends on: CK12, OV5
 Read first: `themi_home/web/templates/cook/_rail.html`; `themi_home/web/static/cook.css` (the
 `.cook-timer*` rules, CK12's block); `themi_home/cooking_screen.py` (the `timer` and
@@ -17890,6 +17890,22 @@ taps its oven button with 14:46 left, and the fake oven's timer is 15 min, linke
 Themi's timer moves the oven's to 20.
 
 Data/Setup: update the Pi. Mark #259 reviewed once live.
+
+Notes:
+- `_rail.html`: the time and [+1] [+5] [Oven] [✕] sit in `.cook-timer-row` (flex, wrapping
+  under the time on a narrow rail), then "of … · remaining" and the bar. Buttons keep
+  `--cook-tap` (48 px) targets. CSS at the end of `cook.css`.
+- `Timers.begin` returns the new timer's id and its end (`start` still returns the end).
+  `cooking_oven.oven_timer(cooking, member, timer_id, fresh=)` sets the oven to that timer's
+  time left, rounded up, linked (OV5), and no longer reads `MAX(id)`. `followed()` says
+  whether the oven already follows a timer.
+- The `oven_timer` action with `timer=<id>` sends a running timer of the owner's to the oven
+  ("The oven's timer is set too."). A finished, cancelled or someone else's timer is
+  refused, and one already followed says so. [+ Add] has "Oven timer too" (`oven=1`).
+  State: `oven_timer` (the oven's there), and each timer's `oven` (followed: an "Oven"
+  mark beside its label, no button).
+- Tests: 5 scenarios in `tests/scenarios/test_oven_timers.py`.
+- **Setup:** update the Pi.
 
 ## Conversation mode
 

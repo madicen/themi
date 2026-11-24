@@ -275,17 +275,40 @@ def has_timer(cooking: Cooking) -> bool:
     return oven is not None and oven.oven(ov.TIMER_OVEN) is not None
 
 
-async def oven_timer(cooking: Cooking, member: Member, session: Session, minutes: float) -> str:
-    """OV5: the oven's timer for the cook-screen timer just started (whole minutes, rounded
-    up, as the oven counts), tied to it so either follows the other."""
+async def oven_timer(cooking: Cooking, member: Member, timer_id: int, *, fresh: bool = True) -> str:
+    """OV5: the oven's timer for a cook-screen timer (F59h: any running one, by its id), set
+    to its time left in whole minutes, rounded up, as the oven counts, and tied to it so
+    either follows the other. `fresh`: the timer was just started ("Timer set, and ...")."""
     oven = control(cooking)
-    timer_id = cooking.db.scalar(
-        "SELECT MAX(id) FROM cooking_timers WHERE session_id = ?", (session.id,)
+    row = cooking.db.one(
+        "SELECT ends_at FROM cooking_timers WHERE id = ? AND cancelled_at IS NULL "
+        "AND fired_at IS NULL",
+        (timer_id,),
     )
-    if oven is None or timer_id is None:
-        return "Timer set."
-    said = await oven.set_timer(member, math.ceil(minutes), link=int(timer_id))
-    return "Timer set, and the oven's timer too." if said.ok else f"Timer set. {said.words}"
+    start = "Timer set" if fresh else "Done"
+    if oven is None or row is None:
+        return f"{start}."
+    if followed(cooking, timer_id):
+        return "The oven's timer follows this one already."
+    left = datetime.fromisoformat(row["ends_at"]) - clock.now()
+    minutes = max(1, math.ceil(left.total_seconds() / 60))
+    said = await oven.set_timer(member, minutes, link=timer_id)
+    if not said.ok:
+        return f"{start}. {said.words}"
+    return "Timer set, and the oven's timer too." if fresh else "The oven's timer is set too."
+
+
+def followed(cooking: Cooking, timer_id: int) -> bool:
+    """F59h: the oven's timer follows this cook-screen timer (OV5's link)."""
+    if control(cooking) is None:
+        return False
+    return bool(
+        cooking.db.scalar(
+            "SELECT COUNT(*) FROM oven_timers WHERE cooking_timer_id = ? AND minutes > 0 "
+            "AND done_at IS NULL",
+            (timer_id,),
+        )
+    )
 
 
 def drawn_at() -> str:

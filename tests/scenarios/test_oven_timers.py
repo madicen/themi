@@ -127,3 +127,79 @@ async def test_cancel_the_timer_in_chat_clears_the_ovens_too(
     (reply,) = await scenario.say("Erin", "cancel the timer")
     assert reply == "Timer cancelled, and the oven's too."
     assert oven_timer(kitchen) == 0
+
+
+# ----- F59h (idea #259): any timer can go to the oven, and the buttons sit by the time ----
+
+
+async def test_a_timer_from_add_can_go_to_the_oven_with_its_time_left(
+    scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ
+) -> None:
+    screen = await at_step_5(scenario, site)
+    shown = await screen.act("timer", minutes=15)  # [+ Add], 15 min
+    (timer,) = shown["timers"]
+    assert timer["oven"] is False
+    page = (await site.get("/session/cook/view")).text
+    assert "The oven&#39;s timer too, Step 5" in page or "The oven's timer too, Step 5" in page
+    clock.advance(timedelta(seconds=14))  # 14:46 left
+    sent = await screen.act("oven_timer", timer=timer["id"])
+    assert sent["said"] == "The oven's timer is set too."
+    assert oven_timer(kitchen) == 15  # 14:46, rounded up
+    assert [t["oven"] for t in sent["timers"]] == [True]
+    again = await screen.act("oven_timer", timer=timer["id"])  # already followed
+    assert again["said"] == "The oven's timer follows this one already."
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM oven_timers WHERE done_at IS NULL") == 1
+    await screen.act("timer_add", timer=timer["id"], minutes=5)
+    await poll(scenario)
+    assert oven_timer(kitchen) == 20  # +5 on Themi's moves the oven's
+
+
+async def test_add_with_oven_timer_too_starts_both(
+    scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ
+) -> None:
+    screen = await at_step_5(scenario, site)
+    page = (await site.get("/session/cook/view")).text
+    assert 'name="oven" value="1"' in page and "Oven timer too" in page
+    shown = await screen.act("timer", minutes=8, oven="1")
+    assert shown["said"] == "Timer set, and the oven's timer too."
+    assert oven_timer(kitchen) == 8
+
+
+async def test_someone_elses_or_a_finished_timer_isnt_sent(
+    scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ
+) -> None:
+    screen = await at_step_5(scenario, site)
+    shown = await screen.act("timer", minutes=1)
+    timer_id = shown["timers"][0]["id"]
+    await scenario.advance(minutes=1)
+    await scenario.run_jobs()
+    await screen.act("oven_timer", timer=timer_id)
+    assert oven_timer(kitchen) in (0, None)
+    await screen.act("oven_timer", timer=99999)
+    assert oven_timer(kitchen) in (0, None)
+
+
+async def test_the_time_and_its_buttons_share_a_row(
+    scenario: Scenario, site: httpx.AsyncClient, kitchen: FakeSmartHQ
+) -> None:
+    import re
+
+    screen = await at_step_5(scenario, site)
+    await screen.act("timer", minutes=15)
+    page = (await site.get("/session/cook/view")).text
+    row = re.search(r'<div class="cook-timer-row">(.*?)</div>\s*</div>\s*<p class="cook-timer-of">',
+                    page, re.S)  # fmt: skip
+    assert row is not None
+    assert 'class="cook-timer-left"' in row[1]
+    assert row[1].count('value="timer_add"') == 2 and 'value="timer_cancel"' in row[1]
+    assert 'value="oven_timer"' in row[1]
+
+
+async def test_without_the_oven_theres_no_oven_button(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    screen = await at_step_5(scenario, site)
+    await screen.act("timer", minutes=15)
+    page = (await site.get("/session/cook/view")).text
+    assert 'class="cook-timer-row"' in page  # the timer is there
+    assert 'value="oven_timer"' not in page and "Oven timer too" not in page
