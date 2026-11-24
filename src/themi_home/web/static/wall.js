@@ -55,6 +55,8 @@
     if (idle) clearTimeout(idle);
     var sheet = document.querySelector("#wall-view .wall-sheet");
     if (!sheet) { idle = null; return; }
+    // F60e: "0" is a body double session going on: it stays until closed by hand.
+    if (sheet.getAttribute("data-close-after") === "0") { idle = null; return; }
     var seconds = Number(sheet.getAttribute("data-close-after")) || 120;
     idle = setTimeout(closeView, seconds * 1000);
   }
@@ -181,6 +183,33 @@
   });
   document.addEventListener("htmx:afterSwap", function (event) { showMics(event.target); });
 
+  // F60e (idea #263): the body double's timer counts between the server's redraws (from
+  // its end or start and the server's now), and a finished session closes after 10 s.
+  var skew = 0;
+  function focusTimers() {
+    document.querySelectorAll(".focus-timer[data-timer]").forEach(function (el) {
+      var now = el.getAttribute("data-now");
+      if (now && !el.hasAttribute("data-skew")) {
+        skew = Date.parse(now) - Date.now();
+        el.setAttribute("data-skew", "1");
+      }
+      var at = Date.now() + skew;
+      var down = el.getAttribute("data-timer") === "down";
+      var mark = Date.parse(el.getAttribute(down ? "data-to" : "data-from"));
+      if (isNaN(mark)) return;
+      var s = Math.max(0, Math.round((down ? mark - at : at - mark) / 1000));
+      var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      el.textContent = (h ? h + ":" + ("0" + m).slice(-2) : m) + ":" + ("0" + sec).slice(-2);
+    });
+  }
+  setInterval(focusTimers, 1000);
+  var ending = null;
+  document.addEventListener("htmx:afterSwap", function () {
+    if (document.querySelector("#wall-view [data-focus-finished], #wall-view [data-focus-over]")) {
+      if (!ending) ending = setTimeout(function () { ending = null; closeView(); }, 10000);
+    }
+  });
+
   // F59f (idea #258): on the calendar screen, a swipe left or right is › or ‹.
   var swipeFrom = null;
   document.addEventListener("touchstart", function (event) {
@@ -220,7 +249,8 @@
   var awake = null;
   function nightMode() {
     var mode = document.querySelector("#wall-night .wall-night-mode");
-    var night = mode && mode.getAttribute("data-night") === "1";
+    var night = mode && mode.getAttribute("data-night") === "1" &&
+      !document.querySelector("#wall-view [data-focus-running]");  // F60e: not mid-session
     document.body.classList.toggle("night", !!night);
     if (!night) wake(false);
     if (mode) applyLook(mode.getAttribute("data-look"));

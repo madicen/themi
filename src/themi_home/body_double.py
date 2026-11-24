@@ -501,6 +501,50 @@ class BodyDouble:
             text, buttons = await decorate(session, text, buttons)
         return session, text, buttons
 
+    async def begin_from_page(
+        self,
+        member: Member,
+        *,
+        task_id: int = 0,
+        routine_id: int = 0,
+        what: str = "",
+        mode: str = "",
+        minutes: int = 0,
+    ) -> Session:
+        """F60e (idea #263): a session started on the wall, as `start_body_double` starts
+        one from chat: its start message goes to Telegram (with [Open]) and is kept as the
+        session's card. ValueError says why it can't start."""
+        burnout = self.services.maybe(keys.burnout)
+        if burnout is not None and burnout.current(member):
+            raise ValueError("burnout mode is on, and it comes first")
+        task, routine = None, None
+        if task_id:
+            task = self.task_for(member, task_id)
+        elif routine_id:
+            routines = self.services.maybe(keys.routines)
+            routine = next(
+                (r for r in (routines.of(member) if routines else []) if r.id == routine_id),
+                None,
+            )
+            if routine is None:
+                raise ValueError("that routine isn't theirs")
+        elif what.strip():
+            routine = self.find_routine(member, what)
+            task = None if routine is not None else self.find_task(member, what)
+        else:
+            raise ValueError("say what it's for")
+        if routine is not None and not mode:
+            mode = GUIDED  # a routine is its items, one at a time
+        session, text, buttons = await self.start(
+            member, mode=mode, minutes=minutes, task=task, label=what, routine=routine
+        )
+        result = await self.services.outbox.send(
+            member, text, priority=Priority.REPLY, kind=KIND, buttons=buttons
+        )
+        if result.outbox_id is not None:
+            self.remember_message(session, self.services.outbox.message_id(result.outbox_id))
+        return session
+
     def resolve(self, member: Member, what: str) -> dict[str, Any]:
         """F34hb: one part of a run, from their words: "task 12", a routine of theirs, an
         open task by its name, or else just their words."""

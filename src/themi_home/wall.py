@@ -38,7 +38,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
-from themi_home import wall_talk
+from themi_home import wall_focus, wall_talk
 from themi_home.wall_calendars import WallCalendars
 from themi_home.wall_columns import TONES, BadLayout, WallColumns, moved
 from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
@@ -642,6 +642,115 @@ def routes(kit: Kit) -> APIRouter:
             (mark, member.id),
         )
         return talk_sheet(request, token, member.id, missed=heard is None)
+
+    # ----- F60e (idea #263): the body double on the wall ---------------------------------
+
+    def focus_sheet(
+        request: Request,
+        token: str,
+        member_id: int | None = None,
+        *,
+        refused: str = "",
+        finished: str = "",
+    ) -> Response:
+        """ "Who's this?" (the same choice as Talk), then the pick, or the session going."""
+        view = WallView(kit.app.services)
+        people = view.people()
+        chosen = member_id if member_id is not None else talking.who(token)
+        member = next((m for m in people if m.id == chosen), None)
+        if member is not None:
+            talking.keep(token, member.id)
+        bd = wall_focus.body_double(kit.app.services)
+        state = bd.state(member) if bd is not None and member is not None else None
+        running = bool(state and state.get("active")) and not finished
+        return kit.page(
+            request, "wall/_view_focus.html", member=member, state=state, finished=finished,
+            refused=refused, modes=wall_focus.MODES, lengths=wall_focus.LENGTHS,
+            choices=wall_focus.choices(kit.app.services, member, view.tz()) if member else (),
+            people=[(m.id, m.name, view.tone_of(m)) for m in people],
+            close_after=0 if running else (10 if finished else CLOSE_AFTER),
+        )  # fmt: skip
+
+    @router.get("/wall/focus", response_class=HTMLResponse)
+    def focus_page(request: Request, member: str = "") -> Response:
+        token = viewer(request)
+        if token is None:
+            return gone()
+        if wall_focus.body_double(kit.app.services) is None:
+            return HTMLResponse("", status_code=404)
+        if member == "0":
+            talking.forget(token)
+            return focus_sheet(request, token)
+        if member:
+            chosen = speaker(member)
+            if chosen is None:
+                return HTMLResponse("", status_code=404)
+            return focus_sheet(request, token, chosen.id)
+        return focus_sheet(request, token)
+
+    @router.get("/wall/focus/live", response_class=HTMLResponse)
+    def focus_live(request: Request, member: str = "") -> Response:
+        """The session alone, for the open sheet's poll."""
+        if viewer(request) is None:
+            return gone()
+        chosen = speaker(member)
+        bd = wall_focus.body_double(kit.app.services)
+        if chosen is None or bd is None:
+            return HTMLResponse("", status_code=404)
+        return kit.page(request, "wall/_focus_live.html", member=chosen, state=bd.state(chosen))
+
+    @router.post("/wall/focus/start", response_class=HTMLResponse)
+    async def focus_start(request: Request) -> Response:
+        form = await posted(request)
+        token = viewer(request)
+        if form is None or token is None:
+            return gone()
+        bd = wall_focus.body_double(kit.app.services)
+        if bd is None:
+            return HTMLResponse("", status_code=404)
+        if not form.get("member"):
+            return HTMLResponse("Who's this?", status_code=400)
+        member = speaker(form["member"])
+        if member is None:
+            return HTMLResponse("", status_code=404)
+        what = form.get("what", "")
+        kind, _, number = what.partition(":")
+        try:
+            await bd.begin_from_page(
+                member,
+                task_id=int(number) if kind == "task" and number.isdigit() else 0,
+                routine_id=int(number) if kind == "routine" and number.isdigit() else 0,
+                what=form.get("typed", "") if kind == "typed" else "",
+                mode=form.get("mode", "") if form.get("mode", "") in ("silent", "sprint",
+                                                                       "guided") else "",
+                minutes=int(form["minutes"]) if form.get("minutes", "").isdigit() else 0,
+            )  # fmt: skip
+        except ValueError as exc:
+            return focus_sheet(request, token, member.id, refused=str(exc))
+        return focus_sheet(request, token, member.id)
+
+    @router.post("/wall/focus/act", response_class=HTMLResponse)
+    async def focus_act(request: Request) -> Response:
+        """A tap on the wall's session: as on /session (`act_from_page`)."""
+        form = await posted(request)
+        token = viewer(request)
+        if form is None or token is None:
+            return gone()
+        bd = wall_focus.body_double(kit.app.services)
+        member = speaker(form.get("member", ""))
+        if bd is None or member is None:
+            return HTMLResponse("", status_code=404)
+        session_id = int(form["session"]) if form.get("session", "").isdigit() else 0
+        found = bd.get(session_id)
+        if found is None or found.member_id != member.id:
+            return HTMLResponse("", status_code=404)
+        seq = int(form["seq"]) if form.get("seq", "").lstrip("-").isdigit() else -1
+        await bd.act_from_page(member, session_id, form.get("action", ""), seq,
+                               form.get("mode", ""))  # fmt: skip
+        after = bd.get(session_id)
+        if after is not None and after.ended_at is not None and bd.current(member) is None:
+            return focus_sheet(request, token, member.id, finished=f"The session for {after.label} is over.")
+        return focus_sheet(request, token, member.id)
 
     @router.get("/wall/view/weather", response_class=HTMLResponse)
     def weather_view(request: Request) -> Response:

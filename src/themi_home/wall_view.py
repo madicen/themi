@@ -30,6 +30,7 @@ from themi.core import keys
 from themi.localtime import member_day, member_day_start, to_utc_iso
 from themi_google import parcel_words
 from themi_google.deliveries import Parcel
+from themi_home import wall_focus
 from themi_home.wall_columns import TOGETHER, TOGETHER_TONE, Place, WallColumns, key_of
 
 if TYPE_CHECKING:
@@ -97,6 +98,7 @@ class WallColumn:
     summary: str
     sections: tuple[WallSection, ...]
     member_id: int | None = None
+    focus: str = ""  # F60e: "Body double · 12 min left" while a session's going for them
 
 
 @dataclass(frozen=True)
@@ -276,6 +278,7 @@ class WallScreen:
     people: tuple[WallPerson, ...] = ()  # WL4: "Who did it?"
     night: NightView | None = None  # WL6: None by day
     look: str = "light"  # F52b: "light", "dark" or "auto"
+    focus: bool = False  # F60e: the body double is here, so the top bar offers it
 
 
 class WallView:
@@ -304,6 +307,7 @@ class WallView:
             people=tuple(WallPerson(m.id, m.name, self.tone_of(m)) for m in self.people()),
             night=self.night(),
             look=self.look(),
+            focus=wall_focus.body_double(self.services) is not None,
         )
 
     # ----- WL6: the night -------------------------------------------------------------
@@ -561,6 +565,7 @@ class WallView:
             summary=f"{count} done {self._today_word()}" if count else self._part_word(),
             sections=tuple(s for s in sections if s.items or s.empty or s.folded),
             member_id=member.id,
+            focus=wall_focus.chip(self.services, member),
         )
 
     def _fold(self, finished: list[tuple[Task, datetime]]) -> tuple[list[Task], list[Task]]:

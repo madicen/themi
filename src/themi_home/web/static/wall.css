@@ -461,3 +461,22 @@ body.night:not(.awake) { background: var(--night-bg); }
 @media (prefers-reduced-motion: reduce) {
   .talk-status.listening::before, .talk-mic.busy .talk-spin { animation: none; }
 }
+
+/* F60e (idea #263): the body double on the wall */
+.wall-asks { display: flex; gap: 0.8rem; align-items: center; }
+.wall-focus-chip { display: block; margin: 0.4rem 0.8rem 0; padding: 0.5rem 1rem; min-height: 3rem; border: 0; border-radius: 2rem;
+  background: var(--tone, var(--soft)); color: var(--on-tone, var(--fg)); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+.focus-pick fieldset { border: 0; margin: 0 0 1rem; padding: 0; }
+.focus-pick legend { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.5rem; }
+.focus-options { display: flex; flex-direction: column; gap: 0.5rem; }
+.focus-row { flex-direction: row; flex-wrap: wrap; }
+.focus-option { display: flex; align-items: center; gap: 0.6rem; min-height: 3.25rem; padding: 0 1rem; border-radius: 1rem; background: var(--soft); font-size: 1.2rem; cursor: pointer; }
+.focus-option input[type=radio] { width: 1.4rem; height: 1.4rem; }
+.focus-option:has(input:checked) { outline: 0.15rem solid var(--fg); }
+.focus-other input[name=typed] { flex: 1; min-height: 2.6rem; font: inherit; border-radius: 0.6rem; border: 0.1rem solid var(--edge); background: var(--field); color: var(--fg); padding: 0 0.6rem; }
+.focus-start { min-width: 10rem; }
+.focus-live { --muted: var(--sub, #6b6b6b); --line: var(--edge); --radius: 1.2rem; --space-2: 0.6rem; --space-3: 1rem; }
+.focus-scene { min-height: 16rem; margin: 0.6rem 0; border-radius: 1.2rem; background: var(--soft); display: flex; align-items: center; justify-content: center; }
+.focus-timer { font-size: 3.5rem; font-variant-numeric: tabular-nums; margin: 0; }
+.focus-line { font-size: 1.4rem; line-height: 1.45; white-space: pre-line; }
+.focus-moves .sheet-button { min-height: 4rem; font-size: 1.25rem; }
