@@ -5,7 +5,7 @@ the husband's day rolls over at 4 am, Erin's at midnight."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from tests.integration.test_chore_chart import chore, limit
 from tests.integration.test_wall_screen import task, wall
@@ -104,5 +104,5 @@ async def test_the_person_page_keeps_their_day_and_limit_too(wall: Scenario) -> 
     await task(wall, "Husband", "Take out trash", due=THU, chore=True)
     move_to(wall, THU, 0, 30)
     view = WallViews(WallView(wall.app.services)).person(wall.member("Husband").id)
-    assert view is not None
+    assert view is not None and view.chores is not None
     assert "Take out trash" not in [i.title for i in view.chores.items]

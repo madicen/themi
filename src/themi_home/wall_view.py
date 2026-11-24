@@ -912,8 +912,9 @@ class WallView:
 
     async def range_events(self, first: date, last: date) -> dict[date, list[WallEvent]]:
         """F59f (idea #258): each day's events from `first` to `last` (the calendars turned
-        off on the wall too: the screen leaves them out, and offers them back). Outside what's kept (last week to two weeks ahead) they're
-        read from Google, held for a few minutes."""
+        off on the wall too: the screen leaves them out, and offers them back). Outside
+        what's kept (last week to two weeks ahead) they're read from Google, held for a few
+        minutes."""
         days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
         reader = self.services.maybe(keys.calendars)
         if reader is None or not self.has_calendar():
@@ -921,17 +922,15 @@ class WallView:
         tz = self.tz()
         start = datetime(first.year, first.month, first.day, tzinfo=tz)
         end = datetime(last.year, last.month, last.day, tzinfo=tz) + timedelta(days=1)
-        source = None
-        if not reader.stored(start, end):
-            got = {
-                m.id: await reader.entries_between(m, start, end)
-                for m in self.services.store.list_members()
-            }
+        if reader.stored(start, end):
+            return {d: self.events(d) for d in days}
+        got = {
+            m.id: await reader.entries_between(m, start, end)
+            for m in self.services.store.list_members()
+        }
 
-            def source(owner: Member, since: datetime, until: datetime) -> list[Any]:
-                return [
-                    e for e in got.get(owner.id, []) if e.ends_at > since and e.starts_at < until
-                ]
+        def source(owner: Member, since: datetime, until: datetime) -> list[Any]:
+            return [e for e in got.get(owner.id, []) if e.ends_at > since and e.starts_at < until]
 
         return {d: self.events(d, source) for d in days}
 

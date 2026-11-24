@@ -89,9 +89,7 @@ async def test_the_mic_is_hidden_until_the_frame_says_it_can_record(wall: Scenar
     husband = wall.member("Husband")
     sheet = (await get(wall, f"/wall/talk?member={husband.id}")).text
     assert re.search(r"<button[^>]*data-talk-mic[^>]*hidden>", sheet)
-    js = (
-        await get(
-            wall, re.search(r'src="([^"]*wall\.js[^"]*)"', (await get(wall, "/wall")).text)[1]
-        )
-    ).text
+    script = re.search(r'src="([^"]*wall\.js[^"]*)"', (await get(wall, "/wall")).text)
+    assert script is not None
+    js = (await get(wall, script[1])).text
     assert "getUserMedia" in js and "MediaRecorder" in js

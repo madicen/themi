@@ -1,20 +1,20 @@
 """F59f (Michael's idea #258): the calendar on the wall opens its own screen: a day at a time
-with ‹ ›, or a month, Monday first, to jump around in; from six months back to a year ahead.
+with the arrows, or a month, Monday first, to jump around in; from six months back to a year ahead.
 The scenario's day is Wednesday 21 October 2026, 9 am, Los Angeles."""
 
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 
 from tests.fakes.gcal_api import FakeGcal
+from tests.integration.test_wall_list_views import post
 from tests.integration.test_wall_screen import calendar, share, words
 from tests.integration.test_wall_views import get
-from tests.integration.test_wall_list_views import post
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_day_summary import local
 from tests.scenarios.test_triage import ERIN
 from themi import clock
-from datetime import timedelta
 
 __all__ = ["calendar"]  # the fixture
 
@@ -81,8 +81,8 @@ async def test_a_month_starts_on_monday_with_up_to_three_chips_a_day(
     assert re.findall(r'class="cal-ev[^"]*">([^<]+)<', day) == ["One", "Two", "Three"]
     assert "+1" in day
     assert 'hx-get="/wall/calendar?day=2026-10-28"' in view
-    assert 'hx-get="/wall/calendar?month=2026-09"' in view  # ‹
-    assert 'hx-get="/wall/calendar?month=2026-11"' in view  # ›
+    assert 'hx-get="/wall/calendar?month=2026-09"' in view  # the month before
+    assert 'hx-get="/wall/calendar?month=2026-11"' in view  # the month after
     assert "October 2026" in view and "May 2026" in view and "October 2027" in view  # picker
 
 

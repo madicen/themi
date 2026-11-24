@@ -176,7 +176,7 @@ class CalendarBusy:
                                     calendar_id,
                                     e["event_id"],
                                     e["notes"],
-                                )  # fmt: skip
+                                )
                             )
             except Exception as exc:  # what's kept still shows
                 log.warning("Couldn't read a range for account %s (%s)", account.id,
