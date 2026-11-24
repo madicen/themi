@@ -279,3 +279,45 @@ async def test_an_unknown_place_is_asked_about_not_done(
     scenario.primary.queue_text("")
     replies = await scenario.say("Erin", "It's one of the places in your memory")
     assert replies == ["I don't have an address for grandma's yet. What is it?"]
+
+
+# ----- F59b (reply 549): where they leave from is never also where they're going ------------
+
+
+async def test_an_address_that_is_where_they_leave_from_is_dropped(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    fake_travel.place(LA_PARA, 37.42, -122.13)
+    fake_travel.place(LOT, 37.43, -122.17)
+    fake_travel.leg(LA_PARA, LOT, 19)
+    ready.add_event(ERIN, local(18, 30), local(20, 30), summary="Visit at Stanford",
+                    location=LOT)  # fmt: skip
+    await scenario.run_periodic("calendar.busy")
+    scenario.primary.queue_tool_call(  # reply 549's arguments
+        "drive_time",
+        {"event": "Visit at Stanford", "from": LA_PARA, "address": LA_PARA, "arrive_by": ""},
+    )
+    scenario.primary.queue_text("")
+    await scenario.say("Erin", "My in-law's house")
+    result = tool_result(scenario)
+    assert f"About 19 min from {LA_PARA}" in result
+    assert "0 min" not in result
+
+
+async def test_a_route_of_no_time_between_two_addresses_is_never_said(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    fake_travel.place(LA_PARA, 37.42, -122.13)
+    fake_travel.place(LOT, 37.43, -122.17)
+    fake_travel.leg(LA_PARA, LOT, 0)
+    ready.add_event(ERIN, local(18, 30), local(20, 30), summary="Visit at Stanford",
+                    location=LOT)  # fmt: skip
+    await scenario.run_periodic("calendar.busy")
+    scenario.primary.queue_tool_call(
+        "drive_time", {"event": "Visit at Stanford", "from": LA_PARA, "address": ""}
+    )
+    scenario.primary.queue_text("Let me check.")
+    await scenario.say("Erin", "When should I leave?")
+    result = tool_result(scenario)
+    assert "came out the same place on the map" in result
+    assert "0 min" not in result

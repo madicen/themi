@@ -347,8 +347,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F58e | Feedback: a saved place's hours are by day (Monday's visit, Monday's hours) | Feedback | [x] 2026-11-22 |
 | F58f | Feedback: "6:30–8:30 pm weekdays" is read, and hours in a place's note or a fact count | Feedback | [x] 2026-11-23 |
 | SW1 | Feedback: the Safeway helper's popup shows Themi's grocery list, an icon, no old fills | Feedback | [x] 2026-11-23 |
-| F59a | Feedback: "in-laws" finds the saved in-laws' house; "Not sure where" never ends "Done." | Feedback | [x] 2026-11-24 |
-| F59b | Feedback: where they leave from is never also where they're going (no "0 min") | Feedback | [ ] |
+| F59a | Feedback: "in-laws" finds the saved in-laws' house; "Not sure where" never ends "Done." | Feedback | [x] 2026-11-23 |
+| F59b | Feedback: where they leave from is never also where they're going (no "0 min") | Feedback | [x] 2026-11-23 |
 | F59c | Idea: the wall keeps each person's day until their rollover, and their chart's limit | Feedback | [ ] |
 | F59d | Idea: the note at the top of the wall has a ✕ to dismiss it in place | Feedback | [ ] |
 | F59e | Idea: any household list's card on the wall opens, to see it all and tick things off | Feedback | [ ] |
@@ -17428,7 +17428,7 @@ Notes (2026-11-23):
   extension on `chrome://extensions` and the Safeway tab.
 
 ### F59a · Feedback (2026-11-23): "in-laws" finds the saved in-laws' house, and "Not sure where" never ends "Done."
-Status: [x] 2026-11-24
+Status: [x] 2026-11-23
 Depends on: F57b, F45e
 Read first: `themi/standard/places.py` (`_words`, `Places.find`, `mentioned`, `search`, `_kin`,
 `named_place`, `IN_LAWS`, `KIN`); `themi_google/travel.py` (`_named_origin`, `address_for`,
@@ -17505,7 +17505,7 @@ Notes:
 - **Setup:** update the Pi; label reply 547 as above.
 
 ### F59b · Feedback (2026-11-23): where they leave from is never also where they're going, so no "0 min"
-Status: [ ]
+Status: [x] 2026-11-23
 Depends on: F46b, F46c
 Read first: `themi_google/travel.py` (`drive_time`, `drive_to_event`, `_given_place`,
 `_named_origin`, `_duration`); F46b's and F46c's Notes. From the conversation saved with
@@ -17537,6 +17537,19 @@ changes for the description.
 Scenario: none beyond the tool test (the 4:53 pm turn is the same call).
 
 Data/Setup: update the Pi. Nothing else.
+
+Notes:
+- `Travel.drive_to_event`: `address` naming the same place as `from` (`_same_place`: both
+  through `address_for`, compared by `name_key`) is dropped, so the event's own location is
+  used. Nothing in travel remembers a given address (F46b's remembering is the model's
+  `remember_fact`), so there was nothing else to skip.
+- A start and end at the same map point, or a route under a minute, raise
+  `TravelError(SAME_PLACE)`: the tool fails with "No drive time: where they leave from and
+  where they're going came out the same place on the map; check the address." This also
+  covers an event at home with no `from` (it said "0 min" before).
+- `drive_time`'s description says `address` is never where they leave from; golden
+  `tools.json` changes for it.
+- Tests: 2 scenarios in `tests/scenarios/test_saved_places.py`.
 
 ### F59c · Idea (2026-11-23): the wall keeps each person's day until their rollover, and their chore chart's limit
 Status: [ ]
