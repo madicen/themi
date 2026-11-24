@@ -14,7 +14,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import InvalidValue, Member, NotFound, PermissionDenied
-from themi.ai.settings import ADAPTER_KINDS, AITask, RouteEntry
+from themi.ai.settings import ADAPTER_KINDS, AITask, Backend, RouteEntry
 from themi.core.capabilities import IMAGE_GENERATION, VOICE_NOTES
 from themi.storage.secrets import Secret
 from themi.web.kit import Kit
@@ -80,8 +80,16 @@ def routes(kit: Kit) -> APIRouter:
             "kind_labels": KIND_LABELS,
             "image_cap": app.services.router.image_cap(member.id),  # BD4a
             "picture_cap": picture_cap(member.id),  # F34gb
+            "backend_chips": {b.id: backend_chips(b) for b in backends},
             **extra,
         }
+
+    def backend_chips(backend: Backend) -> list[tuple[str, str]]:
+        chips = [("Key saved", "good")] if backend.has_key else []
+        # F61c (bug #267): a model the provider said isn't found, skipped until it's changed
+        for model in app.services.router.gone_models(backend.id):
+            chips.append((f"Not found: {model or 'its default model'}", "warn"))
+        return chips
 
     @router.get("/ai", response_class=HTMLResponse)
     def ai_page(request: Request) -> HTMLResponse:

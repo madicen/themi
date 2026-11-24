@@ -92,6 +92,9 @@ class Laundry:
         self.services.provide(keys.laundry, self)
         self.watcher.listeners.append(self.on_event)
         self.board.own_nudges.append(self._nudge)
+        # F61a (bug #266): a wash ending on a work day at home is asked about then; quiet
+        # hours and "/pause laundry" still hold it.
+        self.services.outbox.past_busy.add(KIND)
         self.board.change_listeners.append(self._task_changed)
 
     # ----- the appliances -------------------------------------------------------------
@@ -144,8 +147,7 @@ class Laundry:
             TITLE,
             "physical",
             1,
-            nudge=False,
-            off_displays=True,  # it comes and goes with the washer; the wall's lists stay calm
+            nudge=False,  # F61a (bug #266): on the wall while the load is wet
             assignment=assignment,
         )
         self.db.execute("UPDATE laundry_loads SET task_id = ? WHERE id = ?", (task.id, load_id))

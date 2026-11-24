@@ -140,6 +140,11 @@ WEB = ToolGroup(
         "look (?:it |that |this )?up|search|google|online|on the web|internet|website"
         "|find out|still (?:open|practi[cs]ing|in business|working)|phone number|open"
         "ing hours|reviews?"
+        # F61b (reply 560): when a place opens or closes, or its hours
+        r"|when does .{1,60}? (?:open|close)|\b(?:open|close)s? (?:today|tonight|tomorrow"
+        r"|at|on (?:mon|tue|wed|thu|fri|sat|sun)\w*)"
+        r"|(?:store|shop|business|closing|pharmacy|holiday) hours"
+        r"|hours (?:for|of|today|tonight|tomorrow|on)"
     ),
     examples=(
         "Can you look up whether Dr. Scheinbach is still practicing?",
@@ -154,6 +159,8 @@ WEB = ToolGroup(
         "Can you find the recall notice for our car seat online?",
         "What does the internet say about rosemary for cats?",
         "Look it up: when does daylight saving end this year?",
+        "When does the CVS on Showers Drive close today?",
+        "Is Trader Joe's open tomorrow?",
     ),
     tools=(
         "search_web",

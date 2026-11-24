@@ -418,3 +418,93 @@ def test_the_setting_is_a_number_from_1_to_1000() -> None:
     (field,) = [f for f in fields(SearchSettings) if f.name == "daily_lookups"]
     assert field.kind == "number" and not field.advanced
     assert field.label.startswith("Web lookups a day")
+
+
+# ----- F61b (bug #267): "when does the CVS close?" ------------------------------------------
+
+CVS_YELP = "https://www.yelp.example/biz/cvs-pharmacy-mountain-view-6"
+
+
+def cvs(fake: FakeSearch) -> None:
+    fake.result(
+        "cvs",
+        "CVS Pharmacy - 555 Showers Dr, Mountain View, California - Yelp",
+        CVS_YELP,
+        "Mon - 10:00 am - 6:00 pm, Tue - 10:00 am - 6:00 pm.",
+    )
+
+
+def test_asking_when_a_place_closes_offers_the_web(scenario: Scenario) -> None:
+    choose = scenario.app.services.tools.choose_groups
+    for said in (
+        "When does the CVS on showers drive close today?",
+        "Is Trader Joe's open tomorrow?",
+        "what are the pharmacy hours on Sunday",
+    ):
+        assert "web" in choose([said]), said
+    for said in ("Set my quiet hours to 10 pm", "Close the garage door", "I'm open to ideas"):
+        assert "web" not in choose([said]), said
+
+
+async def test_reply_560_the_hours_are_looked_up_and_said(
+    scenario: Scenario, fake_search: FakeSearch
+) -> None:
+    at_home(scenario)
+    cvs(fake_search)
+    scenario.primary.queue_tool_call(
+        "search_web", {"query": "CVS Showers Drive hours", "near_home": True, "name": "CVS"}
+    )
+    scenario.primary.queue_text("The CVS on Showers Drive closes at 6 pm today (Yelp).")
+    said = "When does the CVS on showers drive close today?"
+    assert await scenario.say("Husband", said) == [
+        "The CVS on Showers Drive closes at 6 pm today (Yelp)."
+    ]
+    assert "search_web" in scenario.primary.requests[0].tool_names  # offered at once
+
+
+async def test_reply_561_an_address_the_web_gave_may_be_searched(
+    scenario: Scenario, fake_search: FakeSearch
+) -> None:
+    at_home(scenario)
+    cvs(fake_search)
+    scenario.primary.queue_tool_call("search_web", {"query": "CVS Showers Drive hours"})
+    scenario.primary.queue_tool_call("search_web", {"query": "CVS 555 Showers Dr hours"})
+    scenario.primary.queue_text("It closes at 6 pm.")
+    await scenario.say("Husband", "Look up when the CVS on Showers Drive closes")
+    assert fake_search.queries() == ["CVS Showers Drive hours", "CVS 555 Showers Dr hours"]
+
+
+async def test_a_refused_call_isnt_run_again_and_the_reply_answers(
+    scenario: Scenario, fake_search: FakeSearch
+) -> None:
+    """Reply 563: the same refused call six times, until the step limit and "tangled". The
+    second is turned back unrun; the third ends the tools, and the reply comes without."""
+    from themi.core.tools import REPEATED_TEXT
+
+    for _ in range(3):
+        scenario.primary.queue_tool_call("search_web", {"query": "dentists near 790 La Para Ave"})
+    scenario.primary.queue_text("I couldn't search that address without you saying it.")
+    replies = await scenario.say("Erin", "Find a dentist near my parents")
+    assert replies == ["I couldn't search that address without you saying it."]
+    assert fake_search.count("search") == 0
+    second = scenario.primary.requests[2]
+    results = [b.content for m in second.messages for b in m.content if isinstance(b, ToolResult)]
+    assert results[-1] == REPEATED_TEXT
+    last = scenario.primary.last_request
+    assert last.tools == () and "No tools are available" in last.messages[-1].text
+    assert len(scenario.primary.requests) == 4
+
+
+async def test_at_the_step_limit_a_tool_asked_for_anyway_gets_an_answer_without(
+    scenario: Scenario, fake_search: FakeSearch
+) -> None:
+    """Reply 561: eight searches, the hours in the first, then "tangled"."""
+    cvs(fake_search)
+    for i in range(9):  # the step limit's last word asks for one more too
+        scenario.primary.queue_tool_call("search_web", {"query": f"CVS Showers Drive hours {i}"})
+    scenario.primary.queue_text("It closes at 6 pm today, going by Yelp.")
+    assert await scenario.say("Husband", "Look up when the CVS on Showers Drive closes") == [
+        "It closes at 6 pm today, going by Yelp."
+    ]
+    last = scenario.primary.last_request
+    assert last.tools == () and "10:00 am - 6:00 pm" in last.messages[-1].text

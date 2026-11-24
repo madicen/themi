@@ -38,6 +38,7 @@ from themi.connectors.travel import TravelClient
 from themi.connectors.weather import WeatherSource
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
+from themi.core.model_gone import ModelGone
 from themi.core.prompts import CORE_RULES
 from themi.core.pronouns import set_themi_pronouns
 from themi.core.routing import EmbeddingRouter
@@ -403,6 +404,7 @@ def build_app(
         },
         channels=channel,
     )
+    router.gone_listeners.append(ModelGone(services))  # F61c (bug #267)
     scheduler = Scheduler(db)
     ctx = ModuleContext(services, scheduler=scheduler)
     approvals = ctx.provide(ApprovalsUI(services.autonomy, outbox))

@@ -63,7 +63,7 @@ nobody else (admins included) can see or change them. Keys are never shown again
 <h2>My backends</h2>
 <div class="rows">
 {% for b in backends %}
-{% call(part) row(b.label, meta=kind_labels[b.kind] ~ (" · " ~ b.model if b.model else ""), chips=[("Key saved", "good")] if b.has_key else [], id="backend-" ~ b.id) %}
+{% call(part) row(b.label, meta=kind_labels[b.kind] ~ (" · " ~ b.model if b.model else ""), chips=backend_chips[b.id], id="backend-" ~ b.id) %}
 {% if part == "body" %}
   <form method="post" action="/ai/backends/{{ b.id }}">
     <input type="hidden" name="csrf" value="{{ csrf }}">

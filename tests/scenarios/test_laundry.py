@@ -11,7 +11,9 @@ from datetime import datetime, timedelta
 import httpx
 import pytest
 
+from tests.fakes.telegram_api import FakeTelegram
 from tests.fakes.thinq import TOKEN, FakeThinq
+from tests.fixtures.family import SeededFamily
 from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import START, Scenario
 from themi import clock
@@ -28,6 +30,10 @@ TZ = START.tzinfo
 @pytest.fixture
 async def laundry_room(scenario: Scenario, fake_thinq: FakeThinq) -> FakeThinq:
     """The washer and dryer, linked and read once (the starting point), pushes connected."""
+    return await link_room(scenario, fake_thinq)
+
+
+async def link_room(scenario: Scenario, fake_thinq: FakeThinq) -> FakeThinq:
     fake_thinq.add_device(WASHER, "DEVICE_WASHER", "Washer")
     fake_thinq.add_device(DRYER, "DEVICE_DRYER", "Dryer", "DLEX4000W")
     watcher = scenario.app.services.maybe(keys.thinq)
@@ -331,3 +337,78 @@ async def test_a_washer_turned_off_without_running_is_not_a_wash(
     await pushed(scenario, laundry_room, WASHER, "END")
     await pushed(scenario, laundry_room, WASHER, "POWER_OFF")
     assert loads(scenario) == ["wet"]  # the END made the one load; off adds nothing
+
+
+def _work_day(scenario: Scenario, name: str) -> None:
+    from datetime import time
+
+    from themi.accounts import SYSTEM, BusyTime
+
+    member = scenario.member(name)
+    scenario.app.store.update_settings(
+        SYSTEM, member.id, busy_times=[BusyTime((0, 1, 2, 3, 4), time(9), time(17))]
+    )
+
+
+def _on_the_wall(scenario: Scenario, member_id: int) -> dict[str, bool]:
+    """Each item in their wall column: ticked or not."""
+    from themi_home.wall_view import WallView
+
+    column = next(c for c in WallView(scenario.app.services).columns() if c.member_id == member_id)
+    return {item.title: item.done for section in column.sections for item in section.items}
+
+
+async def test_a_work_day_doesnt_hold_the_nudge(
+    scenario: Scenario, laundry_room: FakeThinq
+) -> None:
+    """F61a (bug #266): a wash ending at 11 am inside a 9-5 busy time is asked about at
+    11:30, not at 5 pm."""
+    scenario.app.services.energy.record(scenario.member("Erin"), "text_note", -3, "tired")
+    for name in ("Erin", "Husband"):
+        _work_day(scenario, name)
+    clock.advance(timedelta(hours=1))  # Wed 10 am, at work
+    at = await wash(scenario, laundry_room)  # finished at 11 am
+    assert await scenario.advance(minutes=29) == []
+    assert await scenario.advance(minutes=1) == [WASHED_TEXT.format(at=at)]
+
+
+async def test_quiet_hours_still_hold_the_nudge(
+    scenario: Scenario, laundry_room: FakeThinq
+) -> None:
+    scenario.app.services.energy.record(scenario.member("Erin"), "text_note", -3, "tired")
+    for name in ("Erin", "Husband"):
+        _work_day(scenario, name)
+    await scenario.advance(hours=13, minutes=30)  # Wed 10:30 pm
+    await wash(scenario, laundry_room)  # finished at 11:30 pm, in his quiet hours
+    texts = await scenario.advance(hours=7)  # Thu 6:30 am, still quiet
+    assert not any("washer" in text for text in texts)
+    texts = await scenario.advance(hours=1)  # his quiet hours end at 7
+    assert any(text.startswith("The washer finished at") for text in texts)
+
+
+async def test_the_wet_load_is_on_the_wall_until_the_dryer_starts(
+    family: SeededFamily, fake_telegram: FakeTelegram, fake_thinq: FakeThinq
+) -> None:
+    """F61a (bug #266): while the load is wet, the family sees it on the wall."""
+    from tests.integration.test_wall_screen import with_wall
+
+    scenario = with_wall(family, fake_telegram, thinq=fake_thinq)
+    await scenario.start()
+    try:
+        room = await link_room(scenario, fake_thinq)
+        scenario.app.services.energy.record(scenario.member("Erin"), "text_note", -3, "tired")
+        husband = scenario.member("Husband")
+        await wash(scenario, room)
+        assert _on_the_wall(scenario, husband.id).get("Move the wet load to the dryer") is False
+        await pushed(scenario, room, DRYER, "DRYING")  # ticked, as anything done today is
+        assert _on_the_wall(scenario, husband.id).get("Move the wet load to the dryer") is True
+        clock.advance(timedelta(hours=2))
+        await pushed(scenario, room, WASHER, "RUNNING")
+        await pushed(scenario, room, WASHER, "END")
+        await pushed(scenario, room, WASHER, "RUNNING")  # washed again: that load is gone
+        assert all(
+            _on_the_wall(scenario, m.id).get("Move the wet load to the dryer") is not False
+            for m in scenario.app.store.list_members()
+        )
+    finally:
+        await scenario.stop()

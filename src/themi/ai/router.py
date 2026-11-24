@@ -91,6 +91,9 @@ CONNECTION_TEST_PROMPT = "Reply with the single word OK."
 CALLS_KEPT = timedelta(days=7)  # ai_calls history (bug #29)
 # P2b, from the week of 2026-10-28: three in four calls took under 1.9 s, one in ten over 14.
 HEDGE_AFTER = 5.0
+# F61c: a listener for a model found not to exist: (the member whose call it was, the entry).
+GoneListener = Callable[[int, ResolvedEntry], Awaitable[None]]
+MODEL_GONE = "{}'s model isn't found (skipped until it's changed)"
 # The reply (P2a's `replies` row) the calls being made now are for, if any.
 current_reply: ContextVar[int | None] = ContextVar("current_reply", default=None)
 
@@ -170,6 +173,8 @@ class AIRouter:
         self._sleep = sleep
         self._rng = rng or random.Random()
         self._factory = factory or build_provider
+        # F61c (bug #267): told when a backend's model turns out not to exist (a 404).
+        self.gone_listeners: list[GoneListener] = []
 
     def client_for(self, member_id: int, task: AITask) -> TaskClient:
         return TaskClient(self, member_id, AITask(task))
@@ -206,6 +211,9 @@ class AIRouter:
                     await result
 
         for entry in self._chain(member_id, task):
+            if self.is_gone(entry):  # F61c: asked again, it'd be a 404 again
+                errors.append((entry.label, PermanentError(MODEL_GONE.format(entry.label))))
+                continue
             if not self.breakers.allow(member_id, entry.backend_id):
                 errors.append((entry.label, CircuitOpenError("temporarily skipped")))
                 continue
@@ -226,6 +234,8 @@ class AIRouter:
                     type(exc).__name__,
                 )
                 errors.append((entry.label, exc))
+                if isinstance(exc, PermanentError) and exc.status == 404:
+                    await self._gone(member_id, entry)
         last = errors[-1][1] if errors else None
         if isinstance(last, RetriesExhausted):
             call.last_status = last.last_error.status or call.last_status
@@ -236,6 +246,40 @@ class AIRouter:
             raise errors[-1][1]
         failure = Deferred if kind is CallKind.BACKGROUND else AllProvidersFailed
         raise failure(f"no AI backend could handle {task.value}", errors)
+
+    def is_gone(self, entry: ResolvedEntry) -> bool:
+        return (
+            self.settings.db.one(
+                "SELECT 1 FROM ai_models_gone WHERE backend_id = ? AND model = ?",
+                (entry.backend_id, entry.config.model or ""),
+            )
+            is not None
+        )
+
+    def gone_models(self, backend_id: int) -> list[str]:
+        """F61c: this backend's models found not to exist, for its settings."""
+        rows = self.settings.db.query(
+            "SELECT model FROM ai_models_gone WHERE backend_id = ? ORDER BY found_at",
+            (backend_id,),
+        )
+        return [r["model"] for r in rows]
+
+    async def _gone(self, member_id: int, entry: ResolvedEntry) -> None:
+        """F61c: the model isn't there; skipped from now on, and said once."""
+        model = entry.config.model or ""
+        added = self.settings.db.update(
+            "INSERT OR IGNORE INTO ai_models_gone (backend_id, model, found_at) VALUES (?, ?, ?)",
+            (entry.backend_id, model, to_utc_iso(clock.now())),
+        )
+        if not added:
+            return
+        log.warning("AI backend %s: model %r isn't found; skipped until it's changed",
+                    entry.label, model)  # fmt: skip
+        for listener in self.gone_listeners:
+            try:
+                await listener(member_id, entry)
+            except Exception:  # never lose an answer over a note about it
+                log.warning("Couldn't say a model is gone", exc_info=True)
 
     def _counted(self, entry: ResolvedEntry) -> Provider:
         """UC2: the backend's provider, each request it sends counted in the usage book."""
