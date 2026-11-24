@@ -38,8 +38,10 @@ if TYPE_CHECKING:
     from themi.standard.routines import Routine, Routines
     from themi.standard.tasks import Task
 
-TODOS_SHOWN = 3
-FAMILY_TODOS_SHOWN = 5
+# F60f (bug #265): the most to-dos a column is sent. The frame shows what fits and counts the
+# rest into "+N more" (wall-fit.js, F58c); the old 3 (and 5) left half a column empty.
+TODOS_SHOWN = 12
+FAMILY_TODOS_SHOWN = 12
 # WL9c: a tick stays in place, struck through, this long (so a wrong tap can be undone
 # there), then folds into its section's "✓ 3 done"
 FOLD_AFTER = timedelta(minutes=10)

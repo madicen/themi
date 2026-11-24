@@ -360,6 +360,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F60c | Idea: the wall's top bar has Talk to Themi before the weather | Feedback | [x] 2026-11-24 |
 | F60d | Idea: the wall's mic shows when it's listening and when it's working | Feedback | [x] 2026-11-24 |
 | F60e | Idea: the body double on the wall: start a session and run it there | Feedback | [x] 2026-11-24 |
+| F60f | Feedback: a wall column shows as many to-dos as fit, not three | Feedback | [x] 2026-11-24 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -18248,6 +18249,35 @@ Notes:
   the break chat, and switching mode (still in chat and on `/session`).
 - Tests: `tests/integration/test_wall_focus.py` (12) and
   `tests/integration/test_wall_focus_browser.py` (1, headless Chrome, playing stood in for).
+- **Setup:** update the Pi.
+
+### F60f · Feedback (2026-11-24): a wall column shows as many to-dos as fit, not three
+Status: [x] 2026-11-24
+Depends on: WL9c, F58c
+Read first: `themi_home/wall_view.py` (`TODOS_SHOWN`, `FAMILY_TODOS_SHOWN`, `_person`,
+`_together`); `themi_home/web/static/wall-fit.js` (F58c); WL9c's notes. From Michael's bug
+#265 (2026-11-24, 11:35 am, "I don't think I have a limit of 3 set up, but the wall frame
+leaves a lot of space when it could be showing more tasks", with a photo of the frame).
+
+What the Pi shows: report-265-1 is Michael's column on the frame: "Nothing set for this
+morning", three to-dos, "+6 more", and about a third of the column empty above "View full
+day". His chore chart limit is "no limit"; the 3 is `TODOS_SHOWN` (5 for Together's family
+to-dos), set by WL9c before F58c's `wall-fit.js` fitted each column to the frame's height.
+
+Build:
+- The server sends up to 12 to-dos per column (`TODOS_SHOWN`, `FAMILY_TODOS_SHOWN`); the
+  frame shows what fits and counts the rest into "+N more", as F58c does for every section.
+
+Tests: nine to-dos are all in the column's HTML with no "+N more"; past 12, "+2 more".
+Changed: `test_wall_fold.py::test_past_the_top_few_one_line_says_how_many_more` (14 to-dos,
+not 5) and `test_wall_screen.py::test_chores_due_by_today_and_to_dos_in_the_walls_order`
+(all four to-dos sent): both asserted the old cap of 3, which this bug changes.
+
+Data/Setup: update the Pi. Mark #265 reviewed once live.
+
+Notes:
+- Built at once, without a separate prompt-writing step (Michael asked to look at it in the
+  same session). 12 is a ceiling for a tall frame, not a count anyone sees.
 - **Setup:** update the Pi.
 
 ## Conversation mode
