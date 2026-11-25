@@ -367,6 +367,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F62a | Review: conversation mode keeps the locked rules; "X list." reaches list X | Feedback | [x] 2026-11-24 |
 | F62b | Review: extra time before events by what they're called | Feedback | [x] 2026-11-24 |
 | F62c | Review: task steps can have sub-steps ("-- wipe the shelf") | Feedback | [x] 2026-11-24 |
+| F63a | Feedback: the wall's date stays on one line | Feedback | [ ] |
+| F63b | Feedback: Themi can run the CatGenie ("try a clean again") | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -18611,6 +18613,99 @@ Notes:
   `setup_note` on, which does what rule 26 asks. Rules 4, 10, 25, 26, 27 and 28 are all
   covered by code now.
 - **Setup:** update the Pi; then unlock rules 4, 10, 25, 26, 27 and 28.
+
+### F63a · Feedback (2026-11-25): the wall's date stays on one line
+Status: [ ]
+Depends on: WL2, F59g, F60e
+Read first: `themi_home/web/templates/wall/_top.html`; `themi_home/web/static/wall.css`
+(`.wall-top`, `.wall-date`, `.wall-asks`, `.wall-talk`). From Michael's bug #269
+(2026-11-25, 1:19 pm, a photo of the frame: "that top line shouldn't wrap on the wall frame").
+
+What the Pi shows: the photo has "Wednesday, November" on one line and "25" on the next,
+above the time. The top row is the date and time, then F59g's "Talk to Themi" and F60e's
+"Body double" buttons, then the weather. Nothing stops `.wall-when` from shrinking, so on
+the 1080-wide frame the two buttons take the date's room and it wraps.
+
+Build:
+- The date and time never wrap or shrink (`.wall-date { white-space: nowrap }`,
+  `.wall-when { flex: none }`). The buttons give way first: their labels drop to an icon
+  (keeping the label as `aria-label`) when the row is too tight, then the weather's
+  "low … tonight" line, rather than anything stacking.
+- Check the longest date ("Wednesday, September 30") with both buttons and the weather
+  showing, at 1080 x 1920 and at the frame's large text size if it has one.
+
+Tests: the existing wall page test asserts the date has the no-wrap class, and the buttons
+keep an accessible name when their labels hide.
+
+Data/Setup: update the Pi, reload the wall. Mark #269 reviewed once live.
+
+### F63b · Feedback (2026-11-25): Themi can run the CatGenie, not just read it ("try a clean again")
+Status: [ ]
+Depends on: CG1a, CG1b, F60b
+Read first: `themi_home/connectors/catgenie/client.py`, `events.py`, `watch.py`;
+`themi_home/litter_box.py`; `docs/research/catgenie.md`; the trust tiers
+(`themi.autonomy.stage`); CG1b's and F60b's notes. From Erin's idea #268 (2026-11-25,
+11:28 am, "take full control of the cat genie whoosh. I'm fairly certain this 'drainage
+issue' is a software issue, not an actual mechanical error or clog").
+
+What the Pi shows (`litter_problems`, `catgenie_notifications`, `catgenie_devices`, read
+2026-11-25):
+- The Whoosh (device 7, firmware 100.4.14R, production update group) reported error 3,
+  "drainage issue", at the end of a clean on 24 Nov 8:34 am (problem 6, task 139). It
+  cleared on 25 Nov 4:15 am. The next clean, at 4:51 am, ended in error 3 again (problem 7,
+  task 143 "Check the Whoosh", still open). Now `activeErrors: [3]`, `mainErrorType: 3`,
+  `operationStatus: {state: 0, progress: 255}`, connected. All three firmware statuses
+  read "OK". On 24 Nov an unknown error 80 came and went within ten minutes.
+- Themi only reads the box today. The community client (`catgenie` 0.1.6, read from PyPI,
+  not run) also has: `POST device/management/{id}/operation` with `{"state": 1}` to start a
+  clean and `{"state": 0}` to stop one; `GET .../operation/status`; and
+  `PUT device/management/{id}/configuration` (partial) for mode (auto/manual), schedule,
+  do-not-disturb, child lock, auto-lock, volume, cat delay, cat sensitivity, extra dry,
+  extra wash and extra shake. Firmware info is `GET device/update/{id}`.
+- Nothing in the API clears an error or explains one, and Themi can't tell a sensor fault
+  from a clog. What it can do is what the app can: start a clean again (if the error was a
+  false reading, the clean finishes and the error clears) and change settings.
+
+Build:
+- Client: `start_clean`, `stop_clean`, `operation_status` and `configure(**fields)` (only
+  the fields above, by name; the water, heater, pump and activation values are never sent).
+  `firmware(id)` reads what's offered. Fakes and fixtures for each, in the package's
+  shapes.
+- A trust category `litter_box_control` (household, starts at Tier 1: an approval card;
+  may become automatic). Every start, stop and setting change goes through it. Starting a
+  clean while the box is cleaning, offline, or out of sani-solution is refused with the
+  reason, not sent.
+- Tools in the devices group: `litter_box_clean` (start or stop, which box),
+  `litter_box_settings` (read, or change the listed settings: "put the Whoosh on manual",
+  "no cleaning 10 pm to 7 am", "turn extra wash off"). Routing words: "run/start/stop the
+  Whoosh/CatGenie/litter box", "clean the litter box now".
+- The error chore (CG1b) gets a "Try a clean" button. Tapping it starts a clean (the tap
+  is the approval) and says so; the watcher then reports how it went: the error cleared
+  ("The Whoosh finished a clean and the drainage error cleared") or came back ("It showed
+  the drainage error again after the clean, so it's worth a look at the drain"). Same
+  error twice in a row after a retry: the chore's text says so.
+- `appliance_status` and the box's row on the Accounts page show its mode, schedule and
+  firmware version, and say if an update is offered.
+
+Tests:
+- Client: start, stop and configure send the package's bodies; a field outside the list is
+  refused before any request.
+- The trust tier: Tier 1 gives an approval card; approved, the fake sees the start.
+  Refused while cleaning, offline or out of solution.
+- Error 3, "Try a clean", the next read with no errors: the chore closes and the message
+  says it cleared. Error 3 back after the clean: the chore stays, its text says the retry
+  didn't help.
+- Settings read and change ("put the Whoosh on manual") through the tool.
+- Scenario: Erin sees the drainage chore, taps "Try a clean", and hears that it cleared.
+
+Data/Setup: update the Pi. Not tested against PetNovations: the first real start is a
+trial, so Michael or Erin should be near the box for the first "Try a clean". Mark #268
+reviewed once live.
+
+Decide first (Michael), with recommendations:
+- Starts at Tier 1 (an approval each time) until it's been seen working on the real box.
+  Recommended.
+- Leave out a firmware update trigger: the package has no call for it, and the app does it.
 
 ## Conversation mode
 
