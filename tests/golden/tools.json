@@ -101,7 +101,7 @@
   },
   "create_task": {
     "group": "core",
-    "spec": "2f9e31e23d0b"
+    "spec": "6b96c2f6d500"
   },
   "day_summary": {
     "group": "calendar",
@@ -426,6 +426,10 @@
   "set_chore_chart_limit": {
     "group": "wall",
     "spec": "255ee6473cb5"
+  },
+  "set_event_early": {
+    "group": "calendar",
+    "spec": "b9d47a85388b"
   },
   "set_inbox_watched": {
     "group": "email",

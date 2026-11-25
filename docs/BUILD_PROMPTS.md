@@ -365,8 +365,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F61b | Feedback: "when does the CVS close?" looks it up and answers, without looping | Feedback | [x] 2026-11-24 |
 | F61c | Feedback: a fallback model that no longer exists is said once to the admin | Feedback | [x] 2026-11-24 |
 | F62a | Review: conversation mode keeps the locked rules; "X list." reaches list X | Feedback | [x] 2026-11-24 |
-| F62b | Review: extra time before events by what they're called | Feedback | [ ] |
-| F62c | Review: task steps can have sub-steps ("-- wipe the shelf") | Feedback | [ ] |
+| F62b | Review: extra time before events by what they're called | Feedback | [x] 2026-11-24 |
+| F62c | Review: task steps can have sub-steps ("-- wipe the shelf") | Feedback | [x] 2026-11-24 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -18499,7 +18499,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F62b · Review (2026-11-24): extra time before events by what they're called ("tutoring: 30 minutes early")
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: K4, F46d, F57b
 Read first: `themi_google/travel.py` (`_planned_start`, `_plan_or_place`, `_plan`,
 `drive_to_event`); `themi/standard/places.py` (`arrive_early`); `themi/core/rules.py`
@@ -18540,8 +18540,23 @@ Data/Setup: update the Pi. Then for Erin: `set_event_early("tutoring", 30)` (or 
 settings page), and unlock rule 20 (now covered). Michael or Erin can do both on the
 website.
 
+Notes:
+- `TravelPreferences.be_early_for`: lines "words: minutes" (also "words 30 min"), tidied
+  by its validator; a later line for the same words replaces an earlier one, and 0 takes it
+  away. On the Settings page under "My calendars" as a textarea; `site.from_form` now
+  reads a tuple field one item per line.
+- `_plan_or_place`: a plan said for the event (F46d) wins; otherwise the larger of the
+  saved place's minutes and `early_by_title` (whole words of the title, `name_key`).
+- The heads-up says "there by 3:30 pm (30 min early for tutoring)"; `drive_time` says the
+  same in its plan line unless arrive_by was given.
+- `set_event_early` is in the schedules group (golden `tools.json` changes for it).
+- `propose_rule` refuses "travel buffer", "minutes early for", "be early for", "extra/add N
+  minutes before/for" with a pointer to `set_event_early` (`EARLY_FOR`).
+- **Setup:** update the Pi; then Erin's "tutoring: 30" (website, or "I like to be 30
+  minutes early for tutoring") and unlock rule 20.
+
 ### F62c · Review (2026-11-24): task steps can have sub-steps ("-- wipe the shelf"), as lists can
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: F29g, S4
 Read first: `themi/standard/tasks.py` (`clean_steps`, `_steps_for`, `_quoted`,
 `_step_level`, the `steps` tool argument); `themi/standard/lists.py` (F29g's "-- go
@@ -18581,6 +18596,21 @@ Tests:
 Data/Setup: update the Pi. Then unlock rules 4, 10, 27 and 28 (Erin's, now built in).
 Rule 25 (get-ready and leave times) is what heads-ups already say (2026-11-11), so it can
 go now.
+
+Notes:
+- `tasks.step_depth`/`with_depth`/`top_steps`: one dash or a bullet is a step; each dash
+  past the first is a level under the step before (at most 2 under, and never more than one
+  deeper than the step before). Stored as "-- text", so the task page's textarea round-trips.
+- Nudges quote them indented (`> - step`, `>   -- sub`). `_step_levels`: a sub-step without
+  its own (Low)/(Medium)/(High) tag has its step's.
+- `split_task` splits by top-level steps; a part's steps are its step's sub-steps. The
+  lightest step (`reminders._smallest`) is picked among top-level steps, so an optional
+  step's sub-steps go with it. Guided body-double sessions show steps without dashes.
+- Deviation: the wall shows no task steps today, so nothing changed there.
+- Found while checking: Erin's lists already use "dashes" (`list_style`) and she has
+  `setup_note` on, which does what rule 26 asks. Rules 4, 10, 25, 26, 27 and 28 are all
+  covered by code now.
+- **Setup:** update the Pi; then unlock rules 4, 10, 25, 26, 27 and 28.
 
 ## Conversation mode
 

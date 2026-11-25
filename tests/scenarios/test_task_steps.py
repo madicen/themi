@@ -137,3 +137,30 @@ async def test_the_tasks_page_shows_and_edits_steps(
     response = await site.post(f"/tasks/{task.id}/edit", data=form)
     assert response.status_code == 303
     assert board.get(task.id).steps == ("Shake out the top tray", "Refill water")
+
+
+async def test_sub_steps_show_indented_in_the_nudge_and_round_trip_on_the_page(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """F62c: Erin's rules 27-28 asked for sub-steps with double dashes; they came out flat."""
+    steps = ["Clean the bathroom", "-- wipe the mirror", "-- scrub the sink", "Sweep the hall"]
+    scenario.primary.queue_tool_call("create_task", new_task("Weekly clean", steps))
+    scenario.primary.queue_text("Added, with the steps.")
+    await scenario.say("Erin", "add the weekly clean with its steps")
+    board = scenario.app.services.maybe(keys.taskboard)
+    assert board is not None
+    (task,) = board.open_for(scenario.member("Erin"))
+    assert task.steps == tuple(steps)
+
+    await scenario.advance(hours=4, minutes=1)
+    (nudge,) = [t for t in scenario.inbox("Erin") if "Weekly clean" in t]
+    assert (
+        "> - Clean the bathroom\n>   -- wipe the mirror\n>   -- scrub the sink\n"
+        "> - Sweep the hall" in nudge
+    )
+
+    csrf = await sign_in(scenario, site, "Erin")
+    assert "-- wipe the mirror" in (await site.get("/tasks")).text
+    form = {"csrf": csrf, "title": "Weekly clean", "steps": "\n".join(steps)}
+    assert (await site.post(f"/tasks/{task.id}/edit", data=form)).status_code == 303
+    assert board.get(task.id).steps == tuple(steps)

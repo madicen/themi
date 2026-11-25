@@ -22,6 +22,7 @@ each part keeps the task's.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -34,7 +35,7 @@ from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.modules.groups import TASKS
-from themi.standard.tasks import Task, TaskBoard, TaskChange
+from themi.standard.tasks import Task, TaskBoard, TaskChange, top_steps
 
 log = logging.getLogger(__name__)
 
@@ -119,24 +120,25 @@ class TaskParts:
             raise ToolDeclined(f"{task.title} is split already. Nothing was changed.")
         if self.parent_of(task.id) is not None:
             raise ToolDeclined(f"{task.title} is a part already. Nothing was changed.")
-        if len(task.steps) < 2:
+        tops = top_steps(task.steps)  # F62c: a step goes with its sub-steps
+        if len(tops) < 2:
             raise ToolDeclined(
-                f"{task.title} has {'one step' if task.steps else 'no steps'}, so there's "
+                f"{task.title} has {'one step' if tops else 'no steps'}, so there's "
                 "nothing to split. Nothing was changed."
             )
         by_step: dict[int, Part] = {}
         for part in chosen:
-            if not 1 <= part.step <= len(task.steps):
+            if not 1 <= part.step <= len(tops):
                 raise ToolFailed(
-                    f"{task.title} has {len(task.steps)} steps; there's no step {part.step}."
+                    f"{task.title} has {len(tops)} steps; there's no step {part.step}."
                 )
             if part.who not in WHO:
                 raise ToolFailed(f"who is one of {', '.join(repr(w) for w in WHO)}.")
             by_step[part.step] = part
         made = []
-        for number, step in enumerate(task.steps, start=1):
+        for number, (step, subs) in enumerate(tops, start=1):
             part = by_step.get(number, Part(number, "", None))
-            made.append(await self._make(task, by, number, step, part))
+            made.append(await self._make(task, by, number, step, part, subs))
         self.db.execute("UPDATE tasks SET off_displays = 1 WHERE id = ?", (task.id,))
         if task.status == "snoozed":
             self.db.execute(
@@ -146,18 +148,22 @@ class TaskParts:
         await self.board._changed(self.board.get(task.id), "split", True)
         return made
 
-    async def _make(self, parent: Task, by: Member, number: int, step: str, part: Part) -> Task:
+    async def _make(
+        self, parent: Task, by: Member, number: int, step: str, part: Part,
+        subs: Sequence[str] = (),
+    ) -> Task:  # fmt: skip
         assignee = self._assignee(parent, by, part.who)
         made = await self.board.create(
             by,
             part_title(parent.title, step),
             parent.kind,
-            part_effort(parent.effort, len(parent.steps)),
+            part_effort(parent.effort, len(top_steps(parent.steps))),
             part.due_on or parent.due_on,
             interactive=True,
             assignee=assignee,
             due_time=parent.due_time if part.due_on is None else None,
             importance=parent.importance,
+            steps=subs,  # F62c: the step's sub-steps are the part's own steps
         )
         self.db.execute(
             "INSERT INTO task_parts (task_id, parent_id, position) VALUES (?, ?, ?)",
@@ -212,8 +218,9 @@ class TaskParts:
         return back, done
 
     def _step_of(self, parent: Task, part: Task, position: int | None) -> str:
-        if position is not None and 1 <= position <= len(parent.steps):
-            return parent.steps[position - 1]
+        tops = top_steps(parent.steps)
+        if position is not None and 1 <= position <= len(tops):
+            return tops[position - 1][0]
         return part.title.removeprefix(f"{parent.title}: ")
 
     def _not_the_parents_title(self, task: Task, title: str) -> None:

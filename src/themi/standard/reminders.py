@@ -36,7 +36,7 @@ from themi.core.wording import and_list
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.modules.groups import TASKS
-from themi.standard.tasks import IMPORTANCE, Task, TaskBoard, clock_words, day_arg
+from themi.standard.tasks import IMPORTANCE, Task, TaskBoard, clock_words, day_arg, top_steps
 
 log = logging.getLogger(__name__)
 
@@ -283,7 +283,8 @@ class Reminders:
     def _smallest(task: Task) -> str | None:
         """The lightest step: a (Low) one if the steps have levels, else the first that
         isn't optional."""
-        steps = [s for s in task.steps if not s.casefold().startswith("(optional")]
+        tops = [step for step, _subs in top_steps(task.steps)]  # F62c: its sub-steps go too
+        steps = [s for s in tops if not s.casefold().startswith("(optional")]
         low = [s for s in steps if s.casefold().startswith("(low)")]
         chosen = (low or steps or [None])[0]
         return _TAG.sub("", chosen).rstrip(".") if chosen else None

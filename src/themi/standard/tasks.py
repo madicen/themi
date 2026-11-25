@@ -276,11 +276,48 @@ MAX_STEPS = 30
 MAX_STEP_LENGTH = 200
 
 
+MAX_STEP_DEPTH = 2  # F62c: a step, its sub-steps, and theirs
+STEP_DASHES = re.compile(r"^\s*(?:(-+|\u2013+|\u2014+)|•)\s*")
+
+
+def step_depth(step: str) -> tuple[int, str]:
+    """F62c: "-- wipe the mirror" -> (1, "wipe the mirror"). One dash or a bullet is a step
+    as it is; each dash past the first goes one level under the step before."""
+    found = STEP_DASHES.match(step)
+    if found is None:
+        return 0, step
+    dashes = len(found.group(1) or "-")
+    return min(dashes - 1, MAX_STEP_DEPTH), step[found.end() :]
+
+
+def with_depth(depth: int, text: str) -> str:
+    """How a step is kept: "-- " before a sub-step, "--- " before its own sub-steps."""
+    return f"{'-' * (depth + 1)} {text}" if depth else text
+
+
+def top_steps(steps: Sequence[str]) -> list[tuple[str, list[str]]]:
+    """F62c: each top-level step with its sub-steps, one level up (as their own steps)."""
+    found: list[tuple[str, list[str]]] = []
+    for step in steps:
+        depth, text = step_depth(step)
+        if depth and found:
+            found[-1][1].append(with_depth(depth - 1, text))
+        else:
+            found.append((text, []))
+    return found
+
+
 def clean_steps(steps: Sequence[str]) -> list[str]:
-    """Steps as given, trimmed, blanks dropped. The wording is the person's: never rewritten."""
-    cleaned = [" ".join(str(s).split()) for s in steps]
-    cleaned = [s.lstrip("-• ").strip() for s in cleaned]
-    cleaned = [s for s in cleaned if s]
+    """Steps as given, trimmed, blanks dropped. The wording is the person's: never rewritten.
+    F62c: a sub-step keeps its dashes, at most one level under the step before it."""
+    cleaned = []
+    for raw in steps:
+        depth, text = step_depth(" ".join(str(raw).split()))
+        text = text.strip()
+        if not text:
+            continue
+        before = step_depth(cleaned[-1])[0] if cleaned else -1
+        cleaned.append(with_depth(min(depth, before + 1), text))
     if len(cleaned) > MAX_STEPS:
         raise ValueError(f"a task can have at most {MAX_STEPS} steps")
     if any(len(s) > MAX_STEP_LENGTH for s in cleaned):
@@ -823,7 +860,7 @@ class TaskBoard:
         the person today (each level takes in the ones below it), in words (S4)."""
         if not task.steps:
             return None
-        levels = [_step_level(step) for step in task.steps]
+        levels = _step_levels(task.steps)
         if not any(levels):
             return _quoted(task.steps)
         level = self.services.energy.suggested_level(member)
@@ -1937,14 +1974,32 @@ _LEVEL_WORD = {"low": "lighter", "medium": "middle", "high": "full"}
 
 
 def _step_level(step: str) -> str | None:
-    m = _LEVEL_TAG.match(step)
+    m = _LEVEL_TAG.match(step_depth(step)[1])
     return m.group(1).lower() if m else None
+
+
+def _step_levels(steps: Sequence[str]) -> list[str | None]:
+    """Each step's (Low)/(Medium)/(High) tag; a sub-step without one has its step's (F62c)."""
+    levels: list[str | None] = []
+    above: list[str | None] = []  # the tag in force at each depth
+    for step in steps:
+        depth = step_depth(step)[0]
+        own = _step_level(step)
+        above = above[:depth]
+        tag = own or (above[-1] if above else None)
+        above.append(tag)
+        levels.append(tag)
+    return levels
 
 
 def _quoted(steps: Sequence[str]) -> str:
     """Steps as `> ` quotes, so the PDA shield keeps them word for word (steps are usually
-    commands: "Wipe the counters")."""
-    return "\n".join(f"> - {step}" for step in steps)
+    commands: "Wipe the counters"). F62c: sub-steps indented under theirs, with dashes."""
+    lines = []
+    for step in steps:
+        depth, text = step_depth(step)
+        lines.append(f">{'  ' * depth} {'-' * (depth + 1)} {text}")
+    return "\n".join(lines)
 
 
 def _board(ctx: ToolContext) -> TaskBoard:
@@ -2001,7 +2056,8 @@ CALLED_A_RULE = re.compile(r"\b(?:new|house(?:hold)?) rule\b|\bmake (?:it|that|t
             "type": "array",
             "items": {"type": "string"},
             "description": "The steps of the job, in their words and order (tags like "
-            "'(Optional/Bonus)' included), or an empty list.",
+            "'(Optional/Bonus)' included), or an empty list. A sub-step starts with '-- ' "
+            "and goes under the step before it ('--- ' under a sub-step).",
         },
         "check_in": {
             "type": "boolean",
