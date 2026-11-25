@@ -455,7 +455,14 @@ def drawn(out: dict[str, Any]) -> str:
     """A short fingerprint of what the regions show (not the clock), so the page redraws
     them only when something changed: a move, or a timer firing between moves. The company
     bar (the scene, Themi's line, music, Ask Themi) isn't redrawn: its music keeps playing."""
+    from themi_home.cooking_oven import redraw_mark
+
     shown = {k: v for k, v in out.items() if k not in UNDRAWN}
+    # the oven buttons' "drawn at" stamps, to the redraw they need, not to the second
+    shown["oven_at"] = redraw_mark(shown.get("oven_at") or "")
+    for region in ("strip", "proof"):
+        if isinstance(shown.get(region), dict) and "at" in shown[region]:
+            shown[region] = {**shown[region], "at": redraw_mark(shown[region]["at"])}
     return hashlib.sha256(json.dumps(shown, sort_keys=True).encode()).hexdigest()[:12]
 
 

@@ -359,3 +359,52 @@ async def test_bug_225_a_recipe_that_bakes_at_350_offers_the_oven(
         key=button["key"], at=state["oven_at"],
     )  # fmt: skip
     assert (await screen.state())["step_oven"] == []  # on now: not offered again
+
+
+# ----- The screen isn't redrawn every poll (the timer bar reset) ------------------------
+
+
+async def test_the_screen_isnt_redrawn_as_the_clock_ticks(
+    alfredo: Screen, kitchen: FakeSmartHQ
+) -> None:
+    """The oven buttons' "drawn at" stamps were in the screen's fingerprint to the second,
+    so every 5-second poll redrew the cook screen and its timer bars restarted full."""
+    first = await alfredo.state()
+    clock.advance(timedelta(seconds=5))
+    assert (await alfredo.state())["drawn"] == first["drawn"]
+    clock.advance(timedelta(seconds=55))
+    assert (await alfredo.state())["drawn"] == first["drawn"]
+
+
+async def test_a_screen_kept_open_redraws_so_its_buttons_still_work(
+    alfredo: Screen, kitchen: FakeSmartHQ
+) -> None:
+    """A page that keeps polling gets fresh buttons before they'd be refused as stale."""
+    first = await alfredo.state()
+    clock.advance(timedelta(minutes=5))
+    later = await alfredo.state()
+    assert later["drawn"] != first["drawn"]
+    clock.advance(timedelta(minutes=9))  # 14 minutes after the first draw
+    kitchen.remote_enable()
+    button = later["strip"]["oven"][0]
+    shown = await alfredo.act(
+        "oven_heat", oven=button["oven"], mode=button["mode"], temp=button["temp"],
+        key=button["key"], at=later["strip"]["at"],
+    )  # fmt: skip
+    assert shown["said"] == "The lower oven is preheating to 400°F."
+
+
+async def test_no_oven_the_screen_isnt_redrawn_as_the_clock_ticks(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    from tests.unit.test_cooking_look_ahead import BAKED, items
+
+    load(scenario.app.services, BAKED)
+    await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "alfredo sauce", "scale": ""})
+    scenario.primary.queue_structured(items())
+    await scenario.say("Erin", "Let's make the alfredo sauce")
+    await scenario.tap("Erin", "Skip")
+    first = (await site.get("/session/state")).json()
+    clock.advance(timedelta(seconds=5))
+    assert (await site.get("/session/state")).json()["drawn"] == first["drawn"]

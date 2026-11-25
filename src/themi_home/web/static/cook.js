@@ -61,7 +61,15 @@
       // CK12: the bar empties as the timer counts (the page's CSP allows no inline styles,
       // so the width is set here)
       var bar = cards[i].querySelector(".cook-bar span"), whole = Number(cards[i].dataset.seconds) * 1000;
-      if (bar && whole > 0) bar.style.width = (Math.max(0, Math.min(1, ms / whole)) * 100).toFixed(1) + "%";
+      if (bar && whole > 0) {
+        var width = (Math.max(0, Math.min(1, ms / whole)) * 100).toFixed(1) + "%";
+        if (!bar.style.width) {  // a bar just drawn starts where it is, not sliding from full
+          bar.classList.add("cook-bar-now");
+          bar.style.width = width;
+          void bar.offsetWidth;
+          bar.classList.remove("cook-bar-now");
+        } else bar.style.width = width;
+      }
     }
     var soonest = document.querySelector(".cook-soonest");
     if (soonest) soonest.textContent = soonest.dataset.ends ? words(Date.parse(soonest.dataset.ends) - now) : "";
