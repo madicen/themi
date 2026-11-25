@@ -30,7 +30,7 @@ ADDED = {
     "expense_ask_after_hours": "EX2b", "expense_review_day": "EX2b",
     "expense_review_time": "EX2b",
     "picture_counts": "DC3", "picture_morning": "DC3", "picture_theme": "DC3",
-    "themi_pronouns": "F35a", "morning_text": "F49g",
+    "themi_pronouns": "F35a", "morning_text": "F49g", "be_early_for": "F62b",
 }  # fmt: skip
 
 

@@ -31,7 +31,7 @@ from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from themi import clock
 from themi.accounts import Member
@@ -103,6 +103,20 @@ class Stop:
     keys: tuple[str, ...]  # the leave times the lines name, for F41c
 
 
+# F62b: "tutoring: 30" (also "tutoring 30 min", "tutoring = 30").
+EARLY_LINE = re.compile(r"^\s*(.*?\w)\s*[:=-]?\s*(\d{1,3})\s*(?:m|mins?|minutes?)?\s*$", re.I)
+
+
+def early_entries(lines: tuple[str, ...]) -> list[tuple[str, int]]:
+    """F62b: the (words, minutes early) a member keeps, from their setting's lines."""
+    found = []
+    for line in lines:
+        m = EARLY_LINE.match(line)
+        if m:
+            found.append((" ".join(m.group(1).split()), int(m.group(2))))
+    return found
+
+
 class TravelPreferences(Preferences):
     """CR7b1: "time to get ready" before events with a place (K4)."""
 
@@ -110,6 +124,28 @@ class TravelPreferences(Preferences):
     settings_anchor: ClassVar[str] = "calendars"  # MP5
     getting_ready_minutes: int = 15
     leave_heads_up: bool = True
+    be_early_for: tuple[str, ...] = Field(
+        (),
+        title="Events I like to be early for",
+        description="One per line: words in the event's name, then minutes early (tutoring: 30).",
+    )
+
+    @field_validator("be_early_for")
+    @classmethod
+    def _be_early_for(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        kept: dict[str, str] = {}
+        for line in (v for v in value if v.strip()):
+            m = EARLY_LINE.match(line)
+            if m is None:
+                raise ValueError(f"{line.strip()!r}: words, then minutes (tutoring: 30)")
+            words, minutes = " ".join(m.group(1).split()), int(m.group(2))
+            if not 0 <= minutes <= 120:
+                raise ValueError("early is between 0 and 120 minutes")
+            if minutes and name_key(words):
+                kept[name_key(words)] = f"{words}: {minutes}"
+            else:
+                kept.pop(name_key(words), None)  # 0: not early for these any more
+        return tuple(kept.values())
 
     @field_validator("getting_ready_minutes")
     @classmethod
@@ -128,6 +164,7 @@ class TravelHeadsUps:
     def install(self) -> None:
         self.services.provide(keys.travel, self)
         self.services.tools.register(drive_time)
+        self.services.tools.register(set_event_early)  # F62b
         self.services.outbox.refreshers[TRAVEL_KIND] = self._as_it_stands
 
     def _as_it_stands(self, member: Member, row: dict[str, Any]) -> str:
@@ -290,7 +327,7 @@ class TravelHeadsUps:
         elif lost:  # F46c: where they said wasn't found now
             drive = f"{_duration(minutes)} from home ({_the(lost)} wasn't found) {how}"
         there_by = (
-            f", there by {_clock(arrive.astimezone(tz))}"
+            f", there by {_clock(arrive.astimezone(tz))}{self._early_why(member, entry, arrive)}"
             if arrive is not None and arrive < entry.starts_at
             else ""
         )  # F46d
@@ -311,6 +348,15 @@ class TravelHeadsUps:
             expires=entry.starts_at,  # still waiting at the start (an outage): of no use then
             dedupe_key=self._dedupe_key(member, entry),
         )
+
+    def _early_why(self, member: Member, entry: Entry, arrive: datetime) -> str:
+        """F62b: " (30 min early for tutoring)" when their "be early for" set the time."""
+        minutes, words = self.early_by_title(member, entry)
+        if not words or entry.starts_at - arrive != timedelta(minutes=minutes):
+            return ""
+        if self._planned_early(member, entry):
+            return ""
+        return f" ({minutes} min early for {words})"
 
     def _dedupe_key(self, member: Member, entry: Entry) -> str:
         """One heads-up per event, start time and plan (F55a: a changed plan's isn't a
@@ -448,7 +494,8 @@ class TravelHeadsUps:
             if ready > now:
                 plan += f", and start getting ready around {_clock(ready.astimezone(tz))}"
         if early and arrive > now:
-            plan = f"to be there by {_clock(arrive.astimezone(tz))}, {plan}"
+            why = "" if new_early is not None else self._early_why(owner, entry, arrive)
+            plan = f"to be there by {_clock(arrive.astimezone(tz))}{why}, {plan}"
         how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
         heads_up = self._heads_up_words(viewer, owner, entry, leave_by, arrive, now)
         if ctx is not None:
@@ -811,11 +858,37 @@ class TravelHeadsUps:
         """`_plan`, with a saved place's minutes early (F57b) when nothing was said for the
         event itself (an arrival at the start, said for the event, reads as unsaid too)."""
         origin, early = self._plan(member, entry)
-        if not early and entry.location:
+        if early:
+            return origin, early
+        if entry.location:
             saved = self.saved_place(member, entry.location)
             if saved is not None:
                 early = saved.arrive_early
-        return origin, early
+        return origin, max(early, self.early_by_title(member, entry)[0])  # F62b: the larger
+
+    def _planned_early(self, member: Member, entry: Entry) -> bool:
+        """Was a time to be there said for this one event (F46d)? That wins."""
+        return bool(self._plan(member, entry)[1])
+
+    def early_by_title(self, member: Member, entry: Entry) -> tuple[int, str]:
+        """F62b: the most minutes early their "be early for" words give this event's title,
+        and those words ((0, "") when none match). Whole words, in order."""
+        title = f" {name_key(entry.title)} "
+        lines = self.services.store.preferences(member.id, TravelPreferences).be_early_for
+        best = (0, "")
+        for words, minutes in early_entries(lines):
+            key = name_key(words)
+            if key and f" {key} " in title and minutes > best[0]:
+                best = (minutes, words)
+        return best
+
+    def set_early(self, member: Member, words: str, minutes: int) -> TravelPreferences:
+        """F62b: be `minutes` early for events called `words` (0 stops it)."""
+        words = " ".join(words.split())
+        lines = self.services.store.preferences(member.id, TravelPreferences).be_early_for
+        return self.services.store.save_preferences(
+            member, member.id, TravelPreferences, be_early_for=(*lines, f"{words}: {minutes}")
+        )
 
     def _plan(self, member: Member, entry: Entry) -> tuple[str, int]:
         """Where they said they'd leave from ('' home or unsaid), and how many minutes before
@@ -1052,3 +1125,29 @@ async def _drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
     except TravelError as exc:
         raise ToolFailed(f"No drive time: {exc}.") from exc
     raise ToolFailed(WHICH_TEXT)
+
+
+@tool(
+    "set_event_early",
+    "Be there early for a kind of event, by words in its title, from now on: 'I like to be "
+    "30 minutes early for tutoring' is words 'tutoring', minutes 30. Their leave and "
+    "get-ready times for those events count from that. minutes 0 stops it. For one event "
+    "only, use drive_time's arrive_by instead; for a place, the place's own minutes early.",
+    {
+        "words": {"type": "string", "description": "Words in the events' titles."},
+        "minutes": {"type": "integer", "description": "Minutes early, 0 to 120."},
+    },
+)
+async def set_event_early(ctx: ToolContext, args: dict[str, Any]) -> str:
+    travel = ctx.services.maybe(keys.travel)
+    if travel is None:
+        raise ToolFailed("Travel times aren't set up.")
+    words, minutes = " ".join(str(args["words"]).split()), int(args["minutes"])
+    if not name_key(words):
+        raise ToolFailed("Which events? Some words from their titles.")
+    if not 0 <= minutes <= 120:
+        raise ToolFailed("Early is between 0 and 120 minutes.")
+    travel.set_early(ctx.member, words, minutes)
+    if minutes == 0:
+        return f"Done: no extra time for {words} any more."
+    return f"Done: I'll plan to have them at {words} {minutes} minutes early."

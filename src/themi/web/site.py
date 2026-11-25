@@ -25,7 +25,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import replace
 from datetime import time
 from pathlib import Path
-from typing import Any
+from typing import Any, get_origin
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, FastAPI, Request
@@ -818,6 +818,10 @@ def from_form(model: type[Preferences], form: Any, shown: set[str] | None = None
             values[name] = form.get(name) == "on"
         elif info.annotation is int:
             values[name] = as_int(form.get(name))
+        elif get_origin(info.annotation) is tuple and name in form:  # one per line (F62b)
+            values[name] = tuple(
+                line.strip() for line in str(form.get(name)).splitlines() if line.strip()
+            )
         elif name in form:
             values[name] = str(form.get(name))
     return values
