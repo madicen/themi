@@ -451,6 +451,11 @@ GENERAL = re.compile(r"\b(?:always|every|all|any|whenever|from now on)\b")
 URGENT_MAIL = re.compile(  # about senders: "Schwab emails are urgent", "mail from X is urgent"
     r"\b(?:e-?mails?|mail) from\b.*\burgent\b|\b\w+ e-?mails (?:are|count as) (?:always )?urgent\b"
 )
+# F62b: "add 30 minutes to the travel buffer for tutoring" is set_event_early's, not a rule.
+EARLY_FOR = re.compile(
+    r"\btravel buffer\b|\b(?:minutes?|time) early (?:for|to)\b|\bbe early (?:for|to)\b"
+    r"|\b(?:extra|more|add) (?:\d+ )?(?:minutes?|time) (?:before|for|to)\b"
+)
 # F42b (bug #204): "that email is not important enough to notify me" lowers its sender.
 NOT_WANTED = re.compile(
     r"\bnot (?:\w+ )?(?:important|urgent|worth)\b|\bdon'?t (?:need to )?(?:notify|bother|ping"
@@ -569,6 +574,12 @@ async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
             "choices: propose an autonomy_grant for the whole category (it then covers every "
             "case of it, for everyone if it's a shared one, so say that), or tell them plainly "
             "that Themi can't make only this case automatic."
+        )
+    if EARLY_FOR.search(f"{said} {args['summary']} {args['text']}".lower()):
+        raise ToolFailed(
+            "Extra time before a kind of event isn't a rule (the leave and get-ready times "
+            "are worked out in code): use set_event_early with words from those events' "
+            "titles and the minutes; more_tools brings the schedules group if it isn't there."
         )
     if URGENT_MAIL.search(said):
         raise ToolFailed(

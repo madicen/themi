@@ -323,3 +323,16 @@ async def test_recombine_words_bring_the_schedules_tools(scenario: Scenario) -> 
     ):
         assert "schedules" in tools.choose_groups([said]), said
     assert tools.group_of("unsplit_task") == "schedules"
+
+
+async def test_a_step_goes_off_with_its_sub_steps(scenario: Scenario) -> None:
+    """F62c: splitting a task with sub-steps splits by its steps; each takes its own."""
+    erin = scenario.member("Erin")
+    task = await board(scenario).create(
+        erin, "Weekly clean", "physical", 3, None, assignee=erin,
+        steps=["Bathroom", "-- mirror", "--- spots", "-- sink", "Hall"],
+    )  # fmt: skip
+    await split(scenario, "Erin", "split the weekly clean up", task, [])
+    made = parts(scenario).parts(task.id)
+    assert len(made) == 2
+    assert made[0].steps == ("mirror", "-- spots", "sink") and made[1].steps == ()

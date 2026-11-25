@@ -40,7 +40,7 @@ from themi.ai.types import Message
 from themi.channels.outbox import Priority
 from themi.core import keys, listening, pronouns
 from themi.core.agent import CLAIMS_DONE
-from themi.core.prompts import PHRASING_WORDS, day_note
+from themi.core.prompts import PHRASING_WORDS, build_system, day_note
 from themi.core.services import their_last
 from themi.localtime import to_local
 from themi.logs import redact
@@ -189,6 +189,17 @@ def near_list_name(prefix: str, name: str) -> bool:
     return all(any(w == key for w in words) for key in wanted)
 
 
+def list_named_for(prefix: str, names: Sequence[str]) -> str | None:
+    """F62a: "trauma list" names the one list whose name starts with "trauma" (a person's
+    own rule says "Trauma list. …" goes there). Two lists starting that way: neither."""
+    words = name_key(prefix).split()
+    if len(words) < 2 or words[-1] != "list":
+        return None
+    start = words[:-1]
+    found = [n for n in names if name_key(n).split()[: len(start)] == start]
+    return found[0] if len(found) == 1 else None
+
+
 CHAT_SYSTEM = """\
 You are Themi, a household assistant for one family, chatting with them over Telegram.
 Right now you are simply a warm, thoughtful person to talk with, the way a good friend
@@ -252,7 +263,11 @@ def is_request(
         return False
     said = prefix.group(1).strip().lower()
     names = {n.strip().lower() for n in (*list_names, *GROCERY_NAMES)}
-    return said in names or any(near_list_name(said, n) for n in list_names)
+    return (
+        said in names
+        or any(near_list_name(said, n) for n in list_names)
+        or list_named_for(said, list_names) is not None
+    )
 
 
 SENTENCE = re.compile(r"(?<=[.!?])\s+")
@@ -447,7 +462,13 @@ class ConversationMode:
             signals=[] if in_burnout else listening.signals(text, member),
         )
         client = s.router.client_for(member.id, AITask.CHAT)
-        system = pronouns.with_line(CHAT_SYSTEM, pronouns.chosen(s.store))  # F35a
+        household, personal = s.rules(member)
+        system = build_system(  # F62a: the locked rules hold in a chat reply too
+            household,
+            personal_rules=personal,
+            owner=member.name,
+            base=pronouns.with_line(CHAT_SYSTEM, pronouns.chosen(s.store)),  # F35a
+        )
         response = await client.chat(system, [Message.user(turn)])
         return honest(listening.trimmed(response.text.strip(), text), text)
 

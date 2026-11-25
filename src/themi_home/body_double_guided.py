@@ -35,7 +35,7 @@ from themi.channels.step_card import StepCard
 from themi.core import keys
 from themi.core.prompts import PHRASING_WORDS, as_data
 from themi.modules import Module, ModuleContext
-from themi.standard.tasks import clean_steps
+from themi.standard.tasks import clean_steps, step_depth
 from themi_home.body_double import KIND, OPEN_ENDED, SILENT, BodyDouble, Session
 from themi_home.body_double_scene import CHEER_FOR
 from themi_home.groups import BODY_DOUBLING
@@ -148,8 +148,8 @@ class GuidedSteps:
             return session, text, buttons
         if task is not None and task.steps:
             session = self._save(
-                session, steps=json.dumps(list(task.steps)), step=0, phase="work",
-                step_since=clock.now(), steps_proposed=0,
+                session, steps=json.dumps([step_depth(t)[1] for t in task.steps]),  # F62c
+                step=0, phase="work", step_since=clock.now(), steps_proposed=0,
             )  # fmt: skip
             self._watch(session)
             self._ready(session)

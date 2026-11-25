@@ -364,6 +364,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F61a | Feedback: the washer's nudge gets through a work day, and the wet load is on the wall | Feedback | [x] 2026-11-24 |
 | F61b | Feedback: "when does the CVS close?" looks it up and answers, without looping | Feedback | [x] 2026-11-24 |
 | F61c | Feedback: a fallback model that no longer exists is said once to the admin | Feedback | [x] 2026-11-24 |
+| F62a | Review: conversation mode keeps the locked rules; "X list." reaches list X | Feedback | [x] 2026-11-24 |
+| F62b | Review: extra time before events by what they're called | Feedback | [x] 2026-11-24 |
+| F62c | Review: task steps can have sub-steps ("-- wipe the shelf") | Feedback | [x] 2026-11-24 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -18443,6 +18446,171 @@ Notes:
   chain slot shows on its backend's row too.
 - **Michael:** change the Gemini fallback model now; after the update, the Pi will say so on
   its next 404 anyway.
+
+### F62a · Review (2026-11-24): conversation mode keeps the locked rules, and "X list. …" reaches a list named for X
+Status: [x] 2026-11-24
+Depends on: CM1a, CM1b, F16a, F21a
+Read first: `themi/standard/conversation_mode.py` (`ConversationMode.reply`, `CHAT_SYSTEM`,
+`is_request`, `LIST_PREFIX`, `near_list_name`); `themi/standard/sidecar.py` (`SYSTEM`,
+`run`); `themi/core/prompts.py` (`build_system`); `Services.rules`. From a review of the
+Pi's locked rules (Michael, 2026-11-24: "are there any rules in place on the pi that have no
+effect?").
+
+What the Pi shows: Erin has `/chat on` (since 2026-11-05) and seven locked personal rules
+(how her tasks are laid out, what goes into calendar descriptions, a list prefix). The
+tool agent's system prompt carries them (`build_system`), but conversation mode's chat
+reply (`CHAT_SYSTEM`) and the sidecar (`sidecar.SYSTEM`) carry no rules at all. Rules 22
+and 23 say a message starting with "Trauma list." goes onto list 3, one of Erin's lists.
+That worked before chat mode: 61 items were added on 1 to 5 Nov. Now `is_request("Trauma
+list. …")` is False, because "trauma list" isn't near list 3's name (`near_list_name` wants
+every word of the name). So the message gets the tool-less chat reply, and the sidecar
+never hears the rule.
+
+Build:
+- The chat reply's system prompt gets the locked household rules and the member's
+  personal rules, worded as `build_system` words them (no energy scores; the sidecar's
+  rules note below doesn't change what the chat can do: still no tools, still `honest`).
+- The sidecar's turn gets the same rules, under "Their standing rules (follow them when
+  recording)", so "When Erin starts a message with X, add it to list Y" is recorded.
+- `is_request`: a `LIST_PREFIX` of "<words> list" also names a list whose name starts with
+  `<words>` ("trauma list" → a list called "trauma …"), when only one list does. Two
+  lists starting the same way, no match (as now).
+- No other routing change: a rule isn't parsed into a route.
+
+Tests:
+- Conversation mode with a locked personal rule: the chat call's system text has it; a
+  partner's personal rule is never in it.
+- The sidecar's turn carries the household and the member's personal rules.
+- `is_request("Trauma list. Showering", ["trauma processing x", "Groceries"])` is True;
+  with two lists starting "trauma", False.
+- Scenario: Erin in conversation mode sends "Trauma list. Showering"; the item is on that
+  list and the reply says it's added (the tool agent's instant "Added").
+
+Data/Setup: update the Pi. Nothing to migrate.
+
+Notes:
+- The chat reply's system is `build_system(household, personal_rules=…, base=CHAT_SYSTEM
+  with pronouns)`, so with no rules it's still exactly `CHAT_SYSTEM` (the existing tests'
+  `system == CHAT_SYSTEM` still hold).
+- The sidecar's turn has "Their standing rules (follow them when recording)" before the
+  `<data>` block (they're locked rules, not the person's chat), household then personal.
+- `list_named_for`: "<words> list" names the one list whose name starts with `<words>`
+  (`name_key` words). Only routing changes: the tool agent then adds it under its rule.
+- **Setup:** update the Pi.
+
+### F62b · Review (2026-11-24): extra time before events by what they're called ("tutoring: 30 minutes early")
+Status: [x] 2026-11-24
+Depends on: K4, F46d, F57b
+Read first: `themi_google/travel.py` (`_planned_start`, `_plan_or_place`, `_plan`,
+`drive_to_event`); `themi/standard/places.py` (`arrive_early`); `themi/core/rules.py`
+(`propose_rule`'s redirects, for example to `set_sender_levels`). From the same review of
+the Pi's rules.
+
+What the Pi shows: rule 20 (Erin, personal, locked 2026-10-30) says "Add 30 minutes to the
+standard travel buffer for tutoring sessions." The get-ready and leave heads-ups are worked
+out in code from the drive, "getting ready takes", a plan said for that one event
+(`travel_plans`, F46d) or a saved place's minutes early (F57b). None of these read rules,
+and there's no "arrive early" by kind of event. So the rule only reaches the model when
+Erin asks about the drive herself, and the automatic heads-up for tutoring ignores it.
+Tutoring is at different places (sometimes online), so a saved place doesn't cover it.
+
+Build:
+- Travel preferences gain "events I like to be early for": a short list of (words, minutes
+  early, 0-120), per member. An event whose title contains the words (`name_key`, whole
+  words) is planned to arrive that many minutes before its start, unless that one event
+  has its own plan (F46d), which wins. Against a saved place's minutes, the larger
+  applies.
+- A tool `set_event_early(words, minutes)` (minutes 0 removes it) in the schedules group,
+  answering in words ("I'll plan to have you at tutoring 30 minutes early"). The drive
+  answer and the heads-up say why, once: "(30 min early for tutoring)".
+- `propose_rule` points "extra time / buffer / early for <kind of event>" at
+  `set_event_early`, as it points urgent senders at `set_sender_levels`.
+- The member's settings page shows the list and lets it be edited.
+
+Tests:
+- A "Tutoring with G" event 4 pm, 20 min drive, getting ready 15, "tutoring" 30 early: the
+  heads-up says leave around 3:10 and start getting ready around 2:55.
+- A plan said for that event overrides it; a saved place's 45 beats it; "Tutor prep" at
+  home without a place gets no heads-up (as now).
+- `propose_rule` for "add 30 minutes before tutoring" returns the redirect.
+- Scenario: Erin says "I like to be 30 minutes early for tutoring"; her next tutoring
+  heads-up comes 30 minutes earlier.
+
+Data/Setup: update the Pi. Then for Erin: `set_event_early("tutoring", 30)` (or her
+settings page), and unlock rule 20 (now covered). Michael or Erin can do both on the
+website.
+
+Notes:
+- `TravelPreferences.be_early_for`: lines "words: minutes" (also "words 30 min"), tidied
+  by its validator; a later line for the same words replaces an earlier one, and 0 takes it
+  away. On the Settings page under "My calendars" as a textarea; `site.from_form` now
+  reads a tuple field one item per line.
+- `_plan_or_place`: a plan said for the event (F46d) wins; otherwise the larger of the
+  saved place's minutes and `early_by_title` (whole words of the title, `name_key`).
+- The heads-up says "there by 3:30 pm (30 min early for tutoring)"; `drive_time` says the
+  same in its plan line unless arrive_by was given.
+- `set_event_early` is in the schedules group (golden `tools.json` changes for it).
+- `propose_rule` refuses "travel buffer", "minutes early for", "be early for", "extra/add N
+  minutes before/for" with a pointer to `set_event_early` (`EARLY_FOR`).
+- **Setup:** update the Pi; then Erin's "tutoring: 30" (website, or "I like to be 30
+  minutes early for tutoring") and unlock rule 20.
+
+### F62c · Review (2026-11-24): task steps can have sub-steps ("-- wipe the shelf"), as lists can
+Status: [x] 2026-11-24
+Depends on: F29g, S4
+Read first: `themi/standard/tasks.py` (`clean_steps`, `_steps_for`, `_quoted`,
+`_step_level`, the `steps` tool argument); `themi/standard/lists.py` (F29g's "-- go
+upstairs" levels, `_depth`, `DASHES`); `themi/standard/task_parts.py`; `themi/web/task_pages.py`
+(the steps box); `themi/standard/reminders.py` (optional steps). From the same review.
+
+What the Pi shows: rules 27 and 28 (Erin, personal, locked 2026-11-05) ask for "indented
+subtasks using double dashes" on tasks and any list. Lists already do this (F29g: "-- go
+upstairs" is a sub-item). Task steps are a flat list, and `clean_steps` strips leading
+dashes (`lstrip("-• ")`), so whatever the model writes comes out flat. No task made since
+5 Nov has a sub-step. Rules 4 and 10 (bullet points on separate lines; optional tags first)
+are what steps already do. With these built in, the four rules can go.
+
+Build:
+- A step can have a level: "-- step" (or "- -", "—") is a sub-step of the step before it,
+  up to 3 levels, as lists parse it (reuse `_depth`). Steps stay stored as strings; the
+  level is kept as leading "-- " (`clean_steps` keeps it instead of stripping it; a leading
+  "-- " on the first step is dropped, since it has no step to be under).
+- Shown in nudges, replies' task summaries, the task page and the wall as indented
+  bullets: `> - Clean the bathroom` then `>   -- wipe the mirror`. Energy-level tags
+  (`(Low)`…, S4) on a parent apply to its sub-steps; an optional parent hides its
+  sub-steps with it (reminders.py).
+- `task_parts` (a step as its own task) takes the step with its sub-steps; the sub-steps
+  become the new task's steps.
+- The `steps` tool description says how to write a sub-step.
+
+Tests:
+- `clean_steps(["Bathroom", "-- mirror", "--- spots", "-- sink"])` keeps the levels;
+  a first-step "-- x" becomes "x".
+- A nudge for that task shows the sub-steps indented; with a (Low) day, a (High) parent's
+  sub-steps go with it.
+- Splitting step 1 off makes a task "Bathroom" with steps "mirror", "-- spots", "sink".
+- The task page round-trips the indented text.
+- Scenario: Erin adds a task with two sub-steps and sees them indented in the reply and
+  on the wall.
+
+Data/Setup: update the Pi. Then unlock rules 4, 10, 27 and 28 (Erin's, now built in).
+Rule 25 (get-ready and leave times) is what heads-ups already say (2026-11-11), so it can
+go now.
+
+Notes:
+- `tasks.step_depth`/`with_depth`/`top_steps`: one dash or a bullet is a step; each dash
+  past the first is a level under the step before (at most 2 under, and never more than one
+  deeper than the step before). Stored as "-- text", so the task page's textarea round-trips.
+- Nudges quote them indented (`> - step`, `>   -- sub`). `_step_levels`: a sub-step without
+  its own (Low)/(Medium)/(High) tag has its step's.
+- `split_task` splits by top-level steps; a part's steps are its step's sub-steps. The
+  lightest step (`reminders._smallest`) is picked among top-level steps, so an optional
+  step's sub-steps go with it. Guided body-double sessions show steps without dashes.
+- Deviation: the wall shows no task steps today, so nothing changed there.
+- Found while checking: Erin's lists already use "dashes" (`list_style`) and she has
+  `setup_note` on, which does what rule 26 asks. Rules 4, 10, 25, 26, 27 and 28 are all
+  covered by code now.
+- **Setup:** update the Pi; then unlock rules 4, 10, 25, 26, 27 and 28.
 
 ## Conversation mode
 

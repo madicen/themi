@@ -56,3 +56,16 @@ def test_undo_words(text: str) -> None:
 @pytest.mark.parametrize("text", ["that was a task I loved", "undo the dishwasher's last cycle?"])
 def test_not_undo(text: str) -> None:
     assert not UNDO.search(text)
+
+
+def test_the_standing_rules_are_in_the_turn_outside_the_data() -> None:
+    """F62a: the sidecar follows their locked rules ("X list. ..." goes on list Y)."""
+    turn = build_turn(
+        ERIN, "Trauma list. Showering", "That sounds hard.",
+        local_now="Tuesday 24 November 2026", open_items=[], history=[],
+        rules=["When Erin starts a message with \"trauma list\", add it to that list."],
+    )  # fmt: skip
+    before, _data = turn.split("<data>")
+    assert "Their standing rules" in before and "trauma list" in before
+    plain = build_turn(ERIN, "hi", "Hi!", local_now="now", open_items=[], history=[])
+    assert "standing rules" not in plain

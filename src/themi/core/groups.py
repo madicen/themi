@@ -122,6 +122,7 @@ CALENDAR = ToolGroup(
         "unskip_email_sender",
         "day_summary",
         "drive_time",
+        "set_event_early",  # F62b
         "block_time_for_task",
         "find_time_for_task",
         "show_week",  # DC6

@@ -155,14 +155,24 @@ def build_turn(
     local_now: str,
     open_items: Sequence[str],
     history: Sequence[LoggedMessage],
+    rules: Sequence[str] = (),
 ) -> str:
+    """`rules`: the locked household rules and their own personal ones (F62a)."""
     lines = [
         f"{member.name if m.direction == 'in' else 'Themi'}: {redact(m.text)}" for m in history
     ]
     items = "\n".join(f"- {redact(i)}" for i in open_items) or "none"
+    standing = (
+        "Their standing rules (follow them when recording):\n"
+        + "\n".join(f"- {r}" for r in rules)
+        + "\n\n"
+        if rules
+        else ""
+    )
     return (
         f"Local time: {local_now}\n"
         f"Open items (tasks by number):\n{items}\n\n"
+        f"{standing}"
         "<data>\n"
         f"Earlier conversation:\n{chr(10).join(lines) or '(none)'}\n\n"
         f"This turn:\n{member.name}: {redact(text)}\nThemi: {redact(reply)}\n"
@@ -247,6 +257,7 @@ class Sidecar:
                         local_now=f"{local} ({timezone})",
                         open_items=open_items,
                         history=history[-HISTORY:],
+                        rules=[r for group in s.rules(member) for r in group],
                     )
                 )
             ],
