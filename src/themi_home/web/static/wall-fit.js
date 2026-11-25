@@ -45,8 +45,28 @@
     button.textContent = count > 0 ? "+" + count + " more" : "";
   }
 
+  // F63a (Michael's bug #269, the date wrapped onto two lines): the top row's date and time
+  // never give way. When the row is too tight, the buttons drop to their icons first, then
+  // the weather's "low ... tonight" goes. Everything scales with the frame's width, so this
+  // depends only on what the row holds (the longest date, the body double's button).
+  var TIGHT = ["wall-top-tight", "wall-top-tighter"];
+  function fitTop(doc) {
+    var top = doc.querySelector(".wall-top");
+    if (!top) return;
+    TIGHT.forEach(function (c) { top.classList.remove(c); });
+    for (var i = 0; i < TIGHT.length && overfull(top); i++) top.classList.add(TIGHT[i]);
+  }
+  function overfull(top) {
+    if (top.scrollWidth > top.clientWidth + 1) return true;
+    var asks = top.querySelector(".wall-asks"), when = top.querySelector(".wall-when");
+    if (asks && asks.scrollWidth > asks.clientWidth + 1) return true;
+    return !!(when && top.getBoundingClientRect().right < when.getBoundingClientRect().right);
+  }
+
   function fitWall(doc) {
-    (doc || document).querySelectorAll(".wall-col-body").forEach(function (body) {
+    doc = doc || document;
+    fitTop(doc);
+    doc.querySelectorAll(".wall-col-body").forEach(function (body) {
       var sections = sectionsOf(body);
       sections.forEach(function (s) {
         s.entries.forEach(function (e) { e.classList.remove("wall-cut"); });
@@ -83,6 +103,6 @@
     });
   }
 
-  root.themiWallFit = { fitColumn: fitColumn, fitWall: fitWall };
+  root.themiWallFit = { fitColumn: fitColumn, fitWall: fitWall, fitTop: fitTop };
   if (typeof module !== "undefined" && module.exports) module.exports = root.themiWallFit;
 })(typeof window !== "undefined" ? window : globalThis);

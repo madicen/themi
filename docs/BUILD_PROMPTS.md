@@ -367,7 +367,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F62a | Review: conversation mode keeps the locked rules; "X list." reaches list X | Feedback | [x] 2026-11-24 |
 | F62b | Review: extra time before events by what they're called | Feedback | [x] 2026-11-24 |
 | F62c | Review: task steps can have sub-steps ("-- wipe the shelf") | Feedback | [x] 2026-11-24 |
-| F63a | Feedback: the wall's date stays on one line | Feedback | [ ] |
+| F63a | Feedback: the wall's date stays on one line | Feedback | [[~] |
 | F63b | Feedback: Themi can run the CatGenie ("try a clean again") | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -18615,7 +18615,7 @@ Notes:
 - **Setup:** update the Pi; then unlock rules 4, 10, 25, 26, 27 and 28.
 
 ### F63a · Feedback (2026-11-25): the wall's date stays on one line
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: WL2, F59g, F60e
 Read first: `themi_home/web/templates/wall/_top.html`; `themi_home/web/static/wall.css`
 (`.wall-top`, `.wall-date`, `.wall-asks`, `.wall-talk`). From Michael's bug #269
@@ -18638,6 +18638,19 @@ Tests: the existing wall page test asserts the date has the no-wrap class, and t
 keep an accessible name when their labels hide.
 
 Data/Setup: update the Pi, reload the wall. Mark #269 reviewed once live.
+
+Notes:
+- `.wall-when` doesn't shrink and `.wall-date` doesn't wrap. `wall-fit.js` (`fitTop`, run
+  by `fitWall` on load, resize and every swap) adds `wall-top-tight` when the row overflows
+  (the buttons show their icons only), then `wall-top-tighter` (the weather's low goes).
+  Both buttons carry `aria-label`s.
+- At 1080 x 1920 with the longest date, both buttons and the weather, the row needs
+  `wall-top-tight`. The wall scales with the frame's width, so this is the same on any
+  frame.
+- Deviation: tested in Chrome (`tests/integration/test_wall_top_browser.py`), not by a class
+  in the page test: only a real layout shows a wrap. Without the fix the date measured
+  2.7 lines tall.
+- **Setup:** update the Pi, reload the wall.
 
 ### F63b · Feedback (2026-11-25): Themi can run the CatGenie, not just read it ("try a clean again")
 Status: [ ]
