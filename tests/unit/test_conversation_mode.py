@@ -204,3 +204,14 @@ def test_a_reply_cut_to_nothing_doesnt_say_got_it() -> None:
     )
     assert honest("Done, it's on the list.", "long day") == "Mm, I hear you."
     assert "Got it." not in (honest("I've added it.", "remember the vet is closed Mondays"),)
+
+
+@pytest.mark.parametrize("text", ["Trauma list. Showering", "trauma list: forced eye contact"])
+def test_x_list_names_the_one_list_starting_with_x(text: str) -> None:
+    """F62a: her rule says "Trauma list. …" goes on that list; in chat mode it went to chat."""
+    assert is_request(text, ["trauma processing notes", "Groceries"])
+
+
+def test_x_list_with_two_lists_starting_with_x_stays_chat() -> None:
+    assert not is_request("Trauma list. Showering", ["trauma one", "trauma two"])
+    assert not is_request("Long day. Showering now", ["trauma processing notes"])

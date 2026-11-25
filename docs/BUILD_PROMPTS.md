@@ -364,7 +364,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F61a | Feedback: the washer's nudge gets through a work day, and the wet load is on the wall | Feedback | [x] 2026-11-24 |
 | F61b | Feedback: "when does the CVS close?" looks it up and answers, without looping | Feedback | [x] 2026-11-24 |
 | F61c | Feedback: a fallback model that no longer exists is said once to the admin | Feedback | [x] 2026-11-24 |
-| F62a | Review: conversation mode keeps the locked rules; "X list." reaches list X | Feedback | [ ] |
+| F62a | Review: conversation mode keeps the locked rules; "X list." reaches list X | Feedback | [x] 2026-11-24 |
 | F62b | Review: extra time before events by what they're called | Feedback | [ ] |
 | F62c | Review: task steps can have sub-steps ("-- wipe the shelf") | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -18448,7 +18448,7 @@ Notes:
   its next 404 anyway.
 
 ### F62a · Review (2026-11-24): conversation mode keeps the locked rules, and "X list. …" reaches a list named for X
-Status: [ ]
+Status: [x] 2026-11-24
 Depends on: CM1a, CM1b, F16a, F21a
 Read first: `themi/standard/conversation_mode.py` (`ConversationMode.reply`, `CHAT_SYSTEM`,
 `is_request`, `LIST_PREFIX`, `near_list_name`); `themi/standard/sidecar.py` (`SYSTEM`,
@@ -18487,6 +18487,16 @@ Tests:
   list and the reply says it's added (the tool agent's instant "Added").
 
 Data/Setup: update the Pi. Nothing to migrate.
+
+Notes:
+- The chat reply's system is `build_system(household, personal_rules=…, base=CHAT_SYSTEM
+  with pronouns)`, so with no rules it's still exactly `CHAT_SYSTEM` (the existing tests'
+  `system == CHAT_SYSTEM` still hold).
+- The sidecar's turn has "Their standing rules (follow them when recording)" before the
+  `<data>` block (they're locked rules, not the person's chat), household then personal.
+- `list_named_for`: "<words> list" names the one list whose name starts with `<words>`
+  (`name_key` words). Only routing changes: the tool agent then adds it under its rule.
+- **Setup:** update the Pi.
 
 ### F62b · Review (2026-11-24): extra time before events by what they're called ("tutoring: 30 minutes early")
 Status: [ ]

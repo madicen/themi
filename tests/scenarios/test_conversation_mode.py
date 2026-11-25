@@ -235,3 +235,44 @@ async def test_with_no_draft_too_general_stays_chat(scenario: Scenario) -> None:
     queue_nothing_picked_out(scenario)
     await scenario.say("Erin", "that's too general")
     assert scenario.primary.requests[0].system == CHAT_SYSTEM
+
+
+async def lock_personal(scenario: Scenario, name: str, text: str) -> None:
+    rulebook = scenario.app.services.rulebook
+    assert rulebook is not None
+    member = scenario.member(name)
+    rule = await rulebook.propose(member, text, text, scope="personal")
+    await rulebook.lock(rule.id, member)
+
+
+async def test_the_chat_reply_and_sidecar_keep_her_locked_rules(scenario: Scenario) -> None:
+    """F62a: Erin's personal rules held only for the tool agent, not in chat mode."""
+    await lock_personal(scenario, "Erin", "Give both get-ready and leave times")
+    await lock_personal(scenario, "Husband", "Call me captain")
+    await chat_on(scenario)
+    scenario.primary.queue_text("That sounds like a lot.")
+    queue_nothing_picked_out(scenario)
+    await scenario.say("Erin", "long day, the kids were a lot")
+    chat = next(r for r in scenario.primary.requests if r.kind is CallKind.INTERACTIVE)
+    assert chat.system.startswith(CHAT_SYSTEM) and chat.tools == ()
+    assert "Give both get-ready and leave times" in chat.system
+    assert "captain" not in chat.system  # a partner's personal rule, never
+    sidecar = next(r for r in scenario.primary.requests if "quietly read one turn" in r.system)
+    turn = sidecar.messages[0].text
+    assert "Give both get-ready and leave times" in turn and "captain" not in turn
+
+
+async def test_trauma_list_goes_to_the_tool_agent_in_chat_mode(scenario: Scenario) -> None:
+    """F62a: "Trauma list. …" reached its list until chat mode sent it to a tool-less chat."""
+    lists = scenario.app.services.maybe(keys.lists)
+    assert lists is not None
+    lists.create(scenario.member("Erin"), "trauma processing notes", personal=True)
+    await chat_on(scenario)
+    scenario.primary.queue_tool_call(
+        "add_to_list", {"list": "trauma processing notes", "items": ["Showering"]}
+    )
+    scenario.primary.queue_text("Added.")
+    await scenario.say("Erin", "Trauma list. Showering")
+    assert scenario.primary.requests[0].system != CHAT_SYSTEM  # the tool agent
+    found = lists.find(scenario.member("Erin"), "trauma processing notes")
+    assert found is not None and [i.name for i in found.items] == ["Showering"]
