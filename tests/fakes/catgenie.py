@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -55,6 +56,8 @@ class FakeCatGenie(Snapshots):
         self.refresh_tokens: set[str] = set()
         self.tokens: dict[str, datetime] = {}  # access token -> when it ends
         self.calls: list[str] = []
+        self.commands: list[tuple[str, str, dict[str, Any]]] = []  # F63b: (box, path, body)
+        self.ignore_cleans = False  # F63b: the box takes the command but doesn't start
         self.rotate = False  # a renewal hands back a new refresh token
         self._filtered = 0
         self._failing = 0
@@ -202,6 +205,26 @@ class FakeCatGenie(Snapshots):
             )
         if path == "notification/v1/push/user" and method == "GET":
             return httpx.Response(200, json={"userId": "u1", "notifications": self.notifications})
+        command = re.fullmatch(r"device/management/([^/]+)/(operation|configuration)", path)
+        if command and method in ("POST", "PUT"):
+            box = self.devices.get(command.group(1))
+            if box is None:
+                return httpx.Response(404, json={"code": "NOT_FOUND", "message": path})
+            self.commands.append((command.group(1), command.group(2), body))
+            if command.group(2) == "operation" and method == "POST":
+                if body.get("state") == 1 and not self.ignore_cleans:
+                    box["operationStatus"].update({"state": 1, "progress": 0})
+                elif body.get("state") == 0:
+                    box["operationStatus"].update({"state": 0, "progress": 255})
+                return httpx.Response(200, content=b"")
+            if command.group(2) == "configuration" and method == "PUT":
+                config = box["configuration"]
+                for key, value in body.items():
+                    if key == "binaryElements":
+                        config.setdefault("binaryElements", {}).update(value)
+                    else:
+                        config[key] = value
+                return httpx.Response(200, json={})
         return httpx.Response(404, json={"code": "NOT_FOUND", "message": path})
 
     def _headers_wrong(self, request: httpx.Request, path: str) -> str:

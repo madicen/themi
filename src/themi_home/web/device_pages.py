@@ -20,6 +20,7 @@ from themi.core import keys
 from themi.web.accounts_page import back, household_models, render
 from themi.web.kit import Kit
 from themi_home.connectors.catgenie import CatGenieError
+from themi_home.connectors.catgenie.events import settings_words
 from themi_home.connectors.homeconnect import HomeConnectAccount, HomeConnectError
 from themi_home.connectors.roborock import RoborockError
 from themi_home.connectors.smarthq import REGIONS, SmartHQError
@@ -109,6 +110,7 @@ def _catgenie(services: Any) -> dict[str, Any] | None:
             (d, states.get(d.id), watcher.raw(d), chores.granules(d.id) if chores else None)
             for d in watcher.devices()
         ],
+        "settings": {d.id: settings_words(watcher.raw(d)) for d in watcher.devices()},  # F63b
     }
 
 

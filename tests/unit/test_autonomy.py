@@ -45,6 +45,7 @@ CAN_BE_AUTOMATIC = {
     "dishwasher_done",
     "vacuum_home",
     "pet_feed",  # F39a: feeding a pet now; asked in so many words, that's their yes
+    "litter_box_control",  # F63b: start or stop its clean, or change its settings
     "vacuum_done",
     "routine_item_add",
     "server_control",  # D3a: asked for on the website, so it runs at once

@@ -367,8 +367,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F62a | Review: conversation mode keeps the locked rules; "X list." reaches list X | Feedback | [x] 2026-11-24 |
 | F62b | Review: extra time before events by what they're called | Feedback | [x] 2026-11-24 |
 | F62c | Review: task steps can have sub-steps ("-- wipe the shelf") | Feedback | [x] 2026-11-24 |
-| F63a | Feedback: the wall's date stays on one line | Feedback | [[~] |
-| F63b | Feedback: Themi can run the CatGenie ("try a clean again") | Feedback | [ ] |
+| F63a | Feedback: the wall's date stays on one line | Feedback | [x] 2026-11-25 |
+| F63b | Feedback: Themi can run the CatGenie ("try a clean again") | Feedback | [x] 2026-11-25 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -18653,7 +18653,7 @@ Notes:
 - **Setup:** update the Pi, reload the wall.
 
 ### F63b · Feedback (2026-11-25): Themi can run the CatGenie, not just read it ("try a clean again")
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: CG1a, CG1b, F60b
 Read first: `themi_home/connectors/catgenie/client.py`, `events.py`, `watch.py`;
 `themi_home/litter_box.py`; `docs/research/catgenie.md`; the trust tiers
@@ -18719,6 +18719,48 @@ Decide first (Michael), with recommendations:
 - Starts at Tier 1 (an approval each time) until it's been seen working on the real box.
   Recommended.
 - Leave out a firmware update trigger: the package has no call for it, and the app does it.
+
+Decided: built as recommended (Tier 1, a yes each time) when Michael asked for it to be built,
+2026-11-25. Raise it to automatic later from the trust settings if wanted.
+
+Notes:
+- Client (`connectors/catgenie/client.py`): `start_clean`, `stop_clean` (`POST
+  device/management/{id}/operation`, `{"state": 1}` / `{"state": 0}`) and `configure`
+  (`PUT .../configuration`, partial). `check_settings` refuses anything outside `SETTINGS`
+  (mode, dndFrom/dndTo, childLock, volumeLevel, catDelay, extraDry, binaryElements with only
+  EXTRA_WASH/EXTRA_SHAKE) before a request. A command answered with an empty body counts as
+  taken: the edge filter's empty 200 looks the same, so the next read is what shows it.
+- Trust: `litter_box_control` (migration 0186), family, Tier 1, may become automatic
+  (max 2). The error nudge's "Try a clean" is staged `requested=True`: the tap asks for
+  exactly this, so it runs with no card (audit: staged, requested, executed). From chat
+  (`litter_box_clean`, `litter_box_settings`, both staged tools) it's an approval card.
+- "Try a clean" is on error and alert nudges. Refused (cleaning, offline, out of
+  sani-solution, not read yet), it says why. The tap uses up the nudge's buttons, so a
+  refusal and a "came back" message carry Done / Try a clean / Later again.
+- The outcome: `litter_problems.retried_at`, `retried_by`, `retry_outcome` (0186). Each
+  read (`_retry_check`, a reading listener, so it runs before that read's events): once the
+  box is idle with a `lastClean` after the tap, `cleared` (the chore closes as `_gone`
+  closes one, and the tapper hears so) or `back` (it stays open, the tapper hears, and the
+  chore's note says "A clean was tried and the error came back."). An error that goes away
+  mid-clean doesn't close the chore until the clean is done. No clean within 2 hours:
+  `none`, let go quietly.
+- Reading settings: `appliance_status` and the Accounts page show `settings_words` (mode,
+  quiet hours, extra wash/shake/dry, panel lock, firmware). `litter_box_settings` only
+  changes; with nothing to change it fails pointing at `appliance_status` (a staged tool
+  always proposes).
+- Deviations: the schedule, cat sensitivity and auto-lock aren't changed (their values'
+  meaning differs by firmware and no capture shows them), and firmware updates aren't read
+  (`device/update/{id}`'s answer has no known shape). "Whoosh" added to the devices group's
+  words.
+- Changed tests: `test_an_error_goes_to_whoever_has_more_room_and_cant_wait` (the error
+  nudge's buttons now include Try a clean) and `test_asked_how_the_litter_box_is_themi_reads_it`
+  (the status line now ends with its settings); `test_autonomy.py`'s `CAN_BE_AUTOMATIC` lists
+  the new category. The devices group is at its 20 examples, so only "Run the Whoosh" was
+  added. Goldens: `tools.json` (two new tools; the
+  devices group's description, so `more_tools`) and `handlers.json` (the `litter` button,
+  two executors).
+- **Setup:** update the Pi (migration 0186). Not tried against PetNovations: be near the
+  Whoosh the first time "Try a clean" is tapped. Mark #268 reviewed once it's worked.
 
 ## Conversation mode
 

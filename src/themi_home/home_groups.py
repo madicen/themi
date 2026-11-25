@@ -122,14 +122,15 @@ DEVICES = ToolGroup(
     description=(
         "the washer, dryer, dishwasher, robot vacuum, pet feeders, litter box and oven"
         "s: running, done, time left, stuck, food left, last fed, sani-solution, errors"
-        ", on, preheated; feeding a pet from its feeder now"
+        ", on, preheated; feeding a pet from its feeder now; starting or stopping the litter "
+        "box's clean and its settings"
     ),
     words=(
         "wash(?:er|ing)?\\b|dryer|drying|dishwasher|laundry|cycle|load\\b|appliance|how"
         " (?:much )?longer|time left|still running|is it done|robot|roborock|the vacu"
         "um\\b|vacuum'?s\\b|feeders?\\b|\\bfeed\\b|dispens|kibble|been fed|fed the (?:"
         "cat|dog)s?|pet food|c"
-        "at food|dog food|litter|cat ?genie|sani.?solution|cartridge|granules?\\b|\\bo"
+        "at food|dog food|litter|cat ?genie|whoosh|sani.?solution|cartridge|granules?\\b|\\bo"
         "vens?\\b|preheat"
     ),
     examples=(
@@ -152,8 +153,15 @@ DEVICES = ToolGroup(
         "Give Mochi a portion from the feeder",
         "Is the litter box working?",
         "How much sani-solution is left?",
+        "Run the Whoosh",  # F63b
     ),
-    tools=("appliance_status", "feed_pet", "name_litter_code"),  # F60b
+    tools=(
+        "appliance_status",
+        "feed_pet",
+        "name_litter_code",  # F60b
+        "litter_box_clean",
+        "litter_box_settings",  # F63b
+    ),
     order=100,
 )
 

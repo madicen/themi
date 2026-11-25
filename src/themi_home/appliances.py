@@ -27,6 +27,7 @@ from themi.modules.prompt import PromptFragment
 from themi.standard.tasks import clock_words
 from themi_home import home_groups
 from themi_home.connectors.catgenie import CatGenieError
+from themi_home.connectors.catgenie.events import settings_words
 from themi_home.connectors.catgenie.events import state_word as litter_words
 from themi_home.connectors.homeconnect import HomeConnectError
 from themi_home.connectors.roborock import RoborockError
@@ -199,6 +200,9 @@ class Appliances:
         if reading.last_clean is not None:
             said += f"; last cleaned {self._local_words(reading.last_clean)}"
             said += self._day_words(reading.last_clean)
+        settings = settings_words(watcher.raw(device))  # F63b
+        if settings:
+            said += f"; settings: {settings}"
         litter_box = self.services.maybe(keys.litter_box)
         chores = litter_box.chores(device.id) if litter_box is not None else []  # and whose
         return " ".join([f"{name}, read just now: {said}.", *chores])
