@@ -23,7 +23,9 @@ from themi_home.gram_weights import viewer_lines
 from themi_home.quantities import NeedsYield, describe, scale_for, scale_line
 from themi_home.recipe_card import card_png
 from themi_home.recipe_groceries import BAKING_TEXT, SCALED_TEXT, is_baking
-from themi_home.recipes import COOKBOOK, DOC_NAMES, TO_TRY, Recipe, Recipes, search
+from themi_home.recipes import COOKBOOK, TO_TRY, Recipe, Recipes, search
+
+NEW_BOOK = "new"  # RC8b: the select's "A new recipe book…"
 
 SCALES = [
     ("½", "half"),
@@ -73,6 +75,7 @@ def routes(kit: Kit) -> APIRouter:
             account=account,
             cookbook=settings,
             to_try=book.settings(TO_TRY),  # F49h
+            shelves=[(b, book.count(b.key)) for b in book.shelves()],  # RC8b
             chosen_here=settings["account_id"] == account.id,
             picker=bool(config.picker_api_key and config.project_number),
             client_id=config.client_id,
@@ -94,11 +97,49 @@ def routes(kit: Kit) -> APIRouter:
         doc_id = doc_id_from(str(form.get("doc", "")))
         if doc_id is None:
             return kit.redirect(back, "That doesn't look like a Google Doc's link.")
-        which = TO_TRY if form.get("book") == TO_TRY else COOKBOOK  # F49h
+        asked = str(form.get("book") or COOKBOOK)
+        made = None
+        if asked == NEW_BOOK:  # RC8b: a recipe book of its own
+            try:
+                made = book.add_book(str(form.get("name") or ""))
+            except DocsError as exc:
+                return kit.redirect(back, str(exc))
+            which = made.key
+        else:
+            known = {b.key for b in book.books()}
+            which = asked if asked in known else COOKBOOK  # F49h, RC8b
         try:
             said = await book.choose(session.member, account_id, doc_id, which)
         except DocsError as exc:
+            if made is not None:  # a new book that couldn't be read isn't kept
+                app.store.db.execute("DELETE FROM recipe_books WHERE id = ?", (made.id,))
             return kit.redirect(back, str(exc))
+        return kit.redirect(back, said)
+
+    @router.post("/accounts/{account_id:int}/cookbook/books/{key}")
+    async def change_book(request: Request, account_id: int, key: str) -> Response:
+        """RC8b: a book of its own's switches, its name, or stopping reading it."""
+        _, form = await kit.checked(request)
+        book = recipes()
+        back = f"/accounts/{account_id}/cookbook"
+        if book is None:
+            return kit.not_set_up("/accounts", "Recipes aren't set up on this server.", "recipes")
+        try:
+            action = str(form.get("action") or "")
+            if action == "remove":
+                said = book.remove_book(key)
+            elif action == "rename":
+                said = book.rename_book(key, str(form.get("name") or ""))
+            else:
+                book.set_switches(
+                    key,
+                    meal_ideas=bool(form.get("meal_ideas")),
+                    found_unasked=bool(form.get("found_unasked")),
+                    save_button=bool(form.get("save_button")),
+                )
+                said = f"Saved how {book.book(key).name} shows up."
+        except DocsError as exc:
+            said = str(exc)
         return kit.redirect(back, said)
 
     @router.post("/accounts/{account_id:int}/cookbook/read")
@@ -114,11 +155,14 @@ def routes(kit: Kit) -> APIRouter:
                 back, book.settings()["problem"] or "The cookbook couldn't be read."
             )
         said = book.summary(result)
-        if book.try_doc_id is not None:  # F49h: the other doc too
-            trying = await book.sync(force=True, which=TO_TRY)
+        for other in book.books():  # F49h: the other docs too; RC8b: every book's
+            if other.role == "main" or not other.doc_id:
+                continue
+            where = book.doc_name(other.key)
+            read = await book.sync(force=True, which=other.key)
             said += " " + (
-                book.summary(trying, DOC_NAMES[TO_TRY]) if trying is not None
-                else book.settings(TO_TRY)["problem"] or "Recipes to try couldn't be read."
+                book.summary(read, where) if read is not None
+                else book.settings(other.key)["problem"] or f"{where} couldn't be read."
             )  # fmt: skip
         return kit.redirect(back, said)
 
@@ -131,10 +175,20 @@ def routes(kit: Kit) -> APIRouter:
 
     @router.get("/recipes", response_class=HTMLResponse)
     def recipes_page(
-        request: Request, q: str = Query(""), section: str = Query("")
+        request: Request,
+        q: str = Query(""),
+        section: str = Query(""),
+        shelf: str = Query("", alias="book"),
     ) -> HTMLResponse:
         session = kit.current(request)
         everything = book().all(include_charts=True)
+        shelves = book().shelves()  # RC8b: each book of its own is a chip, listed apart
+        chosen = next((b for b in shelves if b.key == shelf), None)
+        if chosen is not None:
+            everything = [r for r in everything if r.book == chosen.key]
+            section = ""
+        else:
+            everything = [r for r in everything if not r.on_shelf]
         if q.strip():
             shown = [m.recipe for m in search(everything, q, section=section)]
         else:
@@ -146,8 +200,10 @@ def routes(kit: Kit) -> APIRouter:
             session,
             recipes=[r for r in shown if not r.to_try],
             to_try=[r for r in shown if r.to_try],  # F49h: under their own heading
-            sections=sections,
+            sections=[] if chosen else sections,
             section=section,
+            shelves=shelves,
+            shelf=chosen,
             q=q,
             looks=[r for r in everything if r.needs_look],
             diet=book().diet(),

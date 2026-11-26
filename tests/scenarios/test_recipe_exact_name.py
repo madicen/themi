@@ -69,7 +69,7 @@ async def test_part_of_a_name_still_asks_which(scenario: Scenario) -> None:
 async def test_find_recipe_sends_the_one_named_exactly(scenario: Scenario) -> None:
     cookies(scenario)
     scenario.primary.queue_tool_call(
-        "find_recipe", {"query": "Chocolate Chip Cookies", "section": ""}
+        "find_recipe", {"query": "Chocolate Chip Cookies", "section": "", "book": ""}
     )
     scenario.primary.queue_text("There you go.")
     await scenario.say("Husband", "Show me the chocolate chip cookies recipe")

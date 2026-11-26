@@ -106,8 +106,16 @@ class RecipeIdeas:
         low = self.services.energy.suggested_level(member) == "low"
         counts, recent = self._finished()
         ideas: list[Idea] = []
+        offered = {b.key: b for b in self.recipes.books() if b.in_meal_ideas}  # RC8b
         for recipe in self.recipes.all(source="doc"):
             if recipe.section.lower() in NOT_MEALS or not recipe.steps:
+                continue
+            shelf = offered.get(recipe.book)
+            if shelf is None:  # a book kept out of meal ideas
+                continue
+            not_meals = {s.lower() for s in (*shelf.sub_recipe_sections,
+                                             *shelf.reference_sections)}  # fmt: skip
+            if recipe.section.lower() in not_meals:
                 continue
             if recipe.id in recent:
                 continue

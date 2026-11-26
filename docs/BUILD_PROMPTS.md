@@ -406,7 +406,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
 | RC8a | Recipes: recipe books, not two fixed docs (no visible change) | Recipes | [x] 2026-11-25 |
-| RC8b | Recipes: a recipe book of its own (vegan cheese), out of the way | Recipes | [ ] |
+| RC8b | Recipes: a recipe book of its own (vegan cheese), out of the way | Recipes | [x] 2026-11-25 |
 | RC8c | Recipes: reading the cheese doc as it's laid out | Recipes | [ ] |
 | CK1 | Cooking companion: the cook screen on /session | Cooking companion | [x] 2026-11-08 |
 | CK2 | Cooking companion: amounts for this step | Cooking companion | [x] 2026-11-08 |
@@ -20796,7 +20796,7 @@ Notes:
   `cookbook`. New: `tests/unit/test_recipe_books.py` (the migration). Goldens unchanged.
 
 ### RC8b · Recipes: a recipe book of its own (the vegan cheese recipes), out of the way
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: RC8a
 Read first: RC8a's notes; `recipes.py` (`search`, `find_recipe`, `show_recipe`, `open_items`,
 `recipe_lines`' labels, `card_buttons`); `recipe_ideas.py` (`self.recipes.all(source="doc")`);
@@ -20877,6 +20877,45 @@ Decide first (Michael), with recommendations:
   "Family"). Recommended. The other way is Michael's alone: only he finds it and sees it on
   the Recipes page, which adds a `member_id` to the book and a check wherever recipes are
   listed.
+
+Decided: the household's, as recommended, when Michael asked for RC8a-c to be built
+(2026-11-25).
+
+Notes:
+- `Recipes`: `shelves()`, `named_book(said)` (a key, or a name loosely: `book_words` drops
+  "the", "recipe", "book", "vegan" and the like, so "the cheese book" and "cheese" are Vegan
+  cheese; "try" is Recipes to try; "the cookbook" the main one), `add_book`, `rename_book`,
+  `set_switches`, `remove_book` (marks its recipes removed, clears its doc; the row stays).
+  `Recipe.book_name`, `book_role`, `on_shelf` come from the same join as `book`.
+- `find(text, section, charts=, book=)`: with `book`, only that book. Otherwise a book with
+  `found_unasked` 0 is left out unless the words name it or the text is one of its recipes'
+  names exactly. `search` gained `sections_from`, so a named section only comes from books
+  found unasked ("Milks" never narrows the cookbook's search). Order among equals: main,
+  trying, shelf (`ROLE_ORDER`).
+- `find_recipe` gained `book` (required, like every property in strict mode: the scripted
+  calls in 7 test files now pass `"book": ""`). Several matches from a shelf say "From the
+  cookbook and Vegan cheese:".
+- Saving: `save_recipe_to_cookbook`'s `where` is a string, resolved by `named_book`; unknown
+  names decline with the books there are. `CookbookSave.offer_to_book(member, recipe, key)`
+  (Recipes to try at its end, as before; a shelf under the section its name's words share
+  with a section, e.g. "Cashew Oat Milk" under Milks, else its first section of recipes).
+  `card_buttons` makes a save button per book whose switch is on: still [Save to cookbook]
+  [Save to try]; a shelf's switch adds [Save to Vegan cheese] (`save_book`).
+- Meal ideas skip books with `in_meal_ideas` 0, and each book's sub-recipe and reference
+  sections. Sub-recipes (`_sub_recipe`) come from each book's `sub_recipe_sections`, the
+  recipe's own book first; the cook screen's named recipes look in the recipe's own book
+  first, and one name is linked once.
+- Website: the cookbook page lists each shelf (title, count, last read, problem), its three
+  switches, Rename and "Stop reading this book" (`POST .../cookbook/books/{key}`), and the
+  select's "A new recipe book…" with a name field. A new book whose doc can't be read isn't
+  kept. "Read it again now" reads every book. The Recipes page has a chip per shelf
+  (`/recipes?book=b3`); a shelf's recipes are never in the main list.
+- Routing: the recipes group's words gained "cheese book" ("recipe book" was already matched).
+- Goldens: `tools.json` (`find_recipe`, `save_recipe_to_cookbook`), `routes.json` (the books
+  route). Tests: `tests/scenarios/test_recipe_shelves.py` (14).
+- **Setup:** once live, Michael picks "Madicen Family Cheese Recipes" on the cookbook page
+  under Accounts, choosing "A new recipe book…" named "Vegan cheese". Best after RC8c is
+  live too, so the first read has its sections.
 
 ### RC8c · Recipes: reading the cheese doc as it's laid out
 Status: [ ]

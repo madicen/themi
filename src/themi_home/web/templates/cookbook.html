@@ -27,6 +27,33 @@ can open only the doc you pick here.</p>
 <p class="muted">A second doc, <em>Recipes to try</em>, can hold recipes you want to try that
 aren't cookbook-worthy yet. Themi reads it too, finds and cooks them, and labels them "to try".</p>
 
+{% for shelf, count in shelves %}
+<div class="stack shelf">
+  <p>{{ shelf.name }}: <strong>{{ shelf.title or shelf.name }}</strong>{% if shelf.doc_id %} <span class="muted">({{ count }} recipes)</span>{% endif %}</p>
+  {% if shelf.problem %}<p class="alert">{{ shelf.problem }}</p>{% endif %}
+  {% if shelf.read_at %}<p class="muted">Last read {{ shelf.read_at | local_time }}.</p>{% endif %}
+  <form method="post" action="/accounts/{{ account.id }}/cookbook/books/{{ shelf.key }}" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="check"><input type="checkbox" name="meal_ideas" {% if shelf.in_meal_ideas %}checked{% endif %}> Offered in meal ideas</label>
+    <label class="check"><input type="checkbox" name="found_unasked" {% if shelf.found_unasked %}checked{% endif %}> Found in any recipe search</label>
+    <label class="check"><input type="checkbox" name="save_button" {% if shelf.save_button %}checked{% endif %}> A save button on web recipes</label>
+    <button>Save</button>
+  </form>
+  <form method="post" action="/accounts/{{ account.id }}/cookbook/books/{{ shelf.key }}" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="rename">
+    <label>Its name <input name="name" value="{{ shelf.name }}" required></label>
+    <button>Rename</button>
+  </form>
+  <form method="post" action="/accounts/{{ account.id }}/cookbook/books/{{ shelf.key }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="remove">
+    <button>Stop reading this book</button>
+  </form>
+</div>
+{% endfor %}
+<p class="muted">A recipe book of its own (a hobby's recipes, say) is read like the cookbook but
+kept out of the way: not offered in meal ideas, found only when you name it or a recipe in it,
+and saved to only when you say so ("save this to the cheese book").</p>
+
 {% if picker %}
 <div id="picker" data-client="{{ client_id }}" data-key="{{ picker_key }}" data-app="{{ project_number }}" data-address="{{ account.address }}">
   <button id="pick" class="primary" type="button">{% if cookbook.doc_id %}Choose a different doc{% else %}Choose the cookbook doc{% endif %}</button>
@@ -42,8 +69,11 @@ aren't cookbook-worthy yet. Themi reads it too, finds and cooks them, and labels
     <select name="book">
       <option value="cookbook">The family cookbook</option>
       <option value="to_try"{% if cookbook.doc_id and not to_try.doc_id %} selected{% endif %}>Recipes to try</option>
+      {% for shelf, _ in shelves %}<option value="{{ shelf.key }}">{{ shelf.name }}</option>
+      {% endfor %}<option value="new">A new recipe book…</option>
     </select>
   </label>
+  <label>A new book's name <input name="name" placeholder="Vegan cheese"></label>
   <label>{% if picker %}Or the doc's link{% else %}The doc's link{% endif %}
     <input name="doc" required placeholder="https://docs.google.com/document/d/...">
   </label>

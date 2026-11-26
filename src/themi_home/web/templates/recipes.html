@@ -10,9 +10,12 @@
   <button>Search</button>
 </form>
 <p class="filters">
-  <a href="/recipes{% if q %}?q={{ q | urlencode }}{% endif %}">{{ chip("All", "info" if not section else "") }}</a>
+  <a href="/recipes{% if q %}?q={{ q | urlencode }}{% endif %}">{{ chip("All", "info" if not section and not shelf else "") }}</a>
   {% for s in sections %}<a href="/recipes?section={{ s | urlencode }}{% if q %}&q={{ q | urlencode }}{% endif %}">{{ chip(s, "info" if s == section else "") }}</a> {% endfor %}
+  {% for b in shelves %}<a href="/recipes?book={{ b.key | urlencode }}{% if q %}&q={{ q | urlencode }}{% endif %}">{{ chip(b.name, "info" if shelf and shelf.key == b.key else "") }}</a> {% endfor %}
 </p>
+{% if shelf %}<h2>{{ shelf.name }}</h2>
+<p class="muted">A recipe book of its own, kept apart from the cookbook.</p>{% endif %}
 <div class="rows">
 {% for recipe in recipes %}
   <a class="row-link" href="/recipes/{{ recipe.id }}">

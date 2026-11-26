@@ -317,11 +317,16 @@ class RecipeGroceries:
             return set()
         return {name_key(i.name) for i in pantry.items() if i.status == "plenty"}
 
-    def _sub_recipe(self, ingredient: Ingredient, exclude: set[int]) -> Recipe | None:
-        """A base recipe from the cookbook's Ingredients section that the line names."""
+    def _sub_recipe(
+        self, ingredient: Ingredient, exclude: set[int], book: str = ""
+    ) -> Recipe | None:
+        """A base recipe from the cookbook's Ingredients section that the line names. RC8b:
+        from each book's base-recipe sections ("Milks"), the recipe's own `book` first."""
         line = name_key(ingredient.line)
-        for recipe in self.recipes.all():
-            if recipe.id in exclude or recipe.section.lower() != "ingredients":
+        bases = {b.key: {s.lower() for s in b.sub_recipe_sections} for b in self.recipes.books()}
+        candidates = sorted(self.recipes.all(), key=lambda r: r.book != book)
+        for recipe in candidates:
+            if recipe.id in exclude or recipe.section.lower() not in bases.get(recipe.book, ()):
                 continue
             name = name_key(recipe.name)
             if len(name.split()) >= 2 and re.search(rf"\b{re.escape(name)}\b", line):
@@ -337,7 +342,7 @@ class RecipeGroceries:
         ids = {r.id for r in recipes}
         for recipe in recipes:
             for ingredient in await self.ingredients(member, recipe):
-                sub = self._sub_recipe(ingredient, ids)
+                sub = self._sub_recipe(ingredient, ids, recipe.book)
                 if sub is not None and sub.id not in offers:
                     offers.append(sub.id)
                 try:

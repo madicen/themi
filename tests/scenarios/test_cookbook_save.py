@@ -84,7 +84,9 @@ async def test_a_liked_recipe_goes_into_the_doc(scenario: Scenario, ready: FakeG
     assert row is not None and row["source"] == "doc" and row["section"] == "Desserts"
     assert row["key"].startswith("h.")
     assert scenario.app.db.scalar("SELECT COUNT(*) FROM recipes WHERE name = 'Vegan Brownies'") == 1
-    scenario.primary.queue_tool_call("find_recipe", {"query": "vegan brownies", "section": ""})
+    scenario.primary.queue_tool_call(
+        "find_recipe", {"query": "vegan brownies", "section": "", "book": ""}
+    )
     (found,) = await scenario.say("Husband", "Pull up the vegan brownies")
     assert found.startswith("Vegan Brownies (Desserts)")
     assert (

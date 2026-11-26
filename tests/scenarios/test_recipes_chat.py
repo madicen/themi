@@ -27,7 +27,9 @@ def tool_result(scenario: Scenario) -> str:
 
 
 async def test_erin_asks_for_the_ranch_dressing(cookbook: Scenario) -> None:
-    cookbook.primary.queue_tool_call("find_recipe", {"query": "ranch dressing", "section": ""})
+    cookbook.primary.queue_tool_call(
+        "find_recipe", {"query": "ranch dressing", "section": "", "book": ""}
+    )
     replies = await cookbook.say("Erin", "Can you pull up our ranch dressing?")
     (card,) = replies  # the recipe is the whole answer
     assert card.startswith("Silken Tofu Ranch Dressing (Ingredients · Sauces, Dressings & Dips)")
@@ -39,7 +41,7 @@ async def test_erin_asks_for_the_ranch_dressing(cookbook: Scenario) -> None:
 
 async def test_two_matches_come_as_buttons(cookbook: Scenario) -> None:
     cookbook.primary.queue_tool_call(
-        "find_recipe", {"query": "chocolate peanut butter bars", "section": ""}
+        "find_recipe", {"query": "chocolate peanut butter bars", "section": "", "book": ""}
     )
     replies = await cookbook.say("Husband", "What's the recipe for the peanut butter bars?")
     assert replies == ["From the cookbook:"]
@@ -50,7 +52,9 @@ async def test_two_matches_come_as_buttons(cookbook: Scenario) -> None:
 
 
 async def test_a_chart_row_answers_a_question(cookbook: Scenario) -> None:
-    cookbook.primary.queue_tool_call("find_recipe", {"query": "roast broccoli", "section": ""})
+    cookbook.primary.queue_tool_call(
+        "find_recipe", {"query": "roast broccoli", "section": "", "book": ""}
+    )
     cookbook.primary.queue_text("From your cookbook: 400°F for 20 minutes, cut into florets.")
     replies = await cookbook.say("Erin", "How long do I roast broccoli?")
     result = tool_result(cookbook)
@@ -60,21 +64,27 @@ async def test_a_chart_row_answers_a_question(cookbook: Scenario) -> None:
 
 
 async def test_nothing_in_the_cookbook_isnt_made_up(cookbook: Scenario) -> None:
-    cookbook.primary.queue_tool_call("find_recipe", {"query": "beef wellington", "section": ""})
+    cookbook.primary.queue_tool_call(
+        "find_recipe", {"query": "beef wellington", "section": "", "book": ""}
+    )
     cookbook.primary.queue_text("There's no beef wellington in the cookbook.")
     await cookbook.say("Erin", "Find the beef wellington recipe")
     assert "never make up a recipe" in tool_result(cookbook)
 
 
 async def test_no_cookbook_yet_says_how(scenario: Scenario) -> None:
-    scenario.primary.queue_tool_call("find_recipe", {"query": "pancakes", "section": ""})
+    scenario.primary.queue_tool_call(
+        "find_recipe", {"query": "pancakes", "section": "", "book": ""}
+    )
     scenario.primary.queue_text("There's no cookbook yet.")
     await scenario.say("Erin", "Pull up the pancakes recipe")
     assert "Accounts page" in tool_result(scenario)
 
 
 async def test_a_section_with_no_other_words_lists_it(cookbook: Scenario) -> None:
-    cookbook.primary.queue_tool_call("find_recipe", {"query": "a dessert", "section": ""})
+    cookbook.primary.queue_tool_call(
+        "find_recipe", {"query": "a dessert", "section": "", "book": ""}
+    )
     await cookbook.say("Erin", "What desserts do we have?")
     assert cookbook.last_buttons("Erin") == [
         "Ube Gelato", "Chocolate Peanut Butter Bars", "Chocolate Peanut Butter Bars",
