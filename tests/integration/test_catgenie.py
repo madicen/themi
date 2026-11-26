@@ -305,3 +305,54 @@ def test_the_capture_command_needs_catgenie_linked(
     monkeypatch.setattr(cli, "_store", lambda: family.store)
     assert main(["catgenie", "capture"]) == 1
     assert "Link the litter box on the website's Accounts page first." in capsys.readouterr().err
+
+
+# ----- F63b: working the box -----------------------------------------------------------------
+
+
+async def test_start_stop_and_settings_send_the_apps_bodies(
+    linked: CatGenieWatcher, boxes: FakeCatGenie
+) -> None:
+    await linked.account.start_clean(BOX)
+    await linked.account.stop_clean(BOX)
+    await linked.account.configure(BOX, {"mode": 1, "binaryElements": {"EXTRA_WASH": False}})
+    assert boxes.commands == [
+        (BOX, "operation", {"state": 1}),
+        (BOX, "operation", {"state": 0}),
+        (BOX, "configuration", {"mode": 1, "binaryElements": {"EXTRA_WASH": False}}),
+    ]
+    assert boxes.calls[-3:] == [
+        f"POST device/management/{BOX}/operation",
+        f"POST device/management/{BOX}/operation",
+        f"PUT device/management/{BOX}/configuration",
+    ]
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"water": {"fillMax": 90}},  # its calibration: never sent
+        {"mode": 0, "heater": {"model": 2}},
+        {"binaryElements": {"SOMETHING_ELSE": True}},
+        {},
+    ],
+)
+async def test_a_setting_outside_the_list_is_refused_before_any_request(
+    linked: CatGenieWatcher, boxes: FakeCatGenie, fields: dict[str, object]
+) -> None:
+    before = len(boxes.calls)
+    with pytest.raises(ValueError, match="settings"):
+        await linked.account.configure(BOX, fields)
+    assert len(boxes.calls) == before and boxes.commands == []
+
+
+def test_settings_in_words() -> None:
+    from tests.fakes.catgenie import payload
+    from themi_home.connectors.catgenie.events import settings_words
+
+    raw = payload("device_whoosh")
+    raw["configuration"].update({"mode": 1, "dndFrom": "22:00", "dndTo": "07:30"})
+    said = settings_words(raw)
+    assert said.startswith("cleans only when started, no cleaning 10 pm to 7:30 am, extra wash")
+    assert said.endswith("firmware 100.4.14R")
+    assert settings_words(None) == ""

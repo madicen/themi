@@ -317,6 +317,20 @@ def drawn_at() -> str:
     return to_utc_iso(clock.now())
 
 
+def redraw_mark(stamp: str) -> str:
+    """A `drawn_at` stamp as the screen's fingerprint takes it: rounded down to half of
+    `STALE`. To the second, every poll looked like a change, so the cook screen was redrawn
+    every 5 seconds and its timer bars restarted full. Rounded, a page left open still gets
+    fresh buttons well before a tap on them would be refused as stale."""
+    from themi_home.oven import STALE
+
+    at = _when(stamp)
+    if at is None:
+        return stamp
+    every = int((STALE / 2).total_seconds())
+    return str(int(at.timestamp()) // every)
+
+
 def _when(value: Any) -> datetime | None:
     try:
         return datetime.fromisoformat(str(value)) if value else None

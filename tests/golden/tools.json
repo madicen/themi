@@ -207,6 +207,14 @@
     "group": "core",
     "spec": "ccaacd72c828"
   },
+  "litter_box_clean": {
+    "group": "devices",
+    "spec": "7738d2b396ef"
+  },
+  "litter_box_settings": {
+    "group": "devices",
+    "spec": "3f7aec977d06"
+  },
   "log_call_outcome": {
     "group": "calls",
     "spec": "1f43204b26b1"
@@ -253,7 +261,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "422d9b317bb6"
+    "spec": "705c94010d5a"
   },
   "move_expense": {
     "group": "spending",

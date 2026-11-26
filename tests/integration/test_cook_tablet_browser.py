@@ -59,6 +59,43 @@ async def test_a_timers_bar_empties_as_it_counts(scenario: Scenario) -> None:
         assert await until(lambda: tab.value(f"{bar} < {first} - 10"))
 
 
+async def test_a_redrawn_timer_bar_doesnt_restart_full(scenario: Scenario) -> None:
+    """A redraw of the screen used to put each bar back to full and slide it down again."""
+    clock.unfreeze()
+    await to_step_three(scenario)
+    cooking = scenario.app.services.maybe(keys.cooking)
+    assert cooking is not None and cooking.timers is not None
+    erin = scenario.member("Erin")
+    session = cooking.current(erin)
+    assert session is not None
+    recipe = cooking.recipes.get(session.recipe_id)
+    assert recipe is not None
+    cooking.timers.start(erin, session, recipe, "2", 1)  # a minute
+    async with page_in_chrome(scenario, erin, ".cook-moves", width=1180, height=820) as tab:
+        bar = "parseFloat(document.querySelector('.cook-bar span').style.width || '100')"
+        assert await until(lambda: tab.value(f"{bar} < 95"))
+        # the next poll redraws (its fingerprint no longer matches); the new bar's drawn
+        # width, a frame after it's put in, is where the timer is, not full
+        await tab.value(
+            """(() => {
+              const old = document.querySelector('.cook-bar span');
+              new MutationObserver((_, watch) => {
+                const span = document.querySelector('.cook-bar span');
+                if (!span || span === old) return;
+                watch.disconnect();
+                requestAnimationFrame(() => {
+                  const box = span.getBoundingClientRect().width;
+                  window.redrawnBar = box / span.parentElement.getBoundingClientRect().width;
+                });
+              }).observe(document.getElementById('cook'), {childList: true, subtree: true});
+              document.querySelector('.cook-main').dataset.drawn = 'stale';
+              return true;
+            })()"""
+        )
+        assert await until(lambda: tab.value("window.redrawnBar !== undefined"))
+        assert await tab.value("window.redrawnBar") < 0.96
+
+
 async def test_an_ingredient_ticks_at_once(scenario: Scenario) -> None:
     clock.unfreeze()
     await to_step_three(scenario)

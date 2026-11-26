@@ -191,6 +191,51 @@ def state_word(reading: LitterBoxReading) -> str:
     return said
 
 
+MODES = {0: "automatic", 1: "manual"}  # F63b: the package's CleaningMode
+
+
+def settings_words(raw: dict[str, Any] | None) -> str:
+    """F63b: its settings, as a person would say them: "cleans automatically, no cleaning
+    10 pm to 7 am, extra wash on, firmware 100.4.14R". Empty when it said none."""
+    if not raw:
+        return ""
+    config = raw.get("configuration")
+    config = config if isinstance(config, dict) else {}
+    said = []
+    mode_code = _int(config.get("mode"))
+    mode = MODES.get(mode_code) if mode_code is not None else None
+    if mode == "automatic":
+        said.append("cleans automatically after the cat")
+    elif mode == "manual":
+        said.append("cleans only when started")
+    start, end = str(config.get("dndFrom") or ""), str(config.get("dndTo") or "")
+    if start and end:
+        said.append(f"no cleaning {clock_words(start)} to {clock_words(end)}")
+    extras = config.get("binaryElements")
+    extras = extras if isinstance(extras, dict) else {}
+    for key, words in (("EXTRA_WASH", "extra wash"), ("EXTRA_SHAKE", "extra shake")):
+        if key in extras:
+            said.append(f"{words} {'on' if extras[key] else 'off'}")
+    if "extraDry" in config:
+        said.append(f"extra dry {'on' if config['extraDry'] else 'off'}")
+    if config.get("childLock") is not None:
+        said.append(f"panel lock {'on' if _int(config['childLock']) else 'off'}")
+    if raw.get("fwVersion"):
+        said.append(f"firmware {raw['fwVersion']}")
+    return ", ".join(said)
+
+
+def clock_words(value: str) -> str:
+    """ "22:00" -> "10 pm"; anything else as it came."""
+    match = re.fullmatch(r"(\d{1,2}):(\d{2})(?::\d{2})?", value.strip())
+    if not match:
+        return value
+    hour, minute = int(match.group(1)), int(match.group(2))
+    half = "am" if hour < 12 else "pm"
+    shown = hour % 12 or 12
+    return f"{shown}{f':{minute:02d}' if minute else ''} {half}"
+
+
 def _label(entry: Any) -> str:
     """An `activeErrors` entry's code, whatever its shape turns out to be."""
     if isinstance(entry, dict):

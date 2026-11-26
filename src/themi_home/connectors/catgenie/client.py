@@ -73,6 +73,15 @@ SIGN_IN = "ums/v1/users/loginByPhoneNumber/v2"
 REFRESH = "facade/v1/mobile-user/refreshToken/v2"
 DEVICES = "device/device/v2"
 NOTIFICATIONS = "notification/v1/push/user"
+OPERATION = "device/management/{device}/operation"  # F63b: {"state": 1} cleans, 0 stops
+CONFIGURATION = "device/management/{device}/configuration"  # F63b: a partial PUT
+# F63b: the settings Themi may change, as the package sends them. Nothing else is ever sent:
+# not the water, heater, pump or activation values, which are the box's own calibration.
+SETTINGS = frozenset(
+    {"mode", "dndFrom", "dndTo", "childLock", "volumeLevel", "catDelay", "extraDry",
+     "binaryElements"}
+)  # fmt: skip
+BINARY = frozenset({"EXTRA_WASH", "EXTRA_SHAKE"})  # what `binaryElements` may hold
 
 
 class CatGenieError(Exception):
@@ -311,14 +320,35 @@ class CatGenieClient:
             raise CatGenieError("PetNovations sent no notification list")
         return [n for n in found if isinstance(n, dict) and n.get("id")]
 
+    # ----- working it (F63b) -------------------------------------------------------------
+
+    async def start_clean(self, manufacturer_id: str) -> None:
+        """A clean now, as the app's Clean button."""
+        await self._call("POST", OPERATION.format(device=manufacturer_id), body={"state": 1})
+
+    async def stop_clean(self, manufacturer_id: str) -> None:
+        await self._call("POST", OPERATION.format(device=manufacturer_id), body={"state": 0})
+
+    async def configure(self, manufacturer_id: str, fields: dict[str, Any]) -> None:
+        """Change some of its settings (only `SETTINGS`; anything else is refused before a
+        request is made)."""
+        check_settings(fields)
+        await self._call("PUT", CONFIGURATION.format(device=manufacturer_id), body=fields)
+
     # ----- the wire ---------------------------------------------------------------------
 
-    async def _call(self, method: str, path: str, params: dict[str, str] | None = None) -> Any:
+    async def _call(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, str] | None = None,
+        body: dict[str, Any] | None = None,
+    ) -> Any:
         await self._ensure_token()
-        answer = await self._send(method, path, params=params, token=self._token)
+        answer = await self._send(method, path, params=params, body=body, token=self._token)
         if answer.status == 401:  # ended early: once more with a new one
             await self._renew()
-            answer = await self._send(method, path, params=params, token=self._token)
+            answer = await self._send(method, path, params=params, body=body, token=self._token)
         if answer.status == 401:
             raise SignInLost(
                 "PetNovations stopped accepting Themi's sign-in. Link the litter box again."
@@ -327,6 +357,8 @@ class CatGenieClient:
             log.info("PetNovations answered %s for %s", answer.status, path)
             raise CatGenieError(f"PetNovations answered {answer.status}")
         data = _json(answer)
+        if data is None and body is not None:
+            return {}  # a command may answer with nothing; a read never does
         if data is None:
             # What its edge does to a request it doesn't trust: never "no devices".
             raise CatGenieError("PetNovations answered with nothing (its edge may be filtering)")
@@ -377,6 +409,18 @@ class CatGenieClient:
         answer = await self._wire.request(method, f"{self._base}/{path}", headers, data, params)
         self.tally(answer.status)
         return answer
+
+
+def check_settings(fields: dict[str, Any]) -> None:
+    """F63b: ValueError for anything outside `SETTINGS` (or `BINARY` within it)."""
+    if not fields:
+        raise ValueError("no settings to change")
+    other = set(fields) - SETTINGS
+    binary = fields.get("binaryElements")
+    if binary is not None and (not isinstance(binary, dict) or set(binary) - BINARY):
+        other.add("binaryElements")
+    if other:
+        raise ValueError(f"Themi doesn't change these litter box settings: {sorted(other)}")
 
 
 def _json(answer: Answer) -> Any:
@@ -455,6 +499,16 @@ class CatGenieAccount:
 
     async def notifications(self) -> list[dict[str, Any]]:
         return await self._with_client(lambda c: c.notifications())
+
+    async def start_clean(self, manufacturer_id: str) -> None:
+        await self._with_client(lambda c: c.start_clean(manufacturer_id))
+
+    async def stop_clean(self, manufacturer_id: str) -> None:
+        await self._with_client(lambda c: c.stop_clean(manufacturer_id))
+
+    async def configure(self, manufacturer_id: str, fields: dict[str, Any]) -> None:
+        check_settings(fields)
+        await self._with_client(lambda c: c.configure(manufacturer_id, fields))
 
     def broken(self, why: str) -> bool:
         """The sign-in stopped working: kept as the problem until linked again. True the

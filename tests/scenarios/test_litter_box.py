@@ -114,8 +114,9 @@ async def test_asked_how_the_litter_box_is_themi_reads_it(
     assert "appliance_status" in tool_names(scenario)  # the words chose the devices group
     assert said.startswith(
         "CatGenie (litter_box), read just now: cleaning (60% done), 15 cleans of "
-        "sani-solution left; last cleaned 8 am today."
-    )
+        "sani-solution left; last cleaned 8 am today; settings: cleans automatically after the "
+        "cat, extra wash off, extra shake off, extra dry off, panel lock off, firmware 8.7.203R."
+    )  # F63b: and its settings
 
 
 async def test_when_it_cant_be_read_it_says_when_it_was_last_seen(
@@ -165,7 +166,7 @@ async def test_an_error_goes_to_whoever_has_more_room_and_cant_wait(
     assert tasks(scenario) == [("Check the CatGenie", "open", husband.id)]
     assert await scenario.advance(minutes=9) == []  # a bounce in the reading waits
     assert await scenario.advance(minutes=1) == [ERROR]
-    assert scenario.last_buttons("Husband") == ["Done", "Later"]
+    assert scenario.last_buttons("Husband") == ["Done", "Try a clean", "Later"]  # F63b
     assert scenario.inbox("Erin") == []
     await seen(scenario, litter_box)  # still showing: no second task
     assert len(tasks(scenario)) == 1
@@ -400,3 +401,133 @@ async def test_bug_261_a_known_or_never_seen_code_isnt_named(
 
     with pytest.raises(ToolFailed, match="No litter box has shown code 99"):
         box.learn(erin, "99", "Error: Anything")
+
+
+# ----- F63b, idea #268: Themi works the box ("Try a clean") --------------------------------
+
+DRAIN = "The CatGenie needs a look: it's showing a drainage issue. Check it when you can?"
+STARTED = "Starting a clean on the CatGenie. I'll tell you how it goes once it's done."
+CLEARED = "The CatGenie finished a clean and the error's gone, so that chore's off the list."
+BACK = (
+    "The CatGenie finished a clean, but it's still showing the error (it's showing a drainage "
+    "issue), so it needs a look by hand."
+)
+
+
+async def drainage(scenario: Scenario, box: FakeCatGenie) -> None:
+    """Error 3, and its nudge, to the husband (Erin's worn out)."""
+    tired(scenario)
+    await seen(scenario, box, error="3")
+    assert await scenario.advance(minutes=10) == [DRAIN]
+
+
+async def test_idea_268_try_a_clean_and_the_error_clears(
+    scenario: Scenario, litter_box: FakeCatGenie
+) -> None:
+    await drainage(scenario, litter_box)
+    assert scenario.last_buttons("Husband") == ["Done", "Try a clean", "Later"]
+    assert await scenario.tap("Husband", "Try a clean") == [STARTED]
+    assert litter_box.commands == [(BOX, "operation", {"state": 1})]
+    trail = scenario.app.services.autonomy.audit_trail(category="litter_box_control")
+    assert [t["event"] for t in trail] == ["staged", "requested", "executed"]  # the tap's yes
+    await seen(scenario, litter_box, error="")  # gone mid-clean: not over until it's done
+    assert tasks(scenario)[0][1] == "open"
+    clock.advance(timedelta(minutes=10))
+    litter_box.clean(BOX, clock.now())
+    await seen(scenario, litter_box)
+    assert scenario.inbox("Husband")[-1] == CLEARED
+    assert tasks(scenario)[0][1] == "done"
+    await seen(scenario, litter_box)
+    assert scenario.inbox("Husband").count(CLEARED) == 1  # said once
+
+
+async def test_idea_268_the_error_comes_back_after_the_clean(
+    scenario: Scenario, litter_box: FakeCatGenie
+) -> None:
+    await drainage(scenario, litter_box)
+    await scenario.tap("Husband", "Try a clean")
+    clock.advance(timedelta(minutes=20))
+    litter_box.clean(BOX, clock.now())  # finished, still showing 3
+    await seen(scenario, litter_box)
+    assert scenario.inbox("Husband")[-1] == BACK
+    assert scenario.last_buttons("Husband") == ["Done", "Try a clean", "Later"]
+    assert tasks(scenario)[0][1] == "open"
+    board = scenario.app.services.get(keys.taskboard)
+    listed = " ".join(item.summary for item in board.open_items(scenario.member("Husband")))
+    assert "A clean was tried and the error came back." in listed
+
+
+async def test_idea_268_no_clean_while_its_cleaning_offline_or_out(
+    scenario: Scenario, litter_box: FakeCatGenie
+) -> None:
+    await drainage(scenario, litter_box)
+    await seen(scenario, litter_box, cleaning=40)
+    said = await scenario.tap("Husband", "Try a clean")
+    assert said == ["The CatGenie is cleaning already."]
+    await seen(scenario, litter_box, cleaning=-1, online=False)
+    assert scenario.last_buttons("Husband") == ["Done", "Try a clean", "Later"]  # asked again
+    said = await scenario.tap("Husband", "Try a clean")
+    assert said == ["The CatGenie is offline, so it can't start a clean."]
+    assert litter_box.commands == []
+
+
+async def test_idea_268_a_clean_that_never_starts_is_let_go(
+    scenario: Scenario, litter_box: FakeCatGenie
+) -> None:
+    await drainage(scenario, litter_box)
+    litter_box.ignore_cleans = True
+    await scenario.tap("Husband", "Try a clean")
+    for _ in range(13):  # two hours of reads, never a clean
+        await seen(scenario, litter_box)
+    outcome = scenario.app.db.scalar("SELECT retry_outcome FROM litter_problems")
+    assert outcome == "none"
+    assert not any(s in (CLEARED, BACK) for s in scenario.inbox("Husband"))
+    await seen(scenario, litter_box, error="")  # cleared later: closed as before
+    assert tasks(scenario)[0][1] == "done"
+
+
+async def chat_tool(scenario: Scenario, text: str, name: str, args: dict[str, object]) -> str:
+    scenario.primary.queue_tool_call(name, args)
+    scenario.primary.queue_text("Here's how it went.")
+    await scenario.say("Erin", text)
+    result = scenario.app.db.one("SELECT * FROM reply_tools ORDER BY id DESC")
+    assert result is not None
+    return str(result["result"])
+
+
+async def test_idea_268_run_it_from_chat_asks_first(
+    scenario: Scenario, litter_box: FakeCatGenie
+) -> None:
+    said = await chat_tool(scenario, "Run the CatGenie", "litter_box_clean", {"box": ""})
+    assert "Staged for approval" in said
+    assert litter_box.commands == []
+    assert scenario.last_buttons("Erin")[:2] == ["Go ahead", "Not now"]
+    await scenario.tap("Erin", "Go ahead")
+    assert litter_box.commands == [(BOX, "operation", {"state": 1})]
+    assert "devices" in {g for g in scenario.app.db.scalar(
+        "SELECT groups FROM replies ORDER BY id DESC"
+    ).split(",")}  # fmt: skip
+
+
+async def test_idea_268_its_settings_read_and_changed_from_chat(
+    scenario: Scenario, litter_box: FakeCatGenie
+) -> None:
+    said = await ask(scenario, "What's the CatGenie set to?", "litter_box")
+    assert "settings: cleans automatically after the cat" in said
+    said = await chat_tool(
+        scenario, "Put the CatGenie on manual, and no cleaning 10 pm to 7 am",
+        "litter_box_settings", {"mode": "manual", "quiet_from": "22:00", "quiet_to": "7:00"},
+    )  # fmt: skip
+    assert "Staged for approval" in said
+    await scenario.tap("Erin", "Go ahead")
+    assert litter_box.commands == [
+        (BOX, "configuration", {"mode": 1, "dndFrom": "22:00", "dndTo": "07:00"})
+    ]
+    await seen(scenario, litter_box)
+    watcher = scenario.app.services.get(keys.catgenie)
+    from themi_home.connectors.catgenie.events import settings_words
+
+    (device,) = watcher.devices()
+    assert settings_words(watcher.raw(device)).startswith(
+        "cleans only when started, no cleaning 10 pm to 7 am"
+    )

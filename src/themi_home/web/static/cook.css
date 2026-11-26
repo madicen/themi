@@ -286,6 +286,7 @@ body.cook-page { background: var(--bg); color: var(--fg); }
 .cook-timer-of { margin: 0 0 var(--space-2); color: var(--muted); font-size: .85rem; }
 .cook-bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
 .cook-bar span { display: block; height: 100%; width: 100%; background: var(--accent); border-radius: inherit; transition: width 1s linear; }
+.cook-bar span.cook-bar-now { transition: none; }  /* cook.js: a redrawn bar's first width */
 .cook-timer-moves button { background: transparent; color: var(--fg); border: 1px solid var(--line); }
 .cook-new > summary { position: absolute; top: var(--space-3); right: var(--space-3); padding: 0 var(--space-4);
   border-radius: 999px; background: var(--soft); color: var(--accent); list-style: none; }

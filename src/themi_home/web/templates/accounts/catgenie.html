@@ -11,11 +11,12 @@
   cleaning, its sani-solution and any error. When it needs a hand (an error, the cartridge
   low or out, the granules due), whoever has more room gets a nudge. CatGenie has no
   official way in, so this uses the app's own, and may stop working if they change it. It
-  never starts, stops or changes the litter box.</p>
+  starts or stops a clean, or changes a setting, only when someone asks and says yes.</p>
   {% if catgenie.linked %}
   {% if catgenie.problem %}<p class="error">{{ catgenie.problem }}</p>{% endif %}
   {% for device, state, raw, granules in catgenie.devices %}
   <p>{{ device.name }}{% if state %} · {{ state }}{% endif %}</p>
+  {% if catgenie.settings[device.id] %}<p class="muted">Settings: {{ catgenie.settings[device.id] }}</p>{% endif %}
   {% if granules is not none %}
   <form method="post" action="/family/catgenie/granules/{{ device.id }}" class="buttons">
     <input type="hidden" name="csrf" value="{{ csrf }}">

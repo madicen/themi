@@ -71,7 +71,8 @@ body.wall {
 
 /* the top: date, time, weather */
 .wall-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; padding: 0 0.5rem; }
-.wall-date { font-size: 1.65rem; color: var(--muted); font-weight: 500; }
+.wall-when { flex: none; }  /* F63a (bug #269): the date and time never shrink or wrap */
+.wall-date { font-size: 1.65rem; color: var(--muted); font-weight: 500; white-space: nowrap; }
 .wall-time { font-size: 5.75rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
 .wall-time span { font-size: 2.5rem; font-weight: 600; margin-left: 0.6rem; color: var(--muted); }
 .wall-weather { display: flex; align-items: center; gap: 1rem; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0.4rem; border-radius: 1rem; }
@@ -468,7 +469,12 @@ body.night:not(.awake) { background: var(--night-bg); }
 }
 
 /* F60e (idea #263): the body double on the wall */
-.wall-asks { display: flex; gap: 0.8rem; align-items: center; }
+.wall-asks { display: flex; gap: 0.8rem; align-items: center; min-width: 0; }
+/* F63a: a row too tight for them (wall-fit.js) shows the buttons' icons only, then drops
+   the weather's low */
+.wall-top-tight .wall-talk { padding: 0 1.2rem; }
+.wall-top-tight .wall-talk span { display: none; }
+.wall-top-tighter .wall-low { display: none; }
 .wall-focus-chip { display: block; margin: 0.4rem 0.8rem 0; padding: 0.5rem 1rem; min-height: 3rem; border: 0; border-radius: 2rem;
   background: var(--tone, var(--soft)); color: var(--on-tone, var(--fg)); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
 .focus-pick fieldset { border: 0; margin: 0 0 1rem; padding: 0; }
