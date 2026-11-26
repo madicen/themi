@@ -707,10 +707,13 @@ class Cooking:
         return await self.render_more(session, recipe, head)
 
     def named_recipes(self, recipe: Recipe, text: str) -> list[Recipe]:
-        """Other cookbook recipes a step names ("Alfredo Sauce", "Simple Parmesan")."""
+        """Other cookbook recipes a step names ("Alfredo Sauce", "Simple Parmesan"). RC8b:
+        the recipe's own book first, so "Cashew Milk" in a cheese recipe is the cheese book's."""
         said = name_key(text)
-        out = []
-        for other in self.recipes.all():
+        out: list[Recipe] = []
+        for other in sorted(self.recipes.all(), key=lambda r: r.book != recipe.book):
+            if any(name_key(o.name) == name_key(other.name) for o in out):
+                continue  # the same name in another book
             name = name_key(other.name)
             if (
                 other.id != recipe.id

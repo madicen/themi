@@ -40,6 +40,7 @@ from themi.core import keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.standard.lists import name_key
 from themi_google.connectors.gdocs import DocsConflict, DocsError
 from themi_home import cookbook as book
 from themi_home import home_groups
@@ -48,12 +49,15 @@ from themi_home.groups import COOKING
 from themi_home.recipes import (
     COOKBOOK,
     DOC_NAMES,
+    MAIN_ID,
     NO_TRY_DOC_TEXT,
     PICTURE_SOURCE,
+    SHELF,
     TO_TRY,
     TRY_KEY,
     Recipe,
     Recipes,
+    stem,
 )
 
 if TYPE_CHECKING:
@@ -101,6 +105,7 @@ class CookbookSave:
         s.recipe_buttons["save_in"] = self.on_save_in
         s.recipe_buttons["save_no"] = self.on_save_no
         s.recipe_buttons["save_try"] = self.on_save_try  # F49h
+        s.recipe_buttons["save_book"] = self.on_save_book  # RC8b
         s.recipe_buttons["keep"] = self.on_keep  # F49i
         s.recipe_buttons["keep_in"] = self.on_keep_in
         s.recipe_buttons["keep_no"] = self.on_keep_no
@@ -156,19 +161,54 @@ class CookbookSave:
     async def offer_to_try(self, member: Member, recipe: Recipe) -> str:
         """F49h (idea #224): show the entry and stage it for the Recipes to try doc, at its
         end (no sections to choose). Returns what was sent."""
-        if self.recipes.try_doc_id is None:
-            raise DocsError(NO_TRY_DOC_TEXT)
-        lines = [f"Here's how it would go in {DOC_NAMES[TO_TRY]}:"]
+        return await self.offer_to_book(member, recipe, TO_TRY)
+
+    def book_sections(self, which: str) -> list[str]:
+        """RC8b: a book's sections in the doc's order."""
+        shelf = self.recipes.book(which)
+        rows = self.db.query(
+            "SELECT section, MIN(position) AS first FROM recipes WHERE source = 'doc' "
+            "AND removed_at IS NULL AND section != '' AND book_id = ? GROUP BY section "
+            "ORDER BY first",
+            (shelf.id,),
+        )
+        return [r["section"] for r in rows]
+
+    def shelf_section(self, recipe: Recipe, which: str) -> str:
+        """RC8b: where a new recipe goes in a book of its own: the section its name says
+        ("Cashew Oat Milk" in Milks), or the book's first section of recipes."""
+        shelf = self.recipes.book(which)
+        not_recipes = {s.lower() for s in (*shelf.sub_recipe_sections, *shelf.reference_sections)}
+        sections = self.book_sections(which)
+        named = {stem(w) for w in name_key(recipe.name).split()}
+        for section in sections:
+            if {stem(w) for w in name_key(section).split()} & named:
+                return section
+        return next((s for s in sections if s.lower() not in not_recipes), "")
+
+    async def offer_to_book(self, member: Member, recipe: Recipe, which: str) -> str:
+        """Show the entry and stage it for a book other than the cookbook: Recipes to try at
+        its end (F49h), a book of its own under the section its name says (RC8b). Returns
+        what was sent."""
+        shelf = self.recipes.book(which)
+        if not shelf.doc_id:
+            if which == TO_TRY:
+                raise DocsError(NO_TRY_DOC_TEXT)
+            raise DocsError(f"{shelf.name} has no doc to add to: choose one on Accounts.")
+        where = self.recipes.doc_name(which)
+        section = self.shelf_section(recipe, which) if shelf.role == SHELF else ""
+        lines = [f"Here's how it would go in {where}:"]
         lines += [f"> {text}" for text, _ in self.entry(recipe)[:-1]]
         preview = "\n".join(lines)
         await self.services.outbox.send(member, preview, priority=Priority.REPLY,
                                         kind="recipes", link_preview=False)  # fmt: skip
-        await self._replace_waiting(member, recipe, DOC_NAMES[TO_TRY])
+        await self._replace_waiting(member, recipe, where)
+        under = f" under {section}" if section else ""
         await self.services.autonomy.stage(
             CATEGORY,
             member,
-            f'Add "{recipe.name}" to {DOC_NAMES[TO_TRY]}',
-            {"recipe": recipe.id, "section": "", "book": TO_TRY},
+            f'Add "{recipe.name}" to {where}{under}',
+            {"recipe": recipe.id, "section": section, "book": which},
             EXECUTOR,
             interactive=True,
         )
@@ -232,21 +272,23 @@ class CookbookSave:
         if payload.get("keep"):
             return await self._keep(recipe, section)
         which = str(payload.get("book") or COOKBOOK)  # F49h: or Recipes to try
-        where = DOC_NAMES[which]
+        where = self.recipes.doc_name(which)
         if recipe is None:
             return "That recipe isn't kept any more, so nothing was added."
         if recipe.source == "doc":
-            return f"{recipe.name} is in {DOC_NAMES[recipe.book]} already."  # a retry
+            return f"{recipe.name} is in {self.recipes.doc_name(recipe.book)} already."  # a retry
         settings = self.recipes.settings(which)
         if not settings["doc_id"] or settings["account_id"] is None:
             raise DocsError(f"There's no {where.removeprefix('the ')} doc to add to.")
         client = self.recipes.client(settings["account_id"])
         doc_id = settings["doc_id"]
-        prefix = TRY_KEY if which == TO_TRY else ""
+        shelf = self.recipes.book(which)  # RC8a
+        prefix = shelf.prefix
         before = {
             r["key"].removeprefix(prefix)
             for r in self.db.query(
-                "SELECT key FROM recipes WHERE source = 'doc' AND book = ?", (which,)
+                "SELECT key FROM recipes WHERE source = 'doc' AND IFNULL(book_id, ?) = ?",
+                (MAIN_ID, shelf.id),
             )
         }
         entry = self.entry(recipe)
@@ -259,11 +301,12 @@ class CookbookSave:
         )
         if added is not None:  # the web recipe becomes the doc's own
             self.db.execute(
-                "UPDATE recipes SET key = ?, source = 'doc', section = ?, book = ?, "
+                "UPDATE recipes SET key = ?, source = 'doc', section = ?, book_id = ?, "
                 "updated_at = ? WHERE id = ?",
-                (prefix + added.key, added.section if prefix else section, which,
+                (prefix + added.key, added.section if prefix else section, shelf.id,
                  to_utc_iso(clock.now()), recipe.id),
             )  # fmt: skip
+        # RC8b: saved to a book of its own, it's that book's; to the cookbook, the cookbook's
         await self.recipes.sync(force=True, which=which)
         kept = self.recipes.get(recipe.id)
         link = self.recipes.link(kept) if kept else None
@@ -320,7 +363,8 @@ class CookbookSave:
         before = {
             r["key"]
             for r in self.db.query(
-                "SELECT key FROM recipes WHERE source = 'doc' AND book = ?", (COOKBOOK,)
+                "SELECT key FROM recipes WHERE source = 'doc' AND IFNULL(book_id, ?) = ?",
+                (MAIN_ID, MAIN_ID),
             )
         }
         await self._write(client, doc_id, "the cookbook", lambda d: book.entry_requests(
@@ -333,8 +377,8 @@ class CookbookSave:
         if added is not None:  # the same row, now the cookbook's: its history stays
             self.db.execute(
                 "UPDATE recipes SET key = ?, source = 'doc', section = ?, subsection = '', "
-                "book = ?, updated_at = ? WHERE id = ?",
-                (added.key, added.section, COOKBOOK, to_utc_iso(clock.now()), recipe.id),
+                "book_id = ?, updated_at = ? WHERE id = ?",
+                (added.key, added.section, MAIN_ID, to_utc_iso(clock.now()), recipe.id),
             )
 
         def deleting(document: dict[str, Any]) -> list[dict[str, Any]] | None:
@@ -388,6 +432,18 @@ class CookbookSave:
         except DocsError as exc:
             await self.services.outbox.send(member, str(exc), priority=Priority.REPLY)
 
+    async def on_save_book(self, event: InboundEvent) -> None:
+        """RC8b: [Save to Vegan cheese], on a book whose save button is switched on."""
+        assert event.button is not None
+        recipe = self.recipes.get(int(event.button.payload.get("id", 0)))
+        if recipe is None:
+            return
+        member = self.services.store.get_member(event.member.id)
+        try:
+            await self.offer_to_book(member, recipe, str(event.button.payload.get("book") or ""))
+        except DocsError as exc:
+            await self.services.outbox.send(member, str(exc), priority=Priority.REPLY)
+
     async def on_keep(self, event: InboundEvent) -> None:
         """F49i: [Add to the cookbook] on a recipe from Recipes to try."""
         await self._offer_from(event, None)
@@ -426,22 +482,29 @@ def _saver(ctx: ToolContext) -> CookbookSave:
     "liked ('we liked that one, add it to the cookbook'), where=to_try for one they want to "
     "try ('save that to try', 'add it to the try list', 'not cookbook-worthy yet'). Also "
     "where=cookbook for one from Recipes to try that's a keeper ('move X to the cookbook'): "
-    "it moves, out of Recipes to try. recipe, its name, or '' for the web recipe they had "
-    "last; section, a cookbook section they named, or ''. Shows the entry and asks for a yes. "
-    "A recipe already in the cookbook is changed in the doc itself, not here.",
+    "it moves, out of Recipes to try. Or where=the name of another recipe book they named "
+    "('save it to the cheese book': where='cheese'). recipe, its name, or '' for the web "
+    "recipe they had last; section, a cookbook section they named, or ''. Shows the entry and "
+    "asks for a yes. A recipe already in the cookbook is changed in the doc itself, not here.",
     {
         "recipe": {"type": "string"},
         "section": {"type": "string"},
-        "where": {"type": "string", "enum": [COOKBOOK, TO_TRY]},
+        "where": {"type": "string"},
     },
 )
 async def save_recipe_to_cookbook(ctx: ToolContext, args: dict[str, Any]) -> str:
     saver = _saver(ctx)
     name = str(args.get("recipe") or "").strip()
+    asked = str(args.get("where") or COOKBOOK).strip() or COOKBOOK
+    target = saver.recipes.named_book(asked)  # RC8b: "cookbook", "to_try", or a book's name
+    if target is None:
+        names = ", ".join(b.name for b in saver.recipes.books() if b.doc_id or b.role == "main")
+        raise ToolDeclined(f'There\'s no recipe book "{asked}". The books are: {names}. Ask them.')
+    where = target.key
     if name:
         matches = saver.recipes.find(name, charts=False)
         recipe = matches[0].recipe if matches else None
-        if recipe is not None and str(args.get("where") or COOKBOOK) == COOKBOOK:
+        if recipe is not None and where == COOKBOOK:
             same = [m.recipe for m in matches if m.recipe.name.lower() == recipe.name.lower()]
             recipe = next((r for r in same if r.to_try), recipe)  # F49i: the one to move
     else:
@@ -452,22 +515,21 @@ async def save_recipe_to_cookbook(ctx: ToolContext, args: dict[str, Any]) -> str
         recipe = saver.recipes.get(row["id"]) if row else None
     if recipe is None:
         raise ToolFailed("Which recipe? There's no web recipe like that kept. Ask them.")
-    where = str(args.get("where") or COOKBOOK)
     if recipe.source == "doc" and not (recipe.to_try and where == COOKBOOK):
         link = saver.recipes.link(recipe)
         raise ToolDeclined(
-            f"{recipe.name} is in {DOC_NAMES[recipe.book]} already; changing it happens in the "
-            "doc itself" + (f" ({link})" if link else "") + ". Say so."
+            f"{recipe.name} is in {saver.recipes.doc_name(recipe.book)} already; changing it "
+            "happens in the doc itself" + (f" ({link})" if link else "") + ". Say so."
         )
-    if where == TO_TRY:  # F49h
+    if where != COOKBOOK:  # F49h: Recipes to try; RC8b: or a book of its own
         try:
-            sent = await saver.offer_to_try(ctx.member, recipe)
+            sent = await saver.offer_to_book(ctx.member, recipe, where)
         except DocsError as exc:
             raise ToolFailed(f"{exc} Say so.") from exc
         ctx.cards.append(sent)
         return (
-            "Sent them the entry and an approval card for Recipes to try. Nothing is in the "
-            "doc until they say yes."
+            f"Sent them the entry and an approval card for {saver.recipes.doc_name(where)}. "
+            "Nothing is in the doc until they say yes."
         )
     section = str(args.get("section") or "").strip()
     if section and section.lower() not in {s.lower() for s in saver.sections()}:

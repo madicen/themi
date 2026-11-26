@@ -81,7 +81,9 @@ async def test_the_cookbooks_count_leaves_them_out(scenario: Scenario, both: Fak
 
 
 async def test_one_is_found_shown_and_labelled_to_try(scenario: Scenario, both: FakeGdocs) -> None:
-    scenario.primary.queue_tool_call("find_recipe", {"query": "snowy earthquake", "section": ""})
+    scenario.primary.queue_tool_call(
+        "find_recipe", {"query": "snowy earthquake", "section": "", "book": ""}
+    )
     (card,) = await scenario.say("Erin", "Pull up the snowy earthquake cookies")
     assert card.startswith("Snowy Earthquake Cookie (to try)\n")
     assert f"In Recipes to try: https://docs.google.com/document/d/{TRY_ID}/edit" in card
@@ -96,7 +98,9 @@ async def test_the_cookbook_comes_first_for_the_same_name(
 
 
 async def test_two_matches_say_which_docs(scenario: Scenario, both: FakeGdocs) -> None:
-    scenario.primary.queue_tool_call("find_recipe", {"query": "pancakes", "section": ""})
+    scenario.primary.queue_tool_call(
+        "find_recipe", {"query": "pancakes", "section": "", "book": ""}
+    )
     replies = await scenario.say("Erin", "What's the pancake recipe?")
     assert replies == ["From the cookbook and Recipes to try:"]
     assert scenario.last_buttons("Erin")[:2] == ["Pancakes", "Pancakes (to try)"]

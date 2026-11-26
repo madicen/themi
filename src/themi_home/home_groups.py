@@ -15,6 +15,7 @@ RECIPES = ToolGroup(
         ") through|let'?s make|step by step|cooking|https?://\\S*(?:recipe|food|kitche"
         "n|cook|bak|eat|vegan)|what (?:can|could) (?:i|we) make|with what (?:we|i) ha"
         "ve|\\bgrams?\\b|\\bweigh(?:s|ed|t|ts)?\\b|\\d\\s?g\\b"  # GW4, GW5: weights in grams
+        "|cheese book"  # RC8b: a recipe book of its own, by its name
     ),
     examples=(
         "Can you pull up the alfredo sauce recipe?",

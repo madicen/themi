@@ -169,7 +169,9 @@ async def test_not_now_leaves_the_list(cookbook: Scenario) -> None:
 
 async def test_from_the_recipe_card(cookbook: Scenario) -> None:
     """RC1b's scenario: Erin asks for the ranch dressing and taps [Add to grocery list]."""
-    cookbook.primary.queue_tool_call("find_recipe", {"query": "ranch dressing", "section": ""})
+    cookbook.primary.queue_tool_call(
+        "find_recipe", {"query": "ranch dressing", "section": "", "book": ""}
+    )
     await cookbook.say("Erin", "Can you pull up our ranch dressing?")
     assert "Add to grocery list" in cookbook.last_buttons("Erin")
     cookbook.primary.queue_structured(

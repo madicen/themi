@@ -33,7 +33,9 @@ def cookbook(scenario: Scenario) -> Scenario:
 
 
 async def show_alfredo(scenario: Scenario) -> None:
-    scenario.primary.queue_tool_call("find_recipe", {"query": "alfredo sauce", "section": ""})
+    scenario.primary.queue_tool_call(
+        "find_recipe", {"query": "alfredo sauce", "section": "", "book": ""}
+    )
     await scenario.say("Erin", "Can you pull up the alfredo sauce?")
 
 

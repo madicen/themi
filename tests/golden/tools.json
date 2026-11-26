@@ -153,7 +153,7 @@
   },
   "find_recipe": {
     "group": "recipes",
-    "spec": "66f1951cb6e8"
+    "spec": "166e27caf5cd"
   },
   "find_time_for_task": {
     "group": "calendar",
@@ -389,7 +389,7 @@
   },
   "save_recipe_to_cookbook": {
     "group": "recipes",
-    "spec": "1ec667132737"
+    "spec": "38018d3e23bb"
   },
   "search_journal": {
     "group": "core",

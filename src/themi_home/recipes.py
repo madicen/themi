@@ -65,15 +65,67 @@ NO_COOKBOOK_TEXT = (
 )
 
 
-# F49h (idea #224): the two docs, and the table each one's settings are kept in
+# F49h (idea #224): the two docs every household has a place for. RC8a: they're the first
+# two recipe books (`recipe_books`); books added later have keys "b<id>".
 COOKBOOK, TO_TRY = "cookbook", "to_try"
-DOC_TABLES = {COOKBOOK: "cookbook", TO_TRY: "try_doc"}
+MAIN_ID = 1  # the cookbook's row: a recipe with no book_id is the main book's
 DOC_NAMES = {COOKBOOK: "the cookbook", TO_TRY: "Recipes to try"}
 TRY_KEY = "try:"  # a to-try recipe's key: its heading id behind this, so the docs never clash
+MAIN, TRYING, SHELF = "main", "trying", "shelf"
 NO_TRY_DOC_TEXT = (
     "There's no Recipes to try doc yet. Someone can choose one on the website's Accounts page "
     "(the cookbook's page)."
 )
+
+
+@dataclass(frozen=True)
+class RecipeBook:
+    """RC8a: one recipe doc and how much it shows up."""
+
+    id: int
+    key: str
+    name: str  # "the cookbook", "Recipes to try", "Vegan cheese"
+    role: str  # main, trying or shelf
+    doc_id: str | None
+    account_id: int | None
+    title: str | None
+    read_at: str | None
+    problem: str | None
+    position: int
+    in_meal_ideas: bool
+    found_unasked: bool
+    save_button: bool
+    sub_recipe_sections: tuple[str, ...]
+    reference_sections: tuple[str, ...]
+    removed: bool
+
+    @property
+    def prefix(self) -> str:
+        """What its recipes' keys start with, so two docs' heading ids never clash."""
+        if self.role == MAIN:
+            return ""
+        return TRY_KEY if self.key == TO_TRY else f"{self.key}:"
+
+
+def book_from_row(row: dict[str, Any]) -> RecipeBook:
+    return RecipeBook(
+        id=row["id"],
+        key=row["key"],
+        name=row["name"],
+        role=row["role"],
+        doc_id=row["doc_id"],
+        account_id=row["account_id"],
+        title=row["title"],
+        read_at=row["read_at"],
+        problem=row["problem"],
+        position=row["position"],
+        in_meal_ideas=bool(row["in_meal_ideas"]),
+        found_unasked=bool(row["found_unasked"]),
+        save_button=bool(row["save_button"]),
+        sub_recipe_sections=tuple(json.loads(row["sub_recipe_sections"] or "[]")),
+        reference_sections=tuple(json.loads(row["reference_sections"] or "[]")),
+        removed=row["removed_at"] is not None,
+    )
 
 
 @dataclass(frozen=True)
@@ -96,11 +148,18 @@ class Recipe:
     needs_look: str
     removed: bool
     updated_at: datetime
-    book: str = COOKBOOK  # F49h: the doc it's from: "cookbook" or "to_try"
+    book: str = COOKBOOK  # F49h: the doc it's from; RC8a: its recipe book's key
+    book_name: str = DOC_NAMES[COOKBOOK]  # RC8b: how its book is said ("Vegan cheese")
+    book_role: str = MAIN  # RC8b: main, trying or shelf
 
     @property
     def to_try(self) -> bool:
         return self.book == TO_TRY
+
+    @property
+    def on_shelf(self) -> bool:
+        """RC8b: from a recipe book of its own, kept apart from the cookbook."""
+        return self.book_role == SHELF
 
     @property
     def is_chart(self) -> bool:
@@ -141,7 +200,9 @@ def recipe_from_row(row: dict[str, Any]) -> Recipe:
         needs_look=row["needs_look"],
         removed=row["removed_at"] is not None,
         updated_at=datetime.fromisoformat(row["updated_at"]),
-        book=row["book"],
+        book=row.get("book_key") or COOKBOOK,  # RC8a: from recipe_books, by book_id
+        book_name=row.get("book_name") or DOC_NAMES[COOKBOOK],
+        book_role=row.get("book_role") or MAIN,
     )
 
 
@@ -187,9 +248,122 @@ class Recipes:
     # ----- the cookbook doc -----------------------------------------------------------------
 
     def settings(self, which: str = COOKBOOK) -> dict[str, Any]:
-        row = self.db.one(f"SELECT * FROM {DOC_TABLES[which]} WHERE id = 1")
-        assert row is not None
+        """A recipe book's row (RC8a), by its key."""
+        row = self.db.one("SELECT * FROM recipe_books WHERE key = ?", (which,))
+        if row is None:
+            raise DocsError(f"There's no recipe book {which!r}.")
         return row
+
+    def books(self, *, removed: bool = False) -> list[RecipeBook]:
+        """RC8a: every recipe book, the cookbook first."""
+        rows = self.db.query(
+            "SELECT * FROM recipe_books WHERE ? OR removed_at IS NULL ORDER BY position, id",
+            (int(removed),),
+        )
+        return [book_from_row(r) for r in rows]
+
+    def book(self, which: str) -> RecipeBook:
+        return book_from_row(self.settings(which))
+
+    def doc_name(self, which: str) -> str:
+        """How Themi says a book: "the cookbook", "Recipes to try"."""
+        return DOC_NAMES.get(which) or self.book(which).name
+
+    # ----- RC8b: recipe books of their own ----------------------------------------------------
+
+    def shelves(self) -> list[RecipeBook]:
+        """The books kept apart from the cookbook ("Vegan cheese")."""
+        return [b for b in self.books() if b.role == SHELF]
+
+    def named_book(self, said: str) -> RecipeBook | None:
+        """The book they named: its key, or its name loosely ("the cheese book")."""
+        said = said.strip()
+        if not said:
+            return None
+        books = self.books()
+        for each in books:
+            if said == each.key:
+                return each
+        wanted = book_words(said)
+        if not wanted:  # "the cookbook", "our family cookbook"
+            cookbook = "cookbook" in name_key(said).split()
+            return next((b for b in books if b.role == MAIN), None) if cookbook else None
+        if wanted <= {"try", "trying"}:
+            return next((b for b in books if b.key == TO_TRY), None)
+        for each in books:
+            have = book_words(each.name) or {"cookbook"}
+            if have <= wanted or wanted <= have:
+                return each
+        return None
+
+    def add_book(self, name: str) -> RecipeBook:
+        """A new recipe book of its own: not in meal ideas, not found unless asked for, no
+        save button on web recipes. Raises DocsError when the name is taken or empty."""
+        name = " ".join(name.split())[:60]
+        if not book_words(name):
+            raise DocsError("Give the recipe book a name, like Vegan cheese.")
+        for each in self.books():
+            if name_key(each.name) == name_key(name) or self.named_book(name) is each:
+                raise DocsError(f"There's a recipe book called {each.name} already.")
+        now = to_utc_iso(clock.now())
+        position = int(self.db.scalar("SELECT IFNULL(MAX(position), 0) + 1 FROM recipe_books"))
+        self.db.execute(
+            "INSERT INTO recipe_books (key, name, role, position, in_meal_ideas, found_unasked, "
+            "save_button, updated_at) VALUES (?, ?, 'shelf', ?, 0, 0, 0, ?)",
+            (f"new:{now}:{position}", name, position, now),
+        )
+        book_id = int(self.db.scalar("SELECT MAX(id) FROM recipe_books"))
+        self.db.execute("UPDATE recipe_books SET key = ? WHERE id = ?", (f"b{book_id}", book_id))
+        return self.book(f"b{book_id}")
+
+    def rename_book(self, which: str, name: str) -> str:
+        shelf = self.book(which)
+        if shelf.role != SHELF:
+            raise DocsError(f"{self.doc_name(which).capitalize()} keeps its name.")
+        name = " ".join(name.split())[:60]
+        if not book_words(name):
+            raise DocsError("Give the recipe book a name, like Vegan cheese.")
+        for each in self.books():
+            if each.key != which and name_key(each.name) == name_key(name):
+                raise DocsError(f"There's a recipe book called {each.name} already.")
+        self.db.execute(
+            "UPDATE recipe_books SET name = ?, updated_at = ? WHERE key = ?",
+            (name, to_utc_iso(clock.now()), which),
+        )
+        return f"It's called {name} now."
+
+    def set_switches(
+        self, which: str, *, meal_ideas: bool, found_unasked: bool, save_button: bool
+    ) -> None:
+        """A shelf book's three switches (the cookbook's and Recipes to try's stay)."""
+        if self.book(which).role != SHELF:
+            raise DocsError(f"{self.doc_name(which).capitalize()} always shows up.")
+        self.db.execute(
+            "UPDATE recipe_books SET in_meal_ideas = ?, found_unasked = ?, save_button = ?, "
+            "updated_at = ? WHERE key = ?",
+            (int(meal_ideas), int(found_unasked), int(save_button), to_utc_iso(clock.now()),
+             which),
+        )  # fmt: skip
+
+    def remove_book(self, which: str) -> str:
+        """Stop reading a shelf book: its recipes are marked removed, as when they leave a
+        doc. Nothing is deleted from Google."""
+        shelf = self.book(which)
+        if shelf.role != SHELF:
+            raise DocsError(f"{self.doc_name(which).capitalize()} can't be removed here.")
+        now = to_utc_iso(clock.now())
+        with self.db.transaction():
+            self.db.execute(
+                "UPDATE recipes SET removed_at = ?, updated_at = ? WHERE book_id = ? "
+                "AND removed_at IS NULL",
+                (now, now, shelf.id),
+            )
+            self.db.execute(
+                "UPDATE recipe_books SET removed_at = ?, doc_id = NULL, updated_at = ? "
+                "WHERE id = ?",
+                (now, now, shelf.id),
+            )
+        return f"Themi stopped reading {shelf.name}. The doc itself is as it was."
 
     @property
     def doc_id(self) -> str | None:
@@ -205,8 +379,8 @@ class Recipes:
 
     def set_diet(self, diet: str) -> None:
         self.db.execute(
-            "UPDATE cookbook SET diet = ?, updated_at = ? WHERE id = 1",
-            (diet.strip().lower(), to_utc_iso(clock.now())),
+            "UPDATE recipe_books SET diet = ?, updated_at = ? WHERE id = ?",
+            (diet.strip().lower(), to_utc_iso(clock.now()), MAIN_ID),
         )
 
     def ready(self) -> bool:
@@ -249,47 +423,42 @@ class Recipes:
             raise DocsError(str(exc) or NOT_LINKED_TEXT) from exc
         if record.get("mimeType") != DOC_MIME:
             raise DocsError(NOT_A_DOC_TEXT)
-        other = TO_TRY if which == COOKBOOK else COOKBOOK
-        if self.settings(other)["doc_id"] == doc_id:
-            raise DocsError(f"That doc is {DOC_NAMES[other]} already; pick another one.")
+        for other in self.books():
+            if other.key != which and other.doc_id == doc_id:
+                raise DocsError(
+                    f"That doc is {self.doc_name(other.key)} already; pick another one."
+                )
         same = self.settings(which)["doc_id"] == doc_id
         title = str(record.get("name") or ("Cookbook" if which == COOKBOOK else "Recipes to try"))
         now = to_utc_iso(clock.now())
-        if which == COOKBOOK:
-            self.db.execute(
-                "UPDATE cookbook SET doc_id = ?, account_id = ?, member_id = ?, title = ?, "
-                "version = NULL, problem = NULL, guides_offered = CASE WHEN ? THEN "
-                "guides_offered ELSE 0 END, updated_at = ? WHERE id = 1",
-                (doc_id, account.id, member.id, title, int(same), now),
-            )
-        else:
-            self.db.execute(
-                "UPDATE try_doc SET doc_id = ?, account_id = ?, member_id = ?, title = ?, "
-                "version = NULL, problem = NULL, updated_at = ? WHERE id = 1",
-                (doc_id, account.id, member.id, title, now),
-            )
+        self.db.execute(
+            "UPDATE recipe_books SET doc_id = ?, account_id = ?, member_id = ?, title = ?, "
+            "version = NULL, problem = NULL, guides_offered = CASE WHEN ? THEN "
+            "guides_offered ELSE 0 END, updated_at = ? WHERE key = ?",
+            (doc_id, account.id, member.id, title, int(same), now, which),
+        )
         result = await self.sync(force=True, which=which)
         if result is None:
             raise DocsError(
                 self.settings(which)["problem"]
-                or f"{DOC_NAMES[which].capitalize()} couldn't be read."
+                or f"{self.doc_name(which).capitalize()} couldn't be read."
             )
-        said = self.summary(result, which)
+        said = self.summary(result, self.doc_name(which))
         await self.services.outbox.send(member, said, priority=Priority.REPLY, kind=KIND)
         if which == COOKBOOK:
             await self.offer_guides(member)
         return said
 
     async def sync_all(self) -> None:
-        """Scheduler job (every 15 minutes): each doc again, if Drive says it changed."""
-        await self.sync()
-        await self.sync(which=TO_TRY)  # F49h
+        """Scheduler job (every 15 minutes): each book's doc again, if Drive says it changed."""
+        for each in self.books():  # F49h, RC8a: every book with a doc
+            if each.doc_id:
+                await self.sync(which=each.key)
 
     async def sync(self, *, force: bool = False, which: str = COOKBOOK) -> SyncResult | None:
         """Read the doc again if Drive says it changed. None when there's no such doc or it
         couldn't be read (the reason is kept)."""
         row = self.settings(which)
-        table = DOC_TABLES[which]
         if not row["doc_id"] or row["account_id"] is None or not self.ready():
             return None
         client = self.client(row["account_id"])
@@ -301,31 +470,33 @@ class Recipes:
             parsed = book.parse(await client.get(row["doc_id"]))
         except (DocsError, TokenRevoked, OAuthError) as exc:
             reason = str(exc) or type(exc).__name__
-            log.warning("%s wasn't read: %s", DOC_NAMES[which].capitalize(), reason)
+            log.warning("%s wasn't read: %s", self.doc_name(which).capitalize(), reason)
             self.db.execute(
-                f"UPDATE {table} SET problem = ?, updated_at = ? WHERE id = 1",
-                (reason, to_utc_iso(clock.now())),
+                "UPDATE recipe_books SET problem = ?, updated_at = ? WHERE key = ?",
+                (reason, to_utc_iso(clock.now()), which),
             )
             return None
         result = self.store_doc(parsed.recipes, which)
         now = to_utc_iso(clock.now())
         self.db.execute(
-            f"UPDATE {table} SET version = ?, revision = ?, read_at = ?, title = ?, "
-            "problem = NULL, updated_at = ? WHERE id = 1",
-            (version, parsed.revision, now, parsed.title or row["title"], now),
+            "UPDATE recipe_books SET version = ?, revision = ?, read_at = ?, title = ?, "
+            "problem = NULL, updated_at = ? WHERE key = ?",
+            (version, parsed.revision, now, parsed.title or row["title"], now, which),
         )
         return result
 
     def store_doc(self, parsed: list[ParsedRecipe], which: str = COOKBOOK) -> SyncResult:
         """Bring the stored copy in step with what the doc holds now."""
         now = to_utc_iso(clock.now())
-        prefix = TRY_KEY if which == TO_TRY else ""
+        shelf = self.book(which)
+        prefix = shelf.prefix
         parsed = [replace(r, key=prefix + r.key) for r in parsed] if prefix else parsed
         existing = {
             r["key"]: r
             for r in self.db.query(
-                "SELECT key, hash, removed_at FROM recipes WHERE source = 'doc' AND book = ?",
-                (which,),
+                "SELECT key, hash, removed_at FROM recipes WHERE source = 'doc' "
+                "AND IFNULL(book_id, ?) = ?",
+                (MAIN_ID, shelf.id),
             )
         }
         added = changed = 0
@@ -354,9 +525,9 @@ class Recipes:
                     self.db.execute(
                         "INSERT INTO recipes (section, subsection, name, ingredients, steps, "
                         "notes, source_text, kind, chart, yield_count, needs_look, words, hash, "
-                        "position, updated_at, key, source, created_at, book) "
+                        "position, updated_at, key, source, created_at, book_id) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'doc', ?, ?)",
-                        (*values, recipe.key, now, which),
+                        (*values, recipe.key, now, shelf.id),
                     )
                     added += 1
                 elif old["hash"] != digest or old["removed_at"] is not None:
@@ -390,10 +561,11 @@ class Recipes:
         )
 
     @staticmethod
-    def summary(result: SyncResult, which: str = COOKBOOK) -> str:
+    def summary(result: SyncResult, where: str = DOC_NAMES[COOKBOOK]) -> str:
+        """What a read found; `where` is how the book is said ("Recipes to try")."""
         charts = f" and {result.charts} chart{'s' if result.charts != 1 else ''}"
         charts = charts if result.charts else ""
-        said = f"I've read {result.recipes} recipes{charts} from {DOC_NAMES[which]}."
+        said = f"I've read {result.recipes} recipes{charts} from {where}."
         if result.needs_look:
             shown = [f"{name} ({reason})" for name, reason in result.needs_look[:SHOWN_LOOKS]]
             more = len(result.needs_look) - len(shown)
@@ -422,7 +594,7 @@ class Recipes:
         if self.settings()["guides_offered"] or self.services.maybe(keys.guides) is None:
             return
         charts = [r for r in self.reference_charts() if not self._has_guide_for(member, r)]
-        self.db.execute("UPDATE cookbook SET guides_offered = 1 WHERE id = 1")
+        self.db.execute("UPDATE recipe_books SET guides_offered = 1 WHERE id = ?", (MAIN_ID,))
         if not charts:
             return
         names = ", ".join(f'"{r.name}"' for r in charts)
@@ -454,26 +626,37 @@ class Recipes:
 
     # ----- reading the stored copy ------------------------------------------------------------
 
+    # RC8a: each recipe with its book's key
+    WITH_BOOK = (
+        "SELECT recipes.*, recipe_books.key AS book_key, recipe_books.name AS book_name, "
+        "recipe_books.role AS book_role FROM recipes "
+        "LEFT JOIN recipe_books ON recipe_books.id = IFNULL(recipes.book_id, 1) "
+    )
+
     def get(self, recipe_id: int) -> Recipe | None:
-        row = self.db.one("SELECT * FROM recipes WHERE id = ?", (recipe_id,))
+        row = self.db.one(self.WITH_BOOK + "WHERE recipes.id = ?", (recipe_id,))
         return recipe_from_row(row) if row else None
 
     def all(self, *, include_charts: bool = False, source: str | None = None) -> list[Recipe]:
         rows = self.db.query(
-            "SELECT * FROM recipes WHERE removed_at IS NULL AND (? OR kind = 'recipe') "
-            "AND (? IS NULL OR source = ?) ORDER BY source, position, name",
+            self.WITH_BOOK + "WHERE recipes.removed_at IS NULL AND (? OR recipes.kind = 'recipe') "
+            "AND (? IS NULL OR recipes.source = ?) "
+            "ORDER BY recipes.source, recipes.position, recipes.name",
             (int(include_charts), source, source),
         )
         return [recipe_from_row(r) for r in rows]
 
-    def open_items(self, member: Member) -> list[OpenItem]:
-        count = self.db.scalar(
+    def count(self, which: str) -> int:
+        """RC8a: a book's recipes and charts, as read from its doc."""
+        return int(self.db.scalar(
             "SELECT COUNT(*) FROM recipes WHERE removed_at IS NULL AND source = 'doc' "
-            "AND book = 'cookbook'"
-        )
-        trying = self.db.scalar(
-            "SELECT COUNT(*) FROM recipes WHERE removed_at IS NULL AND book = 'to_try'"
-        )
+            "AND IFNULL(book_id, ?) = ?",
+            (MAIN_ID, self.book(which).id),
+        ) or 0)  # fmt: skip
+
+    def open_items(self, member: Member) -> list[OpenItem]:
+        count = self.count(COOKBOOK)
+        trying = self.count(TO_TRY)
         items = []
         if count:
             items.append(OpenItem(f"The family cookbook has {count} recipes and charts "
@@ -481,6 +664,13 @@ class Recipes:
         if trying:  # F49h
             items.append(OpenItem(f"Recipes to try (a separate doc, not the cookbook) has "
                                   f"{trying} (find_recipe finds them too)."))  # fmt: skip
+        for shelf in self.shelves():  # RC8b: named apart, never the cookbook's
+            n = self.count(shelf.key)
+            if n:
+                items.append(OpenItem(
+                    f"{shelf.name} (a separate recipe book, not the cookbook) has {n} recipes "
+                    f"(find_recipe with book '{shelf.name}')."
+                ))  # fmt: skip
         return items
 
     def link(self, recipe: Recipe) -> str | None:
@@ -490,14 +680,32 @@ class Recipes:
         doc_id = self.settings(recipe.book)["doc_id"]
         if not doc_id:
             return None
-        key = recipe.key.removeprefix(TRY_KEY)
+        key = recipe.key.removeprefix(self.book(recipe.book).prefix)
         anchor = f"#heading={key}" if key.startswith("h.") else ""
         return f"https://docs.google.com/document/d/{doc_id}/edit{anchor}"
 
     # ----- finding and showing (RC1b) ------------------------------------------------------
 
-    def find(self, text: str, section: str = "", *, charts: bool = True) -> list[Match]:
-        return search(self.all(include_charts=charts), text, section=section)
+    def find(
+        self, text: str, section: str = "", *, charts: bool = True, book: str = ""
+    ) -> list[Match]:
+        """RC8b: `book` (a key or name) looks only there. Otherwise a book kept out of the
+        way is looked in only when they say its name's words ("a cheese recipe") or a recipe's
+        name exactly; its sections never narrow a search that didn't name it."""
+        everything = self.all(include_charts=charts)
+        if book:
+            chosen = self.named_book(book)
+            pool = [r for r in everything if chosen is not None and r.book == chosen.key]
+            return search(pool, text, section=section)
+        said = {stem(w) for w in name_key(text).split()}
+        hidden = {
+            b.key for b in self.books() if not b.found_unasked and not book_words(b.name) & said
+        }
+        shown = [r for r in everything if r.book not in hidden]
+        exact = [r for r in everything if r.book in hidden and name_key(r.name) == name_key(text)]
+        quiet = {b.key for b in self.books() if not b.found_unasked}
+        usual = [r for r in shown if r.book not in quiet]
+        return search(shown + exact, text, section=section, sections_from=usual)
 
     def card_buttons(self, recipe: Recipe) -> list[Button]:
         """[Cook this] [Add to grocery list], once those prompts are built (RC2a, RC3a)."""
@@ -509,13 +717,17 @@ class Recipes:
                 Button("Add to grocery list", "recipe", {"action": "groceries", "id": recipe.id})
             )
         if recipe.source == "web" and "save" in self.button_actions:  # RC5
-            buttons.append(
-                Button("Save to cookbook", "recipe", {"action": "save", "id": recipe.id})
-            )
-            if self.try_doc_id:  # F49h: or with the recipes they want to try
-                buttons.append(
-                    Button("Save to try", "recipe", {"action": "save_try", "id": recipe.id})
-                )
+            for each in self.books():  # RC8b: only the books with a save button
+                if not each.save_button or (not each.doc_id and each.role != MAIN):
+                    continue
+                if each.role == MAIN:
+                    label, payload = "Save to cookbook", {"action": "save", "id": recipe.id}
+                elif each.key == TO_TRY:  # F49h: or with the recipes they want to try
+                    label, payload = "Save to try", {"action": "save_try", "id": recipe.id}
+                else:
+                    label = f"Save to {each.name}"[:40]
+                    payload = {"action": "save_book", "id": recipe.id, "book": each.key}
+                buttons.append(Button(label, "recipe", payload))
         return buttons
 
     async def send(self, member: Member, recipe: Recipe, *, note: str = "") -> str:
@@ -640,6 +852,18 @@ def wanted_words(text: str) -> list[str]:
     return [stem(w) for w in name_key(text).split() if w not in FILLER and len(w) > 1]
 
 
+# RC8b: words in a book's name that don't tell books apart (the household is vegan)
+BOOK_FILLER = frozenset(
+    "a an the my our your family families recipe recipes book books cookbook vegan from in "
+    "of for".split()
+)
+
+
+def book_words(name: str) -> set[str]:
+    """The words that name a book: "Vegan cheese" -> {"cheese"}, "the cheese book" too."""
+    return {stem(w) for w in name_key(name).split() if w not in BOOK_FILLER and len(w) > 1}
+
+
 @dataclass(frozen=True)
 class Match:
     recipe: Recipe
@@ -653,7 +877,10 @@ PICTURE_SOURCE = "your picture"  # F34m: where a recipe copied from a picture is
 
 
 def _label(recipe: Recipe) -> str:
-    """Its name on a button, "(to try)" after it when it's from Recipes to try (F49h)."""
+    """Its name on a button, "(to try)" after it when it's from Recipes to try (F49h), or its
+    book's name when it's from a book of its own (RC8b)."""
+    if recipe.on_shelf:
+        return f"{recipe.name} ({recipe.book_name})"
     return f"{recipe.name} (to try)" if recipe.to_try else recipe.name
 
 
@@ -665,6 +892,8 @@ def recipe_lines(recipe: Recipe, link: str | None = None) -> tuple[str, str]:
         where = site_name(recipe.url) if recipe.url else (recipe.source_text or "the web")
     if recipe.to_try:  # F49h: from the Recipes to try doc, not the cookbook
         where = "to try" + (f" · {where}" if where else "")
+    elif recipe.on_shelf:  # RC8b: from a book of its own
+        where = recipe.book_name + (f" · {where}" if where else "")
     head = f"{recipe.name} ({where})" if where else recipe.name
     first = [head, "", "Ingredients"]
     group = ""
@@ -687,6 +916,7 @@ def recipe_lines(recipe: Recipe, link: str | None = None) -> tuple[str, str]:
         second += ["", *extra]
     if link:
         said = "In Recipes to try: " if recipe.to_try else "In the cookbook: "
+        said = f"In {recipe.book_name}: " if recipe.on_shelf else said
         second += ["", (said if recipe.source == "doc" else "From: ") + link]
     return "\n".join(first), "\n".join(second)
 
@@ -726,10 +956,21 @@ def _section_named(recipes: list[Recipe], words: list[str]) -> str | None:
     return None
 
 
-def search(recipes: list[Recipe], text: str, *, section: str = "") -> list[Match]:
-    """Recipes for what they asked: by name words first, then ingredients and notes."""
+ROLE_ORDER = {MAIN: 0, TRYING: 1, SHELF: 2}
+
+
+def search(
+    recipes: list[Recipe],
+    text: str,
+    *,
+    section: str = "",
+    sections_from: list[Recipe] | None = None,
+) -> list[Match]:
+    """Recipes for what they asked: by name words first, then ingredients and notes. A
+    section they name narrows it; RC8b: only the sections of `sections_from`, when given."""
     words = wanted_words(text)
-    chosen = section or _section_named(recipes, words) or ""
+    named = _section_named(recipes if sections_from is None else sections_from, words)
+    chosen = section or named or ""
     if chosen:
         section_words = {stem(w) for w in name_key(chosen).split()} | {stem(chosen)}
         words = [w for w in words if w not in section_words]
@@ -758,10 +999,10 @@ def search(recipes: list[Recipe], text: str, *, section: str = "") -> list[Match
             not m.exact,
             -m.score,
             m.recipe.source != "doc",
-            m.recipe.to_try,
+            ROLE_ORDER.get(m.recipe.book_role, 2),
             m.recipe.name,
         )
-    )  # F49h: the cookbook before Recipes to try
+    )  # F49h: the cookbook before Recipes to try; RC8b: and before a book of its own
     if found:  # a stray word ("butter" in a sauce) isn't a match for "peanut butter bars"
         best = found[0].score
         found = [m for m in found if m.score * 3 >= best]
@@ -799,8 +1040,13 @@ def _nothing(recipes: Recipes, query: str) -> ToolDeclined:
     )
 
 
-async def _answer(ctx: ToolContext, recipes: Recipes, query: str, section: str) -> str:
-    matches = recipes.find(query, section)
+async def _answer(
+    ctx: ToolContext, recipes: Recipes, query: str, section: str, book: str = ""
+) -> str:
+    if book and recipes.named_book(book) is None:
+        names = ", ".join(b.name for b in recipes.books() if b.doc_id)
+        raise ToolDeclined(f'There\'s no recipe book "{book}"; the books are: {names}. Say so.')
+    matches = recipes.find(query, section, book=book)
     if not matches:
         raise _nothing(recipes, query)
     words = wanted_words(query)
@@ -820,6 +1066,14 @@ async def _answer(ctx: ToolContext, recipes: Recipes, query: str, section: str) 
         return f"Sent them the recipe, as written: {first}. It's in the chat; don't repeat it."
     trying = any(m.recipe.to_try for m in matches[:MATCHES])  # F49h
     intro = "From the cookbook and Recipes to try:" if trying else "From the cookbook:"
+    shelves = list(dict.fromkeys(m.recipe.book_name for m in matches[:MATCHES]
+                                 if m.recipe.on_shelf))  # fmt: skip
+    if shelves:  # RC8b: and the books of their own it came from
+        rest = [m for m in matches[:MATCHES] if not m.recipe.on_shelf]
+        docs = (["the cookbook"] if rest else []) + (["Recipes to try"] if trying else [])
+        names = docs + shelves
+        intro = "From " + (", ".join(names[:-1]) + " and " if len(names) > 1 else "")
+        intro += names[-1] + ":"
     said = await recipes.offer(ctx.member, matches, intro)
     ctx.cards.append(said)
     return f"Sent these as buttons ({said}); tapping one shows it. Don't list them again."
@@ -830,11 +1084,15 @@ async def _answer(ctx: ToolContext, recipes: Recipes, query: str, section: str) 
     "Find a recipe in the family's cookbook and send it, as written: query is what they "
     "asked for (a dish 'the alfredo sauce', an ingredient 'something with chickpeas', a "
     "kind 'a dessert', or a chart row 'roasting broccoli'); section is a cookbook section "
-    "they named ('Desserts') or ''. One clear match is sent whole; several go as buttons.",
-    {"query": {"type": "string"}, "section": {"type": "string"}},
+    "they named ('Desserts') or ''; book is a separate recipe book they named ('the cheese "
+    "book') or ''. One clear match is sent whole; several go as buttons.",
+    {"query": {"type": "string"}, "section": {"type": "string"}, "book": {"type": "string"}},
 )
 async def find_recipe(ctx: ToolContext, args: dict[str, Any]) -> str:
-    return await _answer(ctx, _recipes(ctx), str(args["query"]), str(args.get("section") or ""))
+    return await _answer(
+        ctx, _recipes(ctx), str(args["query"]), str(args.get("section") or ""),
+        str(args.get("book") or ""),
+    )  # fmt: skip
 
 
 @tool(
@@ -859,7 +1117,7 @@ class RecipesModule(Module):
         "the family cookbook, picked from a linked Google account",
         "/accounts",
         "anyone",
-        "SELECT 1 FROM cookbook WHERE doc_id IS NOT NULL",
+        "SELECT 1 FROM recipe_books WHERE key = 'cookbook' AND doc_id IS NOT NULL",
     )
     google_scopes = (  # CR18a: only the files picked or made (RC1a)
         ScopeNeed(

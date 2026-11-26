@@ -62,6 +62,7 @@
   "POST /accounts/{account_id:int}/calendars",
   "POST /accounts/{account_id:int}/calendars/shown",
   "POST /accounts/{account_id:int}/cookbook",
+  "POST /accounts/{account_id:int}/cookbook/books/{key}",
   "POST /accounts/{account_id:int}/cookbook/read",
   "POST /accounts/{account_id:int}/expected",
   "POST /accounts/{account_id:int}/expected/{expected_id:int}/remove",
