@@ -163,7 +163,7 @@ async def test_the_day_view_shows_that_days_timeline_and_whats_due(
     assert "Not in the forecast yet" in shown
     assert 'hx-get="/wall/view/day/2026-10-22"' in view.text  # the day before
     assert 'hx-get="/wall/view/day/2026-10-24"' in view.text
-    assert "tl-now" not in view.text  # a day ahead has no now line
+    assert "pl-now" not in view.text  # a day ahead has no now line (F64h: the planner)
 
 
 async def test_the_day_view_goes_from_today_to_two_weeks_out(calendar: Scenario) -> None:

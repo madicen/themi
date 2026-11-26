@@ -57,9 +57,9 @@ from themi_home.cooking_links import UNITS, StepLinks
 from themi_home.cooking_mixes import CookingMixes
 from themi_home.cooking_titles import TITLES_FIELD, TITLES_RULE, StepTitles
 from themi_home.groups import COOKING
-from themi_home.quantities import AMOUNT, NeedsYield, describe, scale_for, scale_line
+from themi_home.quantities import AMOUNT, BRACKET, NeedsYield, batch_after, scale_for, scale_line
 from themi_home.recipe_groceries import Ingredient, resolve
-from themi_home.recipes import Recipe, Recipes, stem
+from themi_home.recipes import Recipe, Recipes, search, stem
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -71,6 +71,11 @@ log = logging.getLogger(__name__)
 KIND = "cooking"
 PAUSE_TOPIC = "cooking"  # RC3b: nudges and check-ins wait while cooking
 LEFT_AFTER = timedelta(hours=3)
+MAX_OPEN = 3  # F64e: recipes on the go at once, per person; a fourth asks which to stop
+FRONT = "front DESC, id DESC"
+NEXT_FRONT = (
+    "SELECT COALESCE(MAX(front), 0) + 1 FROM cooking_sessions"  # F64e: the one in front first
+)
 ENDED_SHOWN = timedelta(hours=3)  # CK3/CK6: an ended session's screen, at most this long
 STUCK_AFTER = timedelta(minutes=20)  # CK5: on one step, no tap, no timer: one line, once
 SCREEN_OPEN = timedelta(minutes=2)  # the cook screen asked for its state this recently
@@ -250,7 +255,15 @@ def with_amount(job: str, line: str) -> str:
         return f"{job} ({amount})"
     measure = re.match(r"\s*measure\b", rest, re.IGNORECASE)
     if measure:
-        return f"{head}: measure {amount}{rest[measure.end() :]}"
+        after = rest[measure.end() :]
+        # F64c: "measure 550ml" has its amount already; the shown one replaces it, not joins it
+        if said := AMOUNT.match(after.strip()):
+            left = after.strip()[said.end() :]
+            if weight := BRACKET.match(left):  # and its weight, "(560 g)"
+                left = left[weight.end() :]
+            left = left.strip()
+            after = "" if not left else left if left[0] in ",;.)" else f" {left}"
+        return f"{head}: measure {amount}{after}"
     return f"{head} ({amount}):{rest}"
 
 
@@ -473,7 +486,7 @@ class Cooking:
         s.recipe_buttons["cook"] = self.on_cook_button
         s.text_handlers.append(self.on_text)
         s.open_item_sources.append(self.open_items)
-        for t in (start_cooking, stop_cooking):
+        for t in (start_cooking, stop_cooking, switch_recipe):
             s.tools.register(t)
 
     # ----- the stored session ------------------------------------------------------------
@@ -489,13 +502,80 @@ class Cooking:
                 "SELECT * FROM cooking_sessions WHERE ended_at IS NULL AND in_group = 1 "
                 "ORDER BY id DESC LIMIT 1"
             )
-        else:
+        else:  # F64e: the one in front, of the recipes they have on the go
             row = self.db.one(
                 "SELECT * FROM cooking_sessions WHERE ended_at IS NULL AND member_id = ? "
-                "ORDER BY id DESC LIMIT 1",
+                f"ORDER BY {FRONT} LIMIT 1",
                 (member.id,),
             )
         return _session(row) if row else None
+
+    def open_sessions(self, member: Member) -> list[Session]:
+        """F64e: every recipe they have on the go, the one in front first."""
+        rows = self.db.query(
+            "SELECT * FROM cooking_sessions WHERE ended_at IS NULL AND member_id = ? "
+            f"ORDER BY {FRONT}",
+            (member.id,),
+        )
+        return [_session(row) for row in rows]
+
+    def others(self, session: Session) -> list[Session]:
+        """F64e: their other recipes on the go, set aside behind this one."""
+        if session.in_group:
+            return []
+        return [s for s in self.open_sessions(self._owner(session)) if s.id != session.id]
+
+    def where(self, session: Session) -> str:
+        """F64e: where a recipe on the go is, in a few words: "step 9", "gathering"."""
+        recipe = self.recipes.get(session.recipe_id)
+        if recipe is None:
+            return ""
+        return {"ready": "getting ready", "gather": "gathering", "prep": "prepping"}.get(
+            session.phase, f"step {_label(session, recipe)}"
+        )
+
+    def name_of(self, session: Session) -> str:
+        recipe = self.recipes.get(session.recipe_id)
+        return recipe.name if recipe else "the recipe"
+
+    async def set_aside(self, session: Session) -> None:
+        """F64e: its card says it's waiting, with a button to bring it back."""
+        recipe = self.recipes.get(session.recipe_id)
+        if recipe is None or session.message_id is None:
+            return
+        await self._to_card(
+            session,
+            f"Set aside: {self.heading(session, recipe)}, {self.where(session)}.",
+            [Button(_short(f"Back to {recipe.name}"), "cooking",
+                    {"session": session.id, "action": "front"})],
+        )  # fmt: skip
+
+    async def switch(self, session: Session, *, note: str = "") -> None:
+        """F64e: bring a recipe on the go to the front: the one there is set aside, and this
+        one's card comes again at the bottom of the chat, as it was."""
+        member = self._owner(session)
+        front = self.current(member)
+        self.db.execute(
+            f"UPDATE cooking_sessions SET front = ({NEXT_FRONT}) WHERE id = ?",
+            (session.id,),
+        )
+        if front is not None and front.id != session.id:
+            await self.set_aside(front)
+            self._bump(front)
+        await self.show(session, fresh=True, note=note)
+
+    async def next_in_front(self, member: Member) -> None:
+        """F64e: one recipe ended with others still on the go: back to the next one."""
+        session = self.current(member)
+        if session is None:
+            return
+        await self.show(
+            session, fresh=True, note=f"Back to {self.name_of(session)}, {self.where(session)}."
+        )
+
+    def _bump(self, session: Session) -> None:
+        """The cook screen redraws (CK1's `seq`) without the session moving."""
+        self.db.execute("UPDATE cooking_sessions SET seq = seq + 1 WHERE id = ?", (session.id,))
 
     def _save(self, session: Session) -> None:
         """Save a move and bump `seq` (CK1), so the cook screen redraws and a tap made on an
@@ -594,10 +674,9 @@ class Cooking:
         in_group: bool = False,
         from_page: bool = False,
     ) -> Session:
-        for old in self.db.query(
-            "SELECT * FROM cooking_sessions WHERE ended_at IS NULL AND member_id = ?", (member.id,)
-        ):
-            self.end(_session(old), "switched")
+        going = self.open_sessions(member)  # F64e: kept, set aside, rather than ended
+        if len(going) >= MAX_OPEN:
+            raise TooMany(going)
         items = await self.groceries.ingredients(member, recipe)
         ahead = [{"text": a.text, "overnight": a.overnight} for a in ahead_of_time(recipe, items)]
         now = to_utc_iso(clock.now())
@@ -605,14 +684,17 @@ class Cooking:
         session_id = self.db.execute(
             "INSERT INTO cooking_sessions (member_id, recipe_id, scale, scale_said, phase, step, "
             "in_group, gathered, prep, ahead, started_at, last_tap_at, energy_at_start, "
-            "hour_of_week, step_since, from_page) "
-            "VALUES (?, ?, ?, ?, ?, 0, ?, '[]', '[]', ?, ?, ?, ?, ?, ?, ?)",
+            "hour_of_week, step_since, from_page, front) "
+            f"VALUES (?, ?, ?, ?, ?, 0, ?, '[]', '[]', ?, ?, ?, ?, ?, ?, ?, ({NEXT_FRONT}))",
             (
                 member.id, recipe.id, scale, scale_said, "ready" if ahead else "gather",
                 int(in_group), json.dumps(ahead), now, now, energy,
                 hour_of_week(clock.now(), self._tz()), now, int(from_page),
             ),
         )  # fmt: skip
+        if going and not in_group:  # F64e: the one that was in front waits, said on its card
+            await self.set_aside(going[0])
+            self._bump(going[0])
         session = self.get(session_id)
         assert session is not None
         self.services.outbox.pauses.pause(
@@ -649,7 +731,7 @@ class Cooking:
     def heading(self, session: Session, recipe: Recipe) -> str:
         if session.scale == 1:
             return recipe.name
-        batch = describe(session.scale_said, session.scale)
+        batch = batch_after(session.scale_said, session.scale)  # F64c: not "…, a double batch of"
         return f"{recipe.name} {batch}" if batch.startswith("for ") else f"{recipe.name}, {batch}"
 
     async def render(self, session: Session) -> tuple[str, list[Button]]:
@@ -680,6 +762,8 @@ class Cooking:
         if session.phase == "gather":
             lines = self.lines(session, recipe)[:MAX_GATHER]
             rows = [f"Cooking {head}. What it uses (tap each as it's out):"]
+            if recipe.tools:  # RC8c: what to have out, never on the list
+                rows.append(f"> You'll need: {', '.join(recipe.tools)}")
             buttons = []
             items = self.groceries.known(recipe)
             group = ""
@@ -921,8 +1005,20 @@ class Cooking:
         """More buttons for a step: RC3c's timers."""
         return self.timers.buttons(session, part) if self.timers is not None else []
 
-    async def show(self, session: Session, *, fresh: bool = False) -> None:
+    async def show(self, session: Session, *, fresh: bool = False, note: str = "") -> None:
         text, buttons = await self.render(session)
+        if note:  # F64e: "Back to Ricotta, step 9."
+            text = f"{note}\n{text}"
+        others = self.others(session)
+        if others:  # F64e: the others on the go, a tap brings one forward
+            text += "\nAlso going: " + "; ".join(
+                f"{self.name_of(o)}, {self.where(o)}" for o in others
+            )
+            buttons = [*buttons, *(
+                Button(_short(f"Go to {self.name_of(o)}"), "cooking",
+                       {"session": o.id, "action": "front"})
+                for o in others
+            )]  # fmt: skip
         buttons = [*buttons, *self.open_button()]
         await self._to_card(session, text, buttons, fresh=fresh)
         self._save(session)
@@ -991,8 +1087,9 @@ class Cooking:
             await self._to_card(session, f"Stopped cooking {recipe.name}.", (), fresh=fresh)
             screen_only = session.from_page and self.screen_open(session)  # F41b: it asks
             if self.timers is not None and not screen_only:
-                await self.timers.ask_on_end(self._owner(session))
+                await self.timers.ask_on_end(self._owner(session), session.id)
             await self._ask_oven_off(session, in_chat=not self.screen_open(session))
+            await self.next_in_front(self._owner(session))  # F64e
             return
         before = session.phase
         if session.phase == "ready":
@@ -1062,8 +1159,9 @@ class Cooking:
         session.phase = "done"
         await self.say(session, DONE_LINE)  # CK5: the card said it already
         if self.timers is not None and not self.screen_open(session):  # CK13: the screen asks
-            await self.timers.ask_on_end(self._owner(session))
+            await self.timers.ask_on_end(self._owner(session), session.id)
         await self._ask_oven_off(session, in_chat=not self.screen_open(session))
+        await self.next_in_front(self._owner(session))  # F64e
 
     async def _ask_oven_off(self, session: Session, *, in_chat: bool) -> None:
         """OV6: an oven this session started still on: "Turn it off too?"."""
@@ -1100,6 +1198,7 @@ class Cooking:
             f"{overnight}.",
             (),
         )
+        await self.next_in_front(member)  # F64e
 
     # ----- taps and typing ------------------------------------------------------------------
 
@@ -1120,6 +1219,11 @@ class Cooking:
         if session is None:
             return
         action = str(event.button.payload.get("action", ""))
+        if action == "front":  # F64e: [Go to Ricotta] on another card, or [Back to Ricotta]
+            if session.message_id is None:
+                session.message_id = event.button.message_id
+            await self.switch(session)
+            return
         if session.message_id is None:
             session.message_id = event.button.message_id
         if action == "tick":
@@ -1197,7 +1301,24 @@ class Cooking:
         if recipe is None or recipe.is_chart:
             return
         member = self.services.store.get_member(event.member.id)
-        await self.start(member, recipe, in_group=event.in_group)
+        try:
+            await self.start(member, recipe, in_group=event.in_group)
+        except TooMany as many:  # F64e: a fourth: which one stops?
+            await self.services.outbox.send(
+                member,
+                f"{len(many.going)} recipes are on the go already: {self.going_text(many.going)}. "
+                f"Stop one first? Then tap Cook this on {recipe.name} again.",
+                priority=Priority.REPLY,
+                kind=KIND,
+                buttons=[
+                    Button(_short(f"Stop {self.name_of(s)}"), "cooking",
+                           {"session": s.id, "action": "stop"})
+                    for s in many.going
+                ],
+            )  # fmt: skip
+
+    def going_text(self, sessions: list[Session]) -> str:
+        return and_words([f"{self.name_of(s)} ({self.where(s)})" for s in sessions])
 
     # ----- quiet endings and the context ----------------------------------------------------
 
@@ -1238,13 +1359,33 @@ class Cooking:
                     f"\nThey asked for a swap for {session.wrap['swap']}: suggest one from "
                     "what the pantry has, saying it's a suggestion:\n" + pantry
                 )
+        aside = [
+            OpenItem(  # F64e: the others on the go, set aside
+                "Also on the go, set aside (switch_recipe brings one to the front; questions "
+                f"about the recipe mean the one in front): {self.going_text(others)}."
+                + (f" Timers: {self.timers.left_text(member)}" if self.timers else "")
+            )
+        ] if (others := self.others(session)) else []  # fmt: skip
         return [
+            *aside,
             OpenItem(
                 f"Cooking now with Themi: {self.heading(session, recipe)} ({where}). Questions "
                 "about it are answered from this recipe (amounts at this scale), saying it's "
                 "from the recipe:\n" + as_data(f"recipe {recipe.name}", recipe_text) + swap
-            )
+            ),
         ]
+
+
+class TooMany(Exception):
+    """F64e: starting a fourth recipe while three are on the go."""
+
+    def __init__(self, going: list[Session]) -> None:
+        super().__init__("too many recipes on the go")
+        self.going = going
+
+
+def _short(label: str) -> str:
+    return label if len(label) <= LABEL + 8 else label[: LABEL + 7] + "…"
 
 
 def _label(session: Session, recipe: Recipe) -> str:
@@ -1291,28 +1432,68 @@ async def start_cooking(ctx: ToolContext, args: dict[str, Any]) -> str:
     from themi.channels.family_group import group_replies
 
     in_group = group_replies.get() == ctx.member.id
-    session = await cooking.start(
-        ctx.member, recipe, scale=factor, scale_said=said, in_group=in_group
-    )
+    try:
+        session = await cooking.start(
+            ctx.member, recipe, scale=factor, scale_said=said, in_group=in_group
+        )
+    except TooMany as many:  # F64e
+        raise ToolDeclined(
+            f"Three recipes are on the go already: {cooking.going_text(many.going)}. Ask which "
+            "one to stop (stop_cooking with its name), then start this one."
+        ) from None
     ctx.cards.append(f"cooking {recipe.name}")
     return (
         f"Started cooking {recipe.name} with them (session {session.id}); the card is in the chat."
     )
 
 
+def on_the_go(cooking: Cooking, member: Member, name: str) -> Session:
+    """F64e: the recipe on the go they named ("the ricotta"); '' is the one in front."""
+    going = cooking.open_sessions(member)
+    if not going:
+        raise ToolDeclined("There's no cooking session going on.")
+    if not name.strip():
+        return going[0]
+    recipes = [r for r in (cooking.recipes.get(s.recipe_id) for s in going) if r is not None]
+    matches = search(recipes, name, near=True)
+    if not matches:
+        raise ToolDeclined(
+            f'None of the recipes on the go is "{name}": {cooking.going_text(going)}. Ask which.'
+        )
+    return next(s for s in going if s.recipe_id == matches[0].recipe.id)
+
+
 @tool(
     "stop_cooking",
-    "End the cooking session going on, when they say they're stopping or finished.",
-    {},
+    "End a cooking session, when they say they're stopping or finished. recipe: which one, "
+    "when several are on the go ('stop the ricotta'); '' for the one in front.",
+    {"recipe": {"type": "string"}},
 )
 async def stop_cooking(ctx: ToolContext, args: dict[str, Any]) -> str:
     cooking = _cooking(ctx)
-    session = cooking.current(ctx.member)
-    if session is None:
-        raise ToolDeclined("There's no cooking session going on.")
+    session = on_the_go(cooking, ctx.member, str(args.get("recipe") or ""))
+    name = cooking.name_of(session)
     await cooking.advance(session, "stop")
     ctx.cards.append("stopped cooking")
-    return "Ended the cooking session; the card says so."
+    return f"Ended cooking {name}; the card says so."
+
+
+@tool(
+    "switch_recipe",
+    "F64e: with several recipes on the go, bring one to the front ('back to the ricotta', "
+    "'switch to the bechamel'): its card comes again at the bottom of the chat, where it was. "
+    "recipe: its name.",
+    {"recipe": {"type": "string"}},
+)
+async def switch_recipe(ctx: ToolContext, args: dict[str, Any]) -> str:
+    cooking = _cooking(ctx)
+    session = on_the_go(cooking, ctx.member, str(args.get("recipe") or ""))
+    await cooking.switch(session)
+    ctx.cards.append(f"switched to {cooking.name_of(session)}")
+    return (
+        f"{cooking.name_of(session)} is in front again ({cooking.where(session)}); its card is "
+        "in the chat."
+    )
 
 
 class CookingModule(Module):

@@ -277,3 +277,13 @@ def describe(text: str, factor: float) -> str:
         return f"for {found.group(1)}"
     names = {0.5: "half of", 2.0: "a double batch of", 3.0: "a triple batch of"}
     return names.get(factor, f"{fraction(factor)}× of")
+
+
+def batch_after(text: str, factor: float) -> str:
+    """F64c: the batch named after the recipe's name ("Alfredo Sauce, doubled", "Pancakes for
+    6"): 'doubled', 'halved', 'tripled', '1½ times', 'for 6'. `describe` goes before one."""
+    said = text.strip().lower()
+    if found := FOR.match(said):
+        return f"for {found.group(1)}"
+    names = {0.5: "halved", 2.0: "doubled", 3.0: "tripled"}
+    return names.get(factor, f"{fraction(factor)} times")

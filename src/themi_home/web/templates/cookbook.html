@@ -44,6 +44,12 @@ aren't cookbook-worthy yet. Themi reads it too, finds and cooks them, and labels
     <label>Its name <input name="name" value="{{ shelf.name }}" required></label>
     <button>Rename</button>
   </form>
+  <form method="post" action="/accounts/{{ account.id }}/cookbook/books/{{ shelf.key }}" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="sections">
+    <label>Sections of base recipes other recipes use <input name="sub_recipes" value="{{ shelf.sub_recipe_sections | join(', ') }}" placeholder="Milks"></label>
+    <label>Sections of guides and charts <input name="references" value="{{ shelf.reference_sections | join(', ') }}" placeholder="Appendix"></label>
+    <button>Save sections</button>
+  </form>
   <form method="post" action="/accounts/{{ account.id }}/cookbook/books/{{ shelf.key }}">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="remove">
     <button>Stop reading this book</button>

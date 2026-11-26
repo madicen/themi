@@ -61,7 +61,7 @@ async def test_the_state_in_every_phase(scenario: Scenario, cooking: Cooking) ->
                                   scale_said="double")  # fmt: skip
     ready = cooking.state(erin)
     assert (ready["kind"], ready["phase"], ready["recipe"]) == ("cooking", "ready", "Alfredo Sauce")
-    assert ready["heading"] == "Alfredo Sauce, a double batch of"
+    assert ready["heading"] == "Alfredo Sauce, doubled"
     assert ready["ahead"] == [
         {"n": 0, "text": "soak the cashews (10 min)", "overnight": False, "done": False}
     ]

@@ -264,11 +264,20 @@ class CookingTimers:
             (to_utc_iso(clock.now()), row["id"]),
         )
         member = self.services.store.get_member(row["member_id"])
+        session = self.cooking.get(row["session_id"]) if row["session_id"] else None
+        front = self.cooking.current(member)
+        go = (  # F64e: its recipe is set aside behind another: a tap brings it forward
+            [Button(f"Go to {row['recipe']}"[:40], "cooking",
+                    {"session": session.id, "action": "front"})]
+            if session is not None and session.ended_at is None and front is not None
+            and front.id != session.id else []
+        )  # fmt: skip
         await self.services.outbox.send(
             member,
             f"Time's up: {_short(row['minutes'])} for step {row['step']} of {row['recipe']}.",
             priority=Priority.URGENT,  # they set it: it rings in quiet hours too
             kind=KIND,  # to their own chat: a group message waits for everyone to be free
+            buttons=go,
         )
         await self.cooking.timer_line(row["session_id"], row["label"] or f"step {row['step']}")
 
@@ -285,10 +294,12 @@ class CookingTimers:
             return "No timers running."
         now = clock.now()
         parts = []
+        several = len({row["session_id"] for row in timers}) > 1  # F64e: say whose
         for row in timers:
             seconds = max(0, (datetime.fromisoformat(row["ends_at"]) - now).total_seconds())
             left = f"{math.ceil(seconds / 60)} min" if seconds >= 60 else f"{int(seconds)} sec"
-            parts.append(f"{left} left on step {row['step']}")
+            whose = f" of {row['recipe']}" if several else ""
+            parts.append(f"{left} left on step {row['step']}{whose}")
         return "; ".join(parts).capitalize() + "."
 
     # ----- taps and typing ------------------------------------------------------------------
@@ -299,7 +310,14 @@ class CookingTimers:
         member = self.services.store.get_member(event.member.id)
         action = payload.get("action")
         if action in ("keep", "cancel"):
-            if action == "cancel":
+            if action == "cancel" and payload.get("session"):  # F64e: that recipe's only
+                self.db.execute(
+                    "UPDATE cooking_timers SET cancelled_at = ? WHERE member_id = ? AND "
+                    "session_id = ? AND fired_at IS NULL AND cancelled_at IS NULL",
+                    (to_utc_iso(clock.now()), member.id, int(payload["session"])),
+                )
+                await self.changed()
+            elif action == "cancel":
                 self.cancel_all(member)
                 await self.changed()
             self.cooking.answer_timers(member, kept=action == "keep")  # CK3: the screen too
@@ -360,18 +378,22 @@ class CookingTimers:
         await self.services.outbox.send(member, reply, priority=Priority.REPLY, kind=KIND)
         return True
 
-    async def ask_on_end(self, member: Member) -> None:
-        """A session ended with timers still running: keep them or not."""
-        if not self.running(member):
+    async def ask_on_end(self, member: Member, session_id: int | None = None) -> None:
+        """A session ended with timers still running: keep them or not. F64e: with other
+        recipes still on the go, only the ended one's timers are asked about."""
+        mine = session_id is not None and bool(self.cooking.open_sessions(member))
+        rows = [r for r in self.running(member) if not mine or r["session_id"] == session_id]
+        if not rows:
             return
+        only = {"session": session_id} if mine else {}
         await self.services.outbox.send(
             member,
             "There's a timer still running. Keep it going?",
             priority=Priority.REPLY,
             kind=KIND,
             buttons=[
-                Button("Keep timers", "cooking_timer", {"action": "keep"}),
-                Button("Cancel them", "cooking_timer", {"action": "cancel"}),
+                Button("Keep timers", "cooking_timer", {"action": "keep", **only}),
+                Button("Cancel them", "cooking_timer", {"action": "cancel", **only}),
             ],
         )
 

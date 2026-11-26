@@ -28,6 +28,8 @@
 {% endfor %}
 </ul>
 {% for note in notes %}<p class="muted">{{ note }}</p>{% endfor %}
+{% if recipe.tools %}<h2>You'll need</h2>
+<ul class="tools">{% for tool in recipe.tools %}<li>{{ tool }}</li>{% endfor %}</ul>{% endif %}
 
 <h2>Steps</h2>
 <ol class="steps">{% for step in recipe.steps %}<li>{% if step.group %}<strong>{{ step.group }}:</strong> {% endif %}{{ step.text }}</li>{% endfor %}</ol>

@@ -197,3 +197,31 @@ def test_a_method_group_with_real_steps_stays_steps() -> None:
     assert [(s.text, s.group) for s in two.steps][1:] == [
         ("2 Tbsp maple syrup, whisked with the sugar", "Glaze"), ("Drizzle over the top.", "Glaze"),
     ]  # fmt: skip
+
+
+def test_a_notes_heading_with_its_colon_starts_notes() -> None:
+    """F64b: 5 Minute Liquid Mozzarella's "Notes:" (a Heading 6 over a numbered list) was
+    read as two more steps, "step 3 of 4 (Notes)"."""
+    for heading in ("Notes:", "Tips -", "Recipe Notes", "Tip:"):
+        blocks = [
+            ("H4", "Liquid Mozzarella"), ("H5", "Ingredients"), ("P", "½ Cup cashews"),
+            ("H5", "Instructions"), ("P", "1. Soak the cashews."), ("P", "2. Blend until smooth."),
+            ("H6", heading), ("P", "3. Can add 1 tsp of garlic powder."),
+            ("P", "4. For pizza: bake at 500 degrees."), ("P", "-----"),
+        ]  # fmt: skip
+        mozz = named(parse(blocks), "Liquid Mozzarella")
+        assert [s.text for s in mozz.steps] == ["Soak the cashews.", "Blend until smooth."], heading
+        assert mozz.notes[1:] == [
+            "3. Can add 1 tsp of garlic powder.", "4. For pizza: bake at 500 degrees.",
+        ], heading  # fmt: skip
+
+
+def test_a_notes_line_typed_as_text_starts_notes() -> None:
+    blocks = [
+        ("H4", "Liquid Mozzarella"), ("H5", "Ingredients"), ("P", "½ Cup cashews"),
+        ("H5", "Instructions"), ("P", "Blend until smooth."), ("P", "Notes:"),
+        ("P", "Can add garlic powder."), ("P", "-----"),
+    ]  # fmt: skip
+    mozz = named(parse(blocks), "Liquid Mozzarella")
+    assert [s.text for s in mozz.steps] == ["Blend until smooth."]
+    assert mozz.notes == ["Notes:", "Can add garlic powder."]

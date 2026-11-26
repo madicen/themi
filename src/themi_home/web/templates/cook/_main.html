@@ -21,6 +21,14 @@
       {% if not state.ended %}{{ act(state, csrf, "stop", "Stop", cls="cook-stop") }}{% endif %}
     </div>
   </header>
+  {% if state.going %}{# F64f: the recipes on the go, a tap brings one to the front #}
+  <nav class="cook-going" aria-label="Recipes on the go">
+    {% for g in state.going %}
+    {% if g.front %}<p class="cook-going-chip on" aria-current="true"><span class="cook-going-name">{{ g.name }}</span> <span class="cook-going-where">{{ g.where }}</span>{% if g.ends_at %} <span class="cook-going-timer" data-ends="{{ g.ends_at }}"></span>{% endif %}</p>
+    {% else %}{{ act({"id": g.id, "seq": g.seq}, csrf, "front", g.name ~ " · " ~ g.where, cls="cook-going-chip", aria="Go to " ~ g.name ~ ", " ~ g.where) }}{% endif %}
+    {% endfor %}
+  </nav>
+  {% endif %}
   {% if state.strip_steps %}
   <nav class="cook-steps" aria-label="Steps">
     <ol>

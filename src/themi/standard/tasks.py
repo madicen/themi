@@ -1621,6 +1621,19 @@ class TaskBoard:
             await self._release(task)
         return CANCELLED_TEXT.format(title=task.title)
 
+    async def restore(self, task_id: int) -> Task:
+        """F64i: a task cancelled by mistake (an Undo) is open again, as it was."""
+        task = self.get(task_id)
+        if task.status != "cancelled":
+            return task
+        self.db.execute(
+            "UPDATE tasks SET status = 'open', completed_at = NULL WHERE id = ?", (task_id,)
+        )
+        task = self.get(task_id)
+        await self.prompt(task)
+        await self._changed(task, "reopened", False)
+        return task
+
     async def reschedule(
         self,
         task_id: int,

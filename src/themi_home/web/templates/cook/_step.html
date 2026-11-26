@@ -9,6 +9,7 @@
   </ul>
 {% elif state.phase == "gather" %}
   <h1 class="cook-title">What it uses</h1>
+  {% if state.tools %}<p class="cook-tools">You'll need: {{ state.tools | join(", ") }}</p>{% endif %}
   <ul class="cook-list">
   {% set ns = namespace(group="") %}
   {% for g in state.gather %}

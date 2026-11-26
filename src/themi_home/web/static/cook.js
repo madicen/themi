@@ -71,6 +71,9 @@
         } else bar.style.width = width;
       }
     }
+    document.querySelectorAll(".cook-going-timer[data-ends]").forEach(function (t) {  // F64f
+      t.textContent = words(Date.parse(t.dataset.ends) - now);
+    });
     var soonest = document.querySelector(".cook-soonest");
     if (soonest) soonest.textContent = soonest.dataset.ends ? words(Date.parse(soonest.dataset.ends) - now) : "";
     if (window.themiCook && window.themiCook.onTick) window.themiCook.onTick(now);

@@ -597,7 +597,7 @@
   },
   "stop_cooking": {
     "group": "recipes",
-    "spec": "b8d5e4818167"
+    "spec": "ca52564b9fb3"
   },
   "suggest_meals": {
     "group": "pantry",
@@ -606,6 +606,10 @@
   "switch_body_double_mode": {
     "group": "body_double",
     "spec": "e1c0a319520c"
+  },
+  "switch_recipe": {
+    "group": "recipes",
+    "spec": "e573e70796a5"
   },
   "tasks_from_picture": {
     "group": "task_pictures",

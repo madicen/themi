@@ -213,6 +213,37 @@ button.wall-small:focus-visible { outline: 0.2rem solid var(--focus); outline-of
   position: absolute; top: -1.4rem; left: 50%; transform: translateX(-50%); font-size: 0.85rem; font-weight: 700;
   color: var(--on-now); background: var(--now); padding: 0.1rem 0.5rem; border-radius: 999px;
 }
+/* F64h (idea #272): a day on the calendar screen, down the portrait frame */
+.cal-dayplan { display: flex; flex-direction: column; gap: 1rem; }
+.cal-dayplan .wall-day { flex: 1; }
+@media (orientation: landscape) {
+  .cal-dayplan { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  .cal-dayplan .sheet-pair { grid-template-columns: minmax(0, 1fr); }
+}
+.pl { --hours-w: 4.6rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.pl-head { display: flex; gap: 0.5rem; }
+.pl-corner { flex: none; width: var(--hours-w); }
+.pl-name { flex: 1; min-width: 0; text-align: center; font-size: 1.25rem; font-weight: 800; color: var(--tone);
+  border-bottom: 0.25rem solid var(--tone); padding-bottom: 0.3rem; }
+.pl-body { position: relative; display: flex; gap: 0.5rem; height: max(34rem, 58vh); }
+.pl-hours { position: relative; flex: none; width: var(--hours-w); }
+.pl-hour { position: absolute; right: 0.4rem; transform: translateY(-50%); font-size: 1rem; color: var(--sub); white-space: nowrap; }
+.pl-col { position: relative; flex: 1; min-width: 0; border-radius: 0.75rem; background: var(--soft); overflow: hidden; }
+.pl-past { position: absolute; left: 0; right: 0; top: 0; background: var(--past); }
+.pl-grid { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+.pl-block {
+  position: absolute; left: 0; width: 100%; border: 0; font: inherit; text-align: left; cursor: pointer;
+  border-radius: 0.6rem; background: var(--tone); color: var(--on-tone); padding: 0.3rem 0.6rem; overflow: hidden;
+  display: flex; flex-direction: column; gap: 0.1rem; box-shadow: inset 0 0 0 0.12rem var(--soft);
+}
+.pl-block.past { opacity: 0.45; }
+.pl-title { font-size: 1.1rem; font-weight: 700; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
+.pl-when { font-size: 0.85rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-now { position: absolute; left: var(--hours-w); right: 0; height: 0.2rem; margin-top: -0.1rem; background: var(--now); pointer-events: none; }
+.pl-now span {
+  position: absolute; left: -0.25rem; top: 50%; transform: translate(-100%, -50%); font-size: 0.85rem; font-weight: 700;
+  color: var(--on-now); background: var(--now); padding: 0.1rem 0.5rem; border-radius: 999px;
+}
 .wall-tomorrow { display: flex; gap: 1.1rem; align-items: center; flex-wrap: wrap; padding-top: 0.6rem; font-size: 1.2rem; }
 .dot-chip { display: inline-flex; gap: 0.5rem; align-items: center; }
 .dot-chip::before { content: ""; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--tone); }
@@ -324,6 +355,9 @@ button.wall-item:focus-visible { outline: 0.2rem solid var(--focus); outline-off
 .sheet-menu { display: flex; gap: 0.6rem; flex-wrap: wrap; padding: 0.25rem 1rem 1.1rem; }
 .sheet-menu .sheet-button { min-height: 3.5rem; font-size: 1.25rem; padding: 0 1.4rem; }
 .sheet-words { width: 100%; }
+/* F64g: a change just made, offered back for a few seconds */
+.sheet-undo { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.6rem 1rem;
+  border-radius: 1rem; background: var(--card); font-size: 1.2rem; }
 .sheet-lately summary { font-size: 1.25rem; font-weight: 700; color: var(--tone); min-height: 3rem; cursor: pointer; }
 .sheet-lately ul { font-size: 1.3rem; color: var(--sub); }
 .sheet-checks { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
@@ -393,6 +427,21 @@ body.night:not(.awake) { background: var(--night-bg); }
 .page-breathe { margin-top: 0.5rem; background: var(--item-bg); border-radius: 1.4rem; padding: 1.25rem 1.4rem; }
 .page-breathe p { font-size: 1.2rem; color: var(--fg); line-height: 1.35; }
 .page-breathe .page-breathe-head { font-size: 1.3rem; font-weight: 700; color: var(--tone); }
+/* F64i: a chore or to-do held on a person's page, and where it can go */
+[data-drag] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+[data-drag].held { position: fixed; z-index: 20; pointer-events: none; opacity: 0.92;
+  box-shadow: 0 0 0 0.25rem var(--tone, var(--edge)); border-radius: 1rem; }
+.drag-gap { list-style: none; border-radius: 1rem; border: 0.18rem dashed var(--line); }
+.drag-to-people { position: sticky; top: 0; z-index: 15; display: flex; flex-wrap: wrap; gap: 0.75rem;
+  padding: 0.75rem; border-radius: 1.5rem; background: var(--card); }
+.drag-to, .drag-delete { min-height: 4rem; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 1.6rem; border-radius: 999px; font-size: 1.4rem; font-weight: 700; border: 0.2rem solid var(--tone, var(--fg));
+  color: var(--tone, var(--fg)); background: var(--card); }
+.drag-to.over { background: var(--tone); color: var(--on-tone); }
+.drag-delete { position: sticky; bottom: 0; z-index: 15; width: 100%; border-color: var(--now); color: var(--now); }
+.drag-delete.over { background: var(--now); color: var(--on-now); }
+.drag-to-people[hidden], .drag-delete[hidden] { display: none; }
+.sheet-ask { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 1.2rem; border-radius: 1.5rem; background: var(--card); font-size: 1.3rem; }
 .page-box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
 .page-box-head span { font-size: 1.2rem; font-weight: 600; color: var(--tone); }
 .page-lead { font-size: 1.2rem; color: var(--muted); margin-top: -0.3rem; }
@@ -436,7 +485,9 @@ body.night:not(.awake) { background: var(--night-bg); }
 .cal-day.out { opacity: 0.45; }
 .cal-day.today { box-shadow: inset 0 0 0 0.2rem var(--tone, var(--fg)); }
 .cal-num { font-size: 1.3rem; font-weight: 700; }
-.cal-ev { font-size: 0.95rem; padding: 0.1rem 0.4rem; border-radius: 0.4rem; background: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* F64a (bug #273): an event wears its calendar's colour, as the week ahead's do */
+.cal-ev { font-size: 0.95rem; padding: 0.1rem 0.4rem; border-radius: 0.4rem; background: var(--tone); color: var(--on-tone);
+  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* F59g (idea #257): talk to Themi from the wall */
 .wall-talk { display: inline-flex; align-items: center; gap: 0.6rem; min-height: 4rem; padding: 0 1.4rem; border: 0; border-radius: 2rem;

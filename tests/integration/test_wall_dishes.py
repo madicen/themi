@@ -115,3 +115,70 @@ async def test_add_the_rest_stays_on_that_dish(wall: Scenario) -> None:
     assert row is not None and '"items": ["white beans"]' in row["payload"]
     assert 'class="sheet-row sheet-dish open"' in view and 'name="have"' in view
     assert 'role="status"' in view
+
+
+# ----- F64g (idea #271): editing Things to cook on the wall ----------------------------
+
+
+def dishes_now(wall: Scenario) -> list[str]:
+    lists = wall.app.services.get(keys.lists)
+    [nl] = [n for n in lists.visible(wall.member("Erin")) if n.name == "Things to cook"]
+    return [i.name for i in nl.open_items]
+
+
+async def test_a_dish_is_added_and_renamed_on_the_wall(wall: Scenario) -> None:
+    soup(wall)
+    view = (await get(wall, "/wall/view/dishes")).text
+    assert 'placeholder="Add a dish"' in view
+    added = (await post(wall, "/wall/view/dishes", op="add", text="Lentil stew")).text
+    assert dishes_now(wall) == ["Bean soup", "Creami prep", "Lentil stew"]
+    assert numbered(added)[-1] == "03 Lentil stew" and "Added Lentil stew" in added
+    stew = (await get(wall, "/wall/view/dishes")).text
+    item = re.findall(r'hx-get="/wall/view/dish/(\d+)"', stew)[-1]
+    opened = (await get(wall, f"/wall/view/dish/{item}")).text
+    assert ">Rename</button>" in opened and ">Made it</button>" in opened
+    renamed = await post(wall, "/wall/view/dishes", op="rename", id=item, text="Red lentil stew")
+    assert dishes_now(wall)[-1] == "Red lentil stew"
+    assert 'class="sheet-row sheet-dish open"' in renamed.text  # still unfolded
+
+
+async def test_made_it_and_remove_each_have_an_undo(wall: Scenario) -> None:
+    item = soup(wall)
+    made = (await post(wall, "/wall/view/dishes", op="made", id=str(item))).text
+    assert dishes_now(wall) == ["Creami prep"]
+    assert (
+        "Bean soup ticked off." in made and 'data-undo-for="8"' in made and ">Undo</button>" in made
+    )
+    await post(wall, "/wall/view/dishes", op="undo_made", id=str(item))
+    assert dishes_now(wall) == ["Bean soup", "Creami prep"]
+
+    lists = wall.app.services.get(keys.lists)
+    [nl] = [n for n in lists.visible(wall.member("Erin")) if n.name == "Things to cook"]
+    creami = next(i for i in nl.open_items if i.name == "Creami prep")
+    gone = (await post(wall, "/wall/view/dishes", op="remove", id=str(creami.id))).text
+    assert dishes_now(wall) == ["Bean soup"] and "Creami prep taken off." in gone
+    assert wall.app.db.scalar("SELECT COUNT(*) FROM list_items WHERE id = ?", (creami.id,)) == 0
+    await post(wall, "/wall/view/dishes", op="undo_remove", text="Creami prep")
+    assert dishes_now(wall) == ["Bean soup", "Creami prep"]
+
+
+async def test_nonsense_changes_nothing(wall: Scenario) -> None:
+    soup(wall)
+    await post(wall, "/wall/view/dishes", op="rename", id="99999", text="Pie")
+    await post(wall, "/wall/view/dishes", op="remove", id="nope")
+    await post(wall, "/wall/view/dishes", op="add", text="   ")
+    assert dishes_now(wall) == ["Bean soup", "Creami prep"]
+
+
+async def test_start_cooking_with_three_on_the_go_says_so(wall: Scenario) -> None:
+    """F64e: a fourth recipe isn't started; the wall says what's on the go."""
+    item = soup(wall)
+    cooking = wall.app.services.get(keys.cooking)
+    recipe = next(r for r in cooking.recipes.all() if r.name == "Bean Soup")
+    erin = wall.member("Erin")
+    for _ in range(3):
+        wall.primary.queue_structured({"lines": []})
+        await cooking.start(erin, recipe)
+    view = (await post(wall, f"/wall/view/dish/{item}/cook", by=str(erin.id))).text
+    assert "Erin has 3 recipes on the go already" in view
+    assert len(cooking.open_sessions(erin)) == 3

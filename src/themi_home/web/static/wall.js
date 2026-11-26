@@ -22,6 +22,19 @@
     root.querySelectorAll("[data-w]").forEach(function (el) {
       el.style.width = el.getAttribute("data-w") + "%";
     });
+    // F64h: the day planner, down the screen: top and height, and overlaps side by side
+    root.querySelectorAll("[data-y]").forEach(function (el) {
+      el.style.top = el.getAttribute("data-y") + "%";
+    });
+    root.querySelectorAll("[data-h]").forEach(function (el) {
+      el.style.height = el.getAttribute("data-h") + "%";
+    });
+    root.querySelectorAll("[data-cols]").forEach(function (el) {
+      var cols = Number(el.getAttribute("data-cols")) || 1;
+      var col = Number(el.getAttribute("data-col")) || 0;
+      el.style.left = (col * 100) / cols + "%";
+      el.style.width = 100 / cols + "%";
+    });
     root.querySelectorAll("[data-lanes]").forEach(function (el) {
       var lanes = Number(el.getAttribute("data-lanes")) || 1;
       var lane = Number(el.getAttribute("data-lane")) || 0;
@@ -41,6 +54,17 @@
     var line = today.querySelector(".tl-now");
     if (line) line.style.left = at + "%";
     today.querySelectorAll(".tl-past").forEach(function (el) { el.style.width = at + "%"; });
+  }
+
+  function tickPlanner() {  // F64h: today's planner keeps its now line moving too
+    var day = document.querySelector(".pl[data-start]");
+    var line = day && day.querySelector(".pl-now");
+    if (!line) return;
+    var start = Date.parse(day.getAttribute("data-start"));
+    var end = Date.parse(day.getAttribute("data-end"));
+    var at = Math.min(Math.max((Date.now() - start) / (end - start), 0), 1) * 100;
+    line.style.top = at + "%";
+    day.querySelectorAll(".pl-past").forEach(function (el) { el.style.height = at + "%"; });
   }
 
   // WL5a: a view slides up into #wall-view. Close, a tap on the dimmed screen, or its
@@ -315,6 +339,10 @@
     fit();
     if (event.target.id === "wall-view") watchView();
     if (event.target.id === "wall-night") nightMode();
+    // F64g: an Undo bar goes after its few seconds
+    event.target.querySelectorAll("[data-undo-for]").forEach(function (bar) {
+      setTimeout(function () { bar.remove(); }, Number(bar.dataset.undoFor) * 1000);
+    });
   });
   // WL6: the night. The night part says whether it's night (data-night); a touch shows
   // the full screen until it's left alone for two minutes.
@@ -381,6 +409,106 @@
     event.detail.headers["Themi-Wall-Display"] = shownAs();
   });
 
+  // F64i (idea #274): on a person's page, press and hold a chore or to-do to pick it up.
+  // While it's held, the rest of its card makes room as it moves, chips for the others
+  // and Family show at the top, and Delete at the bottom. A plain tap still ticks it.
+  var press = null, held = null, swallow = false;
+  function targets(on) {
+    var page = held && held.page;
+    if (!page) return;
+    page.querySelectorAll(".drag-to-people, .drag-delete").forEach(function (el) { el.hidden = !on; });
+  }
+  function pickUp(li, x, y) {
+    var rect = li.getBoundingClientRect();
+    var gap = document.createElement("li");
+    gap.className = "drag-gap";
+    gap.style.height = rect.height + "px";
+    li.parentNode.insertBefore(gap, li);
+    held = { li: li, gap: gap, list: li.parentNode, page: li.closest("[data-moves]"),
+             offset: y - rect.top, before: li.nextElementSibling };
+    li.classList.add("held");
+    li.style.left = rect.left + "px";
+    li.style.top = rect.top + "px";
+    li.style.width = rect.width + "px";
+    targets(true);
+  }
+  function over(x, y) {
+    var el = document.elementFromPoint(x, y);
+    var chip = el && el.closest(".drag-to, .drag-delete");
+    if (held.page) held.page.querySelectorAll(".drag-to, .drag-delete").forEach(function (t) {
+      t.classList.toggle("over", t === chip);
+    });
+    return chip;
+  }
+  function moveTo(x, y) {
+    held.li.style.top = (y - held.offset) + "px";
+    if (over(x, y)) return;
+    var rows = Array.prototype.filter.call(held.list.children, function (c) {
+      return c !== held.li && c !== held.gap && c.hasAttribute("data-drag");
+    });
+    var next = rows.filter(function (c) {
+      var r = c.getBoundingClientRect();
+      return r.top + r.height / 2 > y;
+    })[0];
+    if (next) held.list.insertBefore(held.gap, next);
+    else if (rows.length) rows[rows.length - 1].after(held.gap);
+  }
+  function putDown() {
+    held.li.classList.remove("held");
+    held.li.style.left = held.li.style.top = held.li.style.width = "";
+    held.gap.replaceWith(held.li);
+    targets(false);
+    held = null;
+  }
+  function drop(x, y) {
+    var chip = over(x, y);
+    var values = { task: held.li.getAttribute("data-task") };
+    if (chip && chip.classList.contains("drag-delete")) values.op = "delete";
+    else if (chip) { values.op = "give"; values.to = chip.getAttribute("data-to"); }
+    else {
+      var after = held.gap.nextElementSibling;
+      while (after && (after === held.li || !after.hasAttribute("data-drag"))) after = after.nextElementSibling;
+      values.op = "move";
+      values.before = after ? after.getAttribute("data-task") : "";
+    }
+    var moved = values.op !== "move" || held.gap.nextElementSibling !== held.before;
+    var url = held.page && held.page.getAttribute("data-moves");
+    putDown();
+    swallow = true;  // the click that ends a drag isn't a tick
+    setTimeout(function () { swallow = false; }, 400);
+    if (moved && url && window.htmx) {
+      window.htmx.ajax("POST", url, { target: "#wall-view", swap: "innerHTML", values: values });
+    }
+  }
+  document.addEventListener("pointerdown", function (event) {
+    var li = event.target.closest && event.target.closest("[data-drag]");
+    if (!li || event.button > 0) return;
+    var x = event.clientX, y = event.clientY;
+    press = { x: x, y: y, timer: setTimeout(function () { press = null; pickUp(li, x, y); }, 450) };
+  });
+  document.addEventListener("pointermove", function (event) {
+    if (held) { event.preventDefault(); moveTo(event.clientX, event.clientY); return; }
+    if (press && Math.abs(event.clientX - press.x) + Math.abs(event.clientY - press.y) > 12) {
+      clearTimeout(press.timer);  // a scroll, not a hold
+      press = null;
+    }
+  }, { passive: false });
+  document.addEventListener("pointerup", function (event) {
+    if (press) { clearTimeout(press.timer); press = null; }
+    if (held) drop(event.clientX, event.clientY);
+  });
+  document.addEventListener("pointercancel", function () {
+    if (press) { clearTimeout(press.timer); press = null; }
+    if (held) putDown();
+  });
+  document.addEventListener("touchmove", function (event) { if (held) event.preventDefault(); }, { passive: false });
+  document.addEventListener("contextmenu", function (event) {
+    if (event.target.closest && event.target.closest("[data-drag]")) event.preventDefault();
+  });
+  document.addEventListener("click", function (event) {
+    if (swallow) { event.preventDefault(); event.stopPropagation(); }
+  }, true);
+
   // WL6: keep the screen on while the wall is open, and ask again when it's seen again.
   function hold() {
     if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
@@ -393,7 +521,7 @@
     nightMode();
     hold();
     fit();
-    setInterval(tick, 60000);
+    setInterval(function () { tick(); tickPlanner(); }, 60000);
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/wall/sw.js", { scope: "/wall" }).catch(function () {});
     }

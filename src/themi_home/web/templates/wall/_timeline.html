@@ -20,3 +20,29 @@
   {% if t.live %}<div class="tl-over" aria-hidden="true"><span class="tl-now" data-x="{{ t.now }}"><span>now</span></span></div>{% endif %}
 </div>
 {% endmacro %}
+
+{#- F64h (idea #272): the same day as a planner, down the portrait frame: hours down the left,
+    a column per row (each person, then Family) with its colour at the head, events as blocks
+    the height of their time, ones that overlap side by side in their column. The timeline's
+    `x` and `width` are its top and height here; its lanes are side by side. -#}
+{% macro planner(t) %}
+<div class="pl" data-start="{{ t.start.isoformat() }}" data-end="{{ t.end.isoformat() }}">
+  <div class="pl-head" aria-hidden="true"><span class="pl-corner"></span>{% for r in t.rows %}<span class="pl-name tone-{{ r.tone }}">{{ r.name }}</span>{% endfor %}</div>
+  <div class="pl-body">
+    <div class="pl-hours" aria-hidden="true">{% for k in t.ticks %}<span class="pl-hour" data-y="{{ k.x }}">{{ k.label }}</span>{% endfor %}</div>
+    {% for r in t.rows %}
+    <div class="pl-col tone-{{ r.tone }}" id="pl-{{ r.key }}" role="group" aria-label="{{ r.name }}">
+      {% if t.live %}<span class="pl-past" data-h="{{ t.now }}"></span>{% endif %}
+      {% for k in t.ticks %}<span class="pl-grid" data-y="{{ k.x }}"></span>{% endfor %}
+      {% for b in r.blocks %}
+      <button type="button" class="pl-block{% if b.past %} past{% endif %}" data-y="{{ b.x }}" data-h="{{ b.width }}" data-col="{{ b.lane }}" data-cols="{{ b.lanes }}"
+        hx-get="/wall/view/event?{{ b.ref }}" hx-target="#wall-view" hx-swap="innerHTML">
+        <span class="pl-title">{{ b.title }}</span><span class="pl-when">{{ b.when }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {% if t.live %}<span class="pl-now" data-y="{{ t.now }}" aria-hidden="true"><span>now</span></span>{% endif %}
+  </div>
+</div>
+{% endmacro %}

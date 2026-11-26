@@ -310,9 +310,15 @@ async def recipe_card(ctx: ToolContext, args: dict[str, Any]) -> str:
     if recipes is None:
         raise ToolFailed("Recipes aren't set up.")
     name = str(args["name"]).strip()
-    matches = [m for m in recipes.find(name, charts=False)]
+    matches = [m for m in recipes.find(name, charts=False, near=True)]
     if not matches:
         raise ToolDeclined(f'Nothing in the cookbook matches "{name}". Say so plainly.')
+    if matches[0].close:  # F64d: "bechemel" is asked about, never taken
+        names = ", ".join(dict.fromkeys(m.recipe.name for m in matches[:4]))
+        raise ToolDeclined(
+            f'No recipe is called "{name}"; the nearest spelling: {names}. Ask whether they '
+            "meant it (one short question); if so, call again with that name, word for word."
+        )
     recipe = clear_match(matches) or (matches[0].recipe if len(matches) == 1 else None)
     if recipe is None:
         names = ", ".join(f"{n}. {m.recipe.name}" for n, m in enumerate(matches[:4], 1))

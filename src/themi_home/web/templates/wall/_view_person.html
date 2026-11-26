@@ -1,20 +1,40 @@
 {#- WL5a, WL9d: a person's whole day, as a page: their schedule down the left, then this part
-    of the day's routine, their chores and their whole to-do list. Ticks work in place. -#}
+    of the day's routine, their chores and their whole to-do list. Ticks work in place.
+    F64i (idea #274): press and hold a chore or to-do to pick it up (wall.js): drop it in its
+    card to set their order, on someone's chip to give it to them, or on Delete. -#}
 {% from "wall/_sheet.html" import page, item with context %}
 {% set vals = {"view": "person/" ~ person.member_id, "open": person.opened ~ ""} %}
 {% set here = "/wall/view/person/" ~ person.member_id %}
-{% macro box(sec, cls, count, lead="") %}
+{% macro box(sec, cls, count, lead="", drag="") %}
 <section class="page-box {{ cls }}">
   <div class="page-box-head"><h3>{{ sec.title }}</h3>{% if count %}<span>{{ count }}</span>{% endif %}</div>
   {% if lead %}<p class="page-lead">{{ lead }}</p>{% endif %}
-  {% if sec.items %}<ul>{% for i in sec.items %}{{ item(i, vals) }}{% endfor %}</ul>
+  {% if sec.items %}<ul{% if drag %} data-drop="{{ drag }}"{% endif %}>{% for i in sec.items %}{{ item(i, vals, drag) }}{% endfor %}</ul>
   {% else %}<p class="wall-empty">{{ sec.empty }}</p>{% endif %}
 </section>
 {% endmacro %}
 {% call page(person.name ~ "'s day", person.tone) %}
-<div class="tone-{{ person.tone }} sheet-person">
+<div class="tone-{{ person.tone }} sheet-person" data-moves="{{ here }}/move">
   <header class="page-title"><p class="page-date">{{ person.day }}</p><h2 class="sheet-title">{{ person.name }}'s day</h2></header>
   <section class="page-banner"><p class="page-headline">{{ person.headline }}</p><p>{{ person.listed }}</p></section>
+  {% if said %}<p class="sheet-done" role="status">{{ said }}</p>{% endif %}
+  {% if undo %}
+  <div class="sheet-undo" role="status" data-undo-for="8">
+    <span>{{ undo.label }}</span>
+    <button type="button" class="sheet-button" hx-post="{{ here }}/move" hx-vals='{{ {"op": undo.op, "task": undo.task, "due": undo.due or ""} | tojson }}' hx-target="#wall-view" hx-swap="innerHTML">Undo</button>
+  </div>
+  {% endif %}
+  {% if asking %}
+  <div class="sheet-ask" role="group" aria-label="Delete {{ asking_title }}">
+    <p>{{ asking_title }} repeats. Stop it repeating, or just this time?</p>
+    <div class="sheet-actions">
+      <button type="button" class="sheet-button" hx-post="{{ here }}/move" hx-vals='{"op": "stop", "task": "{{ asking }}"}' hx-target="#wall-view" hx-swap="innerHTML">Stop it repeating</button>
+      <button type="button" class="sheet-button" hx-post="{{ here }}/move" hx-vals='{"op": "skip", "task": "{{ asking }}"}' hx-target="#wall-view" hx-swap="innerHTML">Just this time</button>
+      <button type="button" class="sheet-button" hx-get="{{ here }}" hx-target="#wall-view" hx-swap="innerHTML">Keep it</button>
+    </div>
+  </div>
+  {% endif %}
+  <div class="drag-to-people" hidden aria-hidden="true">{% for id, name, tone in others %}<span class="drag-to tone-{{ tone }}" data-to="{{ id }}">{{ name }}</span>{% endfor %}<span class="drag-to tone-{{ family_tone }}" data-to="family">Family</span></div>
   <div class="page-cols">
     <section class="page-schedule">
       <h3>Schedule</h3>
@@ -42,10 +62,11 @@
       {% endif %}
       {% endfor %}
       {% set open_chores = person.chores.items | rejectattr("done") | list | length %}
-      {{ box(person.chores, "page-chores", (open_chores ~ " open") if open_chores else "") }}
+      {{ box(person.chores, "page-chores", (open_chores ~ " open") if open_chores else "", drag="chores") }}
       {% set open_todos = person.todos.items | rejectattr("done") | list | length %}
-      {{ box(person.todos, "page-todo", (open_todos ~ " open") if open_todos else "", "Work through these at your own pace." if open_todos else "") }}
+      {{ box(person.todos, "page-todo", (open_todos ~ " open") if open_todos else "", "Work through these at your own pace." if open_todos else "", drag="todos") }}
     </div>
   </div>
+  <div class="drag-delete" hidden aria-hidden="true" data-to="delete">Delete</div>
 </div>
 {% endcall %}

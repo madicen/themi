@@ -20,7 +20,7 @@ __all__ = ["calendar"]  # the fixture
 
 
 def titles(view: str) -> list[str]:
-    return re.findall(r'<span class="tl-title">([^<]+)</span>', view)
+    return re.findall(r'<span class="pl-title">([^<]+)</span>', view)  # F64h: the planner
 
 
 def month_cells(view: str) -> list[str]:
@@ -44,7 +44,7 @@ async def test_a_day_has_its_events_in_order_and_moves_a_day_at_a_time(
 
 async def test_today_has_a_now_line_and_past_days_no_weather(calendar: Scenario) -> None:
     today = (await get(calendar, "/wall/calendar")).text
-    assert "tl-now" in today and "Wednesday, October 21" in today
+    assert "pl-now" in today and "Wednesday, October 21" in today  # F64h: the planner
     assert ">Today</button>" not in today
     past = (await get(calendar, "/wall/calendar?day=2026-10-01")).text
     assert "20 days ago" in words(past) and "Weather" not in past
@@ -134,3 +134,18 @@ async def test_today_and_the_week_ahead_open_it(calendar: Scenario) -> None:
     assert 'hx-get="/wall/calendar"' in today[: today.index(">")]
     assert "click[!event.target.closest('.tl-block')]" in today[: today.index(">")]
     assert 'hx-get="/wall/calendar?day=2026-10-22"' in page
+
+
+async def test_a_months_events_wear_their_calendars_colour(
+    calendar: Scenario, fake_gcal: FakeGcal
+) -> None:
+    """F64a (bug #273): the month's chips are in their calendar's colour, as its chip is."""
+    from tests.integration.test_wall_calendars import two_calendars
+
+    await two_calendars(calendar, fake_gcal)
+    view = (await get(calendar, "/wall/calendar?month=2026-10")).text
+    chip_tones = set(re.findall(r'class="wk-cal tone-(\w+)', view))
+    day = view[view.index('aria-label="2026-10-23"') :]
+    day = day[: day.index("</button>")]
+    event_tones = set(re.findall(r'class="cal-ev tone-(\w+)"', day))
+    assert event_tones and event_tones <= chip_tones

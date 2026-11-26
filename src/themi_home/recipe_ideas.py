@@ -108,8 +108,8 @@ class RecipeIdeas:
         ideas: list[Idea] = []
         offered = {b.key: b for b in self.recipes.books() if b.in_meal_ideas}  # RC8b
         for recipe in self.recipes.all(source="doc"):
-            if recipe.section.lower() in NOT_MEALS or not recipe.steps:
-                continue
+            if recipe.section.lower() in NOT_MEALS or not recipe.steps or recipe.draft:
+                continue  # RC8c: nor one that isn't ready to cook
             shelf = offered.get(recipe.book)
             if shelf is None:  # a book kept out of meal ideas
                 continue

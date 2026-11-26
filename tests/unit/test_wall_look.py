@@ -161,3 +161,9 @@ def test_the_wall_fits_its_columns_whenever_they_change() -> None:
     assert "themiWallFit.fitWall" in SCRIPT
     for when in ('"htmx:afterSwap"', '"resize"', '"DOMContentLoaded"'):
         assert when in SCRIPT
+
+
+def test_a_months_event_is_filled_with_its_tone() -> None:
+    """F64a (bug #273): `.cal-ev` is painted with the event's tone, as the week ahead's are."""
+    [body] = [b for s, b in blocks() if s == ".cal-ev"]
+    assert "background: var(--tone)" in body and "color: var(--on-tone)" in body

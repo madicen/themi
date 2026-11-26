@@ -44,6 +44,7 @@ RECIPES = ToolGroup(
         "set_recipe_yield",
         "start_cooking",
         "stop_cooking",
+        "switch_recipe",  # F64e
         "recipe_from_link",
         "recipe_from_picture",
         "find_web_recipe",

@@ -604,7 +604,13 @@ def resolve(recipes: Recipes, names: list[str]) -> list[Recipe]:
     """The recipes they named, each surely one; otherwise say which they could mean."""
     chosen: list[Recipe] = []
     for name in names:
-        matches = recipes.find(name, charts=False)
+        matches = recipes.find(name, charts=False, near=True)
+        if matches and matches[0].close:  # F64d: a near spelling is asked about, not taken
+            options = ", ".join(dict.fromkeys(m.recipe.name for m in matches[:5]))
+            raise ToolFailed(
+                f'No recipe is called "{name}"; the nearest spelling: {options}. Ask whether '
+                "they meant it (one short question), then use its name."
+            )
         recipe = clear_match(matches) or (matches[0].recipe if len(matches) == 1 else None)
         if recipe is None:
             if not matches:

@@ -16,6 +16,7 @@ and the family's to-dos (tasks on both lists).
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
@@ -439,6 +440,35 @@ class WallView:
             return member_day_start(late, self.household_day(), self.tz())
         return member_day_start(member, self.day_of(member), self.tz())
 
+    def order(self, member: Member) -> dict[int, int]:
+        """F64i (idea #274): their own order, dragged on their page: task id -> rank."""
+        rows = self.services.store.db.query(
+            "SELECT task_id, rank FROM wall_task_order WHERE member_id = ?", (member.id,)
+        )
+        return {int(r["task_id"]): int(r["rank"]) for r in rows}
+
+    def ordered(self, tasks: Iterable[Task], member: Member, today: date) -> list[Task]:
+        """F64i: the ones they've put in order first, in that order; then the wall's own."""
+        mine = self.order(member)
+        return sorted(
+            tasks,
+            key=lambda t: (0, mine[t.id], *_rank(t, today)) if t.id in mine
+            else (1, 0, *_rank(t, today)),
+        )  # fmt: skip
+
+    def set_order(self, member: Member, task_ids: list[int]) -> None:
+        """F64i: these tasks, in this order, ahead of the rest."""
+        db = self.services.store.db
+        for rank, task_id in enumerate(task_ids):
+            db.execute(
+                "DELETE FROM wall_task_order WHERE member_id = ? AND task_id = ?",
+                (member.id, task_id),
+            )
+            db.execute(
+                "INSERT INTO wall_task_order (member_id, task_id, rank) VALUES (?, ?, ?)",
+                (member.id, task_id, rank),
+            )
+
     def held(self, task: Task, member: Member) -> bool:
         """A chore waiting its turn on this person's chart (their limit, C2d): not on the
         wall, as it isn't on the chart. An important one always shows."""
@@ -521,7 +551,7 @@ class WallView:
         if routine_section is not None:
             sections.append(routine_section)
         mine = [t for t in tasks if t.assignee == member.id and not _for_both(t)]
-        chores = sorted(
+        chores = self.ordered(  # F64i: in their own order, where they've set one
             (
                 t
                 for t in mine
@@ -530,9 +560,10 @@ class WallView:
                 and t.due_on <= today
                 and not self.held(t, member)
             ),
-            key=lambda t: _rank(t, today),
+            member,
+            today,
         )
-        todos = sorted((t for t in mine if not t.repeats), key=lambda t: _rank(t, today))
+        todos = self.ordered((t for t in mine if not t.repeats), member, today)
         shown = {t.id for t in chores} | {t.id for t in todos[:TODOS_SHOWN]}
         finished = [
             (t, at)

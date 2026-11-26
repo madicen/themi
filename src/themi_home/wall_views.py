@@ -475,7 +475,7 @@ class WallViews:
     def _tasks(self, member: Member, today: date) -> tuple[WallSection, WallSection]:
         tasks = self.view._open_tasks([member])
         mine = [t for t in tasks if t.assignee == member.id and not _for_both(t)]
-        chores = sorted(
+        chores = self.view.ordered(  # F64i: their own order first
             (
                 t
                 for t in mine
@@ -484,11 +484,13 @@ class WallViews:
                 and t.due_on <= today
                 and not self.view.held(t, member)  # F59c: as their chart shows
             ),
-            key=lambda t: _rank(t, today),
+            member,
+            today,
         )
-        todos = sorted(
+        todos = self.view.ordered(
             (t for t in mine if not t.repeats and (t.due_on is None or t.due_on <= today)),
-            key=lambda t: _rank(t, today),
+            member,
+            today,
         )
         done = [
             t
@@ -751,6 +753,8 @@ class DishesView:
     tone: str
     dishes: tuple[tuple[int, str], ...]
     open: DishView | None = None
+    list_id: int = 0  # F64g: where an added dish goes
+    said: str = ""  # F64g: what an add, rename or remove did
 
 
 def dishes_view(views: WallViews, opened: int = 0, said: str = "") -> DishesView | None:
@@ -770,7 +774,9 @@ def dishes_view(views: WallViews, opened: int = 0, said: str = "") -> DishesView
         return None
     dishes = tuple((i.id, i.name) for i in found.open_items)
     dish = dish_view(views, opened, said) if opened in {i for i, _ in dishes} else None
-    return DishesView(found.name, views.view.together_tone(), dishes, dish)
+    return DishesView(
+        found.name, views.view.together_tone(), dishes, dish, found.id, "" if dish else said
+    )
 
 
 def dish_view(views: WallViews, item_id: int, said: str = "") -> DishView | None:
