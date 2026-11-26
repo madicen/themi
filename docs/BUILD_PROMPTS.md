@@ -369,6 +369,15 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F62c | Review: task steps can have sub-steps ("-- wipe the shelf") | Feedback | [x] 2026-11-24 |
 | F63a | Feedback: the wall's date stays on one line | Feedback | [x] 2026-11-25 |
 | F63b | Feedback: Themi can run the CatGenie ("try a clean again") | Feedback | [x] 2026-11-25 |
+| F64a | Feedback: the wall's month shows each event in its calendar's colour | Feedback | [ ] |
+| F64b | Feedback: a recipe's "Notes:" heading starts its notes, not more steps | Feedback | [ ] |
+| F64c | Feedback: the prep list says an amount once; a scaled batch reads as English | Feedback | [ ] |
+| F64d | Feedback: a misspelt recipe ("bechemel") is still found, after asking | Feedback | [ ] |
+| F64e | Idea: two recipes on the go at once, and switching between them (chat) | Feedback | [ ] |
+| F64f | Idea: the cook screen shows each recipe on the go; a tap switches | Feedback | [ ] |
+| F64g | Idea: Things to cook can be edited on the wall | Feedback | [ ] |
+| F64h | Idea: the calendar's day on the wall runs down the screen | Feedback | [ ] |
+| F64i | Idea: a person's page on the wall: drag to reorder, to someone else, delete | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -18764,6 +18773,288 @@ Notes:
   two executors).
 - **Setup:** update the Pi (migration 0186). Not tried against PetNovations: be near the
   Whoosh the first time "Try a clean" is tapped. Mark #268 reviewed once it's worked.
+
+### F64a · Feedback (2026-11-25): the month on the wall shows each event in its calendar's colour
+Status: [ ]
+Depends on: F59f, F55f, F53
+Read first: `themi_home/web/templates/wall/_view_calendar.html` (the month grid);
+`themi_home/web/static/wall.css` (`.cal-ev`, `.wk-ev`, `.wk-cal`, the `tone-*` classes);
+`themi_home/wall_views.py` `calendar_view`; `WallView.calendar_chips`. From Michael's bug
+#273 (2026-11-25, 8:46 pm, a photo of the frame: "the colors aren't working on the month view
+on the wall").
+
+What the Pi shows: the photo's month has its calendar chips in colour (Michael (Personal)
+green, Michael's Stackadapt off, Erin purple, Madicen Family blue), but every event in the
+grid is the same grey-blue. Each event's chip has `tone-{{ chip.tone }}`, which only sets
+`--tone`; `.cal-ev` paints `background: var(--soft)`, so the tone is never used. The week
+ahead's `.wk-ev` uses `var(--tone)`, which is why the week ahead was right.
+
+Build:
+- A month event's chip is filled with its tone, as the week ahead's are (`.cal-ev` takes
+  `var(--tone)` and `var(--on-tone)`), legible in the light and dark looks (F52b).
+- Its tone is the tone of its calendar's chip above the grid, so an event reads as that chip
+  (same rule as `calendar_chips`: the person's tone, the family's for shared calendars).
+- A day outside the month (`.out`) keeps its faded look, its chips too.
+
+Tests: the calendar screen test asserts a month event's chip carries its calendar's tone class
+and the CSS rule for `.cal-ev` uses `--tone` (or a browser test reads its computed
+background against a `.wk-cal` of the same tone).
+
+Data/Setup: update the Pi, reload the wall. Mark #273 reviewed once live.
+
+### F64b · Feedback (2026-11-25): a recipe's "Notes:" heading starts its notes, not more steps
+Status: [ ]
+Depends on: RC8c
+Read first: `themi_home/cookbook.py` (`NOTE`, `NOTE_GROUPS`, the `GROUP_STYLE` branch,
+`_add`). From the conversation behind Michael's idea #270 (2026-11-25, 8:23 pm).
+
+What the Pi shows: cooking 5 Minute Liquid Mozzarella (the family cookbook, Ingredients ·
+Sauces, Dressings & Dips), the card went "step 3 of 4 (Notes): Can add 1 tsp of garlic
+and/or onion powder…" and "step 4 of 4 (Notes): For pizza: bake at 500 degrees…". In the
+doc, "Notes:" is a Heading 6 over a numbered list. The group branch compares
+`plain.lower()` ("notes:", with its colon) to `NOTE_GROUPS` ("notes"), misses, and since the
+part is "instructions" it makes "Notes:" a step group, so the notes became steps.
+
+Build:
+- A group heading is matched without its trailing colon or dash ("Notes:", "Variations -",
+  "Tips:" count), and the `NOTE` pattern's words ("tips", "recipe notes") are note groups too.
+- Re-read the cookbook on the Pi after the change: list each recipe whose step count changes,
+  and put the list in this prompt's Notes (expect Liquid Mozzarella's 4 to become 2).
+
+Tests: a parser test with a Heading 6 "Notes:" after the steps, then a numbered list: two
+steps, the two notes in `notes`. The existing RC8c tests stay green.
+
+Data/Setup: update the Pi; the cookbook re-reads itself. Mark #270 reviewed only with F64e.
+
+### F64c · Feedback (2026-11-25): the prep list says an amount once, and a scaled batch reads as English
+Status: [ ]
+Depends on: F45b, CK5
+Read first: `themi_home/cooking.py` (`with_amount`, `heading`); `themi_home/quantities.py`
+`describe`. From the conversation behind Michael's idea #270 (2026-11-25, 8:23 to 8:34 pm).
+
+What the Pi shows:
+- Bechamel Sauce's prep: "Soy milk: measure 550ml (560 g) 550ml" and "Butter: measure 4 Tbsp
+  (60 g) 4 Tbsp". The prep job was "Soy milk: measure 550ml"; `with_amount` checks whether the
+  job already says "550ml (560 g)" (it doesn't, because of the grams), then puts that amount
+  after "measure" and keeps the rest of the job, which is the old amount.
+- A doubled Liquid Mozzarella: "Cooking 5 Minute Liquid Mozzarella, a double batch of." and
+  "Prep for 5 Minute Liquid Mozzarella, a double batch of:". `describe` gives "a double batch
+  of", made to go before a name, and `heading` puts it after.
+
+Build:
+- `with_amount`: when the job after "measure" starts with an amount (the line's amount or one
+  `AMOUNT` reads), that amount is replaced by the shown one, not added to. "measure 550ml"
+  becomes "measure 550ml (560 g)". A job that already has the shown amount stays as it is.
+- The batch name reads both ways: after the name ("Bechamel Sauce, doubled", "…, halved",
+  "…, tripled", "…, 1½ times", "…, for 6") wherever a heading puts it last, and "a double
+  batch of X" only where it comes first. Check every caller of `describe` and the cook screen's
+  `scale_words`.
+
+Tests: `with_amount("Soy milk: measure 550ml", "550ml soy milk")` with a weight gives the
+amount once; the heading at scale 2, 0.5, 3, 1.5 and "for 6" has no trailing "of". The
+CK and GW golden texts change only on these lines (say which in the commit).
+
+Data/Setup: update the Pi. Nothing to mark reviewed (no report of its own; seen in #270's
+conversation).
+
+### F64d · Feedback (2026-11-25): a recipe asked for with a misspelling ("bechemel") is still found
+Status: [ ]
+Depends on: R1a, F42c
+Read first: `themi_home/recipes.py` (`search`, `clear_match`, `find`);
+`themi_home/recipe_groceries.py` `resolve`. From the conversation behind Michael's idea #270
+(2026-11-25, 8:31 pm).
+
+What the Pi shows: "Let's make the bechemel" → "There's no recipe called "bechemel" in the
+cookbook." Then "Bechamel" found Bechamel Sauce. `search` only matches whole stemmed words, so
+one wrong letter finds nothing.
+
+Build:
+- When the word match finds nothing, a second pass matches each wanted word to the recipes'
+  name words by closeness (`difflib`, a high cutoff such as 0.8, words of 4+ letters only, so
+  "pie" doesn't become "rice"). Ingredients aren't searched this way.
+- A close match is never taken silently: one close name is offered as "Did you mean Bechamel
+  Sauce?" with the recipe's own buttons (find_recipe's result says so for the model); several
+  are listed as "could be" is now.
+- `resolve` (grocery and cook tools) does the same, asking rather than choosing.
+
+Tests: `search` for "bechemel" finds Bechamel Sauce only in the close pass; "lasagne" finds
+"Lasagna"; "pie" doesn't match "rice"; find_recipe's text for a close match asks rather than
+sends. A scenario: "let's make the bechemel" gets "Did you mean Bechamel Sauce?", and yes starts
+it.
+
+Data/Setup: update the Pi. Nothing to mark reviewed (seen in #270's conversation).
+
+### F64e · Idea (2026-11-25): two recipes on the go at once, and switching between them (chat)
+Status: [ ]
+Depends on: CK1-CK5, F59h
+Read first: `themi_home/cooking.py` (`start`, `current`, `end`, the "switched" outcome, the
+pause, the stale-session sweep near `last_tap_at`); `themi_home/cooking_timers.py`; every
+caller of the cooking service's `current` (habits, conversation mode, burnout, step images,
+the wall, body double, buying, maintenance). The Cooking Companion Plan has nothing on this;
+this prompt is its design. From Michael's idea #270 (2026-11-25, 8:44 pm): "need to be able to
+have multiple recipes going at once and swap between them".
+
+What the Pi shows: session 35 (4 Ingredient Ricotta, step 9 of 15, the almond milk coming to
+temperature) ended with outcome "switched" at 8:22 pm when Michael said "While that's cooking,
+I want to make 2 servings of 5 minute Mozzarella" and tapped Cook this. `start` ends every open
+session of the member. The ricotta never came back; after the mozzarella he started Bechamel
+(session 37).
+
+Build:
+- Starting a recipe while another is open keeps the other. Up to three open sessions per
+  person; a fourth asks which to stop. Each session keeps its phase, step, ticks, scale and
+  timers.
+- One is in front (the most recently tapped or chosen, kept on the session, e.g. a
+  `front_at` column). `current` returns the one in front, so every existing caller keeps
+  working; a new `open_sessions(member)` lists them all.
+- The card in front shows the others as one line under its heading ("Also going: Ricotta,
+  step 9") with a button per other recipe that brings it to the front (its card is sent
+  again, at the bottom of the chat, and the old one says "Set aside: Mozzarella, step 2").
+- Chat: "back to the ricotta", "switch to the bechamel", "how's the ricotta?" (its step and
+  its timers) work through a `switch_recipe` tool in the cooking group; questions about "the
+  recipe" use the one in front, and the context line lists the others.
+- Timers belong to their session: a timer going off says whose recipe it's for ("Ricotta: 20
+  minutes are up") and its button brings that recipe to the front.
+- Finishing or stopping one brings the next most recent to the front with one line ("Back to
+  the Ricotta, step 9"). The cooking pause lasts while any session is open. The stale sweep
+  treats each session on its own.
+- "switched" stays an outcome only for a fourth recipe pushing one out.
+
+Tests: start A, then B: both open, B in front; the switch button and "back to A" bring A to
+the front with its step intact; a timer from A says A and brings it forward; finishing B
+brings A forward; a fourth start asks. Callers of `current` get the front one. A scenario:
+the ricotta/mozzarella evening, simmering ricotta kept while the mozzarella is made, then
+back to the ricotta.
+
+Data/Setup: a migration for the front marker. Update the Pi. Mark #270 reviewed once F64f is
+live too.
+
+### F64f · Idea (2026-11-25): the cook screen shows each recipe on the go, and a tap switches
+Status: [ ]
+Depends on: F64e
+Read first: `themi_home/cooking_screen.py` and its template (/session); the wall's cooking
+card, if any (`themi_home/wall.py`). From Michael's idea #270.
+
+What the Pi shows: see F64e. The cook screen at /session follows the one session.
+
+Build:
+- With two or more open sessions, the cook screen has a row of chips at the top, one per
+  recipe (its name, its step "4/15" and a timer's time left if one is running), the one in
+  front highlighted. A tap brings it to the front on the screen and in the chat (F64e's switch).
+- A timer going off on a recipe not in front shows on the screen as a banner with "Go to
+  Ricotta".
+- The screen's long poll or refresh follows the front session; taps carry their session id
+  (they already log "on session 35"), so a tap on a stale page acts on the session it was for.
+- One open session looks as it does now (no chip row).
+
+Tests: the cook screen page with two sessions has both chips, the front one marked; a chip
+tap switches and the chat card follows; a tap carrying the other session's id acts on that
+session. A browser test of the chip row at the phone's width.
+
+Data/Setup: update the Pi. Mark #270 reviewed once live.
+
+### F64g · Idea (2026-11-25): Things to cook can be edited on the wall: add, rename, remove
+Status: [ ]
+Depends on: WL9b, F59e
+Read first: `themi_home/web/templates/wall/_view_dishes.html`;
+`themi_home/web/templates/wall/_view_list.html` (its add form and per-row actions);
+`themi_home/wall.py` (the dish and list routes); `themi_home/wall_views.py` (`DishesView`).
+From Michael's idea #271 (2026-11-25, 8:45 pm): "things to cook should be editable from the
+wall frame".
+
+What the Pi shows: "Things to Cook" (on the wall) has 4 to go. Its screen (WL9b) numbers the
+dishes and unfolds one to tick ingredients or start cooking, but there's no way to add one,
+change its words or take one off; other lists' screens (F59e) have an add box.
+
+Build:
+- An "Add a dish" box at the top, as the list screen's, with the on-screen keyboard and the
+  wall's mic (F59g) if it's there. A new dish is matched to the cookbook as the list's items
+  are (so it unfolds with its ingredients if it's a recipe).
+- An unfolded dish has "Rename" (its words, in place) and "Made it" / "Remove" (Made it ticks
+  it off, as cooking it does; Remove takes it off without saying it was made), with an Undo
+  for a few seconds after either, no browser dialog.
+- Changes go through the lists service as chat edits do, so the chat and the website's list
+  agree.
+
+Tests: the dishes screen adds a dish (and finds its recipe), renames one, removes one and
+undoes it, each through the lists service; the wall test for the screen's markup keeps its
+numbered rows.
+
+Data/Setup: update the Pi, reload the wall. Mark #271 reviewed once live.
+
+### F64h · Idea (2026-11-25): the calendar's day on the wall runs down the screen
+Status: [ ]
+Depends on: F59f, WL3, F58c
+Read first: `themi_home/web/templates/wall/_view_calendar.html` (day mode);
+`themi_home/web/templates/wall/_timeline.html`; `themi_home/wall_view.py` (`lay_out_today`,
+`TodayLine`, the day's rows); `themi_home/web/static/wall.css` (`.tl*`); `wall-fit.js`. From
+Michael's idea #272 (2026-11-25, 8:45 pm, a photo of the frame): "the day drill down on the
+wall frame should be oriented vertically".
+
+What the Pi shows: the photo is the calendar screen's Day mode on the portrait frame: the
+home screen's timeline (hours across, a row each for Michael, Erin and Family) in a short band
+at the top, then Due that day and Weather, then two thirds of the screen empty.
+
+Build:
+- The calendar screen's day is a day planner: hours down the left (from the earliest event or
+  7 am to the latest or 9 pm, as the timeline now picks), a column per row (each person, then
+  Family) with their colour at the head, events as blocks the height of their time, overlaps
+  side by side in a column. It fills the space down to Due that day and Weather, which go
+  below it (or beside it if the frame is landscape).
+- All-day events stay as chips above it; "now" is a line across on today; a block opens the
+  Event view as now.
+- The home screen's timeline stays horizontal; the day view gets its own macro (or a
+  `vertical` flag) so the two share the block layout code.
+- A short day (one event) still shows the full span of hours, so it reads as a day.
+
+Tests: the day view's markup has the vertical planner with a column per row and blocks
+positioned by time; the home screen's timeline is unchanged (golden). A browser test at 1080 x
+1920: the planner's height fills the screen down to the boxes, and nothing is cut off (F58c).
+
+Data/Setup: update the Pi, reload the wall. Mark #272 reviewed once live.
+
+### F64i · Idea (2026-11-25): a person's page on the wall: drag to reorder, drag to someone else, delete
+Status: [ ]
+Depends on: WL9d, F59e, F60f
+Read first: `themi_home/web/templates/wall/_view_person.html`; `themi_home/wall_views.py`
+(the person page); `themi_home/wall_view.py` `_rank` (the wall's order);
+`themi_home/web/templates/wall/_view_list.html` (its "Give to", "Tomorrow" actions);
+`themi_home/wall.py` (`op == "give"`); `themi/standard/tasks.py` (`cancel`, reassigning);
+`themi_home/web/static/wall.js`. From Michael's idea #274 (2026-11-25, 8:47 pm, a photo of
+Erin's day): "the person drill down on the wall should allow for clicking and dragging tasks to
+reorder them and bring up chips for other family members so items can be dragged to them. Also
+items should be able to be deleted from this view".
+
+What the Pi shows: the photo is "Erin's day": a banner, Schedule, Morning routine (folded),
+Chores (2 open) and To-do (5 open: Process the mail, Make a list of Roborock maintenance tasks,
+Towel + clothes, Text Susan, Get gas for Prius). Rows can only be ticked. Tasks have no order
+of their own; the wall sorts by `_rank` (due first, then important, then soonest).
+
+Build:
+- Press and hold a to-do (or a chore) to pick it up (pointer events, so touch and mouse both
+  work; a plain tap still ticks). While it's held:
+  - the rest of its card makes room as it moves, and dropping it there sets its place;
+  - a row of chips appears at the top, one for each other person (in their colours) and
+    "Family", and dropping on one gives it to them (the existing give path, so they're told as
+    a chat reassignment is) or makes it a family to-do;
+  - a "Delete" target appears at the bottom; dropping there removes it (`cancel`, which keeps
+    the record), with an Undo bar for a few seconds and no browser dialog. A repeating chore
+    dropped there asks in place "Stop it repeating, or just this time?".
+- A person's own order is kept per person (a migration: a rank per task per member). Ranked
+  items go first in that order, then the rest by `_rank`; a task that becomes due today keeps
+  its place. The order shows on the home screen's columns too and in chat's "what's on my
+  list" (say where it's read in Notes).
+- Moving inside a card only: to-dos among to-dos, chores among chores.
+- Each drop is one POST with the task and where it went; the page swaps back as now. Without
+  JavaScript nothing changes for ticking.
+
+Tests: the reorder POST stores the order and the person page and column follow it; a drop on
+another person's chip reassigns (and the outbox gets the heads-up); a drop on Delete cancels
+and Undo reopens; a chore asks first. A browser test drags with the pointer (and touch
+events) at 1080 x 1920: pick up, the chips and Delete appear, a drop reorders.
+
+Data/Setup: a migration for the order. Update the Pi, reload the wall. Mark #274 reviewed once
+live.
 
 ## Conversation mode
 
