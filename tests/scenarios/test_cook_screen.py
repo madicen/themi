@@ -202,3 +202,56 @@ async def test_pancakes_end_with_almond_milk_used_up_and_cleanup_company(
     assert turned["mode"] == "sprint"
     assert "cook-page" not in (await site.get("/session")).text  # the sprint's page now
     assert scenario.inbox("Erin")[-1].startswith("Sprint on: 25 minutes")  # the sprint's start
+
+
+async def test_two_recipes_on_the_go_have_a_chip_each_and_a_tap_switches(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """F64f (idea #270): the screen shows each recipe on the go; a chip brings one forward,
+    on the screen and in the chat. A tap made for the other recipe acts on that one."""
+    load(scenario.app.services)
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "pancakes", "scale": ""})
+    scenario.primary.queue_structured(lines(PANCAKES))
+    await scenario.say("Erin", "Let's make pancakes")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("skip", "all here", "skip prep", "go to step 3"):
+        await scenario.say("Erin", said)
+    alone = (await site.get("/session/state")).json()
+    assert alone["going"] == []  # one recipe: no chip row
+    pancakes = alone["id"]
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "alfredo sauce", "scale": ""})
+    scenario.primary.queue_structured(lines(ALFREDO))
+    await scenario.say("Erin", "and the alfredo sauce")
+    state = (await site.get("/session/state")).json()
+    assert state["recipe"] == "Alfredo Sauce"
+    assert [(g["name"], g["where"], g["front"]) for g in state["going"]] == [
+        ("Alfredo Sauce", "getting ready", True), ("Pancakes", "3/5", False),
+    ]  # fmt: skip
+    page = (await site.get("/session/cook/view")).text
+    assert 'class="cook-going"' in page and "Go to Pancakes, 3/5" in page
+
+    chip = next(g for g in state["going"] if g["name"] == "Pancakes")
+    tapped = await site.post(
+        f"/session/cook/{pancakes}/act",
+        data={"csrf": csrf, "action": "front", "seq": str(chip["seq"])},
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert tapped.status_code < 400
+    now = (await site.get("/session/state")).json()
+    assert now["id"] == pancakes and now["step"]["words"] == "Step 3 of 5"
+    sent = scenario.inbox("Erin")[-1]
+    assert sent.startswith("Pancakes: step 3 of 5") and "Also going: Alfredo Sauce" in sent
+
+    behind = next(g for g in now["going"] if g["name"] == "Alfredo Sauce")
+    await site.post(  # a tap for the Alfredo, from a page drawn before the switch
+        f"/session/cook/{behind['id']}/act",
+        data={"csrf": csrf, "action": "next", "seq": str(behind["seq"])},
+        headers={"X-CSRF-Token": csrf},
+    )
+    cooking = scenario.app.services.maybe(keys.cooking)
+    assert cooking is not None
+    alfredo = cooking.get(behind["id"])
+    assert alfredo is not None and alfredo.phase == "gather"  # that one moved
+    pancakes_now = cooking.get(pancakes)
+    assert pancakes_now is not None and pancakes_now.step == 2  # this one didn't

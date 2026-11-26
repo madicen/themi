@@ -445,3 +445,29 @@ async def test_the_counter_follows_the_phase(scenario: Scenario) -> None:
                 with open(os.path.join(folder, f"cook-{phase}.png"), "wb") as f:
                     f.write(base64.b64decode(shot["result"]["data"]))
     assert seen == {"gather": ["gather"], "prep": ["prep"], "cook": ["cook"]}
+
+
+@pytest.mark.parametrize(("width", "height"), [(390, 844), (1180, 820)])
+async def test_the_recipes_on_the_go_fit_and_a_chip_switches(
+    scenario: Scenario, width: int, height: int
+) -> None:
+    """F64f: two recipes on the go: a chip each, at a phone's width and a tablet's, and a
+    tap on the other one brings it to the screen."""
+    clock.unfreeze()
+    await to_step_three(scenario)
+    cooking = scenario.app.services.maybe(keys.cooking)
+    assert cooking is not None
+    alfredo = cooking.current(scenario.member("Erin"))
+    assert alfredo is not None
+    pancakes = next(r for r in cooking.recipes.all() if r.name == "Pancakes")
+    scenario.primary.queue_structured(lines(["flour", "almond milk"]))
+    await cooking.start(scenario.member("Erin"), pancakes)
+    await cooking.switch(alfredo)  # the Alfredo, on its step, in front
+    recipe = "document.querySelector('.cook-recipe').textContent"
+    async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-going",
+                              width=width, height=height) as tab:  # fmt: skip
+        assert await tab.value("document.querySelectorAll('.cook-going-chip').length") == 2
+        assert await tab.value(LAYOUT) == ""
+        assert await tab.value(recipe) == "Alfredo Sauce"
+        await tab.value("document.querySelector('.cook-going form button').click()")
+        assert await until(lambda: tab.value(f"{recipe} === 'Pancakes'"))

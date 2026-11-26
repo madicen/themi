@@ -374,7 +374,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F64c | Feedback: the prep list says an amount once; a scaled batch reads as English | Feedback | [x] 2026-11-25 |
 | F64d | Feedback: a misspelt recipe ("bechemel") is still found, after asking | Feedback | [x] 2026-11-25 |
 | F64e | Idea: two recipes on the go at once, and switching between them (chat) | Feedback | [x] 2026-11-25 |
-| F64f | Idea: the cook screen shows each recipe on the go; a tap switches | Feedback | [ ] |
+| F64f | Idea: the cook screen shows each recipe on the go; a tap switches | Feedback | [x] 2026-11-25 |
 | F64g | Idea: Things to cook can be edited on the wall | Feedback | [ ] |
 | F64h | Idea: the calendar's day on the wall runs down the screen | Feedback | [ ] |
 | F64i | Idea: a person's page on the wall: drag to reorder, to someone else, delete | Feedback | [ ] |
@@ -19007,7 +19007,7 @@ Notes:
 - **Setup:** update the Pi (the migration runs on start).
 
 ### F64f · Idea (2026-11-25): the cook screen shows each recipe on the go, and a tap switches
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: F64e
 Read first: `themi_home/cooking_screen.py` and its template (/session); the wall's cooking
 card, if any (`themi_home/wall.py`). From Michael's idea #270.
@@ -19029,6 +19029,25 @@ tap switches and the chat card follows; a tap carrying the other session's id ac
 session. A browser test of the chip row at the phone's width.
 
 Data/Setup: update the Pi. Mark #270 reviewed once live.
+
+Notes:
+- The state has `going` (`cooking_screen.going`): with two or more open sessions, a chip each
+  (name, "3/5" on the steps or "getting ready", the soonest timer's `ends_at`), the shown one
+  `front`. `_main.html` draws them as a `.cook-going` row under the header (its own grid
+  area); the shown one is plain text, the others post `front` to their own session with
+  their own `seq`. `cook.js` counts the chips' timers down.
+- A `front` tap (`act`) is `Cooking.switch`: the chat's card follows. The page reloads by
+  itself when the state's session id changes, so a switch made in chat moves the screen.
+- Timers: with several recipes' timers on the rail, each label starts with its recipe; a
+  fired one for a recipe set aside has [Go to Pancakes] under it.
+- A tap carries its session id and seq, so one made for the other recipe acts on that one
+  (or is refused if stale); it never lands on the one in front.
+- Deviation: no banner over the step for a timer going off behind; the rail's fired timer
+  (which already pulses and chimes, CK3) carries the [Go to …] button instead.
+- Tests: `test_two_recipes_on_the_go_have_a_chip_each_and_a_tap_switches`, the timer check in
+  `test_cooking_several`, and the browser test
+  `test_the_recipes_on_the_go_fit_and_a_chip_switches` (390 x 844 and 1180 x 820).
+- **Setup:** update the Pi. Mark #270 reviewed once live.
 
 ### F64g · Idea (2026-11-25): Things to cook can be edited on the wall: add, rename, remove
 Status: [ ]

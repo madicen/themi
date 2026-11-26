@@ -237,6 +237,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     if cooking_oven.has_timer(cooking):  # OV5: a step's timer can be the oven's too
         out["offers"] = [{**o, "oven": True} for o in out["offers"]]
     out["timers"] = timers(cooking, session)
+    out["going"] = going(cooking, session, recipe)  # F64e/F64f: the recipes on the go
     out["oven_timer"] = cooking_oven.has_timer(cooking)  # F59h: any timer can be the oven's
     if out["oven_timer"]:
         for timer in out["timers"]:
@@ -399,8 +400,36 @@ def music(cooking: Cooking, session: Session, viewer: Member) -> dict[str, Any] 
     return found
 
 
+def going(cooking: Cooking, session: Session, recipe: Recipe) -> list[dict[str, Any]]:
+    """F64f: with two or more recipes on the go, a chip each (the one shown marked): its
+    name, where it is ("4/15") and its soonest timer. A tap brings it to the front."""
+    if session.in_group or session.ended_at is not None:
+        return []
+    sessions = cooking.open_sessions(cooking._owner(session))
+    if len(sessions) < 2:
+        return []
+    chips = []
+    for s in sessions:
+        r = recipe if s.id == session.id else cooking.recipes.get(s.recipe_id)
+        if r is None:
+            continue
+        where = (
+            f"{_step_label(s, r)}/{len(r.steps)}" if s.phase == "cook" else cooking.where(s)
+        )
+        soonest = cooking.db.scalar(
+            "SELECT MIN(ends_at) FROM cooking_timers WHERE session_id = ? AND fired_at IS NULL "
+            "AND cancelled_at IS NULL",
+            (s.id,),
+        )
+        chips.append({"id": s.id, "seq": s.seq, "name": r.name, "where": where,
+                      "front": s.id == session.id, "ends_at": soonest or ""})  # fmt: skip
+    return chips
+
+
 def timers(cooking: Cooking, session: Session) -> list[dict[str, Any]]:
-    """The owner's timers: running, or fired and not yet tapped on the screen."""
+    """The owner's timers: running, or fired and not yet tapped on the screen. F64f: with
+    several recipes' timers, each says its recipe; one gone off for a recipe set aside has
+    `go`, the button that brings it to the front."""
     if cooking.timers is None:
         return []
     since = to_utc_iso(clock.now() - FIRED_SHOWN)
@@ -409,16 +438,24 @@ def timers(cooking: Cooking, session: Session) -> list[dict[str, Any]]:
         "AND cleared_at IS NULL AND (fired_at IS NULL OR fired_at > ?) ORDER BY ends_at",
         (session.member_id, since),
     )
-    return [
-        {
+    several = len({row["session_id"] for row in rows}) > 1
+    out = []
+    for row in rows:
+        label = row["label"] or f"Step {row['step']}"
+        go = None
+        if row["session_id"] and row["session_id"] != session.id and row["fired_at"]:
+            other = cooking.get(row["session_id"])
+            if other is not None and other.ended_at is None:
+                go = {"id": other.id, "seq": other.seq, "name": row["recipe"]}
+        out.append({
             "id": row["id"],
-            "label": row["label"] or f"Step {row['step']}",
+            "label": f"{row['recipe']}: {label}" if several else label,
             "ends_at": row["ends_at"],
             "fired": row["fired_at"] is not None,
             "seconds": round(float(row["minutes"]) * 60),  # CK12: "of 8:00", and the bar
-        }
-        for row in rows
-    ]
+            "go": go,
+        })  # fmt: skip
+    return out
 
 
 def buttons(session: Session, recipe: Recipe) -> list[dict[str, str]]:
@@ -488,6 +525,11 @@ async def act(
         return Tapped(False)
     log.info("Cook screen tap %r on session %s", action, session_id)
     said = ""
+    if action == "front":  # F64f: a chip, or a timer's [Go to …]: that recipe to the front
+        if session.ended_at is not None or session.in_group:
+            return Tapped(False)
+        await cooking.switch(session)
+        return Tapped(True)
     if action in TIMER_TAPS:
         tapped = timer_tap(cooking, session, action, form)
         moved = tapped and action != "timer_clear" and cooking.timers is not None

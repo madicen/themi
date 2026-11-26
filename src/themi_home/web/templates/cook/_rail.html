@@ -17,6 +17,7 @@
     <input type="hidden" name="timer" value="{{ t.id }}">
     <button class="cook-timer-done"><span class="cook-timer-label">{{ t.label }}</span> <span class="cook-timer-left">Time's up</span></button>
   </form>
+  {% if t.go %}{{ act({"id": t.go.id, "seq": t.go.seq}, csrf, "front", "Go to " ~ t.go.name, cls="cook-go") }}{% endif %}{# F64f: its recipe is set aside #}
   {% else %}
   <div class="cook-timer" data-timer="{{ t.id }}" data-ends="{{ t.ends_at }}" data-seconds="{{ t.seconds }}">
     <p class="cook-timer-label">{{ t.label }}{% if t.oven %} <span class="cook-timer-oven" title="The oven's timer follows this one">Oven</span>{% endif %}</p>

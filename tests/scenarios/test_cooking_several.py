@@ -121,6 +121,10 @@ async def test_a_timer_says_its_recipe_and_brings_it_forward(cookbook: Scenario)
     await cookbook.app.outbox.flush()
     assert cookbook.inbox("Erin")[-1] == "Time's up: 2 min for step 5 of Pancakes."
     assert cookbook.last_buttons("Erin") == ["Go to Pancakes"]
+    from themi_home.cooking_screen import state
+
+    (fired,) = state(cooking(cookbook), cookbook.member("Erin"))["timers"]  # F64f: the screen
+    assert fired["fired"] and fired["go"]["name"] == "Pancakes"
     await cookbook.tap("Erin", "Go to Pancakes")
     assert names(cookbook)[0] == "Pancakes"
 
