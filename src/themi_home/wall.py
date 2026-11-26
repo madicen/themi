@@ -305,6 +305,12 @@ class WallTaps:
         item = next((i for i in nl.items if i.id == int(payload["item"])), None)
         if item is None:
             return "That one isn't on the list any more."
+        if op == "list_rename":  # F64g: Things to cook's Rename
+            lists.rename_item(item, text)
+            return f"It reads {text} now."
+        if op == "list_remove":  # F64g: off the list, not made
+            lists.remove(item)
+            return f"Took {item.name} off {nl.name}."
         lists.tick(item, op == "list_tick", by)
         if op == "list_tick":
             return f"Ticked {item.name} off {nl.name}."
@@ -963,10 +969,59 @@ def routes(kit: Kit) -> APIRouter:
         )
         return outcome.message
 
-    def dishes(request: Request, item_id: int = 0, said: str = "") -> HTMLResponse:
-        """WL9b: Things to cook, with `item_id` unfolded (its ingredients, Start cooking)."""
+    def dishes(
+        request: Request, item_id: int = 0, said: str = "", undo: dict[str, str] | None = None
+    ) -> HTMLResponse:
+        """WL9b: Things to cook, with `item_id` unfolded (its ingredients, Start cooking).
+        F64g: `undo`, the change just made, offered back for a few seconds."""
         found = dishes_view(views(), item_id, said)
-        return sheet(request, "_view_dishes.html", view=found) if found else HTMLResponse("")
+        if found is None:
+            return HTMLResponse("")
+        return sheet(request, "_view_dishes.html", view=found, undo=undo)
+
+    @router.post("/wall/view/dishes", response_class=HTMLResponse)
+    async def dishes_change(request: Request) -> Response:
+        """F64g (idea #271): Things to cook edited on the wall: add a dish, rename one, Made
+        it (ticked off, as cooking it does), Remove (off without being made), and Undo."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        found = dishes_view(views())
+        people = WallView(kit.app.services).people()
+        if found is None or not people:
+            return HTMLResponse("")
+        op, text = form.get("op", ""), " ".join(form.get("text", "").split())[:200]
+        named = dict(found.dishes)
+        item = int(form["id"]) if form.get("id", "").isdigit() else 0
+        payload: dict[str, Any] = {"by": people[0].id, "list": found.list_id}
+        undo: dict[str, str] | None = None
+        opened = 0
+        if op in ("add", "undo_remove") and text:
+            payload.update(op="list_add", text=text)
+            summary = f"Add {text} to {found.title} {WHERE}"
+        elif op == "rename" and item in named and text and text != named[item]:
+            payload.update(op="list_rename", item=item, text=text)
+            summary = f"Rename {named[item]} as {text} {WHERE}"
+            opened = item
+        elif op == "made" and item in named:
+            payload.update(op="list_tick", item=item)
+            summary = f"{named[item]} made, ticked off {found.title} {WHERE}"
+            undo = {"op": "undo_made", "id": str(item), "label": f"{named[item]} ticked off."}
+        elif op == "remove" and item in named:
+            payload.update(op="list_remove", item=item)
+            summary = f"Take {named[item]} off {found.title} {WHERE}"
+            undo = {"op": "undo_remove", "text": named[item], "label": f"{named[item]} taken off."}
+        elif op == "undo_made" and item:
+            payload.update(op="list_untick", item=item)
+            summary = f"Put a dish back on {found.title} {WHERE}"
+        else:
+            return dishes(request, item if item in named else 0)
+        outcome = await kit.app.services.autonomy.stage(
+            TAP, people[0], summary, payload, TAP, requested=True
+        )
+        if outcome.action.status != "done":
+            undo = None
+        return dishes(request, opened, outcome.message, undo)
 
     @router.get("/wall/view/dishes", response_class=HTMLResponse)
     def dishes_page(request: Request) -> Response:
@@ -1016,7 +1071,14 @@ def routes(kit: Kit) -> APIRouter:
         recipe = _recipe(views(), found.name) if found else None
         if found is None or cooking is None or cook is None or recipe is None:
             return HTMLResponse("")
-        await cooking.start(cook, recipe)
+        from themi_home.cooking import TooMany
+
+        try:
+            await cooking.start(cook, recipe)
+        except TooMany as many:  # F64e: three on the go already
+            said = (f"{cook.name} has {len(many.going)} recipes on the go already "
+                    f"({cooking.going_text(many.going)}). Stop one first.")  # fmt: skip
+            return dishes(request, item_id, said)
         said = f"Started {recipe.name}. The cook screen is on {cook.name}'s phone."
         return dishes(request, item_id, said)
 

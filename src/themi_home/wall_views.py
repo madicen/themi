@@ -751,6 +751,8 @@ class DishesView:
     tone: str
     dishes: tuple[tuple[int, str], ...]
     open: DishView | None = None
+    list_id: int = 0  # F64g: where an added dish goes
+    said: str = ""  # F64g: what an add, rename or remove did
 
 
 def dishes_view(views: WallViews, opened: int = 0, said: str = "") -> DishesView | None:
@@ -770,7 +772,9 @@ def dishes_view(views: WallViews, opened: int = 0, said: str = "") -> DishesView
         return None
     dishes = tuple((i.id, i.name) for i in found.open_items)
     dish = dish_view(views, opened, said) if opened in {i for i, _ in dishes} else None
-    return DishesView(found.name, views.view.together_tone(), dishes, dish)
+    return DishesView(
+        found.name, views.view.together_tone(), dishes, dish, found.id, "" if dish else said
+    )
 
 
 def dish_view(views: WallViews, item_id: int, said: str = "") -> DishView | None:

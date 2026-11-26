@@ -324,6 +324,9 @@ button.wall-item:focus-visible { outline: 0.2rem solid var(--focus); outline-off
 .sheet-menu { display: flex; gap: 0.6rem; flex-wrap: wrap; padding: 0.25rem 1rem 1.1rem; }
 .sheet-menu .sheet-button { min-height: 3.5rem; font-size: 1.25rem; padding: 0 1.4rem; }
 .sheet-words { width: 100%; }
+/* F64g: a change just made, offered back for a few seconds */
+.sheet-undo { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.6rem 1rem;
+  border-radius: 1rem; background: var(--card); font-size: 1.2rem; }
 .sheet-lately summary { font-size: 1.25rem; font-weight: 700; color: var(--tone); min-height: 3rem; cursor: pointer; }
 .sheet-lately ul { font-size: 1.3rem; color: var(--sub); }
 .sheet-checks { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }

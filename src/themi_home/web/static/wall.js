@@ -315,6 +315,10 @@
     fit();
     if (event.target.id === "wall-view") watchView();
     if (event.target.id === "wall-night") nightMode();
+    // F64g: an Undo bar goes after its few seconds
+    event.target.querySelectorAll("[data-undo-for]").forEach(function (bar) {
+      setTimeout(function () { bar.remove(); }, Number(bar.dataset.undoFor) * 1000);
+    });
   });
   // WL6: the night. The night part says whether it's night (data-night); a touch shows
   // the full screen until it's left alone for two minutes.

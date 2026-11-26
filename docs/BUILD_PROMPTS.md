@@ -375,7 +375,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F64d | Feedback: a misspelt recipe ("bechemel") is still found, after asking | Feedback | [x] 2026-11-25 |
 | F64e | Idea: two recipes on the go at once, and switching between them (chat) | Feedback | [x] 2026-11-25 |
 | F64f | Idea: the cook screen shows each recipe on the go; a tap switches | Feedback | [x] 2026-11-25 |
-| F64g | Idea: Things to cook can be edited on the wall | Feedback | [ ] |
+| F64g | Idea: Things to cook can be edited on the wall | Feedback | [x] 2026-11-25 |
 | F64h | Idea: the calendar's day on the wall runs down the screen | Feedback | [ ] |
 | F64i | Idea: a person's page on the wall: drag to reorder, to someone else, delete | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -19050,7 +19050,7 @@ Notes:
 - **Setup:** update the Pi. Mark #270 reviewed once live.
 
 ### F64g · Idea (2026-11-25): Things to cook can be edited on the wall: add, rename, remove
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: WL9b, F59e
 Read first: `themi_home/web/templates/wall/_view_dishes.html`;
 `themi_home/web/templates/wall/_view_list.html` (its add form and per-row actions);
@@ -19077,6 +19077,25 @@ undoes it, each through the lists service; the wall test for the screen's markup
 numbered rows.
 
 Data/Setup: update the Pi, reload the wall. Mark #271 reviewed once live.
+
+Notes:
+- `POST /wall/view/dishes` (`dishes_change`): ops `add`, `rename`, `made` (ticked off, as
+  cooking it does), `remove` (off, not made), `undo_made`, `undo_remove`. Each is staged
+  through the wall's tap category (`TAP`), as F59e's list changes are; the executor gained
+  `list_rename` (`Lists.rename_item`) and `list_remove` (`Lists.remove`).
+- The screen has an "Add a dish" box under its heading; an unfolded dish has [Made it],
+  [Remove] and a Rename box. After Made it or Remove, an Undo bar (`data-undo-for="8"`) shows
+  for 8 seconds (`wall.js` removes it). Undo of a remove adds the dish back by name (a new
+  item), so it lands at the end of the list.
+- A new dish needs no matching step: an unfolded dish already finds its recipe by name
+  (WL9b's `_recipe`).
+- Deviation: no mic on the Add box. The frame's own keyboard is used; F59g's mic stays in the
+  top bar's Talk to Themi ("add lentil stew to things to cook" works there).
+- With F64e, the wall's [X is cooking] can meet three recipes on the go; it says so instead of
+  starting a fourth.
+- Tests: `test_a_dish_is_added_and_renamed_on_the_wall`, `test_made_it_and_remove_each_have_an_undo`,
+  `test_nonsense_changes_nothing`, `test_start_cooking_with_three_on_the_go_says_so`.
+- **Setup:** update the Pi, reload the wall.
 
 ### F64h · Idea (2026-11-25): the calendar's day on the wall runs down the screen
 Status: [ ]
