@@ -15,6 +15,7 @@ instructions to Themi.
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import re
@@ -507,7 +508,8 @@ class Recipes:
         client = self.client(row["account_id"])
         try:
             record = await client.file(row["doc_id"])
-            version = str(record.get("version") or record.get("modifiedTime") or "")
+            drive = str(record.get("version") or record.get("modifiedTime") or "")
+            version = f"p{book.PARSER_VERSION}:{drive}" if drive else ""  # F64b
             if not force and version and version == row["version"]:
                 return SyncResult(0, 0, 0, 0, 0, [])
             parsed = book.parse(await client.get(row["doc_id"]))
@@ -740,11 +742,18 @@ class Recipes:
     # ----- finding and showing (RC1b) ------------------------------------------------------
 
     def find(
-        self, text: str, section: str = "", *, charts: bool = True, book: str = ""
+        self,
+        text: str,
+        section: str = "",
+        *,
+        charts: bool = True,
+        book: str = "",
+        near: bool = False,
     ) -> list[Match]:
         """RC8b: `book` (a key or name) looks only there. Otherwise a book kept out of the
         way is looked in only when they say its name's words ("a cheese recipe") or a recipe's
-        name exactly; its sections never narrow a search that didn't name it."""
+        name exactly; its sections never narrow a search that didn't name it. F64d: `near`, and
+        nothing matched, finds names spelled nearly so (marked `close`, to ask about)."""
         everything = self.all(include_charts=charts)
         if book:
             chosen = self.named_book(book)
@@ -753,7 +762,7 @@ class Recipes:
                 if chosen is not None and r.book == chosen.key
                 and (not r.draft or name_key(r.name) == name_key(text))
             ]  # fmt: skip
-            return search(pool, text, section=section)
+            return search(pool, text, section=section, near=near)
         said = {stem(w) for w in name_key(text).split()}
         hidden = {
             b.key for b in self.books() if not b.found_unasked and not book_words(b.name) & said
@@ -766,7 +775,7 @@ class Recipes:
         ]  # fmt: skip
         quiet = {b.key for b in self.books() if not b.found_unasked}
         usual = [r for r in shown if r.book not in quiet]
-        return search(shown + exact, text, section=section, sections_from=usual)
+        return search(shown + exact, text, section=section, sections_from=usual, near=near)
 
     def card_buttons(self, recipe: Recipe) -> list[Button]:
         """[Cook this] [Add to grocery list], once those prompts are built (RC2a, RC3a)."""
@@ -928,6 +937,7 @@ class Match:
     name_hits: int  # wanted words in its name
     wanted: int  # how many words were wanted
     exact: bool = False  # F42c: its name is what they said, word for word
+    close: bool = False  # F64d: found only by a word spelled nearly the same ("bechemel")
 
 
 PICTURE_SOURCE = "your picture"  # F34m: where a recipe copied from a picture is from
@@ -1029,6 +1039,7 @@ def search(
     *,
     section: str = "",
     sections_from: list[Recipe] | None = None,
+    near: bool = False,
 ) -> list[Match]:
     """Recipes for what they asked: by name words first, then ingredients and notes. A
     section they name narrows it; RC8b: only the sections of `sections_from`, when given."""
@@ -1070,13 +1081,40 @@ def search(
     if found:  # a stray word ("butter" in a sauce) isn't a match for "peanut butter bars"
         best = found[0].score
         found = [m for m in found if m.score * 3 >= best]
-    return found
+        return found
+    return _close(recipes, words) if near else []
+
+
+CLOSE_CUTOFF = 0.8  # F64d: "bechemel" ~ "bechamel" (0.88), "lasagne" ~ "lasagna" (0.86)
+CLOSE_LENGTH = 4  # words shorter than this are never matched by spelling ("pie", "rice")
+
+
+def _close(recipes: list[Recipe], words: list[str]) -> list[Match]:
+    """F64d: recipes whose name has a word spelled nearly as one they said, when no word
+    matched outright. Names only, never ingredients; each one marked `close`, so it's asked
+    about ("Did you mean Bechamel Sauce?"), never taken as what they meant."""
+    wanted = [w for w in words if len(w) >= CLOSE_LENGTH]
+    if not wanted:
+        return []
+    found: list[Match] = []
+    for recipe in recipes:
+        name = [
+            w for w in {stem(w) for w in name_key(recipe.name).split()} if len(w) >= CLOSE_LENGTH
+        ]
+        hits = sum(
+            1 for w in wanted if difflib.get_close_matches(w, name, n=1, cutoff=CLOSE_CUTOFF)
+        )
+        if hits:
+            found.append(Match(recipe, float(hits), hits, len(words), close=True))
+    found.sort(key=lambda m: (-m.score, m.recipe.source != "doc", m.recipe.name))
+    best = found[0].score if found else 0
+    return [m for m in found if m.score == best]
 
 
 def clear_match(matches: list[Match]) -> Recipe | None:
     """One recipe they surely meant: every word they wanted is in its name, and nothing
     else comes close."""
-    if not matches or matches[0].wanted == 0:
+    if not matches or matches[0].wanted == 0 or matches[0].close:  # F64d: only ever asked
         return None
     top = matches[0]
     if top.exact and not (len(matches) > 1 and matches[1].exact):
@@ -1086,6 +1124,12 @@ def clear_match(matches: list[Match]) -> Recipe | None:
     if len(matches) > 1 and matches[1].name_hits >= top.name_hits:
         return None
     return top.recipe
+
+
+def close_intro(matches: list[Match]) -> str:
+    """F64d: what the buttons for a nearly spelled name ask."""
+    names = list(dict.fromkeys(m.recipe.name for m in matches[:MATCHES]))
+    return f"Did you mean {names[0]}?" if len(names) == 1 else "Did you mean one of these?"
 
 
 def _recipes(ctx: ToolContext) -> Recipes:
@@ -1110,7 +1154,7 @@ async def _answer(
     if book and recipes.named_book(book) is None:
         names = ", ".join(b.name for b in recipes.books() if b.doc_id)
         raise ToolDeclined(f'There\'s no recipe book "{book}"; the books are: {names}. Say so.')
-    matches = recipes.find(query, section, book=book)
+    matches = recipes.find(query, section, book=book, near=True)
     if not matches:
         raise _nothing(recipes, query)
     words = wanted_words(query)
@@ -1122,6 +1166,15 @@ async def _answer(
                 + as_data(f"cookbook {match.recipe.name}", row)
                 + "\nAnswer from it, saying it's from their cookbook."
             )
+    if matches[0].close:  # F64d: "bechemel": asked about, never sent as if it were what they said
+        said = await recipes.offer(ctx.member, matches, close_intro(matches))
+        ctx.cards.append(said)
+        names = ", ".join(dict.fromkeys(m.recipe.name for m in matches[:MATCHES]))
+        return (
+            f'Nothing is called "{query}"; the nearest spelling: {names}. Sent as buttons '
+            f"asking if they meant it ({said}). Don't list them again; if they say yes, "
+            "show_recipe it."
+        )
     chosen = clear_match(matches)
     if chosen is not None or len(matches) == 1:
         recipe = chosen or matches[0].recipe

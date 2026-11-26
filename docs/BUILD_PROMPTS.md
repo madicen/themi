@@ -372,7 +372,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F64a | Feedback: the wall's month shows each event in its calendar's colour | Feedback | [x] 2026-11-25 |
 | F64b | Feedback: a recipe's "Notes:" heading starts its notes, not more steps | Feedback | [x] 2026-11-25 |
 | F64c | Feedback: the prep list says an amount once; a scaled batch reads as English | Feedback | [x] 2026-11-25 |
-| F64d | Feedback: a misspelt recipe ("bechemel") is still found, after asking | Feedback | [ ] |
+| F64d | Feedback: a misspelt recipe ("bechemel") is still found, after asking | Feedback | [x] 2026-11-25 |
 | F64e | Idea: two recipes on the go at once, and switching between them (chat) | Feedback | [ ] |
 | F64f | Idea: the cook screen shows each recipe on the go; a tap switches | Feedback | [ ] |
 | F64g | Idea: Things to cook can be edited on the wall | Feedback | [ ] |
@@ -18894,7 +18894,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F64d · Feedback (2026-11-25): a recipe asked for with a misspelling ("bechemel") is still found
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: R1a, F42c
 Read first: `themi_home/recipes.py` (`search`, `clear_match`, `find`);
 `themi_home/recipe_groceries.py` `resolve`. From the conversation behind Michael's idea #270
@@ -18919,6 +18919,19 @@ sends. A scenario: "let's make the bechemel" gets "Did you mean Bechamel Sauce?"
 it.
 
 Data/Setup: update the Pi. Nothing to mark reviewed (seen in #270's conversation).
+
+Notes:
+- `search(..., near=True)` runs a close pass when no word matched: each wanted word of 4+
+  letters against the recipes' name words (`difflib`, cutoff 0.8), names only. Those matches
+  are `Match.close`, and `clear_match` never takes one.
+- Only callers that can ask pass `near=True` (`Recipes.find(near=)`): `find_recipe` /
+  `show_recipe` (a "Did you mean Bechamel Sauce?" card with the recipe's button), `resolve`
+  (the grocery and cook tools) and `recipe_card` (both tell the model to ask). The wall's dish
+  lookup and cookbook saving don't, so "exactly one match" never takes a misspelling there.
+- Tests: `test_a_name_spelled_nearly_is_found_only_when_asked_for_and_marked_close`;
+  scenarios `test_a_misspelt_recipe_is_asked_about_and_yes_shows_it`,
+  `test_a_misspelt_recipe_card_asks_first`.
+- **Setup:** update the Pi.
 
 ### F64e · Idea (2026-11-25): two recipes on the go at once, and switching between them (chat)
 Status: [ ]

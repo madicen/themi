@@ -91,3 +91,14 @@ def test_a_long_recipe_is_two_messages_worth() -> None:
     long = Recipe(**{**long.__dict__, "steps": tuple(Line("Stir. " * 100) for _ in range(8))})
     first, second = recipe_lines(long)
     assert len(first) < 3_800 < len(first) + len(second)
+
+
+def test_a_name_spelled_nearly_is_found_only_when_asked_for_and_marked_close() -> None:
+    """F64d: "Let's make the bechemel" found nothing."""
+    assert search(recipes(), "bechemel") == []  # not unless the caller asks
+    found = search(recipes(), "the bechemel", near=True)
+    assert [m.recipe.name for m in found] == ["Bechamel Sauce"] and found[0].close
+    assert clear_match(found) is None  # asked about, never taken
+    assert [m.recipe.name for m in search(recipes(), "lasagne", near=True)] == ["Lasagna"]
+    assert search(recipes(), "pie", near=True) == []  # short words aren't matched by spelling
+    assert search(recipes(), "bechamel", near=True)[0].close is False  # spelled right: as ever
