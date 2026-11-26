@@ -407,7 +407,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
 | RC8a | Recipes: recipe books, not two fixed docs (no visible change) | Recipes | [x] 2026-11-25 |
 | RC8b | Recipes: a recipe book of its own (vegan cheese), out of the way | Recipes | [x] 2026-11-25 |
-| RC8c | Recipes: reading the cheese doc as it's laid out | Recipes | [ ] |
+| RC8c | Recipes: reading the cheese doc as it's laid out | Recipes | [x] 2026-11-25 |
 | CK1 | Cooking companion: the cook screen on /session | Cooking companion | [x] 2026-11-08 |
 | CK2 | Cooking companion: amounts for this step | Cooking companion | [x] 2026-11-08 |
 | CK3 | Cooking companion: the timer rail | Cooking companion | [x] 2026-11-08 |
@@ -20918,7 +20918,7 @@ Notes:
   live too, so the first read has its sections.
 
 ### RC8c · Recipes: reading the cheese doc as it's laid out
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: RC8b
 Read first: `themi_home/cookbook.py` (the parser: `SECTION_STYLES`, `SUBSECTION_STYLES`,
 `RECIPE_STYLE`, `GROUP_STYLE`, `SEPARATOR`, `_add`, `REFERENCES`); `recipes.py` (`is_guide`,
@@ -20983,6 +20983,39 @@ Decide first (Michael), with recommendations:
   Recommended. The other way is not to read that section at all.
 - Not in this prompt: the "Cheese Calendars" spreadsheet (aging and washing schedules) could
   later become reminders for a cheese that's aging. Ask before writing that prompt.
+
+Decided: "Dairy Recipes to Convert" is read, labelled and found only by exact name, as
+recommended, when Michael asked for RC8a-c to be built (2026-11-25).
+
+Notes:
+- Parser (`cookbook.py`): `_section_styles` makes Heading 2 a section and Heading 3 a
+  sub-section when the only Heading 1 (or Title) is the doc's title and the doc has Heading
+  2s; the cookbook's layout reads as before. A Heading 4 matching `SEPARATOR` is a divider.
+  An ingredient group in `TOOL_GROUPS` (Tools, Equipment, Supplies, You'll need) fills
+  `ParsedRecipe.tools`. A step group in `NOTE_GROUPS` (Variations, Serving, Make it a Meal,
+  Notes) goes to notes as "Variations:" then its lines; a later ordinary step group starts
+  steps again. `draft_of(section)`: "not converted yet" (… to Convert), "an experiment"
+  (Experiments), "an idea" (Ideas, Someday). Empty `tools`/`draft` are left out of
+  `content_hash`, so existing recipes don't all read as changed.
+- Migration `0188_recipe_tools_drafts.sql`: `recipes.tools` (JSON), `recipes.draft`.
+  `Recipe.tools`, `Recipe.draft`.
+- Shown: the chat card's "You'll need" list after the ingredients; the gather step's
+  "> You'll need: …" (chat) and `state["tools"]` / "You'll need: …" (cook screen); the
+  recipe page's "You'll need". A draft's card says "(Vegan cheese · not converted yet)" in
+  place of its section; buttons "Parmesan (Vegan cheese, not converted yet)".
+- Drafts are found only by their exact name (with or without `book`), and are never meal
+  ideas. [Cook this] stays.
+- Book sections: `Recipes.sections_of`, `set_sections`; `_guess_sections` sets a new shelf's
+  `sub_recipe_sections` / `reference_sections` from `BASE_SECTIONS` (Milks, Bases, Cultures,
+  Starters, Ingredients) and `GUIDE_SECTIONS` (Appendix, References, Guides) on its first read.
+  The cookbook page has a "Save sections" form per shelf (comma-separated).
+  `reference_charts` (the guides offer) uses the main book's reference sections, and only the
+  main book's charts (before, a References section in Recipes to try counted too).
+- Tests: `tests/unit/test_cheese_doc_parser.py` (6), `tests/scenarios/test_cheese_book.py` (7),
+  fixture `tests/fixtures/cheese.py` (the real doc's layout, trimmed). Goldens unchanged.
+- **Setup:** update the Pi (migrations 0187, 0188) and restart, then pick "Madicen Family
+  Cheese Recipes" on the cookbook page under Accounts as "A new recipe book…" named "Vegan
+  cheese". No doc changes are needed.
 
 ---
 

@@ -150,6 +150,8 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         lines = cooking.lines(session, recipe)
         out_now = might_be_out(cooking, recipe)  # CK6
         items = cooking.groceries.known(recipe)
+        if recipe.tools:  # RC8c: what to have out, apart from what it uses
+            out["tools"] = list(recipe.tools)
         out["gather"] = [
             {"n": n, "line": line, "group": source.group, "ticked": n in session.gathered,
              "maybe_out": n in out_now, "item": items[n].item if n < len(items) else ""}

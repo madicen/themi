@@ -54,6 +54,22 @@ YIELD = re.compile(
     re.IGNORECASE,
 )
 REFERENCES = "references"
+# RC8c: an ingredient group of things to have, not to buy ("Tools"), and step groups that are
+# notes, not steps ("Variations", "Make it a Meal")
+TOOLS = "\x00tools"  # the group a Tools heading starts (never a heading's own words)
+TOOL_GROUPS = {"tools", "tool", "equipment", "supplies", "you'll need", "you will need"}
+NOTE_GROUPS = {"variations", "variation", "serving", "to serve", "make it a meal", "notes"}
+# RC8c: sections of recipes that aren't ready to cook as written
+DRAFTS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\bto convert\b", re.IGNORECASE), "not converted yet"),
+    (re.compile(r"\bexperiments?\b", re.IGNORECASE), "an experiment"),
+    (re.compile(r"^(?:ideas|someday)\b", re.IGNORECASE), "an idea"),
+)
+
+
+def draft_of(section: str) -> str:
+    """RC8c: why a section's recipes aren't ready ("not converted yet"), or ""."""
+    return next((said for pattern, said in DRAFTS if pattern.search(section)), "")
 
 
 @dataclass(frozen=True)
@@ -77,10 +93,15 @@ class ParsedRecipe:
     yield_count: int | None = None
     needs_look: list[str] = field(default_factory=list)
     position: int = 0
+    tools: list[str] = field(default_factory=list)  # RC8c: what to have out, not to buy
+    draft: str = ""  # RC8c: "not converted yet", from its section
 
     def content_hash(self) -> str:
         data = asdict(self)
         data.pop("position")
+        for unset in ("tools", "draft"):  # RC8c: a recipe without them hashes as before
+            if not data[unset]:
+                data.pop(unset)
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
 
     @property
@@ -182,6 +203,23 @@ def _chart_rows(rows: tuple[tuple[str, ...], ...]) -> list[list[str]]:
     return [row for row in kept if any(row)]
 
 
+def _section_styles(found: list[Block], title: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """RC8c: which heading levels are sections and sub-sections. Heading 1 is a section,
+    unless the only one is the doc's title: then Heading 2 is, and Heading 3 a sub-section."""
+    tops = [
+        _plain(b.text)
+        for b in found
+        if b.kind == "paragraph" and b.style in SECTION_STYLES and _plain(b.text)
+    ]
+    if title:
+        tops = [t for t in tops if t.lower() != title.lower()]
+    elif tops:
+        tops = tops[1:]  # no file name: the first one is the title
+    if tops or not any(b.style == "HEADING_2" for b in found if b.kind == "paragraph"):
+        return SECTION_STYLES, SUBSECTION_STYLES
+    return (*SECTION_STYLES, "HEADING_2"), ("HEADING_3",)
+
+
 def parse(document: dict[str, Any]) -> Cookbook:
     title = _clean(str(document.get("title", "")))
     found: list[ParsedRecipe] = []
@@ -203,7 +241,9 @@ def parse(document: dict[str, Any]) -> Cookbook:
             found.append(recipe)
         recipe, part, group, step_group = None, None, "", ""
 
-    for block in blocks(document):
+    every = blocks(document)
+    section_styles, subsection_styles = _section_styles(every, title)
+    for block in every:
         if block.kind == "rule":
             finish()
             continue
@@ -220,21 +260,26 @@ def parse(document: dict[str, Any]) -> Cookbook:
         text = block.text
         plain = _plain(text)
         style = block.style
-        if style in SECTION_STYLES:
+        if style in section_styles:
             finish()
+            if style in SECTION_STYLES and section_styles != SECTION_STYLES:
+                continue  # RC8c: the title, above the sections
             if plain and plain.lower() != title.lower():
                 section, subsection = plain, ""
                 sections.append((plain, block.start))
             continue
-        if style in SUBSECTION_STYLES:
+        if style in subsection_styles:
             finish()
             subsection = plain
             continue
         if style == RECIPE_STYLE:
             finish()
+            if SEPARATOR.match(_clean(text)):  # RC8c: a divider styled as a heading
+                continue
             if plain:
                 key = block.heading_id or _fallback_key(section, plain, len(found))
                 recipe = ParsedRecipe(key, plain, section, subsection)
+                recipe.draft = draft_of(section)
             continue
         if recipe is None or not plain:
             continue
@@ -251,7 +296,15 @@ def parse(document: dict[str, Any]) -> Cookbook:
             part = word
             continue
         if style == GROUP_STYLE:
-            if part == "instructions":
+            named = plain.lower()
+            if named in TOOL_GROUPS:  # RC8c: things to have out, never bought
+                group, part = TOOLS, "ingredients"
+            elif named in NOTE_GROUPS and part in ("instructions", "after"):
+                recipe.notes.append(f"{plain}:")  # RC8c: variations are notes, not steps
+                part = "after"
+            elif part == "after" and recipe.steps:
+                step_group, part = plain, "instructions"  # steps again after the notes
+            elif part == "instructions":
                 step_group = plain
             else:
                 group = plain
@@ -274,6 +327,9 @@ def _add(recipe: ParsedRecipe, part: Part | None, text: str, group: str, step_gr
             now = "after" if now == "instructions" else now
             continue
         if now == "ingredients":
+            if group == TOOLS:  # RC8c
+                recipe.tools.append(line)
+                continue
             if NOTE.match(line):
                 recipe.notes.append(line)
                 continue

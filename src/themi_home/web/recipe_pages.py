@@ -130,6 +130,13 @@ def routes(kit: Kit) -> APIRouter:
                 said = book.remove_book(key)
             elif action == "rename":
                 said = book.rename_book(key, str(form.get("name") or ""))
+            elif action == "sections":  # RC8c
+                book.set_sections(
+                    key,
+                    str(form.get("sub_recipes") or "").split(","),
+                    str(form.get("references") or "").split(","),
+                )
+                said = f"Saved {book.book(key).name}'s sections."
             else:
                 book.set_switches(
                     key,

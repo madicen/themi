@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -72,6 +73,9 @@ MAIN_ID = 1  # the cookbook's row: a recipe with no book_id is the main book's
 DOC_NAMES = {COOKBOOK: "the cookbook", TO_TRY: "Recipes to try"}
 TRY_KEY = "try:"  # a to-try recipe's key: its heading id behind this, so the docs never clash
 MAIN, TRYING, SHELF = "main", "trying", "shelf"
+# RC8c: a new book's sections of base recipes and of guides, guessed from their names
+BASE_SECTIONS = re.compile(r"^(?:milks?|bases?|cultures?|starters?|ingredients)$", re.IGNORECASE)
+GUIDE_SECTIONS = re.compile(r"^(?:appendix|appendices|references?|guides?)$", re.IGNORECASE)
 NO_TRY_DOC_TEXT = (
     "There's no Recipes to try doc yet. Someone can choose one on the website's Accounts page "
     "(the cookbook's page)."
@@ -151,6 +155,8 @@ class Recipe:
     book: str = COOKBOOK  # F49h: the doc it's from; RC8a: its recipe book's key
     book_name: str = DOC_NAMES[COOKBOOK]  # RC8b: how its book is said ("Vegan cheese")
     book_role: str = MAIN  # RC8b: main, trying or shelf
+    tools: tuple[str, ...] = ()  # RC8c: what to have out ("cheesecloth"), never bought
+    draft: str = ""  # RC8c: why it isn't ready to cook as written ("not converted yet")
 
     @property
     def to_try(self) -> bool:
@@ -203,6 +209,8 @@ def recipe_from_row(row: dict[str, Any]) -> Recipe:
         book=row.get("book_key") or COOKBOOK,  # RC8a: from recipe_books, by book_id
         book_name=row.get("book_name") or DOC_NAMES[COOKBOOK],
         book_role=row.get("book_role") or MAIN,
+        tools=tuple(json.loads(row.get("tools") or "[]")),
+        draft=row.get("draft") or "",
     )
 
 
@@ -345,6 +353,40 @@ class Recipes:
              which),
         )  # fmt: skip
 
+    def sections_of(self, which: str) -> list[str]:
+        """A book's sections as read, in the doc's order."""
+        rows = self.db.query(
+            "SELECT section, MIN(position) AS first FROM recipes WHERE source = 'doc' "
+            "AND removed_at IS NULL AND section != '' AND IFNULL(book_id, ?) = ? "
+            "GROUP BY section ORDER BY first",
+            (MAIN_ID, self.book(which).id),
+        )
+        return [r["section"] for r in rows]
+
+    def set_sections(self, which: str, sub_recipes: list[str], references: list[str]) -> None:
+        """RC8c: which of a book's sections hold base recipes ("Milks") and guides
+        ("Appendix")."""
+        clean = [s.strip() for s in sub_recipes if s.strip()]
+        refs = [s.strip() for s in references if s.strip()]
+        self.db.execute(
+            "UPDATE recipe_books SET sub_recipe_sections = ?, reference_sections = ?, "
+            "updated_at = ? WHERE key = ?",
+            (json.dumps(clean), json.dumps(refs), to_utc_iso(clock.now()), which),
+        )
+
+    def _guess_sections(self, which: str) -> None:
+        """RC8c: a new book of its own's base-recipe and guide sections, from their names,
+        the first time it's read (they can be changed on the cookbook page)."""
+        shelf = self.book(which)
+        if shelf.role != SHELF or shelf.sub_recipe_sections or shelf.reference_sections:
+            return
+        sections = self.sections_of(which)
+        self.set_sections(
+            which,
+            [s for s in sections if BASE_SECTIONS.match(s)],
+            [s for s in sections if GUIDE_SECTIONS.match(s)],
+        )
+
     def remove_book(self, which: str) -> str:
         """Stop reading a shelf book: its recipes are marked removed, as when they leave a
         doc. Nothing is deleted from Google."""
@@ -447,6 +489,7 @@ class Recipes:
         await self.services.outbox.send(member, said, priority=Priority.REPLY, kind=KIND)
         if which == COOKBOOK:
             await self.offer_guides(member)
+        self._guess_sections(which)  # RC8c
         return said
 
     async def sync_all(self) -> None:
@@ -518,6 +561,8 @@ class Recipes:
                     _words(recipe),
                     digest,
                     recipe.position,
+                    json.dumps(recipe.tools),
+                    recipe.draft,
                     now,
                 )
                 old = existing.get(recipe.key)
@@ -525,8 +570,9 @@ class Recipes:
                     self.db.execute(
                         "INSERT INTO recipes (section, subsection, name, ingredients, steps, "
                         "notes, source_text, kind, chart, yield_count, needs_look, words, hash, "
-                        "position, updated_at, key, source, created_at, book_id) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'doc', ?, ?)",
+                        "position, tools, draft, updated_at, key, source, created_at, book_id) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'doc', "
+                        "?, ?)",
                         (*values, recipe.key, now, shelf.id),
                     )
                     added += 1
@@ -535,7 +581,8 @@ class Recipes:
                         "UPDATE recipes SET section = ?, subsection = ?, name = ?, "
                         "ingredients = ?, steps = ?, notes = ?, source_text = ?, kind = ?, "
                         "chart = ?, yield_count = ?, needs_look = ?, words = ?, hash = ?, "
-                        "position = ?, updated_at = ?, removed_at = NULL WHERE key = ?",
+                        "position = ?, tools = ?, draft = ?, updated_at = ?, removed_at = NULL "
+                        "WHERE key = ?",
                         (*values, recipe.key),
                     )
                     changed += 1
@@ -576,7 +623,13 @@ class Recipes:
     # ----- References charts as guides ------------------------------------------------------
 
     def reference_charts(self) -> list[Recipe]:
-        return [r for r in self.all(include_charts=True) if r.is_chart and _is_reference(r)]
+        """The main book's reference charts (RC8c: its reference sections, by default
+        References), the ones offered as guides."""
+        refs = {s.lower() for s in self.book(COOKBOOK).reference_sections} or {book.REFERENCES}
+        return [
+            r for r in self.all(include_charts=True)
+            if r.is_chart and r.book == COOKBOOK and r.section.strip().lower() in refs
+        ]  # fmt: skip
 
     def _has_guide_for(self, member: Member, recipe: Recipe) -> bool:
         guides = self.services.maybe(keys.guides)
@@ -695,14 +748,22 @@ class Recipes:
         everything = self.all(include_charts=charts)
         if book:
             chosen = self.named_book(book)
-            pool = [r for r in everything if chosen is not None and r.book == chosen.key]
+            pool = [
+                r for r in everything
+                if chosen is not None and r.book == chosen.key
+                and (not r.draft or name_key(r.name) == name_key(text))
+            ]  # fmt: skip
             return search(pool, text, section=section)
         said = {stem(w) for w in name_key(text).split()}
         hidden = {
             b.key for b in self.books() if not b.found_unasked and not book_words(b.name) & said
         }
-        shown = [r for r in everything if r.book not in hidden]
-        exact = [r for r in everything if r.book in hidden and name_key(r.name) == name_key(text)]
+        said_name = name_key(text)
+        shown = [r for r in everything if r.book not in hidden and not r.draft]
+        exact = [  # RC8c: a draft, too, only by its name said exactly
+            r for r in everything
+            if (r.book in hidden or r.draft) and name_key(r.name) == said_name
+        ]  # fmt: skip
         quiet = {b.key for b in self.books() if not b.found_unasked}
         usual = [r for r in shown if r.book not in quiet]
         return search(shown + exact, text, section=section, sections_from=usual)
@@ -815,10 +876,6 @@ class Recipes:
         return self.services.recipe_buttons
 
 
-def _is_reference(recipe: Recipe) -> bool:
-    return recipe.section.strip().lower() == book.REFERENCES
-
-
 def chart_guide_text(recipe: Recipe) -> str:
     """A chart as a guide: its name, then a line per row ("Brown Rice: Ratio 1:1, ...")."""
     parsed = ParsedRecipe(recipe.key, recipe.name, chart=[list(r) for r in recipe.chart])
@@ -879,8 +936,11 @@ PICTURE_SOURCE = "your picture"  # F34m: where a recipe copied from a picture is
 def _label(recipe: Recipe) -> str:
     """Its name on a button, "(to try)" after it when it's from Recipes to try (F49h), or its
     book's name when it's from a book of its own (RC8b)."""
-    if recipe.on_shelf:
-        return f"{recipe.name} ({recipe.book_name})"
+    if recipe.on_shelf:  # RC8c: and why it isn't ready, when it's a draft
+        said = f"{recipe.book_name}, {recipe.draft}" if recipe.draft else recipe.book_name
+        return f"{recipe.name} ({said})"
+    if recipe.draft:
+        return f"{recipe.name} ({recipe.draft})"
     return f"{recipe.name} (to try)" if recipe.to_try else recipe.name
 
 
@@ -888,6 +948,8 @@ def recipe_lines(recipe: Recipe, link: str | None = None) -> tuple[str, str]:
     """Its ingredients part and its steps part, as sent: the name plain, the recipe's own
     words quoted, as written."""
     where = recipe.section + (f" · {recipe.subsection}" if recipe.subsection else "")
+    if recipe.draft:  # RC8c: "not converted yet" in place of its section
+        where = recipe.draft
     if recipe.source == "web":  # F34m: a picture's has no link, and says so
         where = site_name(recipe.url) if recipe.url else (recipe.source_text or "the web")
     if recipe.to_try:  # F49h: from the Recipes to try doc, not the cookbook
@@ -902,6 +964,8 @@ def recipe_lines(recipe: Recipe, link: str | None = None) -> tuple[str, str]:
             first.append(f"{QUOTE}{line.group}:")
             group = line.group
         first.append(f"{QUOTE}- {line.text}")
+    if recipe.tools:  # RC8c: what to have out, apart from what it uses
+        first += ["", "You'll need"] + [f"{QUOTE}- {tool}" for tool in recipe.tools]
     second = ["Steps"]
     step_group = ""
     for n, step in enumerate(recipe.steps, start=1):

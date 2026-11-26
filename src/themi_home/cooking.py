@@ -680,6 +680,8 @@ class Cooking:
         if session.phase == "gather":
             lines = self.lines(session, recipe)[:MAX_GATHER]
             rows = [f"Cooking {head}. What it uses (tap each as it's out):"]
+            if recipe.tools:  # RC8c: what to have out, never on the list
+                rows.append(f"> You'll need: {', '.join(recipe.tools)}")
             buttons = []
             items = self.groceries.known(recipe)
             group = ""
