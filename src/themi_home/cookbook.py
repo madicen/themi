@@ -61,8 +61,19 @@ PARSER_VERSION = 2
 # notes, not steps ("Variations", "Make it a Meal")
 TOOLS = "\x00tools"  # the group a Tools heading starts (never a heading's own words)
 TOOL_GROUPS = {"tools", "tool", "equipment", "supplies", "you'll need", "you will need"}
-NOTE_GROUPS = {"variations", "variation", "serving", "to serve", "make it a meal", "notes",
-               "note", "recipe notes", "recipe note", "tips", "tip"}  # F64b: NOTE's words too
+NOTE_GROUPS = {
+    "variations",
+    "variation",
+    "serving",
+    "to serve",
+    "make it a meal",
+    "notes",
+    "note",
+    "recipe notes",
+    "recipe note",
+    "tips",
+    "tip",
+}  # F64b: NOTE's words too
 # RC8c: sections of recipes that aren't ready to cook as written
 DRAFTS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bto convert\b", re.IGNORECASE), "not converted yet"),

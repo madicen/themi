@@ -96,7 +96,9 @@ async def test_a_misspelt_recipe_is_asked_about_and_yes_shows_it(scenario: Scena
     """F64d (seen in #270's conversation): "Let's make the bechemel" said there was no such
     recipe; Bechamel Sauce was there."""
     load(scenario.app.services)
-    scenario.primary.queue_tool_call("find_recipe", {"query": "bechemel", "section": "", "book": ""})
+    scenario.primary.queue_tool_call(
+        "find_recipe", {"query": "bechemel", "section": "", "book": ""}
+    )
     scenario.primary.queue_text("Is that the one?")
     await scenario.say("Husband", "Let's make the bechemel")
     assert "Did you mean Bechamel Sauce?" in scenario.inbox("Husband")

@@ -90,7 +90,8 @@ async def test_a_chore_dropped_on_delete_asks_first(wall: Scenario) -> None:
     assert board.get(sweep.id).status == "open"  # nothing yet
     said = await move(wall, op="skip", task=str(sweep.id))
     skipped = board.get(sweep.id)
-    assert skipped.status == "open" and skipped.due_on > board._today()  # just this time
+    assert skipped.status == "open" and skipped.due_on is not None
+    assert skipped.due_on > board._today()  # just this time
     assert "Sweep skipped this time." in said
     today = board._today().isoformat()
     assert f'"due": "{today}"' in said  # its Undo knows the day it was

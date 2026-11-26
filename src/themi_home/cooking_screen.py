@@ -413,9 +413,7 @@ def going(cooking: Cooking, session: Session, recipe: Recipe) -> list[dict[str, 
         r = recipe if s.id == session.id else cooking.recipes.get(s.recipe_id)
         if r is None:
             continue
-        where = (
-            f"{_step_label(s, r)}/{len(r.steps)}" if s.phase == "cook" else cooking.where(s)
-        )
+        where = f"{_step_label(s, r)}/{len(r.steps)}" if s.phase == "cook" else cooking.where(s)
         soonest = cooking.db.scalar(
             "SELECT MIN(ends_at) FROM cooking_timers WHERE session_id = ? AND fired_at IS NULL "
             "AND cancelled_at IS NULL",

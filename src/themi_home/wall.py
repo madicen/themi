@@ -528,7 +528,7 @@ def routes(kit: Kit) -> APIRouter:
             return HTMLResponse("")
         board = kit.app.services.get(keys.taskboard)
         op, raw = form.get("op", ""), form.get("task", "")
-        cards = {"chores": found.chores, "todos": found.todos}
+        cards = {k: sec for k, sec in (("chores", found.chores), ("todos", found.todos)) if sec}
         here = {
             name: [int(i.key[5:]) for i in sec.items if i.key.startswith("task-") and not i.done]
             for name, sec in cards.items()
