@@ -405,7 +405,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
-| RC8a | Recipes: recipe books, not two fixed docs (no visible change) | Recipes | [ ] |
+| RC8a | Recipes: recipe books, not two fixed docs (no visible change) | Recipes | [x] 2026-11-25 |
 | RC8b | Recipes: a recipe book of its own (vegan cheese), out of the way | Recipes | [ ] |
 | RC8c | Recipes: reading the cheese doc as it's laid out | Recipes | [ ] |
 | CK1 | Cooking companion: the cook screen on /session | Cooking companion | [x] 2026-11-08 |
@@ -20719,7 +20719,7 @@ Notes (2026-11-06):
 - One eval (no energy words in the reply), not run here.
 
 ### RC8a · Recipes: recipe books, not two fixed docs (no change the family sees)
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: F49h, F49i
 Read first: F49h's and F49i's notes; `themi_home/recipes.py` (`COOKBOOK`, `TO_TRY`,
 `DOC_TABLES`, `DOC_NAMES`, `TRY_KEY`, `settings(which)`, `choose`, `sync`, `sync_all`,
@@ -20778,6 +20778,22 @@ Tests:
 - Goldens don't change (`tools.json`, `handlers.json`, the cookbook page).
 
 Data/Setup: a migration; update the Pi and restart. Nothing for the family to do.
+
+Notes:
+- Migration `0187_recipe_books.sql`: `recipe_books` (the cookbook is id 1, key `cookbook`, role
+  `main`; Recipes to try is id 2, `to_try`, `trying`), with the doc columns, `diet` and
+  `guides_offered` (both moved onto the books table, used for the main book), `position`, the
+  three switches, `sub_recipe_sections` / `reference_sections` (JSON) and `removed_at` (for
+  RC8b). `cookbook` and `try_doc` are dropped. `recipes.book_id` is nullable: NULL is the main
+  book (web recipes, and rows tests insert directly), because SQLite won't add a REFERENCES
+  column with a non-NULL default while foreign keys are on. `recipes.book` stays, unread.
+- `Recipes`: `books()`, `book(key)` (a `RecipeBook`, whose `prefix` is "", `try:` or
+  `<key>:`), `doc_name(key)`, `count(key)`; `settings(key)` is the book's row.
+  `get`/`all` join `recipe_books` (`WITH_BOOK`) so `Recipe.book` is the book's key, as before.
+  `summary(result, where)` now takes how the book is said, not its key. `sync_all` reads
+  every book with a doc. `MAIN_ID = 1`.
+- Changed test: `tests/fixtures/cookbook.py`'s `load` sets the doc on `recipe_books`, not
+  `cookbook`. New: `tests/unit/test_recipe_books.py` (the migration). Goldens unchanged.
 
 ### RC8b · Recipes: a recipe book of its own (the vegan cheese recipes), out of the way
 Status: [ ]

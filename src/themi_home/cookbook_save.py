@@ -48,6 +48,7 @@ from themi_home.groups import COOKING
 from themi_home.recipes import (
     COOKBOOK,
     DOC_NAMES,
+    MAIN_ID,
     NO_TRY_DOC_TEXT,
     PICTURE_SOURCE,
     TO_TRY,
@@ -232,21 +233,23 @@ class CookbookSave:
         if payload.get("keep"):
             return await self._keep(recipe, section)
         which = str(payload.get("book") or COOKBOOK)  # F49h: or Recipes to try
-        where = DOC_NAMES[which]
+        where = self.recipes.doc_name(which)
         if recipe is None:
             return "That recipe isn't kept any more, so nothing was added."
         if recipe.source == "doc":
-            return f"{recipe.name} is in {DOC_NAMES[recipe.book]} already."  # a retry
+            return f"{recipe.name} is in {self.recipes.doc_name(recipe.book)} already."  # a retry
         settings = self.recipes.settings(which)
         if not settings["doc_id"] or settings["account_id"] is None:
             raise DocsError(f"There's no {where.removeprefix('the ')} doc to add to.")
         client = self.recipes.client(settings["account_id"])
         doc_id = settings["doc_id"]
-        prefix = TRY_KEY if which == TO_TRY else ""
+        shelf = self.recipes.book(which)  # RC8a
+        prefix = shelf.prefix
         before = {
             r["key"].removeprefix(prefix)
             for r in self.db.query(
-                "SELECT key FROM recipes WHERE source = 'doc' AND book = ?", (which,)
+                "SELECT key FROM recipes WHERE source = 'doc' AND IFNULL(book_id, ?) = ?",
+                (MAIN_ID, shelf.id),
             )
         }
         entry = self.entry(recipe)
@@ -259,9 +262,9 @@ class CookbookSave:
         )
         if added is not None:  # the web recipe becomes the doc's own
             self.db.execute(
-                "UPDATE recipes SET key = ?, source = 'doc', section = ?, book = ?, "
+                "UPDATE recipes SET key = ?, source = 'doc', section = ?, book_id = ?, "
                 "updated_at = ? WHERE id = ?",
-                (prefix + added.key, added.section if prefix else section, which,
+                (prefix + added.key, added.section if prefix else section, shelf.id,
                  to_utc_iso(clock.now()), recipe.id),
             )  # fmt: skip
         await self.recipes.sync(force=True, which=which)
@@ -320,7 +323,8 @@ class CookbookSave:
         before = {
             r["key"]
             for r in self.db.query(
-                "SELECT key FROM recipes WHERE source = 'doc' AND book = ?", (COOKBOOK,)
+                "SELECT key FROM recipes WHERE source = 'doc' AND IFNULL(book_id, ?) = ?",
+                (MAIN_ID, MAIN_ID),
             )
         }
         await self._write(client, doc_id, "the cookbook", lambda d: book.entry_requests(
@@ -333,8 +337,8 @@ class CookbookSave:
         if added is not None:  # the same row, now the cookbook's: its history stays
             self.db.execute(
                 "UPDATE recipes SET key = ?, source = 'doc', section = ?, subsection = '', "
-                "book = ?, updated_at = ? WHERE id = ?",
-                (added.key, added.section, COOKBOOK, to_utc_iso(clock.now()), recipe.id),
+                "book_id = ?, updated_at = ? WHERE id = ?",
+                (added.key, added.section, MAIN_ID, to_utc_iso(clock.now()), recipe.id),
             )
 
         def deleting(document: dict[str, Any]) -> list[dict[str, Any]] | None:

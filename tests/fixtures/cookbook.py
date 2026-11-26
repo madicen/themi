@@ -393,5 +393,5 @@ def load(services: Any, blocks: list[Block] | None = None) -> None:
 
     services.maybe(keys.recipes).store_doc(book.parse(document(blocks)).recipes)
     services.store.db.execute(
-        "UPDATE cookbook SET doc_id = ?, title = ? WHERE id = 1", (COOKBOOK_ID, TITLE)
+        "UPDATE recipe_books SET doc_id = ?, title = ? WHERE id = 1", (COOKBOOK_ID, TITLE)
     )

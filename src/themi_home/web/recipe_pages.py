@@ -23,7 +23,7 @@ from themi_home.gram_weights import viewer_lines
 from themi_home.quantities import NeedsYield, describe, scale_for, scale_line
 from themi_home.recipe_card import card_png
 from themi_home.recipe_groceries import BAKING_TEXT, SCALED_TEXT, is_baking
-from themi_home.recipes import COOKBOOK, TO_TRY, Recipe, Recipes, search
+from themi_home.recipes import COOKBOOK, DOC_NAMES, TO_TRY, Recipe, Recipes, search
 
 SCALES = [
     ("½", "half"),
@@ -117,7 +117,7 @@ def routes(kit: Kit) -> APIRouter:
         if book.try_doc_id is not None:  # F49h: the other doc too
             trying = await book.sync(force=True, which=TO_TRY)
             said += " " + (
-                book.summary(trying, TO_TRY) if trying is not None
+                book.summary(trying, DOC_NAMES[TO_TRY]) if trying is not None
                 else book.settings(TO_TRY)["problem"] or "Recipes to try couldn't be read."
             )  # fmt: skip
         return kit.redirect(back, said)
