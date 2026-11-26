@@ -7,7 +7,15 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from themi_home.quantities import NeedsYield, fraction, number, scale_for, scale_line
+from themi_home.quantities import (
+    NeedsYield,
+    batch_after,
+    describe,
+    fraction,
+    number,
+    scale_for,
+    scale_line,
+)
 
 
 @pytest.mark.parametrize(
@@ -83,3 +91,21 @@ def test_what_they_asked_for() -> None:
         scale_for("for 6", None)
     with pytest.raises(ValueError, match="isn't an amount"):
         scale_for("lots", None)
+
+
+@pytest.mark.parametrize(
+    ("said", "factor", "after", "before"),
+    [
+        ("double", 2.0, "doubled", "a double batch of"),
+        ("half", 0.5, "halved", "half of"),
+        ("x3", 3.0, "tripled", "a triple batch of"),
+        ("1.5x", 1.5, "1½ times", "1½× of"),
+        ("for 6", 1.5, "for 6", "for 6"),
+    ],
+)  # fmt: skip
+def test_a_batch_is_named_after_a_name_or_before_one(
+    said: str, factor: float, after: str, before: str
+) -> None:
+    """F64c: "5 Minute Liquid Mozzarella, a double batch of." read as half a sentence."""
+    assert batch_after(said, factor) == after
+    assert describe(said, factor) == before

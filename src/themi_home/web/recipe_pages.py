@@ -20,7 +20,7 @@ from themi.web.kit import Kit
 from themi_google.connectors.gdocs import DocsError, doc_id_from
 from themi_google.connectors.google import DRIVE_FILE_SCOPE
 from themi_home.gram_weights import viewer_lines
-from themi_home.quantities import NeedsYield, describe, scale_for, scale_line
+from themi_home.quantities import NeedsYield, batch_after, scale_for, scale_line
 from themi_home.recipe_card import card_png
 from themi_home.recipe_groceries import BAKING_TEXT, SCALED_TEXT, is_baking
 from themi_home.recipes import COOKBOOK, TO_TRY, Recipe, Recipes, search
@@ -277,7 +277,7 @@ def routes(kit: Kit) -> APIRouter:
             recipe=recipe,
             lines=list(zip(groups, lines, strict=True)),
             scale=scale if not problem else "",
-            batch=describe(scale, factor) if factor != 1 else "",
+            batch=batch_after(scale, factor) if factor != 1 else "",  # F64c
             scales=SCALES,
             notes=[SCALED_TEXT] + ([BAKING_TEXT] if is_baking(recipe) else [])
             if factor != 1

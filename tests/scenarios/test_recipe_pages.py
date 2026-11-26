@@ -40,7 +40,7 @@ async def test_a_recipe_scaled(scenario: Scenario, site: httpx.AsyncClient, sign
     pancakes = recipe_id(scenario, "Pancakes")
     page = await site.get(f"/recipes/{pancakes}", params={"scale": "double"})
     assert "3 Cups (360 grams) white whole wheat flour" in page.text
-    assert "A double batch of" in page.text
+    assert "Doubled" in page.text
     assert "Pan size and times may need changing." in page.text
     asked = await site.get(f"/recipes/{pancakes}", params={"scale": "for 6"})
     assert "doesn&#39;t say how many it makes" in asked.text

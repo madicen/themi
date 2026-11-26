@@ -57,7 +57,7 @@ from themi_home.cooking_links import UNITS, StepLinks
 from themi_home.cooking_mixes import CookingMixes
 from themi_home.cooking_titles import TITLES_FIELD, TITLES_RULE, StepTitles
 from themi_home.groups import COOKING
-from themi_home.quantities import AMOUNT, NeedsYield, describe, scale_for, scale_line
+from themi_home.quantities import AMOUNT, BRACKET, NeedsYield, batch_after, scale_for, scale_line
 from themi_home.recipe_groceries import Ingredient, resolve
 from themi_home.recipes import Recipe, Recipes, stem
 
@@ -250,7 +250,15 @@ def with_amount(job: str, line: str) -> str:
         return f"{job} ({amount})"
     measure = re.match(r"\s*measure\b", rest, re.IGNORECASE)
     if measure:
-        return f"{head}: measure {amount}{rest[measure.end() :]}"
+        after = rest[measure.end() :]
+        # F64c: "measure 550ml" has its amount already; the shown one replaces it, not joins it
+        if said := AMOUNT.match(after.strip()):
+            left = after.strip()[said.end() :]
+            if weight := BRACKET.match(left):  # and its weight, "(560 g)"
+                left = left[weight.end() :]
+            left = left.strip()
+            after = "" if not left else left if left[0] in ",;.)" else f" {left}"
+        return f"{head}: measure {amount}{after}"
     return f"{head} ({amount}):{rest}"
 
 
@@ -649,7 +657,7 @@ class Cooking:
     def heading(self, session: Session, recipe: Recipe) -> str:
         if session.scale == 1:
             return recipe.name
-        batch = describe(session.scale_said, session.scale)
+        batch = batch_after(session.scale_said, session.scale)  # F64c: not "…, a double batch of"
         return f"{recipe.name} {batch}" if batch.startswith("for ") else f"{recipe.name}, {batch}"
 
     async def render(self, session: Session) -> tuple[str, list[Button]]:

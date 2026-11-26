@@ -371,7 +371,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F63b | Feedback: Themi can run the CatGenie ("try a clean again") | Feedback | [x] 2026-11-25 |
 | F64a | Feedback: the wall's month shows each event in its calendar's colour | Feedback | [x] 2026-11-25 |
 | F64b | Feedback: a recipe's "Notes:" heading starts its notes, not more steps | Feedback | [x] 2026-11-25 |
-| F64c | Feedback: the prep list says an amount once; a scaled batch reads as English | Feedback | [ ] |
+| F64c | Feedback: the prep list says an amount once; a scaled batch reads as English | Feedback | [x] 2026-11-25 |
 | F64d | Feedback: a misspelt recipe ("bechemel") is still found, after asking | Feedback | [ ] |
 | F64e | Idea: two recipes on the go at once, and switching between them (chat) | Feedback | [ ] |
 | F64f | Idea: the cook screen shows each recipe on the go; a tap switches | Feedback | [ ] |
@@ -18852,7 +18852,7 @@ Notes:
 - **Setup:** update the Pi; the next `recipes.sync` (within 15 minutes) re-reads every book.
 
 ### F64c · Feedback (2026-11-25): the prep list says an amount once, and a scaled batch reads as English
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: F45b, CK5
 Read first: `themi_home/cooking.py` (`with_amount`, `heading`); `themi_home/quantities.py`
 `describe`. From the conversation behind Michael's idea #270 (2026-11-25, 8:23 to 8:34 pm).
@@ -18881,6 +18881,17 @@ CK and GW golden texts change only on these lines (say which in the commit).
 
 Data/Setup: update the Pi. Nothing to mark reviewed (no report of its own; seen in #270's
 conversation).
+
+Notes:
+- `with_amount`: after "measure", an amount the job already has (and its "(560 g)") is
+  replaced by the shown one; a following ", sifted" keeps its comma.
+- `quantities.batch_after` names a batch after the recipe's name: "doubled", "halved",
+  "tripled", "1½ times", "for 6". The cooking heading (card, prep, steps, done) and the recipe
+  page use it; the grocery card ("For a double batch of Pancakes, …") keeps `describe`, which
+  goes before a name.
+- Tests changed for the new wording (the prompt changes it): `test_cooking_links` and
+  `test_cook_screen` ("Alfredo Sauce, doubled"), `test_recipe_pages` ("Doubled").
+- **Setup:** update the Pi.
 
 ### F64d · Feedback (2026-11-25): a recipe asked for with a misspelling ("bechemel") is still found
 Status: [ ]

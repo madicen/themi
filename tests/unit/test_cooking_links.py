@@ -176,7 +176,7 @@ async def test_scale_mid_session(scenario: Scenario, cooking: Cooking) -> None:
     assert state["amounts"]["uses"][0]["line"].startswith("2 Cups cashews")
     assert state["scale_words"] == "double"
     assert [o["on"] for o in state["scales"]["options"]] == [False, False, True]
-    assert scenario.edits("Erin")[-1]["text"].startswith("Alfredo Sauce, a double batch of:")
+    assert scenario.edits("Erin")[-1]["text"].startswith("Alfredo Sauce, doubled:")
     scenario.app.db.execute("UPDATE recipes SET yield_said = '4' WHERE name = 'Alfredo Sauce'")
     tapped = await cooking.act_from_page(erin, session_id, "scale", state["seq"], {"for": "6"})
     assert tapped.said == "Now for 6." and cooking.state(erin)["scales"]["for"] == 6

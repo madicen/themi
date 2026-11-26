@@ -24,6 +24,12 @@ from themi_home.quantities import scale_line, weight_after_unit
         ("Lemon juice: measure 1 tsp", "1 tsp lemon juice", "Lemon juice: measure 1 tsp"),
         ("salt: measure", "salt to taste", "Salt: measure"),
         ("Eggs: beat", "2 eggs", "Eggs (2): beat"),
+        # F64c (seen in #270's conversation): the job's own amount is replaced, not repeated
+        ("Soy milk: measure 550ml", "550ml (560 g) soy milk", "Soy milk: measure 550ml (560 g)"),
+        ("Butter: measure 4 Tbsp", "4 Tbsp (60 g) butter", "Butter: measure 4 Tbsp (60 g)"),
+        ("Flour: measure 2 cups, sifted", "2 cups (250 g) flour",
+         "Flour: measure 2 cups (250 g), sifted"),
+        ("Oil: measure 2 Tbsp (30 g) oil", "4 Tbsp (60 g) oil", "Oil: measure 4 Tbsp (60 g) oil"),
     ],
 )  # fmt: skip
 def test_the_amount_goes_with_the_job(job: str, line: str, shown: str) -> None:
