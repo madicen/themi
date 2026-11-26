@@ -1622,7 +1622,7 @@ class TaskBoard:
         return CANCELLED_TEXT.format(title=task.title)
 
     async def restore(self, task_id: int) -> Task:
-        """F64i: a task cancelled by mistake (the wall's Undo) is open again, as it was."""
+        """F64i: a task cancelled by mistake (an Undo) is open again, as it was."""
         task = self.get(task_id)
         if task.status != "cancelled":
             return task
