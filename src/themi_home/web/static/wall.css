@@ -213,6 +213,37 @@ button.wall-small:focus-visible { outline: 0.2rem solid var(--focus); outline-of
   position: absolute; top: -1.4rem; left: 50%; transform: translateX(-50%); font-size: 0.85rem; font-weight: 700;
   color: var(--on-now); background: var(--now); padding: 0.1rem 0.5rem; border-radius: 999px;
 }
+/* F64h (idea #272): a day on the calendar screen, down the portrait frame */
+.cal-dayplan { display: flex; flex-direction: column; gap: 1rem; }
+.cal-dayplan .wall-day { flex: 1; }
+@media (orientation: landscape) {
+  .cal-dayplan { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  .cal-dayplan .sheet-pair { grid-template-columns: minmax(0, 1fr); }
+}
+.pl { --hours-w: 4.6rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.pl-head { display: flex; gap: 0.5rem; }
+.pl-corner { flex: none; width: var(--hours-w); }
+.pl-name { flex: 1; min-width: 0; text-align: center; font-size: 1.25rem; font-weight: 800; color: var(--tone);
+  border-bottom: 0.25rem solid var(--tone); padding-bottom: 0.3rem; }
+.pl-body { position: relative; display: flex; gap: 0.5rem; height: max(34rem, 58vh); }
+.pl-hours { position: relative; flex: none; width: var(--hours-w); }
+.pl-hour { position: absolute; right: 0.4rem; transform: translateY(-50%); font-size: 1rem; color: var(--sub); white-space: nowrap; }
+.pl-col { position: relative; flex: 1; min-width: 0; border-radius: 0.75rem; background: var(--soft); overflow: hidden; }
+.pl-past { position: absolute; left: 0; right: 0; top: 0; background: var(--past); }
+.pl-grid { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+.pl-block {
+  position: absolute; left: 0; width: 100%; border: 0; font: inherit; text-align: left; cursor: pointer;
+  border-radius: 0.6rem; background: var(--tone); color: var(--on-tone); padding: 0.3rem 0.6rem; overflow: hidden;
+  display: flex; flex-direction: column; gap: 0.1rem; box-shadow: inset 0 0 0 0.12rem var(--soft);
+}
+.pl-block.past { opacity: 0.45; }
+.pl-title { font-size: 1.1rem; font-weight: 700; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
+.pl-when { font-size: 0.85rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-now { position: absolute; left: var(--hours-w); right: 0; height: 0.2rem; margin-top: -0.1rem; background: var(--now); pointer-events: none; }
+.pl-now span {
+  position: absolute; left: -0.25rem; top: 50%; transform: translate(-100%, -50%); font-size: 0.85rem; font-weight: 700;
+  color: var(--on-now); background: var(--now); padding: 0.1rem 0.5rem; border-radius: 999px;
+}
 .wall-tomorrow { display: flex; gap: 1.1rem; align-items: center; flex-wrap: wrap; padding-top: 0.6rem; font-size: 1.2rem; }
 .dot-chip { display: inline-flex; gap: 0.5rem; align-items: center; }
 .dot-chip::before { content: ""; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--tone); }

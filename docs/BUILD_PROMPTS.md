@@ -376,7 +376,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F64e | Idea: two recipes on the go at once, and switching between them (chat) | Feedback | [x] 2026-11-25 |
 | F64f | Idea: the cook screen shows each recipe on the go; a tap switches | Feedback | [x] 2026-11-25 |
 | F64g | Idea: Things to cook can be edited on the wall | Feedback | [x] 2026-11-25 |
-| F64h | Idea: the calendar's day on the wall runs down the screen | Feedback | [ ] |
+| F64h | Idea: the calendar's day on the wall runs down the screen | Feedback | [x] 2026-11-25 |
 | F64i | Idea: a person's page on the wall: drag to reorder, to someone else, delete | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -19098,7 +19098,7 @@ Notes:
 - **Setup:** update the Pi, reload the wall.
 
 ### F64h · Idea (2026-11-25): the calendar's day on the wall runs down the screen
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: F59f, WL3, F58c
 Read first: `themi_home/web/templates/wall/_view_calendar.html` (day mode);
 `themi_home/web/templates/wall/_timeline.html`; `themi_home/wall_view.py` (`lay_out_today`,
@@ -19127,6 +19127,21 @@ positioned by time; the home screen's timeline is unchanged (golden). A browser 
 1920: the planner's height fills the screen down to the boxes, and nothing is cut off (F58c).
 
 Data/Setup: update the Pi, reload the wall. Mark #272 reviewed once live.
+
+Notes:
+- `_timeline.html` has a `planner(t)` macro beside `timeline(t)`: the same `TodayLine`, its
+  `x`/`width` drawn as top/height and its lanes as columns side by side. Both the calendar
+  screen's Day mode and the older `/wall/view/day/…` view use it, inside `.cal-dayplan` (the
+  boxes under it; beside it on a landscape frame). The home screen's timeline is unchanged.
+- No inline styles (the wall's CSP): `wall.js` `place` sets `data-y`/`data-h` (top, height)
+  and `data-col`/`data-cols` (left, width); `tickPlanner` moves today's now line each minute.
+- The hours are the timeline's (8 am to 9 pm, stretched for earlier or later events, a label
+  every two hours on a long day). The planner's body is `max(34rem, 58vh)` tall.
+- Tests changed for the moved markup: `test_wall_calendar_screen` (`titles` reads
+  `pl-title`, the now line is `pl-now`) and `test_wall_views` (`pl-now`).
+- New: `tests/integration/test_wall_planner_browser.py` at 1080 x 1920 (tall, a column per
+  row, blocks by time, overlaps side by side, the boxes below it and on the page).
+- **Setup:** update the Pi, reload the wall.
 
 ### F64i · Idea (2026-11-25): a person's page on the wall: drag to reorder, drag to someone else, delete
 Status: [ ]

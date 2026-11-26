@@ -3,7 +3,7 @@
     a time, its name a picker of months; a day opens it. The week ahead's calendar chips
     (F55f) here too. -#}
 {% from "wall/_sheet.html" import page with context %}
-{% from "wall/_timeline.html" import timeline %}
+{% from "wall/_timeline.html" import planner %}
 {% set state = {"day": view.day.day.isoformat()} if view.mode == "day" else {"month": view.month} %}
 {% call page("Calendar", tone=view.tone) %}
 <div class="cal" data-swipe>
@@ -34,9 +34,10 @@
   {% endif %}
   {% if view.mode == "day" %}
   {% set d = view.day %}
+  <div class="cal-dayplan">{# F64h (idea #272): the day down the screen, its boxes under it #}
   <div class="wall-day">
     {% if d.line.all_day %}<div class="wall-chips"><span class="wall-label">All day</span>{% for c in d.line.all_day %}<span class="pill tone-{{ c.tone }}">{{ c.title }}</span>{% endfor %}</div>{% endif %}
-    {{ timeline(d.line) }}
+    {{ planner(d.line) }}
   </div>
   <div class="sheet-pair">
     <section class="sheet-box">
@@ -51,6 +52,7 @@
       {% else %}<p class="wall-empty">Not in the forecast yet</p>{% endif %}
     </section>
     {% endif %}
+  </div>
   </div>
   {% else %}
   <div class="cal-grid" role="grid" aria-label="{{ view.month_label }}">

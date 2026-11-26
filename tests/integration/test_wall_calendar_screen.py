@@ -20,7 +20,7 @@ __all__ = ["calendar"]  # the fixture
 
 
 def titles(view: str) -> list[str]:
-    return re.findall(r'<span class="tl-title">([^<]+)</span>', view)
+    return re.findall(r'<span class="pl-title">([^<]+)</span>', view)  # F64h: the planner
 
 
 def month_cells(view: str) -> list[str]:
@@ -44,7 +44,7 @@ async def test_a_day_has_its_events_in_order_and_moves_a_day_at_a_time(
 
 async def test_today_has_a_now_line_and_past_days_no_weather(calendar: Scenario) -> None:
     today = (await get(calendar, "/wall/calendar")).text
-    assert "tl-now" in today and "Wednesday, October 21" in today
+    assert "pl-now" in today and "Wednesday, October 21" in today  # F64h: the planner
     assert ">Today</button>" not in today
     past = (await get(calendar, "/wall/calendar?day=2026-10-01")).text
     assert "20 days ago" in words(past) and "Weather" not in past

@@ -22,6 +22,19 @@
     root.querySelectorAll("[data-w]").forEach(function (el) {
       el.style.width = el.getAttribute("data-w") + "%";
     });
+    // F64h: the day planner, down the screen: top and height, and overlaps side by side
+    root.querySelectorAll("[data-y]").forEach(function (el) {
+      el.style.top = el.getAttribute("data-y") + "%";
+    });
+    root.querySelectorAll("[data-h]").forEach(function (el) {
+      el.style.height = el.getAttribute("data-h") + "%";
+    });
+    root.querySelectorAll("[data-cols]").forEach(function (el) {
+      var cols = Number(el.getAttribute("data-cols")) || 1;
+      var col = Number(el.getAttribute("data-col")) || 0;
+      el.style.left = (col * 100) / cols + "%";
+      el.style.width = 100 / cols + "%";
+    });
     root.querySelectorAll("[data-lanes]").forEach(function (el) {
       var lanes = Number(el.getAttribute("data-lanes")) || 1;
       var lane = Number(el.getAttribute("data-lane")) || 0;
@@ -41,6 +54,17 @@
     var line = today.querySelector(".tl-now");
     if (line) line.style.left = at + "%";
     today.querySelectorAll(".tl-past").forEach(function (el) { el.style.width = at + "%"; });
+  }
+
+  function tickPlanner() {  // F64h: today's planner keeps its now line moving too
+    var day = document.querySelector(".pl[data-start]");
+    var line = day && day.querySelector(".pl-now");
+    if (!line) return;
+    var start = Date.parse(day.getAttribute("data-start"));
+    var end = Date.parse(day.getAttribute("data-end"));
+    var at = Math.min(Math.max((Date.now() - start) / (end - start), 0), 1) * 100;
+    line.style.top = at + "%";
+    day.querySelectorAll(".pl-past").forEach(function (el) { el.style.height = at + "%"; });
   }
 
   // WL5a: a view slides up into #wall-view. Close, a tap on the dimmed screen, or its
@@ -397,7 +421,7 @@
     nightMode();
     hold();
     fit();
-    setInterval(tick, 60000);
+    setInterval(function () { tick(); tickPlanner(); }, 60000);
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/wall/sw.js", { scope: "/wall" }).catch(function () {});
     }
