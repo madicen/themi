@@ -373,7 +373,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F64b | Feedback: a recipe's "Notes:" heading starts its notes, not more steps | Feedback | [x] 2026-11-25 |
 | F64c | Feedback: the prep list says an amount once; a scaled batch reads as English | Feedback | [x] 2026-11-25 |
 | F64d | Feedback: a misspelt recipe ("bechemel") is still found, after asking | Feedback | [x] 2026-11-25 |
-| F64e | Idea: two recipes on the go at once, and switching between them (chat) | Feedback | [ ] |
+| F64e | Idea: two recipes on the go at once, and switching between them (chat) | Feedback | [x] 2026-11-25 |
 | F64f | Idea: the cook screen shows each recipe on the go; a tap switches | Feedback | [ ] |
 | F64g | Idea: Things to cook can be edited on the wall | Feedback | [ ] |
 | F64h | Idea: the calendar's day on the wall runs down the screen | Feedback | [ ] |
@@ -18934,7 +18934,7 @@ Notes:
 - **Setup:** update the Pi.
 
 ### F64e · Idea (2026-11-25): two recipes on the go at once, and switching between them (chat)
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: CK1-CK5, F59h
 Read first: `themi_home/cooking.py` (`start`, `current`, `end`, the "switched" outcome, the
 pause, the stale-session sweep near `last_tap_at`); `themi_home/cooking_timers.py`; every
@@ -18977,6 +18977,34 @@ back to the ricotta.
 
 Data/Setup: a migration for the front marker. Update the Pi. Mark #270 reviewed once F64f is
 live too.
+
+Notes:
+- `cooking_sessions.front` (migration `cooking_schema/0005_front.sql`): a counter, not a time,
+  so a switch in the same second still wins. `current` returns the highest `front`;
+  `open_sessions` lists all of a person's, front first; `others(session)` the rest. Every
+  existing caller of `current` gets the one in front unchanged.
+- `start` keeps the others (`MAX_OPEN` 3) and edits the old front's card to "Set aside:
+  Pancakes, step 1." with [Back to Pancakes]. A fourth raises `TooMany`: `start_cooking`
+  declines and says to ask which to stop; [Cook this] sends "3 recipes are on the go
+  already…" with [Stop X] buttons. Deviation: nothing is pushed out, so "switched" is no
+  longer written by cooking (body double still uses it).
+- The card in front ends "Also going: Pancakes, step 1" with [Go to Pancakes]. A `front` tap
+  (`Cooking.switch`) sets the old front aside and sends the other's card fresh at the bottom
+  (its old card "(Carried on below.)").
+- Chat: `switch_recipe` (recipes group) and `stop_cooking` take a recipe name (`on_the_go`
+  matches among the open ones, misspellings included). The context has "Also on the go, set
+  aside: …" with the timers left.
+- Finishing, stopping or "remind me tomorrow" brings the next one back: its card again,
+  headed "Back to Alfredo Sauce, getting ready.".
+- Timers: "Time's up …" has [Go to Pancakes] when that recipe isn't in front; "how long
+  left" names the recipe when timers span two; the end-of-session "Keep timers?" asks only
+  about the ended recipe's (and cancels only those) while others are open.
+- The pause lasts while any session is open (`end` already resumed only when none was).
+- Golden: `tools.json` changes for `stop_cooking` (its `recipe` argument) and the new
+  `switch_recipe`, as this prompt says.
+- Tests: `tests/scenarios/test_cooking_several.py` (six scenarios, the ricotta evening's shape
+  with the fixture's Pancakes and Alfredo).
+- **Setup:** update the Pi (the migration runs on start).
 
 ### F64f · Idea (2026-11-25): the cook screen shows each recipe on the go, and a tap switches
 Status: [ ]
