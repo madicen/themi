@@ -369,7 +369,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F62c | Review: task steps can have sub-steps ("-- wipe the shelf") | Feedback | [x] 2026-11-24 |
 | F63a | Feedback: the wall's date stays on one line | Feedback | [x] 2026-11-25 |
 | F63b | Feedback: Themi can run the CatGenie ("try a clean again") | Feedback | [x] 2026-11-25 |
-| F64a | Feedback: the wall's month shows each event in its calendar's colour | Feedback | [ ] |
+| F64a | Feedback: the wall's month shows each event in its calendar's colour | Feedback | [x] 2026-11-25 |
 | F64b | Feedback: a recipe's "Notes:" heading starts its notes, not more steps | Feedback | [ ] |
 | F64c | Feedback: the prep list says an amount once; a scaled batch reads as English | Feedback | [ ] |
 | F64d | Feedback: a misspelt recipe ("bechemel") is still found, after asking | Feedback | [ ] |
@@ -18775,7 +18775,7 @@ Notes:
   Whoosh the first time "Try a clean" is tapped. Mark #268 reviewed once it's worked.
 
 ### F64a · Feedback (2026-11-25): the month on the wall shows each event in its calendar's colour
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: F59f, F55f, F53
 Read first: `themi_home/web/templates/wall/_view_calendar.html` (the month grid);
 `themi_home/web/static/wall.css` (`.cal-ev`, `.wk-ev`, `.wk-cal`, the `tone-*` classes);
@@ -18801,6 +18801,14 @@ and the CSS rule for `.cal-ev` uses `--tone` (or a browser test reads its comput
 background against a `.wk-cal` of the same tone).
 
 Data/Setup: update the Pi, reload the wall. Mark #273 reviewed once live.
+
+Notes:
+- The tones were already right: each month event has its calendar's `tone-*` class (the
+  person's, or the family's for shared calendars, as `calendar_chips`). Only `.cal-ev`'s CSS
+  painted `var(--soft)`; it now takes `var(--tone)` / `var(--on-tone)`, as `.wk-ev` does.
+- Tests: `test_a_months_events_wear_their_calendars_colour` (markup) and
+  `test_a_months_event_is_filled_with_its_tone` (the CSS rule).
+- **Setup:** update the Pi, reload the wall.
 
 ### F64b · Feedback (2026-11-25): a recipe's "Notes:" heading starts its notes, not more steps
 Status: [ ]

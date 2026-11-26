@@ -134,3 +134,18 @@ async def test_today_and_the_week_ahead_open_it(calendar: Scenario) -> None:
     assert 'hx-get="/wall/calendar"' in today[: today.index(">")]
     assert "click[!event.target.closest('.tl-block')]" in today[: today.index(">")]
     assert 'hx-get="/wall/calendar?day=2026-10-22"' in page
+
+
+async def test_a_months_events_wear_their_calendars_colour(
+    calendar: Scenario, fake_gcal: FakeGcal
+) -> None:
+    """F64a (bug #273): the month's chips are in their calendar's colour, as its chip is."""
+    from tests.integration.test_wall_calendars import two_calendars
+
+    await two_calendars(calendar, fake_gcal)
+    view = (await get(calendar, "/wall/calendar?month=2026-10")).text
+    chip_tones = set(re.findall(r'class="wk-cal tone-(\w+)', view))
+    day = view[view.index('aria-label="2026-10-23"') :]
+    day = day[: day.index("</button>")]
+    event_tones = set(re.findall(r'class="cal-ev tone-(\w+)"', day))
+    assert event_tones and event_tones <= chip_tones
