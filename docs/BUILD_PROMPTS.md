@@ -405,6 +405,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
+| RC8a | Recipes: recipe books, not two fixed docs (no visible change) | Recipes | [ ] |
+| RC8b | Recipes: a recipe book of its own (vegan cheese), out of the way | Recipes | [ ] |
+| RC8c | Recipes: reading the cheese doc as it's laid out | Recipes | [ ] |
 | CK1 | Cooking companion: the cook screen on /session | Cooking companion | [x] 2026-11-08 |
 | CK2 | Cooking companion: amounts for this step | Cooking companion | [x] 2026-11-08 |
 | CK3 | Cooking companion: the timer rail | Cooking companion | [x] 2026-11-08 |
@@ -20714,6 +20717,217 @@ Notes (2026-11-06):
   requested). A new tool, `cookbook_recipes_we_can_make`, lists up to five as buttons; the
   recipes group's words gained "what can we make" and "with what we have".
 - One eval (no energy words in the reply), not run here.
+
+### RC8a · Recipes: recipe books, not two fixed docs (no change the family sees)
+Status: [ ]
+Depends on: F49h, F49i
+Read first: F49h's and F49i's notes; `themi_home/recipes.py` (`COOKBOOK`, `TO_TRY`,
+`DOC_TABLES`, `DOC_NAMES`, `TRY_KEY`, `settings(which)`, `choose`, `sync`, `sync_all`,
+`store_doc`, `open_items`, `link`, `search`'s order, `card_buttons`, `recipe_lines`);
+`cookbook_save.py` (`offer_to_try`, `_keep`, `where`); `cooking.py` and `cooking_wrap.py` (the
+keeper offers); `web/recipe_pages.py` and `templates/cookbook.html`, `recipes.html`;
+`storage/schema/0120_recipes.sql`, `0172_recipes_to_try.sql`; `storage/migrations.py`
+(each migration runs in one transaction, foreign keys on). From Michael (2026-11-25, in a
+Claude Code session): his vegan cheese recipes, a hobby, should come into Themi as their own
+doc, managed apart from the family cookbook and Recipes to try, "and not have it get in the
+way. I don't want to continue to add more and more buttons about which cookbook a recipe
+should go in." This prompt is the groundwork; RC8b adds the cheese book and RC8c reads its
+doc well.
+
+Decided (Michael, 2026-11-25): the recipe docs become a list of *recipe books*, each with
+settings for how much it shows up. The cookbook and Recipes to try are its first two rows.
+Web recipe cards keep their two save buttons whatever books exist, and other books are saved
+to by saying so. ("Book" alone already means expense books and the weight book in the code:
+say *recipe book*, `recipe_books`.)
+
+Build:
+- Migration (the next core one): a `recipe_books` table, one row per doc: `id`, `key`
+  (`cookbook`, `to_try`, or `b<id>` for books added later), `name` ("the cookbook",
+  "Recipes to try"), `role` (`main`, `trying`, `shelf`), the doc columns `cookbook` and
+  `try_doc` have now (doc, account, member who chose it, title, version, revision, read_at,
+  problem, updated_at), `position`, and the behaviour settings RC8b uses, set here to what the
+  two docs do today: `in_meal_ideas` (1 for both), `found_unasked` (1 for both),
+  `save_button` (1 for both), `sub_recipe_sections` (JSON, `["Ingredients"]` for the
+  cookbook), `reference_sections` (JSON, `["References"]` for the cookbook). Copy both rows
+  across. `diet` and `guides_offered` stay on `cookbook` (they're the household's and the main
+  book's), or move to the main row. Either is fine; say which in Notes.
+- `recipes.book_id` (references `recipe_books`), backfilled from `recipes.book`. Don't rebuild
+  `recipes` to drop the old `book` column and its CHECK: the migration runs in one transaction
+  with foreign keys on, so dropping `recipes` would cascade-delete cooking sessions, titles,
+  mixes and weights. Leave `book` in place, unread from now on, with a comment saying why.
+  Web recipes keep the main book's id, as they keep `'cookbook'` today.
+- `Recipes` gets `books()`, `book(key)`, `main`, `trying` (None when there's no to-try doc).
+  `settings(which)`, `doc_id`, `try_doc_id`, `choose`, `sync`, `sync_all` (every book with a
+  doc), `store_doc` and `summary` take a book, not `COOKBOOK`/`TO_TRY`. Key prefixes: the
+  main book none, `to_try` keeps `try:` (existing keys don't change), others `<key>:`. "That
+  doc is X already" checks every book. `Recipe.book` becomes the book's key and
+  `Recipe.to_try` becomes `role == "trying"`. Anything that asks "is this the cookbook?" asks
+  for the role instead.
+- Drop the `cookbook` and `try_doc` tables only once nothing reads them. Keep them if a
+  module's `ready_check` SQL still names them and moving it is wider than this prompt (say so
+  in Notes).
+- No behaviour changes: every string, button, card, page and tool schema is as before.
+
+Tests:
+- The migration on a database with both docs and a to-try recipe: two book rows with the
+  docs' values, every recipe's `book_id` right, the cooking history rows untouched (count
+  before and after).
+- `tests/scenarios/test_recipes_to_try.py`, the cookbook tests, `test_cookbook_save`, the
+  cooking wrap tests and the recipe page tests pass unchanged. A test that reaches into
+  `try_doc` or `cookbook` directly may change to the books table; the commit says which.
+- Goldens don't change (`tools.json`, `handlers.json`, the cookbook page).
+
+Data/Setup: a migration; update the Pi and restart. Nothing for the family to do.
+
+### RC8b · Recipes: a recipe book of its own (the vegan cheese recipes), out of the way
+Status: [ ]
+Depends on: RC8a
+Read first: RC8a's notes; `recipes.py` (`search`, `find_recipe`, `show_recipe`, `open_items`,
+`recipe_lines`' labels, `card_buttons`); `recipe_ideas.py` (`self.recipes.all(source="doc")`);
+`recipe_groceries.py` (`_sub_recipe`); `cooking.py` (the step's other recipes, around
+`self.recipes.all()`); `cookbook_save.py` (`save_recipe_to_cookbook`'s `where`, the preview
+and card); `web/recipe_pages.py`, `templates/cookbook.html`, `recipes.html`; the recipes
+group's words. From the same request as RC8a: the doc is "Madicen Family Cheese Recipes" in
+Michael's Drive (35 recipes: Cheeses (Fresh, Aged), Milks, Dairy Recipes to Convert,
+Experiments, Appendix).
+
+Build:
+- Adding a book: the cookbook page's "The doc I pick is" select lists the books and "A new
+  recipe book…", which shows a name field ("Vegan cheese"). Picking makes a `shelf` book with
+  `in_meal_ideas` 0, `found_unasked` 0, `save_button` 0, and reads it as `choose` does. The
+  page lists each book with its doc's title, last read, problem and three switches: "Offered
+  in meal ideas", "Found in any recipe search", "A save button on web recipes". It also has
+  "Rename" and "Stop reading this book" (the recipes are marked removed, as when they leave
+  a doc; nothing is deleted from Google). The cookbook and Recipes to try can't be removed
+  here, and their switches stay as RC8a set them.
+- Out of the way:
+  - Meal ideas (`suggest_meals`, `cookbook_recipes_we_can_make`) skip books with
+    `in_meal_ideas` 0.
+  - Search: `find_recipe` gains an optional `book` (a book's name or key). A book with
+    `found_unasked` 0 is searched only when `book` names it, the query says its name's words
+    ("a cheese recipe", "from the cheese book"), or the query is a recipe's exact name
+    (F42c's rule, so "how do I make Colibrie?" finds it). It always comes after the
+    cookbook and Recipes to try.
+  - `open_items` names the book apart ("Vegan cheese (a separate recipe book) has 35
+    recipes"), so "how many recipes in the cookbook" stays the cookbook's.
+  - The recipes group's words gain "recipe book" and "the cheese book". Only add a new
+    example if the group has room.
+- Shown as its own: the chat card's head is "Colibrie (Vegan cheese)" and its link "In
+  Vegan cheese: …", as F49h labels to-try ones. The Recipes page gets one chip per shelf
+  book ("Vegan cheese"). Its recipes are listed only under that chip, never in the main list
+  or the cookbook's section chips.
+- Within a book: a step or ingredient line that names another recipe (the cook screen's
+  links in `cooking.py`, groceries' `_sub_recipe`) looks in the recipe's own book first, so
+  "Cashew Milk" in a cheese recipe is the cheese book's. Sub-recipes come from the book's
+  `sub_recipe_sections` (RC8c sets them for this book), not the hard-coded "ingredients".
+- Saving, by words only: `save_recipe_to_cookbook`'s `where` becomes a string: "cookbook",
+  "to_try", or a book's name. It's checked when it runs, not as a schema enum, so the tool
+  schema doesn't change with the data. The description says how to name another book. "Save
+  this to the cheese book" previews "Here's how it would go in Vegan cheese:" and stages
+  `cookbook_add` with that book (written at the doc's end, as to-try entries are, or under
+  a section the name says, as `CookbookSave` guesses for the cookbook). An unknown book
+  answers with the books there are. `card_buttons` shows a save button only for books with
+  `save_button` 1, so web recipe cards keep exactly [Save to cookbook] [Save to try].
+- The keeper flow (F49i) stays Recipes to try → the cookbook. A shelf book's recipe isn't
+  offered "A keeper?" after cooking.
+- Everything else works on a shelf book's recipes as on any: showing, the cook screen,
+  timers, grams, scaling, the grocery list, the recipe card.
+
+Tests:
+- A shelf book made from the cookbook page, read from a fixture; its count isn't the
+  cookbook's.
+- "What can we make?" with a pantry that covers a cheese recipe doesn't offer it. With
+  "Offered in meal ideas" switched on, it does.
+- `find_recipe("something with cashews")` doesn't return a cheese recipe; "a cheese recipe
+  with cashews" and "Colibrie" do; `book: "Vegan cheese"` does.
+- A web recipe's card has the same two save buttons with a shelf book set.
+- "Save this to the cheese book" writes to that book's fake doc, not the cookbook's. An
+  unknown book names the books there are.
+- A cheese recipe's "Cashew Milk" line links to the cheese book's Cashew Milk when the
+  cookbook has one too.
+- No "A keeper?" after cooking a shelf book's recipe.
+- Scenario: Michael asks "how do I make the Colibrie?", gets it labelled Vegan cheese, and
+  cooks it. Then "what can we make for dinner?" offers nothing from it.
+
+Golden: `tools.json` changes (`find_recipe`'s `book`; `save_recipe_to_cookbook`'s `where`
+from enum to string; descriptions). The cookbook page's markup changes.
+
+Data/Setup: **Setup:** once live, Michael picks "Madicen Family Cheese Recipes" on the
+cookbook page under Accounts, choosing "A new recipe book…" named "Vegan cheese". Before
+that, RC8c's doc changes (or its parser changes) keep the first read clean.
+
+Decide first (Michael), with recommendations:
+- Whose book: the household's, seen by everyone, like the cookbook (the doc's title says
+  "Family"). Recommended. The other way is Michael's alone: only he finds it and sees it on
+  the Recipes page, which adds a `member_id` to the book and a check wherever recipes are
+  listed.
+
+### RC8c · Recipes: reading the cheese doc as it's laid out
+Status: [ ]
+Depends on: RC8b
+Read first: `themi_home/cookbook.py` (the parser: `SECTION_STYLES`, `SUBSECTION_STYLES`,
+`RECIPE_STYLE`, `GROUP_STYLE`, `SEPARATOR`, `_add`, `REFERENCES`); `recipes.py` (`is_guide`,
+the References charts); `recipe_groceries.py` (what goes on the list); `cooking.py` (gather
+and prep, what "Tools" would become); RC8b's notes. What Michael's "Madicen Family Cheese
+Recipes" doc does that the cookbook doesn't (read 2026-11-25 through Drive, as text with its
+heading levels):
+- The title is Heading 1. Its sections are Heading 2 ("Cheeses", "Milks", "Dairy Recipes to
+  Convert", "Experiments", "Appendix") and its sub-sections Heading 3 ("Fresh", "Aged").
+  Today Heading 1 is a section and Heading 2 and 3 both sub-sections, so every recipe would
+  get no section and "Cheeses" would be overwritten by "Fresh".
+- Two `-----` dividers are styled Heading 4 (after Petite Soy and after Goaty), so each
+  would start a recipe called "-----".
+- Eight recipes have a Heading 6 "*Tools*" group under Ingredients (cheesecloth, molds, a
+  dehydrator). They'd be read as ingredients and go on the grocery list.
+- Ten have a Heading 6 "*Variations*" (and one "*Make it a Meal*") after the steps, which
+  would be read as a step group, so the cook screen would show variations as steps.
+- "Milks" holds the base recipes other recipes use ("Cashew Milk", "Soy Milk"), as the
+  cookbook's Ingredients does. "Appendix" holds "Soaking Guidelines" and "Making and Using
+  Brine", as the cookbook's References does.
+- "Dairy Recipes to Convert" holds dairy recipes not yet made vegan (Dried Mizithra,
+  Parmesan, Cheddar). "Experiments" is empty.
+
+Build (parser changes apply to every doc; check the cookbook fixture still parses
+identically):
+- Section levels from the doc: when the only Heading 1 is the title (or the doc's first
+  heading), Heading 2 is a section and Heading 3 a sub-section. The cookbook's layout reads
+  as before.
+- A recipe-level heading that matches `SEPARATOR` is a divider, not a recipe.
+- An ingredient group named Tools, Equipment or Supplies is kept apart as the recipe's
+  `tools` (a new JSON column, default `[]`). These are shown on the recipe and the cook
+  screen's gather step as "You'll need: …", and never go on the grocery list or get weighed.
+- A step group named Variations, Variation, Serving or "Make it a Meal" (after the steps)
+  goes to notes, kept with its name as the first line.
+- The book's `sub_recipe_sections` and `reference_sections` (RC8a) are set on the cheese book
+  when it's chosen: "Milks" and "Appendix" when the doc has them by those names. They can be
+  changed on the cookbook page as a comma-separated field per book. `is_guide` and the
+  guides offer use the book's reference sections. Guides are still offered for the main
+  book only.
+- Unfinished sections: recipes under a section named "… to Convert", "Experiments", "Ideas"
+  or "Someday" are read with a `draft` flag. They show on the Recipes page under their
+  section, and are found only by exact name. Their card says "(not converted yet)" for
+  "to Convert", or "(an experiment)". [Cook this] stays, since Michael might cook one to
+  convert it.
+
+Tests:
+- A fixture in the cheese doc's shape (Docs API JSON: title H1, H2 sections, H3
+  sub-sections, an H4 divider, Tools and Variations groups, Milks, Appendix, a "to Convert"
+  recipe) parses to the right sections, no "-----" recipe, tools apart, variations in notes.
+- The cookbook fixture's parse is unchanged (the existing parser tests).
+- A cheese recipe with Tools: its grocery card has none of them, and the gather step says
+  "You'll need: cheesecloth, two ricotta molds".
+- A "to Convert" recipe isn't found by "a parmesan" but is by "Parmesan" said exactly, and is
+  labelled.
+
+Data/Setup: a migration (`tools`, `draft`). No doc changes are needed. If Michael would
+rather tidy the doc than wait, restyling the two `-----` Heading 4s as normal text fixes the
+divider problem by hand.
+
+Decide first (Michael), with recommendations:
+- "Dairy Recipes to Convert": read, labelled, found only by exact name, as above.
+  Recommended. The other way is not to read that section at all.
+- Not in this prompt: the "Cheese Calendars" spreadsheet (aging and washing schedules) could
+  later become reminders for a cheese that's aging. Ask before writing that prompt.
 
 ---
 
