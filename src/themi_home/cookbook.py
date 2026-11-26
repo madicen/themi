@@ -54,11 +54,15 @@ YIELD = re.compile(
     re.IGNORECASE,
 )
 REFERENCES = "references"
+# F64b: bumped whenever the parser reads a doc differently, so stored recipes are read again
+# once (a doc's Drive version alone wouldn't change). 2: RC8c and F64b's note headings.
+PARSER_VERSION = 2
 # RC8c: an ingredient group of things to have, not to buy ("Tools"), and step groups that are
 # notes, not steps ("Variations", "Make it a Meal")
 TOOLS = "\x00tools"  # the group a Tools heading starts (never a heading's own words)
 TOOL_GROUPS = {"tools", "tool", "equipment", "supplies", "you'll need", "you will need"}
-NOTE_GROUPS = {"variations", "variation", "serving", "to serve", "make it a meal", "notes"}
+NOTE_GROUPS = {"variations", "variation", "serving", "to serve", "make it a meal", "notes",
+               "note", "recipe notes", "recipe note", "tips", "tip"}  # F64b: NOTE's words too
 # RC8c: sections of recipes that aren't ready to cook as written
 DRAFTS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bto convert\b", re.IGNORECASE), "not converted yet"),
@@ -191,7 +195,7 @@ def _clean(text: str) -> str:
 
 def _plain(text: str) -> str:
     """A heading's words without markdown-ish decoration: '*Masala Paste*' -> 'Masala Paste'."""
-    return _clean(text).strip("*_: ").strip()
+    return _clean(text).strip("*_: ").rstrip("-\u2013\u2014 ").strip()  # F64b: "Tips -"
 
 
 def _part_word(text: str) -> Part | None:

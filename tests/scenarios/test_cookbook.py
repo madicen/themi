@@ -188,3 +188,19 @@ async def test_the_picker_page_alone_may_load_googles_scripts(
     accounts = await site.get("/accounts")
     assert "apis.google.com" not in accounts.headers["content-security-policy"]
     assert "Choose the family cookbook" in accounts.text
+
+
+async def test_a_new_parser_reads_the_doc_again_once(
+    scenario: Scenario, linked: FakeGdocs, site: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F64b: a parser fix (RC8c's "Notes:" heading) reaches recipes already stored, though
+    the doc itself hasn't changed; once, not every 15 minutes."""
+    from themi_home import cookbook as book
+
+    await choose(scenario, site)
+    reads = linked.calls.count(("get", COOKBOOK_ID))
+    monkeypatch.setattr(book, "PARSER_VERSION", book.PARSER_VERSION + 1)
+    await scenario.run_periodic("recipes.sync")
+    assert linked.calls.count(("get", COOKBOOK_ID)) == reads + 1
+    await scenario.run_periodic("recipes.sync")
+    assert linked.calls.count(("get", COOKBOOK_ID)) == reads + 1

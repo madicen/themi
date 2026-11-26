@@ -370,7 +370,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F63a | Feedback: the wall's date stays on one line | Feedback | [x] 2026-11-25 |
 | F63b | Feedback: Themi can run the CatGenie ("try a clean again") | Feedback | [x] 2026-11-25 |
 | F64a | Feedback: the wall's month shows each event in its calendar's colour | Feedback | [x] 2026-11-25 |
-| F64b | Feedback: a recipe's "Notes:" heading starts its notes, not more steps | Feedback | [ ] |
+| F64b | Feedback: a recipe's "Notes:" heading starts its notes, not more steps | Feedback | [x] 2026-11-25 |
 | F64c | Feedback: the prep list says an amount once; a scaled batch reads as English | Feedback | [ ] |
 | F64d | Feedback: a misspelt recipe ("bechemel") is still found, after asking | Feedback | [ ] |
 | F64e | Idea: two recipes on the go at once, and switching between them (chat) | Feedback | [ ] |
@@ -18811,7 +18811,7 @@ Notes:
 - **Setup:** update the Pi, reload the wall.
 
 ### F64b · Feedback (2026-11-25): a recipe's "Notes:" heading starts its notes, not more steps
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: RC8c
 Read first: `themi_home/cookbook.py` (`NOTE`, `NOTE_GROUPS`, the `GROUP_STYLE` branch,
 `_add`). From the conversation behind Michael's idea #270 (2026-11-25, 8:23 pm).
@@ -18833,6 +18833,23 @@ Tests: a parser test with a Heading 6 "Notes:" after the steps, then a numbered 
 steps, the two notes in `notes`. The existing RC8c tests stay green.
 
 Data/Setup: update the Pi; the cookbook re-reads itself. Mark #270 reviewed only with F64e.
+
+Notes:
+- The Pi runs code from before RC8c, which already reads a Heading 6 "Notes:" as notes
+  (`_plain` drops the colon; "notes" is in `NOTE_GROUPS`). What it lacked, and what this adds:
+  - headings ending in a dash ("Tips -", "Variations –") are matched, and `NOTE`'s words
+    ("tips", "tip", "note", "recipe notes") are note groups too;
+  - `cookbook.PARSER_VERSION` (now 2). `Recipes.sync` stores the book's version as
+    `p<parser>:<drive version>`, so a parser change reads every doc again once, though Drive
+    says it hasn't changed. Without it RC8c's and this fix would wait for someone to edit
+    the cookbook. Bump it whenever the parser reads a doc differently.
+- Deviation: the "re-read on the Pi and list recipes whose steps change" step waits for the
+  update (the Pi hasn't RC8c yet). After updating, check Liquid Mozzarella (recipe 10) has 2
+  steps and 2 notes:
+  `SELECT name, json_array_length(steps), json_array_length(notes) FROM recipes WHERE id = 10`.
+- Tests: `test_a_notes_heading_with_its_colon_starts_notes`,
+  `test_a_notes_line_typed_as_text_starts_notes`, `test_a_new_parser_reads_the_doc_again_once`.
+- **Setup:** update the Pi; the next `recipes.sync` (within 15 minutes) re-reads every book.
 
 ### F64c · Feedback (2026-11-25): the prep list says an amount once, and a scaled batch reads as English
 Status: [ ]
