@@ -377,7 +377,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F64f | Idea: the cook screen shows each recipe on the go; a tap switches | Feedback | [x] 2026-11-25 |
 | F64g | Idea: Things to cook can be edited on the wall | Feedback | [x] 2026-11-25 |
 | F64h | Idea: the calendar's day on the wall runs down the screen | Feedback | [x] 2026-11-25 |
-| F64i | Idea: a person's page on the wall: drag to reorder, to someone else, delete | Feedback | [ ] |
+| F64i | Idea: a person's page on the wall: drag to reorder, to someone else, delete | Feedback | [x] 2026-11-25 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -19144,7 +19144,7 @@ Notes:
 - **Setup:** update the Pi, reload the wall.
 
 ### F64i · Idea (2026-11-25): a person's page on the wall: drag to reorder, drag to someone else, delete
-Status: [ ]
+Status: [x] 2026-11-25
 Depends on: WL9d, F59e, F60f
 Read first: `themi_home/web/templates/wall/_view_person.html`; `themi_home/wall_views.py`
 (the person page); `themi_home/wall_view.py` `_rank` (the wall's order);
@@ -19185,6 +19185,36 @@ events) at 1080 x 1920: pick up, the chips and Delete appear, a drop reorders.
 
 Data/Setup: a migration for the order. Update the Pi, reload the wall. Mark #274 reviewed once
 live.
+
+Notes:
+- Order: `wall_schema/0007_wall_task_order.sql` (`wall_task_order`: member, task, rank).
+  `WallView.ordered` puts ranked tasks first in their order, the rest by `_rank` after;
+  `set_order` writes a whole card's order. Used by the person page (`WallViews._tasks`) and
+  the home screen's columns (`WallView._column`). A task that becomes due keeps its rank.
+- `POST /wall/view/person/{id}/move` (`person_move`): `op=move` (`task`, `before` or ""),
+  `give` (`to` = a member id or `family`), `delete`, `stop`, `skip`, `undo_delete`,
+  `undo_skip` (`due`). Only a task showing on that person's page is moved. Give, family,
+  delete and skip are staged through the wall's tap category; the executor gained `cancel`
+  (`TaskBoard.cancel`, the record kept), `restore` (new `TaskBoard.restore`: cancelled ->
+  open, prompted again), `skip` (`skip_round`) and `unskip` (back to its day). A chore "N
+  times a week" has no rounds, so its "just this time" is `tomorrow`.
+- Delete on a repeating chore asks in place: [Stop it repeating] [Just this time] [Keep
+  it]. After a delete or a skip, an Undo bar shows for 8 seconds (F64g's `data-undo-for`).
+- `wall.js`: press and hold (450 ms, under 12 px of movement) picks a row up; a gap holds
+  its place and moves with the pointer within its card; chips for the others and Family
+  show at the top (sticky), Delete at the bottom. The drop posts with `htmx.ajax`; the click
+  that ends a drag is swallowed, so a plain tap still ticks. Touch: `touchmove` is
+  cancelled while holding, and a long press's context menu is stopped.
+- Moves stay inside a card: chores among chores, to-dos among to-dos.
+- Deviation: chat's "what's on my list" keeps its own order. Its list is built in
+  `themi.standard.tasks`, which can't read a wall-module table without a new hook; the
+  order is on the wall (page and columns) only.
+- Tests: `tests/integration/test_wall_person_moves.py` (6) and
+  `tests/integration/test_wall_person_drag_browser.py` (mouse drag, a tap still ticks, a
+  finger dropping on a person and on Delete; `htmx.ajax` stood in for, since the frame's
+  pairing cookie isn't in the test browser).
+- **Setup:** update the Pi (the migration runs on start), reload the wall. Mark #274
+  reviewed once live.
 
 ## Conversation mode
 

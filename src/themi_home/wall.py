@@ -291,6 +291,15 @@ class WallTaps:
         if op == "words":
             task = await board.update(task_id, by, title=text)
             return f"It reads {task.title} now."
+        if op == "cancel":  # F64i: dropped on Delete (the record's kept)
+            return await board.cancel(task_id, by)
+        if op == "restore":  # F64i: its Undo
+            task = await board.restore(task_id)
+            return f"{task.title} is back."
+        if op == "skip":  # F64i: a chore dropped on Delete, "just this time"
+            return await board.skip_round(task_id, by)
+        if op == "unskip":  # its Undo: the round back on the day it was
+            return await board.reschedule(task_id, date.fromisoformat(str(payload["due"])))
         raise ValueError(f"not a change the wall makes: {op}")
 
     def _list_change(self, op: str, payload: dict[str, Any], by: Member, text: str) -> str:
@@ -491,12 +500,92 @@ def routes(kit: Kit) -> APIRouter:
         return kit.page(request, f"wall/{template}", close_after=CLOSE_AFTER, **values)
 
     def person_view(
-        request: Request, view: WallView, member_id: int, opened: int = 0
+        request: Request, view: WallView, member_id: int, opened: int = 0, **shown: Any
     ) -> HTMLResponse:
         found = WallViews(view).person(member_id, opened)
         if found is None:
             return HTMLResponse("")
-        return sheet(request, "_view_person.html", person=found)
+        others = [  # F64i: where a held item can go
+            (m.id, m.name, view.tone_of(m)) for m in view.people() if m.id != member_id
+        ]
+        return sheet(request, "_view_person.html", person=found, others=others,
+                     family_tone=view.together_tone(), **shown)  # fmt: skip
+
+    @router.post("/wall/view/person/{member_id:int}/move", response_class=HTMLResponse)
+    async def person_move(request: Request, member_id: int) -> Response:
+        """F64i (idea #274): a chore or to-do held and dropped on their page: somewhere else
+        in its card (their own order), on another person or Family (given to them), or on
+        Delete (cancelled, its record kept; a repeating chore asks first). Undo for a few
+        seconds after a delete."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        view = WallView(kit.app.services)
+        people = {m.id: m for m in view.people()}
+        member = people.get(member_id)
+        found = WallViews(view).person(member_id) if member else None
+        if member is None or found is None:
+            return HTMLResponse("")
+        board = kit.app.services.get(keys.taskboard)
+        op, raw = form.get("op", ""), form.get("task", "")
+        cards = {"chores": found.chores, "todos": found.todos}
+        here = {
+            name: [int(i.key[5:]) for i in sec.items if i.key.startswith("task-") and not i.done]
+            for name, sec in cards.items()
+        }
+        task_id = int(raw) if raw.isdigit() else 0
+        card = next((name for name, ids in here.items() if task_id in ids), None)
+        if op in ("undo_delete", "undo_skip") and task_id:  # its Undo: no longer on the page
+            task = board.get(task_id)
+            if task is None or task.assignee != member_id:
+                return person_view(request, view, member_id)
+            payload: dict[str, Any] = {"by": member_id, "op": "restore", "task": task_id}
+            if op == "undo_skip":
+                payload.update(op="unskip", due=form.get("due", ""))
+            outcome = await kit.app.services.autonomy.stage(
+                TAP, member, f"Undo for {task.title} {WHERE}", payload, TAP, requested=True
+            )
+            return person_view(request, view, member_id, said=outcome.message)
+        if card is None:
+            return person_view(request, view, member_id)
+        task = board.get(task_id)
+        if op == "move":
+            ids = [i for i in here[card] if i != task_id]
+            before = form.get("before", "")
+            at = ids.index(int(before)) if before.isdigit() and int(before) in ids else len(ids)
+            ids.insert(at, task_id)
+            view.set_order(member, ids)
+            return person_view(request, view, member_id)
+        payload = {"by": member_id, "task": task_id}
+        undo: dict[str, str] | None = None
+        to = form.get("to", "")
+        if op == "give" and to.isdigit() and int(to) in people and int(to) != member_id:
+            payload["op"] = "give"
+            payload["to"] = int(to)
+            summary = f"Give {task.title} to {people[int(to)].name} {WHERE}"
+        elif op == "give" and to == "family":
+            payload["op"] = "family"
+            summary = f"{task.title}: make it a family to-do {WHERE}"
+        elif op == "delete" and task.repeats:  # a chore: which kind of delete, asked in place
+            return person_view(request, view, member_id, asking=task_id, asking_title=task.title)
+        elif op in ("delete", "stop"):
+            payload["op"] = "cancel"
+            summary = f"Delete {task.title} {WHERE}"
+            undo = {"op": "undo_delete", "task": str(task_id), "label": f"{task.title} deleted."}
+        elif op == "skip" and task.repeats:  # "N times a week" has no rounds: tomorrow, then
+            payload["op"] = "skip" if task.repeat is not None else "tomorrow"
+            summary = f"Skip {task.title} this time {WHERE}"
+            due = task.due_on.isoformat() if task.due_on else ""
+            undo = {"op": "undo_skip", "task": str(task_id), "due": due,
+                    "label": f"{task.title} skipped this time."}  # fmt: skip
+        else:
+            return person_view(request, view, member_id)
+        outcome = await kit.app.services.autonomy.stage(
+            TAP, member, summary, payload, TAP, requested=True
+        )
+        if outcome.action.status != "done":
+            undo = None
+        return person_view(request, view, member_id, said=outcome.message, undo=undo)
 
     @router.get("/wall/view/event", response_class=HTMLResponse)
     def event_view(

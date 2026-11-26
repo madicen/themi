@@ -34,8 +34,8 @@
 
 {#- One tickable thing on a page: `vals` is the tap's extra fields (its view, an unfolded
     routine). -#}
-{% macro item(i, vals) %}
-<li class="wall-entry">
+{% macro item(i, vals, drag="") %}
+<li class="wall-entry"{% if drag and not i.done and i.key.startswith("task-") %} data-drag="{{ drag }}" data-task="{{ i.key[5:] }}"{% endif %}>
   {% if i.tappable %}
   <button type="button" class="wall-item{% if i.done %} done{% endif %}" data-key="{{ i.key }}" aria-pressed="{{ 'true' if i.done else 'false' }}"
     hx-post="/wall/tap" hx-vals='{{ dict(vals, key=i.key) | tojson }}' hx-target="#wall-view" hx-swap="innerHTML">

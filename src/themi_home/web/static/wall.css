@@ -427,6 +427,21 @@ body.night:not(.awake) { background: var(--night-bg); }
 .page-breathe { margin-top: 0.5rem; background: var(--item-bg); border-radius: 1.4rem; padding: 1.25rem 1.4rem; }
 .page-breathe p { font-size: 1.2rem; color: var(--fg); line-height: 1.35; }
 .page-breathe .page-breathe-head { font-size: 1.3rem; font-weight: 700; color: var(--tone); }
+/* F64i: a chore or to-do held on a person's page, and where it can go */
+[data-drag] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+[data-drag].held { position: fixed; z-index: 20; pointer-events: none; opacity: 0.92;
+  box-shadow: 0 0 0 0.25rem var(--tone, var(--edge)); border-radius: 1rem; }
+.drag-gap { list-style: none; border-radius: 1rem; border: 0.18rem dashed var(--line); }
+.drag-to-people { position: sticky; top: 0; z-index: 15; display: flex; flex-wrap: wrap; gap: 0.75rem;
+  padding: 0.75rem; border-radius: 1.5rem; background: var(--card); }
+.drag-to, .drag-delete { min-height: 4rem; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 1.6rem; border-radius: 999px; font-size: 1.4rem; font-weight: 700; border: 0.2rem solid var(--tone, var(--fg));
+  color: var(--tone, var(--fg)); background: var(--card); }
+.drag-to.over { background: var(--tone); color: var(--on-tone); }
+.drag-delete { position: sticky; bottom: 0; z-index: 15; width: 100%; border-color: var(--now); color: var(--now); }
+.drag-delete.over { background: var(--now); color: var(--on-now); }
+.drag-to-people[hidden], .drag-delete[hidden] { display: none; }
+.sheet-ask { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 1.2rem; border-radius: 1.5rem; background: var(--card); font-size: 1.3rem; }
 .page-box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
 .page-box-head span { font-size: 1.2rem; font-weight: 600; color: var(--tone); }
 .page-lead { font-size: 1.2rem; color: var(--muted); margin-top: -0.3rem; }

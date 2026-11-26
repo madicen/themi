@@ -475,7 +475,7 @@ class WallViews:
     def _tasks(self, member: Member, today: date) -> tuple[WallSection, WallSection]:
         tasks = self.view._open_tasks([member])
         mine = [t for t in tasks if t.assignee == member.id and not _for_both(t)]
-        chores = sorted(
+        chores = self.view.ordered(  # F64i: their own order first
             (
                 t
                 for t in mine
@@ -484,11 +484,13 @@ class WallViews:
                 and t.due_on <= today
                 and not self.view.held(t, member)  # F59c: as their chart shows
             ),
-            key=lambda t: _rank(t, today),
+            member,
+            today,
         )
-        todos = sorted(
+        todos = self.view.ordered(
             (t for t in mine if not t.repeats and (t.due_on is None or t.due_on <= today)),
-            key=lambda t: _rank(t, today),
+            member,
+            today,
         )
         done = [
             t
