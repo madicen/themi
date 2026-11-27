@@ -9,11 +9,14 @@ from __future__ import annotations
 import re
 
 from tests.fakes.gcal_api import FakeGcal
+from tests.fixtures.cookbook import load
 from tests.fixtures.web import web_client
 from tests.integration.test_wall_alerts import at, leaving, local, share
 from tests.integration.test_wall_screen import frame, words
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN
+from tests.unit.test_cook_tablet import alfredo, to_steps
+from themi.core import keys
 
 __all__ = ["leaving"]  # the fixture
 
@@ -48,3 +51,32 @@ async def test_a_dentist_trip_on_the_wall(leaving: Scenario, fake_gcal: FakeGcal
         assert "wall-alert" not in gone.text
         await at(leaving, 14, 30)
         assert "wall-alert" not in (await wall.get("/wall/part/alerts")).text
+
+
+async def test_a_timer_goes_off_while_getting_ready(
+    leaving: Scenario, fake_gcal: FakeGcal
+) -> None:
+    """WA3: leaving stays on top with the kitchen as a band under it, until a timer is up."""
+    share(leaving)
+    load(leaving.app.services)
+    fake_gcal.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
+    await at(leaving, 14, 5)
+    cooking = leaving.app.services.maybe(keys.cooking)
+    assert cooking is not None and cooking.timers is not None
+    session = cooking.get(await to_steps(leaving, cooking, {"jobs": []}))
+    assert session is not None
+    cooking.timers.start(leaving.member("Erin"), session, alfredo(cooking), "1", 10)
+    async with web_client(leaving) as wall:
+        await frame(leaving, wall)
+        await at(leaving, 14, 10)
+        part = (await wall.get("/wall/part/alerts")).text
+        assert re.findall(r'class="wall-alert ([^"]+)"', part) == [
+            "alert-leave alert-ready", "alert-kitchen alert-running alert-second",
+        ]  # fmt: skip
+        await at(leaving, 14, 15)
+        await leaving.run_jobs()
+        part = (await wall.get("/wall/part/alerts")).text
+        assert re.findall(r'class="wall-alert ([^"]+)"', part) == [
+            "alert-kitchen alert-up", "alert-leave alert-ready alert-second",
+        ]  # fmt: skip
+        assert "Kitchen time" in words(part)

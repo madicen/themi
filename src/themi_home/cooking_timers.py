@@ -256,6 +256,15 @@ class CookingTimers:
             )
         )
 
+    def shown(self, now: datetime, fired_shown: timedelta) -> list[dict[str, Any]]:
+        """WA3: everyone's timers as the wall shows them: running, or gone off within
+        `fired_shown` and not tapped (as the cook screen keeps them), soonest first."""
+        return self.db.query(
+            "SELECT * FROM cooking_timers WHERE cancelled_at IS NULL AND cleared_at IS NULL "
+            "AND (fired_at IS NULL OR fired_at > ?) ORDER BY ends_at, id",
+            (to_utc_iso(now - fired_shown),),
+        )
+
     async def run_job(self, payload: dict[str, Any]) -> None:
         row = self.db.one(
             "SELECT * FROM cooking_timers WHERE id = ? AND fired_at IS NULL "

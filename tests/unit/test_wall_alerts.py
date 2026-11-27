@@ -15,9 +15,11 @@ from themi_home.wall_alerts import (
     WallAlert,
     countdown,
     drive_words,
+    kitchen_alerts,
     leave_alert,
     leave_state,
     ranked,
+    up_words,
 )
 
 LA = ZoneInfo("America/Los_Angeles")
@@ -124,3 +126,61 @@ def test_only_the_soonest_leave_and_at_most_two() -> None:
     )
     assert later is not None
     assert ranked([later, first]) == [first]
+
+
+# ----- WA3: kitchen timers ---------------------------------------------------------------
+
+
+def timer(id_: int, ends: datetime, minutes: float = 10, **changes: object) -> dict[str, object]:
+    row: dict[str, object] = dict(
+        id=id_, session_id=7, member_id=1, recipe="Pad Thai", step="3", label="Sauce, step 3",
+        minutes=minutes, ends_at=ends.isoformat(), fired_at=None,
+    )  # fmt: skip
+    row.update(changes)
+    return row
+
+
+def test_the_soonest_running_timer_and_the_next() -> None:
+    rows = [
+        timer(1, at(17, 47)),
+        timer(2, at(17, 56), 22, step="5", label="Noodles, step 5"),
+    ]
+    (card,) = kitchen_alerts(rows, at(17, 40, 48), LA, {1: "p0"})  # type: ignore[arg-type]
+    assert (card.state, card.label, card.title, card.numerals, card.counts) == (
+        "running", "Back to the kitchen in", "Pad Thai · Sauce, step 3", "6:12", "down",
+    )  # fmt: skip
+    assert (card.bar, card.bar_from, card.bar_to) == (38, "of 10:00", "done at 5:47")
+    assert (card.next_line, card.next_at) == ("Then: Pad Thai · Noodles, step 5", at(17, 56))
+    assert (card.icon, card.sound, card.buttons, card.rank) == ("pot", "", (), 2)
+
+
+def test_a_timer_thats_up_counts_up_and_comes_first() -> None:
+    rows = [
+        timer(1, at(17, 47), fired_at=at(17, 47).isoformat()),
+        timer(2, at(17, 56), step="5", label="Noodles, step 5"),
+    ]
+    up, running = kitchen_alerts(rows, at(17, 47, 42), LA, {})  # type: ignore[arg-type]
+    assert (up.state, up.label, up.numerals, up.sub, up.up_for) == (
+        "up", "Pad Thai · Sauce, step 3", "Kitchen time", "10 minutes are up", "+0:42",
+    )  # fmt: skip
+    assert (up.sound, up.rank, [b.answer for b in up.buttons]) == ("kitchen", 0, ["got_it"])
+    assert up.next_line == "Next: Pad Thai · Noodles, step 5"
+    assert running.title == "Pad Thai · Noodles, step 5"
+    leave = card(at(14, 12))
+    assert [a.kind for a in ranked([leave, running, up])] == ["kitchen", "leave"]
+    assert ranked([leave, running]) == [leave, running]
+
+
+def test_a_timer_from_chat_shows_a_clock_and_its_own_label() -> None:
+    rows = [timer(1, at(17, 47), session_id=None, label="Tea", recipe="Tea")]
+    (card,) = kitchen_alerts(rows, at(17, 40), LA, {})  # type: ignore[arg-type]
+    assert (card.icon, card.title) == ("clock", "Tea")
+
+
+@pytest.mark.parametrize(
+    ("minutes", "said"),
+    [(10, "10 minutes are up"), (1, "1 minute is up"), (0.5, "30 seconds are up"),
+     (2.5, "2.5 minutes are up"), (90, "1 hr 30 min is up")],
+)  # fmt: skip
+def test_up_words(minutes: float, said: str) -> None:
+    assert up_words(minutes) == said

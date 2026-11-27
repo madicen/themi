@@ -32,7 +32,8 @@ from themi.localtime import member_day, member_day_start, to_utc_iso
 from themi_google import parcel_words
 from themi_google.deliveries import Parcel
 from themi_home import wall_focus
-from themi_home.wall_alerts import AlertAnswers, WallAlert, leave_alert, ranked
+from themi_home.cooking_screen import FIRED_SHOWN
+from themi_home.wall_alerts import AlertAnswers, WallAlert, kitchen_alerts, leave_alert, ranked
 from themi_home.wall_columns import TOGETHER, TOGETHER_TONE, Place, WallColumns, key_of
 
 if TYPE_CHECKING:
@@ -331,6 +332,10 @@ class WallView:
             alert = leave_alert(leaving, now, tz, tone)
             if alert is not None:
                 found.append(alert)
+        cooking = self.services.maybe(keys.cooking)
+        if cooking is not None and cooking.timers is not None:
+            tones = {m.id: self.tone_of(m) for m in self.people()}
+            found += kitchen_alerts(cooking.timers.shown(now, FIRED_SHOWN), now, tz, tones)
         kept = AlertAnswers(self.services.store.db).apply(found)
         return tuple(ranked(kept))
 

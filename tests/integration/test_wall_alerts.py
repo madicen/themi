@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import re
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
 
 from tests.fakes.gcal_api import FakeGcal
+from tests.fixtures.cookbook import load
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fakes.travel import FakeTravel
@@ -23,10 +24,13 @@ from tests.fixtures.web import web_client
 from tests.integration.test_wall_screen import frame, with_wall, words
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
+from tests.unit.test_cook_tablet import alfredo, to_steps
 from themi import clock
 from themi.core import keys
 from themi.core.calendar_view import CalendarPreferences
 from themi_google.travel import TravelPreferences
+from themi_home.cooking import Cooking, Session
+from themi_home.cooking_screen import FIRED_SHOWN, timers
 from themi_home.wall_view import WallView
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -250,3 +254,87 @@ async def test_the_private_event_stays_private_on_the_page(
         await frame(leaving, client)
         html = await part(leaving, client)
     assert "Leaving at 2:25" in html and "Dentist" not in html and "Smile" not in html
+
+
+# ----- WA3: kitchen timers ---------------------------------------------------------------
+
+
+@pytest.fixture
+async def kitchen(family: SeededFamily, fake_telegram: FakeTelegram) -> AsyncIterator[Scenario]:
+    """The wall and the cookbook: Erin cooking Alfredo Sauce, at its steps."""
+    s = with_wall(family, fake_telegram)
+    await s.start()
+    try:
+        load(s.app.services)
+        yield s
+    finally:
+        await s.stop()
+
+
+async def cooking_now(s: Scenario) -> tuple[Cooking, Session]:
+    cooking = s.app.services.maybe(keys.cooking)
+    assert cooking is not None and cooking.timers is not None
+    session = cooking.get(await to_steps(s, cooking, {"jobs": []}))
+    assert session is not None
+    return cooking, session
+
+
+async def test_a_running_timer_then_got_it_clears_it_on_the_cook_screen(
+    kitchen: Scenario,
+) -> None:
+    cooking, session = await cooking_now(kitchen)
+    erin = kitchen.member("Erin")
+    assert cooking.timers is not None
+    cooking.timers.start(erin, session, alfredo(cooking), "1", 10)
+    clock.advance(timedelta(minutes=3, seconds=48))
+    (card,) = WallView(kitchen.app.services).alerts()
+    assert (card.state, card.title, card.numerals) == (
+        "running", "Alfredo Sauce · Step 1", "6:12",
+    )  # fmt: skip
+    clock.advance(timedelta(minutes=6, seconds=12))
+    await kitchen.run_jobs()
+    async with web_client(kitchen) as client:
+        await frame(kitchen, client)
+        html = await part(kitchen, client)
+        assert "alert-kitchen alert-up" in html and 'data-sound="kitchen"' in html
+        assert "Kitchen time" in html and "10 minutes are up" in html
+        key = re.search(r'data-alert="([^"]+)"', html)
+        csrf = re.search(r'"X-CSRF-Token": "([^"]+)"', (await client.get("/wall")).text)
+        assert key and csrf
+        done = await client.post(
+            "/wall/alert", data={"key": key.group(1), "answer": "got_it"},
+            headers={"X-CSRF-Token": csrf.group(1)},
+        )  # fmt: skip
+        assert "wall-alert" not in done.text
+    assert timers(cooking, session) == []  # gone from the cook screen too
+
+
+async def test_cleared_on_the_cook_screen_or_cancelled_goes_from_the_wall(
+    kitchen: Scenario,
+) -> None:
+    cooking, session = await cooking_now(kitchen)
+    erin = kitchen.member("Erin")
+    assert cooking.timers is not None
+    first, _ = cooking.timers.begin(erin, session, alfredo(cooking), "1", 5)
+    second, _ = cooking.timers.begin(erin, session, alfredo(cooking), "2", 20)
+    clock.advance(timedelta(minutes=5))
+    await kitchen.run_jobs()
+    shown = WallView(kitchen.app.services).alerts()
+    assert [(a.state, a.next_line) for a in shown] == [
+        ("up", "Next: Alfredo Sauce · Step 2"), ("running", ""),
+    ]  # fmt: skip
+    assert cooking.timers.clear(erin.id, first)
+    assert [a.state for a in WallView(kitchen.app.services).alerts()] == ["running"]
+    assert cooking.timers.cancel(erin.id, second)
+    assert WallView(kitchen.app.services).alerts() == ()
+
+
+async def test_a_timer_nobody_taps_goes_after_two_hours(kitchen: Scenario) -> None:
+    cooking, session = await cooking_now(kitchen)
+    assert cooking.timers is not None
+    cooking.timers.start(kitchen.member("Erin"), session, alfredo(cooking), "1", 5)
+    clock.advance(timedelta(minutes=5))
+    await kitchen.run_jobs()
+    assert [a.state for a in WallView(kitchen.app.services).alerts()] == ["up"]
+    clock.advance(FIRED_SHOWN)
+    assert WallView(kitchen.app.services).alerts() == ()
