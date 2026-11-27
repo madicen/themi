@@ -32,3 +32,17 @@ in them except the instrument samples named below, played into new music.
 | soft-piano-waltz.m4a | Little waltz: grand piano in F sharp minor, in three | CC0 1.0, made for Themi |
 | brown-noise.m4a | Brown noise, low-passed | CC0 1.0, made for Themi |
 | brown-noise-hum.m4a | Brown noise, low-passed further into a hum | CC0 1.0, made for Themi |
+
+## Themi's trills (WA4)
+
+The wall's alert sounds in `trills/`, synthesised from code by `tools/make_trills.py` (ffmpeg
+alone: a swept sine with a fast vibrato and a little second harmonic; the notes are in
+`themi_home/trills.py`). Original, and dedicated to the public domain under CC0 1.0.
+
+| File | What it is | Licence |
+| --- | --- | --- |
+| trills/ready.m4a | Time to get ready: two soft rising chirps | CC0 1.0, made for Themi |
+| trills/five.m4a | Five minutes: three climbing chirps | CC0 1.0, made for Themi |
+| trills/go.m4a | Time to go: a full trill twice, then a hop up | CC0 1.0, made for Themi |
+| trills/kitchen.m4a | A kitchen timer is up: three falling trills and a pop | CC0 1.0, made for Themi |
+| trills/got-it.m4a | We're off or Got it tapped: one tiny chirp | CC0 1.0, made for Themi |

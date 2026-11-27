@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
@@ -78,6 +78,7 @@ BACK_TO_BACK = timedelta(minutes=90)
 STOP = timedelta(minutes=15)  # F41d: a drop-off or pick-up, at the stop
 # F55a (reply 521): an arrive_by further before the start than this is a misreading.
 EARLIEST = timedelta(hours=4)
+NEAR = timedelta(minutes=1)  # WA1: an event still at the start its heads-up was for
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,22 @@ class Origin:
     @property
     def words(self) -> str:
         return f"from {self.label}" if self.label else "from home"
+
+
+@dataclass(frozen=True)
+class Leaving:
+    """WA1: a heads-up already sent, as the wall's countdown shows it. `title` is "" when the
+    event's details are private to its person (K1)."""
+
+    key: str
+    member_ids: tuple[int, ...]
+    names: tuple[str, ...]
+    title: str
+    starts_at: datetime
+    leave_by: datetime
+    ready_from: datetime
+    drive_minutes: int
+    traffic: bool
 
 
 @dataclass(frozen=True)
@@ -336,10 +353,20 @@ class TravelHeadsUps:
             f"{drive}: {when}."
         )
         self.db.execute(
-            "INSERT INTO travel_headsups (member_id, event_id, starts_at, sent_at) "
-            "VALUES (?, ?, ?, ?)",
-            (member.id, self._event_key(entry), to_utc_iso(entry.starts_at), to_utc_iso(now)),
-        )
+            "INSERT INTO travel_headsups (member_id, event_id, starts_at, sent_at, leave_by, "
+            "ready_from, drive_minutes, traffic, title) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                member.id,
+                self._event_key(entry),
+                to_utc_iso(entry.starts_at),
+                to_utc_iso(now),
+                to_utc_iso(leave_by),
+                to_utc_iso(leave_by - ready),
+                minutes,
+                int(traffic),
+                entry.title,
+            ),
+        )  # fmt: skip  (WA1: the wall's countdown reads these)
         await self.services.outbox.send(
             member,
             text,
@@ -347,6 +374,61 @@ class TravelHeadsUps:
             kind=TRAVEL_KIND,  # F38b: breaks through quiet hours, busy times, limits, pauses
             expires=entry.starts_at,  # still waiting at the start (an outage): of no use then
             dedupe_key=self._dedupe_key(member, entry),
+        )
+
+    # ----- WA1: the wall's countdown ---------------------------------------------------
+
+    def leavings(self, now: datetime) -> list[Leaving]:
+        """The heads-ups sent for events not started yet, as the wall's leave card reads them:
+        what each worked out when it went (the wall never looks a drive up). One per event,
+        with everyone it went to; gone when the event has moved or gone from the calendar, or
+        the person has switched heads-ups off. Soonest leave-by first."""
+        reader = self.services.maybe(keys.calendars)
+        if reader is None:
+            return []
+        rows = self.db.query(
+            "SELECT * FROM travel_headsups WHERE leave_by IS NOT NULL AND starts_at > ? "
+            "ORDER BY leave_by, member_id",
+            (to_utc_iso(now),),
+        )
+        found: dict[tuple[str, str], Leaving] = {}
+        for row in rows:
+            member = self.services.store.get_member(row["member_id"])
+            if not self._still_on(member, row):
+                continue
+            if not self.services.store.preferences(member.id, TravelPreferences).leave_heads_up:
+                continue
+            shares = (
+                self.services.store.preferences(member.id, CalendarPreferences).calendar_details
+                == "partner"
+            )
+            key = (row["event_id"], row["starts_at"])
+            if key in found:  # the same event, sent to both of them
+                was = found[key]
+                title = was.title or (row["title"] if shares else "")
+                found[key] = replace(was, names=(*was.names, member.name), title=title)
+                continue
+            found[key] = Leaving(
+                key=f"{row['event_id']}@{row['starts_at']}",
+                member_ids=(member.id,),
+                names=(member.name,),
+                title=row["title"] if shares else "",
+                starts_at=datetime.fromisoformat(row["starts_at"]),
+                leave_by=datetime.fromisoformat(row["leave_by"]),
+                ready_from=datetime.fromisoformat(row["ready_from"]),
+                drive_minutes=int(row["drive_minutes"] or 0),
+                traffic=bool(row["traffic"]),
+            )
+        return sorted(found.values(), key=lambda leaving: leaving.leave_by)
+
+    def _still_on(self, member: Member, row: dict[str, Any]) -> bool:
+        reader = self.services.maybe(keys.calendars)
+        if reader is None:
+            return False
+        starts = datetime.fromisoformat(row["starts_at"])
+        return any(
+            self._event_key(e) == row["event_id"] and e.starts_at == starts
+            for e in reader.entries(member, starts - NEAR, starts + NEAR)
         )
 
     def _early_why(self, member: Member, entry: Entry, arrive: datetime) -> str:

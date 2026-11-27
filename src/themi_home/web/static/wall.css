@@ -21,6 +21,12 @@ html.wall-root { font-size: calc(100vw / 67.5); }
   --rec: #b3261e; --on-rec: #ffffff;  /* F60d: the mic while it listens */
   /* F60e: Themi the chameleon's own colours (themi.css's), for the body double's scene */
   --cham: #3aa79b; --cham-belly: #b4ead6; --cham-stripe: #23857a; --cham-line: #1b4b46; --cham-eye: #ffffff;
+  /* WA2: the alerts. Getting ready in teal, the last minutes in orange, running behind on a
+     pale orange, the kitchen in amber; each with the text that sits on it. */
+  --alert-ready: #1f6b6b; --alert-ready-tint: #dcefee; --on-alert: #ffffff;
+  --alert-go: #c2410c; --alert-go-track: #e58a63; --on-go: #ffffff; --alert-go-ink: #8a2e08;
+  --alert-behind: #8a2e08; --alert-behind-bg: #fbede6;
+  --alert-kitchen: #8a5a12; --alert-kitchen-tint: #f4ead9; --alert-kitchen-bg: #faf4ea; --on-kitchen: #ffffff;
 }
 /* F52b: the dark look. Every token above, redrawn for a dark room: the people keep their
    hues, lighter on dark tints, with dark text on their blocks. On <html> when the look is
@@ -44,6 +50,10 @@ html.dark, body.night {
   --p6: #b4c0d2; --p6-tint: #2a3039; --p6-bg: #21262d; --p6-ring: #7d8a9c;
   --rec: #f2b8b5; --on-rec: #601410;
   --cham: #46b2a6; --cham-belly: #a3dcc7; --cham-stripe: #2a8a80; --cham-line: #0d2624; --cham-eye: #f4f4f0;
+  --alert-ready: #7fcfc8; --alert-ready-tint: #1d3533; --on-alert: #111317;
+  --alert-go: #f08a52; --alert-go-track: #b5643a; --on-go: #111317; --alert-go-ink: #f08a52;
+  --alert-behind: #f4a57f; --alert-behind-bg: #3a2117;
+  --alert-kitchen: #e0b26a; --alert-kitchen-tint: #3a2e1b; --alert-kitchen-bg: #2e2518; --on-kitchen: #111317;
   color-scheme: dark;
 }
 /* The night view keeps its own colours, whatever the look. */
@@ -547,3 +557,97 @@ body.night:not(.awake) { background: var(--night-bg); }
 .focus-music { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; margin-top: 1rem; }
 .focus-music select { min-height: 3.25rem; font: inherit; font-size: 1.15rem; border-radius: 0.8rem; background: var(--field); color: var(--fg); border: 0.1rem solid var(--edge); padding: 0 0.6rem; }
 .focus-music input[type=range] { flex: 1; min-width: 10rem; height: 2.5rem; }
+
+/* WA2: the alerts (Themi Wall Alerts Plan). A layer below the clock, its cards centred top to
+   bottom over the wall, which dims and keeps its layout. Read from across the room: the
+   countdown is about 300px tall on the frame, 380px in the last five minutes. */
+.wall-alerts { position: fixed; top: 13rem; left: 2.5rem; right: 2.5rem; bottom: 2.5rem;
+  display: flex; flex-direction: column; justify-content: center; pointer-events: none; }
+.wall-alerts:empty { display: none; }
+body.alerting .wall-screen > :not(.wall-top), body.alerting .wall-night { opacity: 0.4; }
+.wall-alert-list { display: flex; flex-direction: column; gap: 1.5rem; max-height: 100%; }
+.wall-alert {
+  pointer-events: auto; display: flex; flex-direction: column; gap: 1.75rem;
+  background: var(--card); color: var(--fg); border: 0.4rem solid var(--alert-ready);
+  border-radius: 3.5rem; padding: 3rem 3.25rem 2.75rem;
+}
+.alert-head { display: flex; gap: 1.75rem; align-items: center; }
+.alert-cham { flex: none; width: 6.5rem; }
+.alert-cham svg { display: block; width: 100%; height: auto; }
+.alert-icon { flex: none; width: 5rem; height: 5rem; fill: none; stroke: var(--alert-kitchen); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.alert-words { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.alert-label { font-size: 1.9rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--alert-ready); }
+.alert-title { font-size: 3.5rem; font-weight: 700; line-height: 1.1; }
+.alert-count { text-align: center; font-size: 18.5rem; font-weight: 800; line-height: 0.95; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.alert-sub { text-align: center; font-size: 2.75rem; color: var(--quiet); margin-top: -0.75rem; }
+.alert-sub strong { color: var(--fg); }
+.alert-bar { height: 1.75rem; border-radius: 1rem; background: var(--alert-ready-tint); overflow: hidden; }
+.alert-fill { display: block; height: 100%; width: 0; border-radius: 1rem; background: var(--alert-ready); }
+.alert-ends { display: flex; justify-content: space-between; font-size: 1.75rem; color: var(--muted); margin-top: -1rem; }
+.alert-detail { text-align: center; font-size: 2.1rem; color: var(--quiet); }
+.alert-dot { display: inline-block; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--tone); margin-right: 0.75rem; vertical-align: middle; }
+.alert-next { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.5rem 2rem;
+  border-radius: 2rem; background: var(--alert-kitchen-bg); font-size: 2.4rem; }
+.alert-next strong { font-variant-numeric: tabular-nums; }
+.alert-buttons { display: flex; gap: 1.5rem; }
+.alert-button { flex: 1; min-height: 7rem; border-radius: 2rem; border: 0.25rem solid var(--edge); background: var(--card);
+  color: var(--fg); font: inherit; font-size: 2.4rem; font-weight: 700; cursor: pointer; }
+.alert-button.main { background: var(--alert-ready); border-color: var(--alert-ready); color: var(--on-alert); }
+
+/* the last five minutes and time to go: orange, larger */
+.alert-almost, .alert-go { background: var(--alert-go); border-color: var(--alert-go); color: var(--on-go); }
+.alert-almost .alert-label, .alert-go .alert-label, .alert-almost .alert-sub, .alert-go .alert-sub,
+.alert-almost .alert-detail, .alert-go .alert-detail { color: var(--on-go); }
+.alert-almost .alert-count { font-size: 23.75rem; }
+.alert-almost .alert-bar { background: var(--alert-go-track); }
+.alert-almost .alert-fill { background: var(--on-go); }
+.alert-almost .alert-button, .alert-go .alert-button { background: transparent; border-color: var(--on-go); color: var(--on-go); }
+.alert-almost .alert-button.main, .alert-go .alert-button.main { background: var(--on-go); border-color: var(--on-go); color: var(--alert-go-ink); }
+.alert-go { flex: 1 1 auto; justify-content: space-between; text-align: center; padding-top: 4rem; }
+.alert-go .alert-head { flex-direction: column; }
+.alert-go .alert-cham { width: 15rem; }
+.alert-go .alert-label { display: none; }
+.alert-go .alert-said { font-size: 13rem; letter-spacing: -0.02em; }
+
+/* running behind: calmer, no countdown */
+.alert-behind { background: var(--alert-behind-bg); border-color: var(--alert-go); color: var(--alert-behind); text-align: center; }
+.alert-behind .alert-head { justify-content: center; }
+.alert-behind .alert-cham { display: none; }
+.alert-behind .alert-label { color: var(--alert-behind); }
+.alert-behind .alert-title { font-size: 8rem; font-weight: 800; }
+.alert-behind .alert-words { align-items: center; }
+.alert-behind .alert-said { font-size: 15rem; }
+.alert-behind .alert-sub, .alert-behind .alert-detail { color: var(--fg); }
+.alert-behind .alert-button { background: transparent; border-color: var(--alert-go); color: var(--alert-behind); }
+.alert-behind .alert-button.main { background: var(--alert-behind); border-color: var(--alert-behind); color: var(--alert-behind-bg); }
+
+/* the kitchen (WA3) */
+.alert-kitchen { border-color: var(--alert-kitchen); }
+.alert-kitchen .alert-label { color: var(--alert-kitchen); }
+.alert-kitchen .alert-bar { background: var(--alert-kitchen-tint); }
+.alert-kitchen .alert-fill, .alert-kitchen .alert-button.main { background: var(--alert-kitchen); border-color: var(--alert-kitchen); color: var(--on-kitchen); }
+.alert-kitchen.alert-up { background: var(--alert-kitchen); color: var(--on-kitchen); text-align: center; }
+.alert-up .alert-label, .alert-up .alert-sub, .alert-up .alert-detail { color: var(--on-kitchen); }
+.alert-up .alert-icon { stroke: var(--on-kitchen); }
+.alert-up .alert-head { justify-content: center; }
+.alert-up .alert-said { font-size: 11.5rem; }
+.alert-up .alert-count[data-count="up"] { font-size: 8rem; }
+.alert-up .alert-next { background: var(--alert-kitchen-tint); color: var(--fg); }
+.alert-kitchen.alert-up .alert-button.main { background: var(--on-kitchen); border-color: var(--on-kitchen); color: var(--alert-kitchen); }
+
+/* the second card: a band under the first */
+.alert-second { flex-direction: row; align-items: center; gap: 2rem; padding: 2rem 2.5rem; border-radius: 3rem; }
+.alert-second .alert-head { flex: 1 1 auto; min-width: 0; }
+.alert-second .alert-title { font-size: 2.5rem; }
+.alert-second .alert-count { font-size: 8rem; flex: none; }
+.alert-second .alert-sub, .alert-second .alert-bar, .alert-second .alert-ends, .alert-second .alert-next,
+.alert-second .alert-detail, .alert-second .alert-cham { display: none; }
+.alert-second .alert-buttons { flex: none; }
+.alert-second .alert-button:not(.main) { display: none; }
+.alert-second .alert-button { min-width: 12rem; }
+
+/* WA4: until the frame has been touched, the browser won't play a sound: the card says so */
+.alert-sound { align-self: center; min-height: 4rem; padding: 0 1.75rem; border-radius: 2rem; border: 0.2rem solid currentColor;
+  background: transparent; color: inherit; font: inherit; font-size: 1.75rem; font-weight: 700; cursor: pointer; }
+.alert-sound[hidden] { display: none; }
+.alert-second .alert-sound { display: none; }

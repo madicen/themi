@@ -238,6 +238,82 @@
     musicShown();
   });
 
+  // WA2: the alerts. Each countdown ticks every second between the 15-second polls, from
+  // the server's now (data-now) and never the frame's own clock; the wall dims under them.
+  var alertSkew = 0;
+  function clockText(s) {
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return (h ? h + ":" + ("0" + m).slice(-2) : m) + ":" + ("0" + sec).slice(-2);
+  }
+  function alertsSeen() {
+    var list = document.querySelector(".wall-alert-list[data-now]");
+    if (list && !list.hasAttribute("data-skew")) {
+      alertSkew = Date.parse(list.getAttribute("data-now")) - Date.now();
+      list.setAttribute("data-skew", "1");
+    }
+    document.body.classList.toggle("alerting", !!document.querySelector(".wall-alert"));
+  }
+  function alertsTick() {
+    alertsSeen();
+    var at = Date.now() + alertSkew;
+    document.querySelectorAll("#wall-alerts [data-count][data-to]").forEach(function (el) {
+      var mark = Date.parse(el.getAttribute("data-to"));
+      if (isNaN(mark)) return;
+      var up = el.getAttribute("data-count") === "up";
+      var s = Math.max(0, Math.floor((up ? at - mark : mark - at) / 1000));
+      el.textContent = (up ? "+" : "") + clockText(s);
+    });
+  }
+  setInterval(alertsTick, 1000);
+  document.addEventListener("htmx:afterSwap", function (event) {
+    if (event.target.id === "wall-alerts") { alertsTick(); alertSounds(); }
+  });
+
+  // WA4: Themi's trills. A card's sound plays once for its alert and state (kept in
+  // sessionStorage, so a poll or a reload doesn't play it again); a timer that's up has a
+  // second state two minutes on. Browsers play sound only after a touch on the page: until
+  // then the card shows "Tap for sound", and the tap plays it. Half volume at night.
+  function playedKey(card) {
+    return "wall-trill:" + card.getAttribute("data-alert") + ":" + card.getAttribute("data-sound-key");
+  }
+  function trill(url) {
+    var list = document.querySelector(".wall-alert-list[data-volume]");
+    var sound = new Audio(url);
+    sound.volume = list ? Number(list.getAttribute("data-volume")) || 1 : 1;
+    return sound.play();
+  }
+  function alertSounds() {
+    document.querySelectorAll("#wall-alerts .wall-alert[data-sound-url]").forEach(function (card) {
+      var key = playedKey(card);
+      if (sessionStorage.getItem(key)) return;
+      var chip = card.querySelector("[data-sound-unlock]");
+      trill(card.getAttribute("data-sound-url")).then(function () {
+        sessionStorage.setItem(key, "1");
+        if (chip) chip.hidden = true;
+      }, function () {
+        if (chip) chip.hidden = false;  // not allowed yet: wait for a touch
+      });
+    });
+  }
+  document.addEventListener("click", function (event) {
+    var chip = event.target.closest && event.target.closest("[data-sound-unlock]");
+    if (chip) {
+      var card = chip.closest(".wall-alert");
+      chip.hidden = true;
+      trill(card.getAttribute("data-sound-url")).then(function () {
+        sessionStorage.setItem(playedKey(card), "1");
+      }, function () {});
+      return;
+    }
+    // We're off or Got it: one tiny chirp, on a card whose sounds are on (data-chirp)
+    var done = event.target.closest && event.target.closest(".wall-alert[data-chirp] .alert-button");
+    var answer = done && done.getAttribute("data-answer");
+    var list = document.querySelector(".wall-alert-list[data-got-it]");
+    if ((answer === "off" || answer === "got_it") && list) {
+      trill(list.getAttribute("data-got-it")).then(function () {}, function () {});
+    }
+  });
+
   // F60e: the built-in loop plays from the frame through #wall-music, which lives outside
   // the sheet so a tap or a redraw doesn't stop it. Nothing plays until Play is tapped.
   // The choice and volume are kept as /session keeps them (POST /wall/focus/music).
@@ -519,6 +595,8 @@
   document.addEventListener("DOMContentLoaded", function () {
     place(document);
     nightMode();
+    alertsTick();
+    alertSounds();
     hold();
     fit();
     setInterval(function () { tick(); tickPlanner(); }, 60000);

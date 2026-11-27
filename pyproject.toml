@@ -180,6 +180,7 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "web/templates/*/*.html",
     "web/static/*",
     "web/static/*/*",
+    "web/static/audio/trills/*",  # WA4: the wall's alert trills
     "drawing_templates/*.svg",  # DC9: its pictures' templates
 ]
 themi_google = [

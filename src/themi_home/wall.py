@@ -45,6 +45,7 @@ from themi.modules.groups import YOUR_DAY
 from themi.modules.web import MenuEntry
 from themi.storage.db import Database
 from themi_home import wall_focus, wall_talk
+from themi_home.wall_alerts import ANSWERS, answer_alert
 from themi_home.wall_calendars import WallCalendars
 from themi_home.wall_columns import TONES, BadLayout, WallColumns, moved
 from themi_home.wall_view import THEME_COLOR, WallItem, WallSettings, WallView
@@ -69,7 +70,8 @@ LOCKED_FOR = timedelta(minutes=10)
 WALL_COOKIE = "themi_wall"
 COOKIE_AGE = timedelta(days=400)  # the longest a browser keeps a cookie
 DEFAULT_NAME = "Wall"
-PARTS = ("top", "note", "today", "columns", "week", "smalls", "night")  # refreshed on their own
+# refreshed on their own (WA2: and the alerts)
+PARTS = ("top", "note", "today", "columns", "week", "smalls", "night", "alerts")
 TAP = "wall_tap"  # WL4: the category and executor of a tick on the wall
 WHERE = "on the wall"  # as praise says it ("Ticked off on the wall: ...")
 CLOSE_AFTER = 120  # WL5a: seconds without a touch before a view closes itself
@@ -1234,6 +1236,19 @@ def routes(kit: Kit) -> APIRouter:
         response = sheet(request, "_view_note.html", view=replace(found, said=said))
         response.headers["HX-Trigger"] = "wall-refresh"
         return response
+
+    @router.post("/wall/alert", response_class=HTMLResponse)
+    async def alert_answer(request: Request) -> Response:
+        """WA2: a tap on an alert card (We're off, Quiet, Not going, Got it). Kept for every
+        frame; nothing is sent or changed elsewhere. The alerts come back redrawn."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        key, answer = form.get("key", ""), form.get("answer", "")
+        view = WallView(kit.app.services)
+        if answer in ANSWERS and any(a.key == key for a in view.alerts()):
+            answer_alert(kit.app.services, key, answer)
+        return kit.page(request, "wall/_alerts.html", screen=WallView(kit.app.services).screen())
 
     @router.get("/wall/pair", response_class=HTMLResponse)
     def pair_form(request: Request) -> Response:

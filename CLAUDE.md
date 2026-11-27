@@ -47,6 +47,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
   written to the cookbook doc): Themi Cooking Feedback Plan,
   https://claude.ai/artifact/HqDg5tQhrasA4p3NcRKkrV. Read it the same way. It is the design
   source for the CF prompts.
+- Wall alerts (the wall's big countdowns to out the door and to the next cook timer, and
+  Themi's trills): Themi Wall Alerts Plan, https://claude.ai/artifact/BCfg74hmKv41dPperEQazi.
+  Read it the same way. It is the design source for the WA prompts.
 
 ## "Implement the next prompt"
 

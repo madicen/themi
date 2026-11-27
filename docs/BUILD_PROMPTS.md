@@ -39,6 +39,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 - The wall (WL prompts, at the end) has its own design doc, the
   [Themi Wall Plan](https://claude.ai/artifact/Rrt4bF7u69oPFetsw6BW4y): a page for the
   Cozyla frame with today's timeline, both of us and what we share, and the week ahead.
+- Wall alerts (WA prompts, at the end) have their own design doc, the
+  [Themi Wall Alerts Plan](https://claude.ai/artifact/BCfg74hmKv41dPperEQazi): a big countdown
+  on the wall to out the door and to the next cook timer, with Themi's trills.
 
 ## Progress
 
@@ -580,6 +583,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CF7 | Cooking feedback: Themi-side fixes for prep jobs and timer chips | Cooking feedback | [x] 2026-11-27 |
 | CF8 | Cooking feedback: Themi-side fixes for sentence splits | Cooking feedback | [x] 2026-11-27 |
 | CF9 | Cooking feedback: notes from the recipe page | Cooking feedback | [x] 2026-11-27 |
+| WA1 | Wall alerts: the model and leaving | Wall alerts | [x] 2026-11-27 |
+| WA2 | Wall alerts: the card on the wall | Wall alerts | [x] 2026-11-27 |
+| WA3 | Wall alerts: kitchen timers | Wall alerts | [x] 2026-11-27 |
+| WA4 | Wall alerts: Themi's trills | Wall alerts | [x] 2026-11-27 |
+| WA5 | Wall alerts: on the frame | Wall alerts | [ ] |
 
 ## Fixed technical choices
 
@@ -27262,3 +27270,172 @@ Notes:
   finds it sorted and does nothing.
 - CF1 to CF9 were built in one go at Michael's request (2026-11-27), with `make
   test-changed` along the way and one `make lint` and `make test-all` at the end.
+
+## Wall alerts
+
+Design source: the [Themi Wall Alerts Plan](https://claude.ai/artifact/BCfg74hmKv41dPperEQazi),
+with its mock-ups in the [Themi Wall Alerts mockup](https://claude.ai/artifact/UY5XwAXLEqBZy6yJYxi3wG).
+Read the plan with the Claude Docs tools, like the other plans. Michael asked on 2026-11-27
+for something bigger than Themi's note on the wall when time matters: a countdown to out the
+door when it's time to get ready for a drive, and to the next cook timer, large enough to read
+from across the room, with short chameleon trills. Decisions the same day: the cards sit in
+the middle of the screen over the dimmed wall, which keeps its layout; the leave countdown
+runs to leave-by (from K4), not to the event. The prefix is WA.
+Rules every WA prompt keeps:
+
+- The server decides what alerts exist and each state; the page only ticks seconds between
+  polls (from the part's `data-now`, never the browser's own time) and plays the sound a state
+  names. Time from `themi.clock`.
+- The wall never looks up a route: leaving reads what K4 stored when its heads-up went.
+- Nothing private on the wall (a private event shows the person and the leave time only); no
+  energy; no new outbox messages. Running behind says when leaving now gets them there, never
+  minutes late, and plays nothing.
+- Tests use the fake travel client and a frozen clock; no real network, no sleeping.
+
+### WA1 · Wall alerts: the model and leaving
+Status: [x] 2026-11-27
+Depends on: K4, WL6
+Read first: the plan's "Summary", "What the family sees" (Leaving the house) and "How it
+works" (The alert model, Rules it keeps); `themi_google/travel.py` (`heads_up`, `_consider`,
+`_send`, `_planned_start`, `private_partners`); `travel_headsups` (0055); `WallView`
+(`wall_view.py`) and how it reads `keys.weather` and `keys.deliveries`.
+- `themi_home/wall_alerts.py`: a frozen `WallAlert` (`key`, `kind` leave or kitchen, `state`,
+  `title`, `who`, `detail`, `starts_at`, `ends_at`, `sound`, `rank`) and the states:
+  getting ready (ready-from until 5 minutes before leave-by), almost (the last 5 minutes),
+  go (leave-by until 2 minutes after), behind (after that, until the event starts).
+- A migration adds `leave_by`, `ready_from`, `drive_minutes` and `traffic` to
+  `travel_headsups`; `_send` fills them. `TravelHeadsUps.wall_alerts(now)` reads those rows
+  for events not yet started, skips people with `leave_heads_up` off, and words the card as
+  the plan does ("Dentist at 3:00", "35 min drive with traffic", "Everyone" for the family
+  calendar, the person and leave time only for a private event). Behind's "there around"
+  time is now plus the stored drive.
+- `WallView.alerts()` asks each source behind its key and returns at most two, ranked: a
+  fired kitchen timer, then leaving (the sooner leave-by first), then a running timer. With
+  the travel module off, no leave alerts. Kitchen comes in WA3; leave a place for it.
+Tests (unit): each state and its words at frozen times (ready-from, 5 minutes before, leave-by,
++2 minutes, the start: gone); a heads-up first sent late starts at the right state; a private
+event shows no title; `leave_heads_up` off shows nothing; two events, the sooner leave-by
+first; the wall makes no route call (the fake client counts calls).
+
+Notes:
+- `themi_home/wall_alerts.py` (`WallAlert`, `leave_alert`, `ranked`, `AlertAnswers`) and
+  `WallView.alerts()`; `TravelHeadsUps.leavings(now)` and a `Leaving` in `travel.py`.
+  Migration 0189 adds `leave_by`, `ready_from`, `drive_minutes`, `traffic` and `title` to
+  `travel_headsups`; `_send` fills them. Rows from before 0189 have no `leave_by` and are
+  skipped, so the first cards come with the first heads-up after the update.
+- A card is checked against the kept calendar each poll (`_still_on`, local rows, no
+  network): a moved or deleted event's card goes. The same event sent to both people is one
+  card naming both ("Erin and Husband"), in Together's colour.
+- Deviation: the plan's "Everyone" for a family-calendar event isn't used; the heads-up row
+  doesn't know which calendar it came from, so the card names the people it went to. A
+  title shows when its person shares calendar details ("partner"), else "Leaving at 2:25".
+- New: `tests/unit/test_wall_alerts.py`, `tests/integration/test_wall_alerts.py`.
+
+### WA2 · Wall alerts: the card on the wall
+Status: [x] 2026-11-27
+Depends on: WA1
+Read first: the plan's "What the family sees" (all of it) and "How it works" (Taps, The
+page); the mock-up's frames 1 to 4; `home.html`, `_top.html`, `_note.html`, `wall.css` (both
+token blocks), `wall.js`, `wall-fit.js`; `tests/unit/test_wall_look.py`.
+- `/wall/part/alerts` and `wall/_alerts.html`: a layer over the parts below the clock, its
+  cards centred top to bottom, polled every 15 s and on `wall-refresh`. The four leave states
+  drawn as the mock-ups: the white card with the teal border, the orange card with larger
+  numerals, Time to go filling most of the screen with Themi waving, and the pale running
+  behind card. Numerals about 300 px on the 1080 x 1920 frame; buttons at least 64 px.
+- `body.alerting` dims the parts underneath (opacity 0.4); they keep their layout. Alerts
+  show over the night view too.
+- `wall.js` ticks each `data-ends-at` every second from the offset to `data-now`, worked out
+  once per swap.
+- `POST /wall/alert` (`key`, `answer`: `off`, `quiet`, `not_going`) and a `wall_alert_answers`
+  table (key, answer, at), so every frame and a reload agree. We're off and Not going end the
+  card; Quiet keeps it and marks it silent for WA4.
+- New tokens (`--alert-go`, `--alert-ready`, their tints and text) in both looks.
+Tests: integration, the part's HTML per state at frozen times and `data-now`; each answer on
+one frame shows on another; the contrast test covers the new tokens; nothing private in the
+part. Script text: the tick reads `data-now`. Scenario: `test_wall_leaving.py`, a dentist trip
+from getting ready through almost and time to go to We're off.
+
+Notes:
+- `wall/_alerts.html` in `#wall-alerts`, a fixed layer before `<main>` (so it also shows
+  over the night view, and a view's sheet still opens above it), polled every 15 s and on
+  `wall-refresh`; `PARTS` gains `alerts`. `body.alerting` dims everything but the top bar.
+- `POST /wall/alert` takes a key only if that alert is showing; `wall_alert_answers` in the
+  wall's own schema (0008). The bar's width goes through `data-w` (no inline styles).
+- Tokens `--alert-*`, `--on-alert`, `--on-go`, `--on-kitchen` in both looks, with 12 new
+  pairs in `test_wall_look.py`'s contrast test. The second card is a band (`alert-second`):
+  its title, numerals and main button only.
+- Not looked at on the frame yet: WA5.
+- New: `tests/scenarios/test_wall_leaving.py`.
+
+### WA3 · Wall alerts: kitchen timers
+Status: [x] 2026-11-27
+Depends on: WA2, CK3
+Read first: the plan's "Back to the kitchen" and "Both at once"; the mock-up's frames 5 to 7;
+`cooking_timers.py` (`running`, `clear`), `cooking_screen.timers` and `FIRED_SHOWN`; OV5's
+notes (oven timers tied to step timers).
+- `CookingTimers.wall_alerts(now)`: the soonest running timer ("Back to the kitchen in ·
+  Pad Thai · Sauce, step 3", its bar against the timer's length, the next timer under it), or
+  a fired one not cleared within `FIRED_SHOWN` ("Kitchen time · 10 minutes are up", counting
+  up). Across every open session, as the cook screen, and timers with no session (set from
+  chat), which show a clock icon and their own label.
+- Got it (`answer`: `got_it`) calls `CookingTimers.clear`, so the cook screen agrees; a timer
+  cleared on the cook screen or by the oven link goes from the wall.
+- With leaving: leaving on top and the kitchen card as a band under it; a fired timer moves
+  above leaving until Got it.
+Tests (unit): running, fired, cleared on the cook screen, past `FIRED_SHOWN`; several
+sessions; integration, both at once and a fired timer moving above leaving; Got it on the
+wall clears it on the cook screen. Scenario: a timer up while getting ready to leave.
+
+Notes:
+- The plan changed the same day: any running timer gets a card, a cook session's or one
+  with no session (set from chat), which shows a clock and its own label instead of the pot
+  and "Recipe · step". Oven events stay in chat (plan's open questions, decided).
+- `CookingTimers.shown(now, FIRED_SHOWN)` (everyone's timers) and `kitchen_alerts`: one
+  card for the timer up longest and not tapped (rank 0, above leaving), one for the soonest
+  running (rank 2, a band under leaving), each with the next timer's line.
+- Got it calls `CookingTimers.clear` for the timer's own person, so the cook screen agrees;
+  one cleared or cancelled there goes from the wall at the next poll.
+
+### WA4 · Wall alerts: Themi's trills
+Status: [x] 2026-11-27
+Depends on: WA2
+Read first: the plan's "Sound" and "Settings"; the mock-up's last frame (the five sketches,
+their pitches and timings); `tools/make_loops.py` and `static/audio/LICENCES.md`; the body
+double's player in `wall.js`; `WallSettings`.
+- `tools/make_trills.py`: the five trills (time to get ready, five minutes, time to go,
+  kitchen timer, got it) synthesised with ffmpeg alone from the sketches' notes, each under
+  1.5 s, mono AAC in `static/audio/trills/`, CC0 and listed in `LICENCES.md`.
+- The part carries `data-sound` for a state that has one; `wall.js` plays it once per alert
+  key and state (kept in `sessionStorage`), so polls and reloads don't replay it. A fired
+  kitchen timer plays once more at +2:00 if nobody taps; nothing else repeats. Quiet and
+  running behind play nothing. Half volume after the wall's bedtime.
+- Sound needs a tap on the page first: until then a small "Tap for sound" chip on the card.
+- `WallSettings`: Leave alerts (on), Kitchen alerts (on), Alert sounds (On, Kitchen only,
+  Off), on the wall module's page.
+Tests (unit): which sound per state and setting; integration, `data-sound` in the part, none
+when running behind, after Quiet or with sounds off; settings hide each kind. Script text:
+play-once keyed on the alert and state; the chip until a tap.
+
+Notes:
+- `themi_home/trills.py` holds the five trills' notes (the mockup's sketches);
+  `tools/make_trills.py` renders them with ffmpeg into `static/audio/trills/*.m4a` (2 to
+  10 kB each, peaks about -5 to -8 dB), listed in `LICENCES.md` as CC0.
+- Each card with a sound carries `data-sound-url` and `data-sound-key`; `wall.js` plays it
+  once per alert and key in `sessionStorage`. A timer that's up has key `up`, then `up-again`
+  after two minutes, so it trills once more. A refused `play()` shows "Tap for sound" on the
+  card; the tap plays it. We're off and Got it chirp on cards whose sounds are on
+  (`data-chirp`). `data-volume` is 0.5 at night.
+- `WallSettings`: Leave alerts, Kitchen alerts, Alert sounds (On, Kitchen only, Off), on
+  the wall module's page.
+- To tune a trill: change its notes in `trills.py` and run `python3 tools/make_trills.py`.
+- `pyproject.toml` ships `web/static/audio/trills/*` (a folder deeper than the static globs;
+  `test_package_data.py` caught it in the full run).
+
+### WA5 · Wall alerts: on the frame
+Status: [ ]
+Depends on: WA3, WA4
+Read first: the plan's "Open questions for Michael"; WA1 to WA4's notes.
+With Michael at the Cozyla: does sound unlock after one tap, and after the page reloads?
+Are the numerals readable from across the room, and the trills loud enough but not startling?
+Anything this turns up gets a prompt of its own or a fix here, each fix starting with a
+failing test. Record the answers to the plan's open questions in Notes.
