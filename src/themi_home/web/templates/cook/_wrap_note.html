@@ -1,0 +1,34 @@
+{# CF5: a note left while cooking, at wrap-up: the note as it was left, then what Themi
+   proposes, before and after with the changed words marked. Only the session's owner gets
+   the buttons. #}
+{% from "cook/_act.html" import act %}
+{% set w = state.wrap %}
+<div class="cook-wrap-note">
+  <p class="cook-card-sub">Your note{% if w.who %} from {{ w.who }}{% endif %}: &ldquo;{{ w.said }}&rdquo;</p>
+  {% for c in w.changes or [] %}
+  <div class="cook-change">
+    {% for b in c.before %}<p class="cook-change-what">{{ c.what }} was</p><p class="cook-before">{{ b }}</p>{% endfor %}
+    {% for a in c.after %}<p class="cook-change-what">{{ "Now" if c.before else c.what }}</p><p class="cook-after">{% for seg in a %}{% if seg.new %}<mark>{{ seg.text }}</mark>{% else %}{{ seg.text }}{% endif %} {% endfor %}</p>{% endfor %}
+  </div>
+  {% endfor %}
+  {% if w.choice == "fixed" and w.summary %}<p class="cook-card-sub">{{ w.summary }}</p>{% endif %}
+  <p class="cook-line">{{ w.text }}</p>
+  {% if w.can_decide %}
+  <div class="cook-moves">
+  {% if w.choice == "change" %}
+    {{ act(state, csrf, "wrap_note_change", "Change the recipe", {"note": w.note}, cls="primary big") }}
+    {{ act(state, csrf, "wrap_note_keep", "Keep as a note", {"note": w.note}, cls="big") }}
+    {{ act(state, csrf, "wrap_note_later", "Not now", {"note": w.note}, cls="big") }}
+  {% elif w.choice == "note" %}
+    {{ act(state, csrf, "wrap_note_keep", "Keep as a note", {"note": w.note}, cls="primary big") }}
+    {{ act(state, csrf, "wrap_note_later", "Not now", {"note": w.note}, cls="big") }}
+  {% elif w.choice == "fixed" %}
+    {{ act(state, csrf, "wrap_note_ok", "OK", {"note": w.note}, cls="primary big") }}
+    {{ act(state, csrf, "wrap_note_undo", "Undo", {"note": w.note}, cls="big") }}
+  {% elif w.choice == "grams" %}
+    {{ act(state, csrf, "wrap_note_grams", "Fix the weights guide", {"note": w.note}, cls="primary big") }}
+    {{ act(state, csrf, "wrap_note_later", "Not now", {"note": w.note}, cls="big") }}
+  {% endif %}
+  </div>
+  {% endif %}
+</div>

@@ -24,6 +24,7 @@ from themi.accounts import Member
 from themi.channels.outbox import Priority
 from themi.core import keys
 from themi.core.prompts import as_data
+from themi_home.cooking_notes_wrap import NOTE_TAPS
 
 if TYPE_CHECKING:
     from themi_home.cooking import Cooking, Session
@@ -38,7 +39,7 @@ KEEP_TEXT = "A keeper? It can go into the cookbook."
 CLEANUP_TEXT = "Want company for cleanup?"
 SKIP_ITEMS = {"water"}
 WRAP_TAPS = ("wrap_save", "wrap_save_no", "wrap_keep", "wrap_keep_no", "wrap_used",
-             "wrap_used_done", "wrap_cleanup", "wrap_cleanup_no")  # fmt: skip
+             "wrap_used_done", "wrap_cleanup", "wrap_cleanup_no", *NOTE_TAPS)  # fmt: skip
 
 
 def might_be_out(cooking: Cooking, recipe: Recipe) -> set[int]:
@@ -67,6 +68,10 @@ def offer(cooking: Cooking, session: Session, recipe: Recipe) -> dict[str, Any] 
     """The wrap-up's next offer, or None when each has been made and answered."""
     if session.outcome != "finished":
         return None
+    from themi_home import cooking_notes_wrap
+
+    if (note := cooking_notes_wrap.offer(cooking, session, recipe)) is not None:
+        return note  # CF5: the notes first, before RC5's save and the rest
     wrap = session.wrap
     if (
         "save" not in wrap

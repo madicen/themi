@@ -35,6 +35,7 @@ from themi_home.cooking_links import digest, in_line
 
 if TYPE_CHECKING:
     from themi.scheduler import Scheduler
+    from themi_home.cookbook_edit import CookbookEdits
     from themi_home.cooking import Cooking, Session
     from themi_home.recipes import Recipe
 
@@ -120,6 +121,7 @@ class CookingNotes:
         self.services = cooking.services
         self.db = cooking.db
         self.jobs = jobs
+        self.edits: CookbookEdits | None = None  # CF4
 
     def install(self) -> None:
         self.cooking.notes = self
@@ -129,6 +131,12 @@ class CookingNotes:
         handlers.insert(at, self.on_text)
         if self.jobs is not None:
             self.jobs.handler(SORT_JOB)(self.run_sort)
+        self.cooking.recipes.loaders.append(self.with_splits)  # CF8
+        self.services.button_handlers["cooking_note"] = self.on_button  # CF5, in chat
+        from themi_home.cookbook_edit import CookbookEdits
+
+        self.edits = CookbookEdits(self.services, self.cooking.recipes, self)
+        self.edits.install()
 
     # ----- reading ------------------------------------------------------------------------
 
@@ -154,7 +162,9 @@ class CookingNotes:
 
     # ----- leaving one --------------------------------------------------------------------
 
-    def where(self, session: Session, recipe: Recipe, label: str = "") -> tuple[str, int | None, str]:
+    def where(
+        self, session: Session, recipe: Recipe, label: str = ""
+    ) -> tuple[str, int | None, str]:
         """The part a note is about: (label, step index, its words). The label sent with a
         tap wins (the part shown when the sheet opened), else the session's own place.
         Before the steps, the phase ("gather", "prep") with no step."""
@@ -211,6 +221,55 @@ class CookingNotes:
         self.after_add(note_id)
         return self.get(note_id)
 
+    def add_on_page(
+        self,
+        recipe: Recipe,
+        member: Member,
+        *,
+        step: int | None = None,
+        line: int | None = None,
+        chip: str = "",
+        said: str = "",
+    ) -> Note | None:
+        """CF9: a note from the recipe's page, with no cooking session: on a step (0-based)
+        or an ingredient line. None when it's empty or names neither."""
+        chip = chip.strip()
+        said = " ".join(said.split())[:MAX_SAID]
+        if (chip and chip not in (*CHIPS, *LINE_CHIPS)) or (not chip and not said):
+            return None
+        if step is not None and not 0 <= step < len(recipe.steps):
+            return None
+        if line is not None and not 0 <= line < len(recipe.ingredients):
+            return None
+        if step is None and line is None:
+            return None
+        shown: dict[str, Any] = {"phase": "page"}
+        text = ""
+        if step is not None:
+            from themi_home.cooking import SENTENCE, Part
+            from themi_home.cooking_timers import step_durations
+
+            text = recipe.steps[step].text
+            links = self.cooking.links.links(recipe, self.cooking.groceries.known(recipe))
+            sentences = SENTENCE.split(text)
+            shown.update(
+                amounts=[recipe.ingredients[n].text for n in links.get(step, [])],
+                timers=[f.said for f in step_durations(self.db, recipe, Part(str(step + 1), text))],
+                sentences=sentences if len(sentences) > 1 else [],
+            )  # fmt: skip
+        if line is not None:
+            shown["line_text"] = recipe.ingredients[line].text
+        note_id = self.db.execute(
+            "INSERT INTO cooking_notes (session_id, recipe_id, member_id, step_label, "
+            "step_index, step_text, line, chip, said, how, recipe_digest, shown, created_at) "
+            "VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'page', ?, ?, ?)",
+            (recipe.id, member.id, str(step + 1) if step is not None else "ingredients", step,
+             text, line, chip, said, digest(recipe), json.dumps(shown), to_utc_iso(clock.now())),
+        )  # fmt: skip
+        log.info("Recipe page note %s on %s", note_id, recipe.name)
+        self.after_add(note_id)
+        return self.get(note_id)
+
     def after_add(self, note_id: int) -> None:
         """CF3: the note is sorted in the background, so it's ready by wrap-up."""
         if self.jobs is not None:
@@ -223,9 +282,21 @@ class CookingNotes:
         from themi_home.cooking_screen import amounts
 
         if index is None:
-            return {"phase": session.phase}
+            out: dict[str, Any] = {"phase": session.phase}
+            if session.phase == "prep":  # CF7: the jobs as they were shown
+                out["prep"] = [str(job.get("text", "")) for job in session.prep]
+            return out
+        from themi_home.cooking import step_parts
+        from themi_home.cooking_timers import step_durations
+
         uses = amounts(self.cooking, session, recipe, label, viewer)["uses"]
-        return {"phase": session.phase, "amounts": [a["line"] for a in uses]}
+        part = next((p for p in step_parts(recipe) if p.label == label), None)
+        chips = [f.said for f in step_durations(self.db, recipe, part)] if part else []
+        from themi_home.cooking import SENTENCE
+
+        sentences = SENTENCE.split(recipe.steps[index].text) if index < len(recipe.steps) else []
+        return {"phase": session.phase, "amounts": [a["line"] for a in uses], "timers": chips,
+                "sentences": sentences if len(sentences) > 1 else []}  # fmt: skip
 
     async def on_said(
         self, session: Session, member: Member, text: str, *, how: str, from_page: bool
@@ -256,6 +327,21 @@ class CookingNotes:
             return False
         return await self.on_said(session, member, text, how="typed", from_page=event.from_page)
 
+    def with_splits(self, recipe: Recipe) -> Recipe:
+        """CF8: the recipe with its split fixes (the latest for each step) on it."""
+        from dataclasses import replace
+
+        fixes = live_fixes(self.db, recipe, "split")
+        if not fixes:
+            return recipe
+        splits = tuple((s, tuple(int(k) for k in found[-1]["after"]))
+                       for s, found in sorted(fixes.items()))  # fmt: skip
+        return replace(recipe, splits=splits)
+
+    async def on_button(self, event: InboundEvent) -> None:
+        from themi_home.cooking_notes_wrap import on_button
+
+        await on_button(self.cooking, event)
 
     # ----- sorting (CF3) -------------------------------------------------------------------
 
@@ -293,6 +379,14 @@ class CookingNotes:
         notes = "\n".join(recipe.notes)
         shown = [f"Step {note.step_label}: {note.step_text}" if note.step_text
                  else f"Before the steps ({note.step_label})"]  # fmt: skip
+        if note.shown.get("prep"):
+            shown.append("Prep jobs shown: " + "; ".join(note.shown["prep"]))
+        if note.shown.get("timers") is not None:
+            shown.append("Timer buttons on this step: " + ("; ".join(note.shown["timers"])
+                                                           or "none"))  # fmt: skip
+        if note.shown.get("sentences"):  # CF8: how a long step's sentences number
+            shown.append("The whole step's sentences: " + " ".join(
+                f"({n}) {t}" for n, t in enumerate(note.shown["sentences"], start=1)))  # fmt: skip
         if note.shown.get("amounts") is not None:
             shown.append("Ingredients shown for this step: "
                          + ("; ".join(note.shown["amounts"]) or "none"))  # fmt: skip
@@ -337,7 +431,26 @@ class CookingNotes:
             self.report(sorted_note, recipe, data, "idea" if report == "idea" else "bug")
         if kind == "display" and proposal.get("links") is not None:
             await self.apply_links(sorted_note, recipe)
+        if kind == "display" and (proposal.get("prep") or proposal.get("timer")
+                                  or proposal.get("split")):  # fmt: skip
+            await self.apply_fix(self.get(note.id) or sorted_note, recipe)  # CF7
+        await self.offer_late(sorted_note)
         return self.get(note.id) or sorted_note
+
+    async def offer_late(self, note: Note) -> None:
+        """CF5: a note sorted after a wrap-up in chat began, offered there when it's the only
+        one left to decide (so no other offer is waiting on an answer)."""
+        from themi_home.cooking_notes_wrap import next_in_chat, to_decide
+
+        session = self.cooking.get(note.session_id) if note.session_id else None
+        if (
+            session is None
+            or session.outcome != "finished"
+            or self.cooking.screen_open(session)
+            or [n.id for n in to_decide(self, session)] != [note.id]
+        ):
+            return
+        await next_in_chat(self.cooking, session)
 
     def display_fix(self, note: Note, recipe: Recipe, data: dict[str, Any]) -> dict[str, Any]:
         """CF3: which lines the step should show, checked against the lines; CF7 and CF8 add
@@ -350,6 +463,24 @@ class CookingNotes:
             remove = self._lines(recipe, links.get("remove") or [])
             if add or remove:
                 fix["links"] = {"add": add, "remove": [n for n in remove if n not in add]}
+        prep = data.get("prep") or {}
+        job = " ".join(str(prep.get("job") or "").split())
+        if job and job in (note.shown.get("prep") or []):  # CF7: a job that was shown
+            fix["prep"] = {"job": job, "to": " ".join(str(prep.get("to") or "").split())[:120]}
+        timer = data.get("timer") or {}
+        said, minutes = str(timer.get("said") or "").strip(), float(timer.get("minutes") or 0)
+        if (
+            note.step_index is not None
+            and 0 <= minutes <= 8 * 60
+            and (said in (note.shown.get("timers") or []) or (not said and minutes > 0))
+            and (said or minutes)
+        ):
+            fix["timer"] = {"said": said, "minutes": minutes, "part": note.step_label}
+        split = data.get("split") or {}
+        count = len(note.shown.get("sentences") or [])
+        after = sorted({int(k) for k in split.get("after") or [] if 1 <= int(k) < count})
+        if count and (after or split.get("whole")):  # CF8: on screen only, not the recipe
+            fix["split"] = {"after": after}
         grams = data.get("grams") or {}
         if (
             str(grams.get("ingredient") or "").strip()
@@ -366,8 +497,9 @@ class CookingNotes:
         found: list[int] = []
         for link in said:
             n = int(link.get("line") or 0) - 1
-            if 0 <= n < len(recipe.ingredients) and in_line(str(link.get("item") or ""),
-                                                            recipe.ingredients[n].text):
+            if 0 <= n < len(recipe.ingredients) and in_line(
+                str(link.get("item") or ""), recipe.ingredients[n].text
+            ):
                 found.append(n)
         return sorted(set(found))
 
@@ -381,6 +513,48 @@ class CookingNotes:
         session = self.cooking.get(note.session_id) if note.session_id else None
         if session is not None and session.ended_at is None:
             await self.cooking.say(session, fix_line(recipe, links, note.step_label))
+            self.cooking._bump(session)
+
+    async def apply_fix(self, note: Note, recipe: Recipe) -> None:
+        """CF7: a prep job or a step's timer fixed on Themi's side at once, and said."""
+        session = self.cooking.get(note.session_id) if note.session_id else None
+        line = ""
+        fix_id = note.fix_id
+        if prep := note.proposal.get("prep"):
+            fix_id = add_fix(self.db, recipe, -1, "prep", prep, note.id)
+            line = f"Prep: {prep['to']}." if prep["to"] else f'Took "{prep["job"]}" off the prep.'
+            if session is not None:
+                session.prep = apply_prep(session.prep, [prep])
+                self.cooking.save(session)
+        if (split := note.proposal.get("split")) is not None and note.step_index is not None:
+            from themi_home.cooking import step_parts
+
+            parts = step_parts(recipe)
+            where = parts[session.step].text if session is not None and session.step < len(
+                parts) else ""  # fmt: skip
+            fix_id = add_fix(self.db, recipe, note.step_index, "split", split, note.id)
+            line = f"Step {note.step_index + 1} is split as you said."
+            if session is not None and session.phase == "cook" and where:  # stay on it
+                fixed = self.cooking.recipes.get(recipe.id) or recipe
+                from themi_home.cooking import SENTENCE
+
+                first = SENTENCE.split(where)[0]
+                moved = next((k for k, p in enumerate(step_parts(fixed)) if first in p.text), None)
+                if moved is not None:
+                    session.step = moved
+                    self.cooking.save(session)
+        if (timer := note.proposal.get("timer")) and note.step_index is not None:
+            fix_id = add_fix(self.db, recipe, note.step_index, "timer", timer, note.id)
+            from themi_home.cooking_timers import _short
+
+            line = (
+                f"Step {note.step_label}: no {timer['said']} timer."
+                if not timer["minutes"]
+                else f"Step {note.step_label}: a {_short(timer['minutes'])} timer."
+            )
+        self._set(note, fix_id=fix_id, status="fixed")
+        if session is not None and session.ended_at is None and line:
+            await self.cooking.say(session, line)
             self.cooking._bump(session)
 
     def report(self, note: Note, recipe: Recipe, data: dict[str, Any], kind: str) -> None:
@@ -402,6 +576,19 @@ class CookingNotes:
         }  # fmt: skip
         bug_id = feedback.book.record(note.member_id, kind, text, context)  # type: ignore[arg-type]
         self._set(note, bug_id=bug_id)
+
+    def undo_fix(self, note: Note) -> None:
+        """[Undo] on a display fix: the step is shown as before."""
+        self.db.execute("UPDATE recipe_fixes SET undone_at = ? WHERE note_id = ?",
+                        (to_utc_iso(clock.now()), note.id))  # fmt: skip
+        self._set(note, status="undone")
+
+    def restale(self, note: Note) -> None:
+        """CF4: the doc no longer has the words a change was made from: sorted once more
+        against the recipe as it is now, else left as it was said."""
+        self._set(note, status="stale")
+        if note.sorts < MAX_SORTS and self.jobs is not None:
+            self.jobs.enqueue(SORT_JOB, {"note": note.id})
 
     def _set(self, note: Note, **columns: Any) -> None:
         sets = ", ".join(f"{k} = ?" for k in columns)
@@ -437,8 +624,56 @@ def live_fixes(db: Any, recipe: Recipe, kind: str) -> dict[int, list[dict[str, A
         (recipe.id, kind),
     ):
         s = int(row["step_index"])
-        if s < len(recipe.steps) and step_hash(recipe.steps[s].text) == row["step_hash"]:
+        if 0 <= s < len(recipe.steps) and step_hash(recipe.steps[s].text) == row["step_hash"]:
             out.setdefault(s, []).append(json.loads(row["data"]))
+    return out
+
+
+def prep_fixes(db: Any, recipe: Recipe) -> list[dict[str, Any]]:
+    """CF7: a recipe's prep job fixes, oldest first."""
+    return [
+        json.loads(r["data"])
+        for r in db.query(
+            "SELECT data FROM recipe_fixes WHERE recipe_id = ? AND kind = 'prep' AND "
+            "undone_at IS NULL ORDER BY id",
+            (recipe.id,),
+        )
+    ]
+
+
+def apply_prep(jobs: list[dict[str, Any]], fixes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The prep jobs with fixes made: a job's words changed, or the job taken off."""
+    out = [dict(j) for j in jobs]
+    for fix in fixes:
+        for job in out:
+            if job.get("text") == fix["job"]:
+                if fix["to"]:
+                    job["text"] = fix["to"]
+                else:
+                    job["gone"] = True
+    return [j for j in out if not j.pop("gone", False)]
+
+
+def timer_fixed(db: Any, recipe: Recipe, label: str, found: list[Any]) -> list[Any]:
+    """CF7: a step's timer offers with its fixes made: one taken off, one's minutes
+    changed, or one added."""
+    from dataclasses import replace
+
+    from themi_home.cooking_screen import step_index
+    from themi_home.cooking_timers import Found, _short
+
+    out = list(found)
+    for fix in live_fixes(db, recipe, "timer").get(step_index(label), []):
+        if fix.get("part") and fix["part"] != label:
+            continue
+        said, minutes = fix["said"], float(fix["minutes"])
+        hit = next((f for f in out if f.said == said), None) if said else None
+        if hit is not None and not minutes:
+            out.remove(hit)
+        elif hit is not None:
+            out[out.index(hit)] = replace(hit, minutes=minutes, said=_short(minutes))
+        elif not said and minutes:
+            out.append(Found(minutes, _short(minutes)))
     return out
 
 
@@ -465,6 +700,15 @@ Someone cooking a recipe on Themi's cook screen left a note on a step. Sort it i
   from the step's ingredients. A gram weight that's wrong ("1 tsp salt isn't 15 g") is
   display too: give grams (ingredient, amount, unit: cup, tbsp, tsp, ml or each, and the
   right grams).
+  A prep job shown wrong (a job for an ingredient that isn't prepped that way, or not at
+  all): give prep: the job exactly as shown, and to: the job as it should read, or "" to
+  take it off. A timer button wrong on the step: give timer: said, the button's time as
+  shown ("10 min"), and minutes, the right minutes (0 to take it off); said "" with
+  minutes to add a timer the step needs.
+  A long step that the screen split into parts in the wrong place (the recipe's step is
+  fine as one): give split: after, the sentence numbers to split after (from the whole
+  step's sentences), and whole true to show it as one. A note asking for the recipe itself
+  to have more steps is a change, not this.
 - change: the recipe itself should change. Splitting a step into steps, a longer time, a
   different amount, an ingredient added or taken out. Give ops, each quoting the recipe's
   old words exactly as given: replace_step (old, new: one), split_step (old, new: two or
@@ -497,6 +741,13 @@ SORT_SCHEMA: dict[str, Any] = {
             "ingredient": _TEXT, "amount": {"type": "number"}, "unit": _TEXT,
             "grams": {"type": "number"}},
             "required": ["ingredient", "amount", "unit", "grams"], "additionalProperties": False},
+        "prep": {"type": "object", "properties": {"job": _TEXT, "to": _TEXT},
+                 "required": ["job", "to"], "additionalProperties": False},
+        "timer": {"type": "object", "properties": {"said": _TEXT, "minutes": {"type": "number"}},
+                  "required": ["said", "minutes"], "additionalProperties": False},
+        "split": {"type": "object", "properties": {
+            "after": {"type": "array", "items": {"type": "integer"}}, "whole": {"type": "boolean"}},
+            "required": ["after", "whole"], "additionalProperties": False},
         "ops": {"type": "array", "items": {"type": "object", "properties": {
             "op": _TEXT, "old": _TEXT, "olds": {"type": "array", "items": _TEXT},
             "new": {"type": "array", "items": _TEXT}, "after": _TEXT, "group": _TEXT},
@@ -506,7 +757,8 @@ SORT_SCHEMA: dict[str, Any] = {
         "report": {"type": "string", "enum": ["bug", "idea", "none"]},
         "bug": _TEXT,
     },
-    "required": ["kind", "summary", "links", "grams", "ops", "note", "report", "bug"],
+    "required": ["kind", "summary", "links", "grams", "prep", "timer", "split", "ops", "note",
+                 "report", "bug"],
     "additionalProperties": False,
 }  # fmt: skip
 

@@ -432,3 +432,12 @@ body.cook-page[data-theme="dark"] .cook-new > summary { color: var(--accent); }
 .cook-note-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .cook-note-chips form { margin: 0; }
 .cook-note-chips .cook-chip { background: var(--card-2); color: var(--fg); border: 1px solid var(--line); min-height: var(--cook-tap); }
+
+/* CF5: a note's change at wrap-up, before and after */
+.cook-wrap-note { display: grid; gap: var(--space-3); }
+.cook-change { display: grid; gap: var(--space-2); }
+.cook-before, .cook-after { margin: 0; overflow-wrap: anywhere; }
+.cook-before { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.cook-change-what { margin: 0; font-size: 0.85rem; color: var(--muted); }
+.cook-after mark { background: var(--soft); color: var(--fg); border-radius: 4px; padding: 0 2px; }
+.cook-last-time { margin: var(--space-2) 0 0; color: var(--muted); font-size: 1rem; }

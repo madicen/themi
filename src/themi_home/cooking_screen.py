@@ -22,6 +22,7 @@ from themi.accounts import Member
 from themi.localtime import to_utc_iso
 from themi_home.body_double_scene import CHEER_FOR, pick_cooking_state
 from themi_home.cooking_links import MORE, shown
+from themi_home.cooking_notes_wrap import NOTE_TAPS
 from themi_home.cooking_timers import PRESETS
 from themi_home.cooking_wrap import WRAP_TAPS
 from themi_home.gram_weights import GramWeights
@@ -137,6 +138,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         "steps": [],
         "strip_steps": [],
         "next_title": "",
+        "last_time": [],  # CF6: notes still waiting from an earlier cook, on this step
     }
     if session.phase == "ready":
         out["ahead"] = [
@@ -193,6 +195,9 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
                 for i, p in enumerate(parts)
             ]  # fmt: skip
         out["amounts"] = amounts(cooking, session, recipe, part.label, viewer)
+        from themi_home.cooking_notes_wrap import last_time
+
+        out["last_time"] = last_time(cooking, session, recipe, part.text, here)
         if n + 1 < len(parts):
             nxt = parts[n + 1]
             out["peek"] = f"Next, step {nxt.label}: {nxt.text}"
@@ -201,11 +206,11 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
                 titles[after] if after != here and after < len(titles) else f"step {nxt.label}"
             )
         if cooking.timers is not None:
-            from themi_home.cooking_timers import durations
+            from themi_home.cooking_timers import step_durations
 
             out["offers"] = [
                 {"label": f"Timer {found.said}", "minutes": found.minutes, "step": part.label}
-                for found in durations(part.text)
+                for found in step_durations(cooking.db, recipe, part)
                 if not found.reminder
             ]
     from themi_home.cooking_ahead import look_ahead, strip
@@ -249,6 +254,8 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     from themi_home.cooking_wrap import offer
 
     out["wrap"] = offer(cooking, session, recipe) if out["ended"] else None
+    if out["wrap"] is not None and out["wrap"]["kind"] == "note":  # CF5: the owner decides
+        out["wrap"] = {**out["wrap"], "can_decide": viewer.id == session.member_id}
     out["soonest"] = running[0]["ends_at"] if running else ""
     out["presets"] = list(PRESETS)
     out["chime_volume"] = cooking.preferences(viewer.id).cooking_chime_volume
@@ -552,6 +559,11 @@ async def act(
             words = "Timer cancelled" if "cancel" in action else "More time"
             return Tapped(True, f"{words}, and the oven's too.")
         return Tapped(tapped)
+    if action in NOTE_TAPS:  # CF5: a note at wrap-up, decided by the session's owner
+        from themi_home import cooking_notes_wrap
+
+        done, said = await cooking_notes_wrap.tap(cooking, session, member, action, form)
+        return Tapped(done, said)
     if action in WRAP_TAPS:
         from themi_home import cooking_wrap
 

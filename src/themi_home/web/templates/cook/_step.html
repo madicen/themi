@@ -51,6 +51,7 @@
   {% else %}
   <blockquote class="cook-text"><p class="cook-headline">{{ state.step.headline }}</p>{% if state.step.rest %}<p class="cook-rest">{{ state.step.rest }}</p>{% endif %}</blockquote>
   {% endif %}
+  {% for words in state.last_time %}<p class="cook-last-time">From last time: {{ words }}</p>{% endfor %}
   {% include "cook/_tip.html" %}
   {% if state.peek %}<details class="cook-peek" data-keep-open="peek"><summary>Next: {{ state.next_title or "the next step" }}</summary><p>{{ state.peek }}</p></details>{% endif %}
   {% if state.notes.on %}{% include "cook/_note.html" %}{% endif %}
@@ -68,6 +69,8 @@
     {{ act(state, csrf, "timers_keep", "Keep timers", cls="primary big") }}
     {{ act(state, csrf, "timers_cancel", "Cancel them", cls="big") }}
   </div>
+  {% elif state.wrap and state.wrap.kind == "note" %}
+  {% include "cook/_wrap_note.html" %}
   {% elif state.wrap %}
   <p class="cook-line">{{ state.wrap.text }}</p>
   {% if state.wrap.kind == "save" %}

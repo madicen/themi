@@ -108,6 +108,13 @@ def durations(text: str) -> list[Found]:
     return unique[:PER_STEP]
 
 
+def step_durations(db: Any, recipe: Recipe, part: Any) -> list[Found]:
+    """A step's times with the recipe's timer fixes from cooking notes made (CF7)."""
+    from themi_home.cooking_notes import timer_fixed
+
+    return timer_fixed(db, recipe, part.label, durations(part.text))
+
+
 def default_label(recipe: Recipe, step: str) -> str:
     """ "Sauce, step 3" where the recipe groups its steps, else "Step 3"."""
     from themi_home.cooking import step_parts
@@ -133,7 +140,9 @@ class CookingTimers:
 
     def buttons(self, session: Session, part: Part) -> list[Button]:
         out = []
-        for found in durations(part.text):
+        recipe = self.cooking.recipes.get(session.recipe_id)
+        found_times = step_durations(self.db, recipe, part) if recipe else durations(part.text)
+        for found in found_times:
             payload: dict[str, Any] = {
                 "session": session.id, "step": part.label, "minutes": found.minutes,
             }  # fmt: skip

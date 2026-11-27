@@ -177,11 +177,19 @@ class StepLinks:
         return {int(k): [int(n) for n in v] for k, v in json.loads(row["data"]).items()}
 
     def links(self, recipe: Recipe, items: list[Ingredient]) -> dict[int, list[int]]:
-        """Rule links, joined by the cached model's links for the gap steps (CF1)."""
+        """Rule links, joined by the cached model's links for the gap steps (CF1), then the
+        recipe's own link fixes from cooking notes (CF3), lines added and removed."""
+        from themi_home.cooking_notes import live_fixes
+
         found = rule_links(recipe, items)
         model = self.cached(recipe) or {}
         for s in gaps(recipe, found):
             found[s] = sorted(set(found.get(s, [])) | set(model.get(s, [])))
+        for s, fixes in live_fixes(self.db, recipe, "links").items():
+            lines = set(found.get(s, []))
+            for fix in fixes:
+                lines = (lines | set(fix.get("add", []))) - set(fix.get("remove", []))
+            found[s] = sorted(n for n in lines if n < len(recipe.ingredients))
         return found
 
     async def ensure(self, member: Member, recipe: Recipe, items: list[Ingredient]) -> None:

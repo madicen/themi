@@ -19,6 +19,7 @@ import difflib
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -158,6 +159,9 @@ class Recipe:
     book_role: str = MAIN  # RC8b: main, trying or shelf
     tools: tuple[str, ...] = ()  # RC8c: what to have out ("cheesecloth"), never bought
     draft: str = ""  # RC8c: why it isn't ready to cook as written ("not converted yet")
+    # CF8: where to split a long step on the screen, from a cooking note: (step index, the
+    # sentence numbers to split after), used instead of RC3b's own choice for that step
+    splits: tuple[tuple[int, tuple[int, ...]], ...] = ()
 
     @property
     def to_try(self) -> bool:
@@ -242,6 +246,7 @@ class Recipes:
         self.google = google
         self.config = config
         self.db = services.store.db
+        self.loaders: list[Callable[[Recipe], Recipe]] = []  # CF8
 
     def install(self) -> None:
         self.services.provide(keys.recipes, self)
@@ -690,7 +695,13 @@ class Recipes:
 
     def get(self, recipe_id: int) -> Recipe | None:
         row = self.db.one(self.WITH_BOOK + "WHERE recipes.id = ?", (recipe_id,))
-        return recipe_from_row(row) if row else None
+        return self._loaded(recipe_from_row(row)) if row else None
+
+    def _loaded(self, recipe: Recipe) -> Recipe:
+        """CF8: what other modules keep on a recipe's side (`loaders`), added as it's read."""
+        for loader in self.loaders:
+            recipe = loader(recipe)
+        return recipe
 
     def all(self, *, include_charts: bool = False, source: str | None = None) -> list[Recipe]:
         rows = self.db.query(
@@ -699,7 +710,7 @@ class Recipes:
             "ORDER BY recipes.source, recipes.position, recipes.name",
             (int(include_charts), source, source),
         )
-        return [recipe_from_row(r) for r in rows]
+        return [self._loaded(recipe_from_row(r)) for r in rows]
 
     def count(self, which: str) -> int:
         """RC8a: a book's recipes and charts, as read from its doc."""

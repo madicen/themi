@@ -1,6 +1,20 @@
 {% extends "base.html" %}
 {% block title %}{{ recipe.name }} · Themi{% endblock %}
 {% block content %}
+{# CF9: [Note] on a step or a line: a chip alone saves, words are optional. #}
+{% macro note_sheet(what, n, chips) -%}
+<details class="note-sheet"><summary>Note</summary>
+  <form method="post" action="/recipes/{{ recipe.id }}/note">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="{{ what }}" value="{{ n }}">
+    {% for c in chips %}<button name="chip" value="{{ c }}">{{ c }}</button> {% endfor %}
+  </form>
+  <form method="post" action="/recipes/{{ recipe.id }}/note">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="{{ what }}" value="{{ n }}">
+    <input name="said" maxlength="500" aria-label="Your note" placeholder="A few words">
+    <button class="primary">Save note</button>
+  </form>
+</details>
+{%- endmacro %}
 <p><a href="/recipes">← Recipes</a></p>
 <h1>{{ recipe.name }}</h1>
 <p class="muted">{% if recipe.source == "web" %}From {{ recipe.source_text or "the web" }}{% else %}{{ recipe.section }}{% if recipe.subsection %} · {{ recipe.subsection }}{% endif %}{% endif %}{% if link %} · <a href="{{ link }}" rel="noopener">{% if recipe.source == "web" %}the page{% else %}in the doc{% endif %}</a>{% endif %}{% if not recipe.is_chart %} · <a href="/recipes/{{ recipe.id }}/card.png" download="{{ recipe.name }}.png">a picture to keep</a>{% endif %}</p>
@@ -24,7 +38,7 @@
 {% set ns = namespace(group="") %}
 {% for group, line in lines %}
   {% if group and group != ns.group %}<li class="group">{{ group }}</li>{% set ns.group = group %}{% endif %}
-  <li>{{ line }}</li>
+  <li>{{ line }}{% if line_chips %} {{ note_sheet("line", loop.index0, line_chips) }}{% endif %}</li>
 {% endfor %}
 </ul>
 {% for note in notes %}<p class="muted">{{ note }}</p>{% endfor %}
@@ -32,9 +46,48 @@
 <ul class="tools">{% for tool in recipe.tools %}<li>{{ tool }}</li>{% endfor %}</ul>{% endif %}
 
 <h2>Steps</h2>
-<ol class="steps">{% for step in recipe.steps %}<li>{% if step.group %}<strong>{{ step.group }}:</strong> {% endif %}{{ step.text }}</li>{% endfor %}</ol>
+<ol class="steps">{% for step in recipe.steps %}<li>{% if step.group %}<strong>{{ step.group }}:</strong> {% endif %}{{ step.text }}{% if note_chips %} {{ note_sheet("step", loop.index0, note_chips) }}{% endif %}</li>{% endfor %}</ol>
 {% for note in recipe.notes %}<p>{{ note }}</p>{% endfor %}
 {% if recipe.source_text %}<p class="muted">Source: {{ recipe.source_text }}</p>{% endif %}
+
+{% if cook_notes or cook_changes %}
+<h2 id="cook-notes">Notes from cooking</h2>
+{% for n in cook_notes %}
+<section class="cook-note-card">
+  <p class="muted">{{ n.who }}, {{ n.when }}{% if n.step and n.step[:1].isdigit() %}, step {{ n.step }}{% endif %}: &ldquo;{{ n.said }}&rdquo;</p>
+  {% for c in n.changes or [] %}
+    {% for b in c.before %}<p class="muted"><small>{{ c.what }} was</small><br><s>{{ b }}</s></p>{% endfor %}
+    {% for a in c.after %}<p><small class="muted">{{ "Now" if c.before else c.what }}</small><br>{% for seg in a %}{% if seg.new %}<mark>{{ seg.text }}</mark>{% else %}{{ seg.text }}{% endif %} {% endfor %}</p>{% endfor %}
+  {% endfor %}
+  <p>{{ n.text }}</p>
+  {% if n.can_decide %}
+  <div class="actions">
+    {% set moves = {"change": [("wrap_note_change", "Change the recipe", True), ("wrap_note_keep", "Keep as a note", False), ("wrap_note_later", "Not now", False)],
+                    "note": [("wrap_note_keep", "Keep as a note", True), ("wrap_note_later", "Not now", False)],
+                    "fixed": [("wrap_note_ok", "OK", True), ("wrap_note_undo", "Undo", False)],
+                    "grams": [("wrap_note_grams", "Fix the weights guide", True), ("wrap_note_later", "Not now", False)]} %}
+    {% for action, label, main in moves[n.choice] %}
+    <form method="post" action="/recipes/{{ recipe.id }}/notes/{{ n.note }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ action }}">
+      <button{% if main %} class="primary"{% endif %}>{{ label }}</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+{% if cook_changes %}
+<h3>Changed from notes</h3>
+<ul class="cook-changes">
+{% for c in cook_changes %}
+  <li>{{ c.when }}: {{ c.what }}{% if c.undone %} <span class="muted">(undone)</span>{% elif c.can_undo %}
+    <form method="post" action="/recipes/{{ recipe.id }}/changes/{{ c.id }}/undo" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button>Undo</button>
+    </form>{% endif %}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endif %}
 
 <div class="actions">
   <form method="post" action="/recipes/{{ recipe.id }}/groceries">
