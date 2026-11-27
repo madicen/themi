@@ -261,6 +261,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         else None,
     )  # CK5: the chameleon
     out["chat"] = cooking.page_chat(session)
+    out["notes"] = notes_state(cooking, session)  # CF2
     out["music"] = music(cooking, session, viewer)
     out["meta"] = meta(out)
     out["drawn"] = drawn(out)
@@ -269,6 +270,20 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         timer["text"] = span(left)
         timer["of"] = span(timer["seconds"])
     return out
+
+
+def notes_state(cooking: Cooking, session: Session) -> dict[str, Any]:
+    """CF2: the [Note] sheet's chips, and how many notes this session has."""
+    from themi_home.cooking_notes import CHIPS, LINE_CHIPS
+
+    if cooking.notes is None:
+        return {"on": False, "count": 0, "chips": [], "line_chips": []}
+    return {
+        "on": session.ended_at is None,
+        "count": len(cooking.notes.for_session(session.id)),
+        "chips": list(CHIPS),
+        "line_chips": list(LINE_CHIPS),
+    }
 
 
 def meta(out: dict[str, Any]) -> str:
@@ -514,6 +529,8 @@ async def act(
         log.info("Cook screen tap %r on session %s refused: not theirs or over",
                  action, session_id)  # fmt: skip
         return Tapped(False)
+    if action in ("note", "line_note") and session.ended_at is None:
+        return note_tap(cooking, session, member, action, form)  # CF2: never lost to `seq`
     if seq != session.seq:
         log.info("Cook screen tap %r on session %s refused: seq %s, now %s",
                  action, session_id, seq, session.seq)  # fmt: skip
@@ -656,6 +673,27 @@ async def act(
     else:
         return Tapped(False)
     return Tapped(True, said)
+
+
+def note_tap(
+    cooking: Cooking, session: Session, member: Member, action: str, form: dict[str, Any]
+) -> Tapped:
+    """CF2: [Note] under the step (a chip, words, or both) or on a line in the drawer. Saved
+    against the part shown when the sheet opened (its label comes with the tap), so a tap
+    from an older screen still counts. Nothing is asked."""
+    from themi_home.cooking_notes import NOTED
+
+    if cooking.notes is None:
+        return Tapped(False)
+    line = _int(form.get("n")) if action == "line_note" else None
+    note = cooking.notes.add(
+        session, member, chip=str(form.get("chip", "")), said=str(form.get("said", "")),
+        line=line, how="tap", label=str(form.get("label", "")),
+    )  # fmt: skip
+    if note is None:
+        return Tapped(False)
+    cooking._bump(session)
+    return Tapped(True, NOTED)
 
 
 async def rescale(

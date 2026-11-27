@@ -419,3 +419,16 @@ body.cook-page[data-theme="dark"] .cook-new > summary { color: var(--accent); }
 .cook-timer-row .cook-timer-moves button { width: auto; min-width: var(--cook-tap, 48px); min-height: var(--cook-tap, 48px); padding: 0 var(--space-2); }
 .cook-timer-oven { margin-left: var(--space-1); padding: 0 var(--space-2); border-radius: 999px; background: var(--soft); color: var(--accent); font-size: .8rem; font-weight: 600; }
 .cook-check { display: flex; align-items: center; gap: var(--space-2); }
+
+/* CF2: [Note] under the step, and on each line in the drawer */
+.cook-note { margin-top: var(--space-3); }
+.cook-note summary, .cook-line-note summary { min-height: var(--cook-tap); display: inline-flex; align-items: center; cursor: pointer; color: var(--muted); }
+.cook-note summary { min-width: var(--cook-tap); padding: 0 var(--space-4); border: 1px solid var(--line); border-radius: 999px; }
+.cook-note-sheet { display: grid; gap: var(--space-3); padding-top: var(--space-3); }
+.cook-note-sheet form { margin: 0; }
+.cook-note-words { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.cook-note-words input { flex: 1 1 14rem; min-height: var(--cook-tap); font-size: 1.1rem; }
+.cook-line-note { margin: 0 0 var(--space-2); }
+.cook-note-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.cook-note-chips form { margin: 0; }
+.cook-note-chips .cook-chip { background: var(--card-2); color: var(--fg); border: 1px solid var(--line); min-height: var(--cook-tap); }

@@ -63,6 +63,7 @@ from themi_home.recipes import Recipe, Recipes, search, stem
 
 if TYPE_CHECKING:
     from themi.core.services import Services
+    from themi_home.cooking_notes import CookingNotes
     from themi_home.cooking_timers import CookingTimers
     from themi_home.recipe_groceries import RecipeGroceries
 
@@ -475,6 +476,7 @@ class Cooking:
         self.titles = StepTitles(services, self.recipes)  # CK12; F50d: every recipe's
         self.mixes = CookingMixes(services)  # CK15b: music made from the recipe's name
         self.playlists: dict[int, list[dict[str, Any]]] = {}  # CK5: their Spotify, per session
+        self.notes: CookingNotes | None = None  # CF2: notes left while cooking
 
     def preferences(self, member_id: int) -> CookingPreferences:
         return self.services.store.preferences(member_id, CookingPreferences)
@@ -1515,6 +1517,10 @@ class CookingModule(Module):
 
         cooking = ctx.provide(Cooking(ctx.services, ctx.get(Recipes), ctx.get(RecipeGroceries)))
         cooking.install()
+        from themi_home.cooking_notes import CookingNotes
+
+        notes = ctx.provide(CookingNotes(cooking, ctx.scheduler))  # CF2
+        notes.install()
         ctx.periodic("cooking.expire", timedelta(minutes=15), cooking.expire)
         ctx.periodic("cooking.stuck", timedelta(minutes=5), cooking.stuck)  # CK5
         ctx.periodic("cooking.step_titles", timedelta(minutes=30), cooking.titles.fill)  # F50d

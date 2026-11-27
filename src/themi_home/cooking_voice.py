@@ -58,6 +58,10 @@ async def say(cooking: Cooking, member: Member, session: Session, heard: str) ->
         "text", member, member.telegram_user_id or 0, None, clock.now(), 0, text=phrase,
         in_group=session.in_group and session.member_id != member.id, from_page=True,
     )  # fmt: skip
+    if cooking.notes is not None and await cooking.notes.on_said(
+        session, member, words, how="voice", from_page=True
+    ):  # CF2: "note: split this into two"
+        return Heard(words, "Noted for after.")
     timers = cooking.timers
     said = ""
     if timers is not None:

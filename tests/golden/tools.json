@@ -91,6 +91,10 @@
     "group": "recipes",
     "spec": "174d70331869"
   },
+  "cooking_note": {
+    "group": "recipes",
+    "spec": "c2daa1b2bcee"
+  },
   "correct_gram_weight": {
     "group": "recipes",
     "spec": "b4f506f42b64"

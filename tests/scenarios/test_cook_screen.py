@@ -295,3 +295,34 @@ async def test_a_step_with_spices_shows_every_spice(
     assert [a["line"] for a in state["amounts"]["uses"]] == [
         "1 onion, diced", "1 tsp cumin", "1 tsp smoked paprika", "½ tsp chili powder", "1 tsp salt",
     ]  # fmt: skip
+
+
+async def test_notes_left_while_cooking_ask_nothing(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CF2: a [Note] chip on step 3 and "note: less salt next time" in chat are both saved
+    on the right steps, with nothing asked."""
+    load(scenario.app.services)
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "alfredo sauce", "scale": ""})
+    scenario.primary.queue_structured(lines(ALFREDO))
+    await scenario.say("Erin", "Let's make the alfredo sauce")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("done", "all here", "skip prep", "go to step 3"):
+        await scenario.say("Erin", said)
+    state = (await site.get("/session/state")).json()
+    assert state["step"]["label"] == "3"
+    tapped = await site.post(
+        f"/session/cook/{state['id']}/act", headers={"X-Requested-With": "fetch"},
+        data={"csrf": csrf, "action": "note", "seq": str(state["seq"]),
+              "chip": "Split this step", "label": "3"},
+    )  # fmt: skip
+    assert tapped.json()["said"] == "Noted for after."
+    await scenario.say("Erin", "go to step 2")
+    await scenario.say("Erin", "note: less salt next time")
+    assert scenario.inbox("Erin")[-1] == "Noted for after."
+    cooking = scenario.app.services.maybe(keys.cooking)
+    notes = cooking.notes.for_session(state["id"])
+    assert [(n.step_label, n.words) for n in notes] == [
+        ("3", "Split this step"), ("2", "less salt next time")]  # fmt: skip
+    assert not [t for t in scenario.inbox("Erin") if t.endswith("?")]

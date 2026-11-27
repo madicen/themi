@@ -1,0 +1,20 @@
+{# CF2: [Note] under the step: a chip alone saves, words are optional. Saved for after,
+   with nothing to answer now. The step's label goes with the tap, so a tap from an older
+   screen is saved on the step it showed. #}
+{% from "cook/_act.html" import act %}
+<details class="cook-note" data-keep-open="note">
+  <summary class="cook-note-open">Note{% if state.notes.count %} <span class="cook-note-count">({{ state.notes.count }})</span>{% endif %}</summary>
+  <div class="cook-note-sheet">
+    <p class="cook-card-sub">A note for after. Nothing to answer now.</p>
+    <div class="cook-note-chips">{% for c in state.notes.chips %}{{ act(state, csrf, "note", c, {"chip": c, "label": state.step.label}, cls="cook-chip") }}{% endfor %}</div>
+    <form method="post" action="/session/cook/{{ state.id }}/act" class="cook-note-words">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="seq" value="{{ state.seq }}">
+      <input type="hidden" name="action" value="note">
+      <input type="hidden" name="label" value="{{ state.step.label }}">
+      <input name="said" maxlength="500" autocomplete="off" aria-label="Your note" placeholder="A few words, if you like">
+      <button class="primary">Save note</button>
+    </form>
+    {% if state.view.voice %}<p class="cook-card-sub">Or say "note:" and the words.</p>{% endif %}
+  </div>
+</details>

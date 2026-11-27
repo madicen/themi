@@ -572,7 +572,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | PT6b | Package tracking: what Telegram tells them (problems, delivered) | Package tracking | [ ] |
 | PT7 | Package tracking: the FedEx lookup | Package tracking | deferred |
 | CF1 | Cooking feedback: step links for ingredient groups and collective words | Cooking feedback | [x] 2026-11-27 |
-| CF2 | Cooking feedback: notes while cooking | Cooking feedback | [ ] |
+| CF2 | Cooking feedback: notes while cooking | Cooking feedback | [x] 2026-11-27 |
 | CF3 | Cooking feedback: sorting notes, Themi's own fixes, bug reports | Cooking feedback | [ ] |
 | CF4 | Cooking feedback: recipe edits written to the doc | Cooking feedback | [ ] |
 | CF5 | Cooking feedback: the wrap-up review | Cooking feedback | [ ] |
@@ -26989,7 +26989,7 @@ Notes:
   `make test-all` for CF1 is part of CF9's.
 
 ### CF2 · Cooking feedback: notes while cooking
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: CK1, CK8, CK12
 Read first: the plan's "What the family sees" (leaving a note) and "Data model";
 `themi_home/cooking_screen.py` (`state`, `act`), `web/session_pages.py` (the cook act
@@ -27017,6 +27017,22 @@ stale `seq`, CSRF), the chat prefixes and the tool; browser test: a chip tap sav
 line shows; no question is ever sent.
 Scenario: Michael taps [Note] then "Split this step" on step 3, says "note: less salt next
 time" in chat, and both notes are saved on the right steps with nothing asked.
+
+Notes:
+- `themi_home/cooking_notes.py` (`CookingNotes`, installed by the cooking module and kept
+  as `Cooking.notes`); `cooking_schema/0006_notes.sql` holds every CF table and the
+  `cookbook_edit` action category. A note's `shown` keeps what the screen showed (the step's
+  amounts, the noted line's words) for the sort and the report.
+- The screen: `cook/_note.html` under the step (a `<details>` sheet, closed by `cook.js`
+  once a note is sent); the drawer's lines get "Not used here" and "Wrong amount". The
+  chips are `.cook-note-chips`, not `.cook-offers` (the timer chips' box, which scripts
+  and tests look for). `state["notes"]`: on, count, chips, line chips.
+- `note` and `line_note` are handled before the `seq` check; the label sent with the tap
+  places the note.
+- Chat: `CookingNotes.on_text` sits just ahead of `Cooking.on_text`; voice goes to
+  `on_said` first in `cooking_voice.say` (how "voice", the screen's line). The
+  `cooking_note` tool is in the recipes group; golden `tools.json` and `handlers.json`
+  change for it as they should.
 
 ### CF3 · Cooking feedback: sorting notes, Themi's own fixes, bug reports
 Status: [ ]

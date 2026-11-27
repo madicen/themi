@@ -158,6 +158,7 @@
   "text_handlers": [
     "ExpenseSheets.on_text",
     "ExpenseAsks.on_text",
+    "CookingNotes.on_text",
     "Cooking.on_text",
     "CookingTimers.on_text",
     "GuidedSteps.on_text"

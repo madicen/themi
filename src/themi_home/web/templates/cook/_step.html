@@ -53,6 +53,7 @@
   {% endif %}
   {% include "cook/_tip.html" %}
   {% if state.peek %}<details class="cook-peek" data-keep-open="peek"><summary>Next: {{ state.next_title or "the next step" }}</summary><p>{{ state.peek }}</p></details>{% endif %}
+  {% if state.notes.on %}{% include "cook/_note.html" %}{% endif %}
 {% elif state.phase == "done" %}
   <h1 class="cook-title">{{ "All done." if state.outcome == "finished" else "Stopped cooking." }}</h1>
   {% if state.oven_off %}
