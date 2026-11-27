@@ -355,9 +355,17 @@ class TravelHeadsUps:
         self.db.execute(
             "INSERT INTO travel_headsups (member_id, event_id, starts_at, sent_at, leave_by, "
             "ready_from, drive_minutes, traffic, title) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (member.id, self._event_key(entry), to_utc_iso(entry.starts_at), to_utc_iso(now),
-             to_utc_iso(leave_by), to_utc_iso(leave_by - ready), minutes, int(traffic),
-             entry.title),
+            (
+                member.id,
+                self._event_key(entry),
+                to_utc_iso(entry.starts_at),
+                to_utc_iso(now),
+                to_utc_iso(leave_by),
+                to_utc_iso(leave_by - ready),
+                minutes,
+                int(traffic),
+                entry.title,
+            ),
         )  # fmt: skip  (WA1: the wall's countdown reads these)
         await self.services.outbox.send(
             member,
@@ -397,8 +405,8 @@ class TravelHeadsUps:
             key = (row["event_id"], row["starts_at"])
             if key in found:  # the same event, sent to both of them
                 was = found[key]
-                found[key] = replace(was, names=(*was.names, member.name),
-                                     title=was.title or (row["title"] if shares else ""))  # fmt: skip
+                title = was.title or (row["title"] if shares else "")
+                found[key] = replace(was, names=(*was.names, member.name), title=title)
                 continue
             found[key] = Leaving(
                 key=f"{row['event_id']}@{row['starts_at']}",
@@ -411,7 +419,7 @@ class TravelHeadsUps:
                 drive_minutes=int(row["drive_minutes"] or 0),
                 traffic=bool(row["traffic"]),
             )
-        return sorted(found.values(), key=lambda l: l.leave_by)
+        return sorted(found.values(), key=lambda leaving: leaving.leave_by)
 
     def _still_on(self, member: Member, row: dict[str, Any]) -> bool:
         reader = self.services.maybe(keys.calendars)

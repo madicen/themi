@@ -256,7 +256,8 @@ class WallSettings(HouseholdSettings):
     )
     kitchen_alerts: bool = Field(True, description="A countdown to the next cook timer.")
     alert_sounds: AlertSounds = Field(
-        "On", description="Themi's short trills when an alert comes and changes. Half as loud at night."
+        "On",
+        description="Themi's short trills when an alert comes and changes. Half as loud at night.",
     )
     look: Look = Field(
         "Follow the frame",

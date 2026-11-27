@@ -53,9 +53,7 @@ async def test_a_dentist_trip_on_the_wall(leaving: Scenario, fake_gcal: FakeGcal
         assert "wall-alert" not in (await wall.get("/wall/part/alerts")).text
 
 
-async def test_a_timer_goes_off_while_getting_ready(
-    leaving: Scenario, fake_gcal: FakeGcal
-) -> None:
+async def test_a_timer_goes_off_while_getting_ready(leaving: Scenario, fake_gcal: FakeGcal) -> None:
     """WA3: leaving stays on top with the kitchen as a band under it, until a timer is up."""
     share(leaving)
     load(leaving.app.services)

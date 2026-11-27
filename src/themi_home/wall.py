@@ -70,7 +70,8 @@ LOCKED_FOR = timedelta(minutes=10)
 WALL_COOKIE = "themi_wall"
 COOKIE_AGE = timedelta(days=400)  # the longest a browser keeps a cookie
 DEFAULT_NAME = "Wall"
-PARTS = ("top", "note", "today", "columns", "week", "smalls", "night", "alerts")  # refreshed on their own
+# refreshed on their own (WA2: and the alerts)
+PARTS = ("top", "note", "today", "columns", "week", "smalls", "night", "alerts")
 TAP = "wall_tap"  # WL4: the category and executor of a tick on the wall
 WHERE = "on the wall"  # as praise says it ("Ticked off on the wall: ...")
 CLOSE_AFTER = 120  # WL5a: seconds without a touch before a view closes itself

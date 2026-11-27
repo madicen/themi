@@ -15,10 +15,10 @@ import httpx
 import pytest
 
 from tests.fakes.gcal_api import FakeGcal
-from tests.fixtures.cookbook import load
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fakes.travel import FakeTravel
+from tests.fixtures.cookbook import load
 from tests.fixtures.family import SeededFamily
 from tests.fixtures.web import web_client
 from tests.integration.test_wall_screen import frame, with_wall, words
@@ -213,14 +213,20 @@ async def test_a_tap_holds_on_every_frame(leaving: Scenario, fake_gcal: FakeGcal
         csrf = re.search(r'"X-CSRF-Token": "([^"]+)"', (await one.get("/wall")).text)
         assert csrf
         headers = {"X-CSRF-Token": csrf.group(1)}
-        quiet = await one.post("/wall/alert", data={"key": alert.key, "answer": "quiet"}, headers=headers)
+        quiet = await one.post(
+            "/wall/alert", data={"key": alert.key, "answer": "quiet"}, headers=headers
+        )
         assert quiet.status_code == 200 and "data-sound" not in quiet.text
         html = await part(leaving, two)
         assert "alert-ready" in html and "data-sound" not in html  # still up, without sound
-        off = await one.post("/wall/alert", data={"key": alert.key, "answer": "off"}, headers=headers)
+        off = await one.post(
+            "/wall/alert", data={"key": alert.key, "answer": "off"}, headers=headers
+        )
         assert "wall-alert" not in off.text
         assert "wall-alert" not in await part(leaving, two)
-        nonsense = await one.post("/wall/alert", data={"key": "x", "answer": "off"}, headers=headers)
+        nonsense = await one.post(
+            "/wall/alert", data={"key": "x", "answer": "off"}, headers=headers
+        )
         assert nonsense.status_code == 200
         assert leaving.app.db.one("SELECT 1 FROM wall_alert_answers WHERE alert_key = 'x'") is None
 

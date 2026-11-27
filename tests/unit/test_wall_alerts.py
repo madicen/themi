@@ -6,7 +6,7 @@ A dentist at 3:00 pm, a 35-minute drive: leave by 2:25, getting ready from 2:10.
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -202,7 +202,10 @@ SCRIPT = (Path(__file__).parents[2] / "src/themi_home/web/static/wall.js").read_
 )
 def test_which_sounds_play_by_the_setting(sounds: str, leave: str, kitchen: str) -> None:
     up = kitchen_alerts(
-        [timer(1, at(17, 47), fired_at=at(17, 47).isoformat())], at(17, 48), LA, {}  # type: ignore[list-item]
+        [timer(1, at(17, 47), fired_at=at(17, 47).isoformat())],
+        at(17, 48),
+        LA,
+        {},  # type: ignore[list-item]
     )[0]
     assert heard(card(at(14, 12)), sounds).sound == leave
     assert heard(up, sounds).sound == kitchen
@@ -226,7 +229,8 @@ def test_every_trill_is_made_and_short() -> None:
 
 
 def test_the_page_plays_each_once_and_waits_for_a_touch() -> None:
-    assert 'sessionStorage.getItem(key)' in SCRIPT
-    assert '"wall-trill:" + card.getAttribute("data-alert") + ":" + card.getAttribute("data-sound-key")' in SCRIPT
+    assert "sessionStorage.getItem(key)" in SCRIPT
+    key = '"wall-trill:" + card.getAttribute("data-alert") + ":" + card.getAttribute('
+    assert key + '"data-sound-key")' in SCRIPT
     assert "if (chip) chip.hidden = false;  // not allowed yet" in SCRIPT
     assert 'sound.volume = list ? Number(list.getAttribute("data-volume"))' in SCRIPT

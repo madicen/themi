@@ -215,16 +215,26 @@ def kitchen_alerts(
         minutes = float(row["minutes"])
         out.append(
             WallAlert(
-                key=f"timer:{row['id']}", kind="kitchen", state="up", label=timer_title(row),
-                title="", numerals="Kitchen time",
+                key=f"timer:{row['id']}",
+                kind="kitchen",
+                state="up",
+                label=timer_title(row),
+                title="",
+                numerals="Kitchen time",
                 sub=up_words(minutes),
-                detail="", ends_at=fired, rank=0, tone=tones.get(row["member_id"], ""),
-                sound="kitchen", next_line=line, next_at=at, up_since=fired,
+                detail="",
+                ends_at=fired,
+                rank=0,
+                tone=tones.get(row["member_id"], ""),
+                sound="kitchen",
+                next_line=line,
+                next_at=at,
+                up_since=fired,
                 up_for=f"+{countdown((now - fired).total_seconds())}",
                 sound_key="up-again" if now - fired >= AGAIN else "up",
                 icon="pot" if row["session_id"] else "clock",
                 buttons=(Button("got_it", "Got it", main=True),),
-            )  # fmt: skip
+            )
         )
     if running:
         row = running[0]
@@ -234,14 +244,25 @@ def kitchen_alerts(
         line, at = then(running[1:], "Then")
         out.append(
             WallAlert(
-                key=f"timer:{row['id']}", kind="kitchen", state="running",
-                label="Back to the kitchen in", title=timer_title(row),
-                numerals=countdown(left), counts="down", sub="", detail="", ends_at=ends,
-                rank=2, tone=tones.get(row["member_id"], ""),
+                key=f"timer:{row['id']}",
+                kind="kitchen",
+                state="running",
+                label="Back to the kitchen in",
+                title=timer_title(row),
+                numerals=countdown(left),
+                counts="down",
+                sub="",
+                detail="",
+                ends_at=ends,
+                rank=2,
+                tone=tones.get(row["member_id"], ""),
                 bar=max(0, min(100, round(100 * (1 - left / total)))) if total > 0 else 0,
-                bar_from=f"of {countdown(total)}", bar_to=f"done at {short_time(ends.astimezone(tz))}",
-                next_line=line, next_at=at, icon="pot" if row["session_id"] else "clock",
-            )  # fmt: skip
+                bar_from=f"of {countdown(total)}",
+                bar_to=f"done at {short_time(ends.astimezone(tz))}",
+                next_line=line,
+                next_at=at,
+                icon="pot" if row["session_id"] else "clock",
+            )
         )
     return out
 
@@ -299,6 +320,8 @@ def answer_alert(services: Services, key: str, answer: str) -> None:
     if answer == "got_it" and key.startswith("timer:"):
         cooking = services.maybe(keys.cooking)
         timer_id = int(key.removeprefix("timer:"))
-        row = services.store.db.one("SELECT member_id FROM cooking_timers WHERE id = ?", (timer_id,))
+        row = services.store.db.one(
+            "SELECT member_id FROM cooking_timers WHERE id = ?", (timer_id,)
+        )
         if cooking is not None and cooking.timers is not None and row is not None:
             cooking.timers.clear(row["member_id"], timer_id)

@@ -186,4 +186,4 @@ def test_the_alerts_tick_from_the_servers_now() -> None:
     """WA2: the countdowns tick from the part's data-now, never the frame's own clock."""
     assert 'list.getAttribute("data-now")' in SCRIPT
     assert "var at = Date.now() + alertSkew;" in SCRIPT
-    assert 'body.alerting .wall-screen > :not(.wall-top)' in CSS
+    assert "body.alerting .wall-screen > :not(.wall-top)" in CSS
