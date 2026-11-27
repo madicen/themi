@@ -63,6 +63,7 @@ from themi_home.recipes import Recipe, Recipes, search, stem
 
 if TYPE_CHECKING:
     from themi.core.services import Services
+    from themi_home.cooking_notes import CookingNotes
     from themi_home.cooking_timers import CookingTimers
     from themi_home.recipe_groceries import RecipeGroceries
 
@@ -312,7 +313,19 @@ class Part:
 
 def step_parts(recipe: Recipe) -> list[Part]:
     parts: list[Part] = []
+    chosen = dict(getattr(recipe, "splits", ()))  # CF8: a note's split (a parsed one has none)
     for n, step in enumerate(recipe.steps, start=1):
+        if n - 1 in chosen:
+            sentences = SENTENCE.split(step.text)
+            after = sorted({k for k in chosen[n - 1] if 1 <= k < len(sentences)})
+            if not after:
+                parts.append(Part(str(n), step.text, step.group))
+                continue
+            bounds = [0, *after, len(sentences)]
+            for k in range(len(bounds) - 1):
+                chunk = " ".join(sentences[bounds[k] : bounds[k + 1]])
+                parts.append(Part(f"{n}{chr(ord('a') + k)}", chunk, step.group))
+            continue
         if len(step.text) <= LONG_STEP:
             parts.append(Part(str(n), step.text, step.group))
             continue
@@ -475,6 +488,7 @@ class Cooking:
         self.titles = StepTitles(services, self.recipes)  # CK12; F50d: every recipe's
         self.mixes = CookingMixes(services)  # CK15b: music made from the recipe's name
         self.playlists: dict[int, list[dict[str, Any]]] = {}  # CK5: their Spotify, per session
+        self.notes: CookingNotes | None = None  # CF2: notes left while cooking
 
     def preferences(self, member_id: int) -> CookingPreferences:
         return self.services.store.preferences(member_id, CookingPreferences)
@@ -1039,6 +1053,12 @@ class Cooking:
     # ----- moving on ------------------------------------------------------------------------
 
     async def prep_jobs(self, member: Member, recipe: Recipe) -> list[dict[str, Any]]:
+        """The knife and measuring jobs, with the recipe's prep fixes from notes (CF7)."""
+        from themi_home.cooking_notes import apply_prep, prep_fixes
+
+        return apply_prep(await self._prep_jobs(member, recipe), prep_fixes(self.db, recipe))
+
+    async def _prep_jobs(self, member: Member, recipe: Recipe) -> list[dict[str, Any]]:
         """The knife and measuring jobs, from the cache, one model call, or the lines."""
         items = await self.groceries.ingredients(member, recipe)
         digest = hashlib.sha256(
@@ -1161,6 +1181,10 @@ class Cooking:
         if self.timers is not None and not self.screen_open(session):  # CK13: the screen asks
             await self.timers.ask_on_end(self._owner(session), session.id)
         await self._ask_oven_off(session, in_chat=not self.screen_open(session))
+        if self.notes is not None and not self.screen_open(session):  # CF5: in chat instead
+            from themi_home.cooking_notes_wrap import next_in_chat
+
+            await next_in_chat(self, self.get(session.id) or session)
         await self.next_in_front(self._owner(session))  # F64e
 
     async def _ask_oven_off(self, session: Session, *, in_chat: bool) -> None:
@@ -1515,6 +1539,10 @@ class CookingModule(Module):
 
         cooking = ctx.provide(Cooking(ctx.services, ctx.get(Recipes), ctx.get(RecipeGroceries)))
         cooking.install()
+        from themi_home.cooking_notes import CookingNotes
+
+        notes = ctx.provide(CookingNotes(cooking, ctx.scheduler))  # CF2
+        notes.install()
         ctx.periodic("cooking.expire", timedelta(minutes=15), cooking.expire)
         ctx.periodic("cooking.stuck", timedelta(minutes=5), cooking.stuck)  # CK5
         ctx.periodic("cooking.step_titles", timedelta(minutes=30), cooking.titles.fill)  # F50d

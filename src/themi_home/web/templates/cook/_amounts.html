@@ -31,7 +31,10 @@
   <ul class="cook-list cook-checks">
   {% for g in state.amounts.groups %}
     {% if g.group %}<li class="cook-group">{{ g.group }}</li>{% endif %}
-    {% for a in g.lines %}<li>{{ line(a) }}</li>
+    {% for a in g.lines %}<li>{{ line(a) }}{% if state.notes.on %}
+      <details class="cook-line-note" data-keep-open="line-note-{{ a.n }}"><summary aria-label="Note on {{ a.line }}">Note</summary>
+        <div class="cook-note-chips">{% for c in state.notes.line_chips %}{{ act(state, csrf, "line_note", c, {"chip": c, "n": a.n, "label": state.step.label}, cls="cook-chip") }}{% endfor %}</div>
+      </details>{% endif %}</li>
     {% endfor %}
   {% endfor %}
   </ul>

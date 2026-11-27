@@ -13,6 +13,7 @@
     "calendar_twin",
     "closing",
     "cooking",
+    "cooking_note",
     "cooking_timer",
     "day_end",
     "email_audit",
@@ -100,6 +101,7 @@
     "calendar.unmerge_events",
     "calendar.write_task",
     "cookbook.add",
+    "cookbook.edit",
     "cozyla.add_routine",
     "cozyla.put_list",
     "devices.dishwasher_done",
@@ -158,6 +160,7 @@
   "text_handlers": [
     "ExpenseSheets.on_text",
     "ExpenseAsks.on_text",
+    "CookingNotes.on_text",
     "Cooking.on_text",
     "CookingTimers.on_text",
     "GuidedSteps.on_text"

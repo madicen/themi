@@ -45,6 +45,7 @@ RECIPES = ToolGroup(
         "start_cooking",
         "stop_cooking",
         "switch_recipe",  # F64e
+        "cooking_note",  # CF2
         "recipe_from_link",
         "recipe_from_picture",
         "find_web_recipe",

@@ -641,6 +641,10 @@
     event.preventDefault();
     var what = form.querySelector("input[name=action]");
     if (what && what.value === "use") ticked(form);
+    if (what && /^(line_)?note$/.test(what.value)) {  // CF2: the sheet closes once it's sent
+      var sheet = form.closest("details");
+      if (sheet) sheet.open = false;
+    }
     post(form, null, event.submitter);
   });
 

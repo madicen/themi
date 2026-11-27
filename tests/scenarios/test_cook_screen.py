@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import httpx
 
-from tests.fixtures.cookbook import load
+from tests.fixtures.cookbook import load, recipe
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.unit.test_cook_screen import ALFREDO, lines
@@ -35,6 +35,11 @@ PANCAKES = [
     "white whole wheat flour", "all-purpose flour", "baking powder", "cinnamon", "kosher salt",
     "almond milk", "applesauce", "vanilla extract",
 ]  # fmt: skip
+# CF1: step 3's "dry ingredients" and "wet ingredients" are a gap, asked once, every line
+PANCAKE_LINKS = {
+    "steps": [{"step": 3, "lines": [{"line": n, "item": item}
+                                    for n, item in enumerate(PANCAKES, start=1)]}]
+}  # fmt: skip
 
 
 async def test_pancakes_with_two_timers_at_once(
@@ -50,6 +55,7 @@ async def test_pancakes_with_two_timers_at_once(
     scenario.primary.queue_structured({"jobs": []})
     for said in ("skip", "all here", "skip prep", "go to step 5"):
         await scenario.say("Erin", said)
+    scenario.primary.queue_structured(PANCAKE_LINKS)
     state = (await site.get("/session/state")).json()
     assert state["step"]["words"] == "Step 5 of 5"
     assert [o["label"] for o in state["offers"]] == ["Timer 2 min (2-3)", "Timer 1 min (1-2)"]
@@ -255,3 +261,150 @@ async def test_two_recipes_on_the_go_have_a_chip_each_and_a_tap_switches(
     assert alfredo is not None and alfredo.phase == "gather"  # that one moved
     pancakes_now = cooking.get(pancakes)
     assert pancakes_now is not None and pancakes_now.step == 2  # this one didn't
+
+
+CHANA = [
+    ("T", "Madicen Family Cookbook"),
+    ("H1", "Entrees"),
+    *recipe(
+        "Chana Masala",
+        ["1 onion, diced", "## Spices", "1 tsp cumin", "1 tsp smoked paprika",
+         "½ tsp chili powder", "1 tsp salt", "## For the pot", "1 can chickpeas"],
+        ["Add the onion and spices and cook 2 minutes.", "Stir in the chickpeas."],
+    ),
+]  # fmt: skip
+
+
+async def test_a_step_with_spices_shows_every_spice(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CF1 (the spices bug): "add the onion and spices" showed the onion and none of the
+    lines under Spices."""
+    load(scenario.app.services, CHANA)
+    await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "chana masala", "scale": ""})
+    scenario.primary.queue_structured(
+        lines(["onion", "cumin", "smoked paprika", "chili powder", "salt", "chickpeas"])
+    )
+    await scenario.say("Erin", "Let's make chana masala")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("all here", "skip prep", "go to step 1"):
+        await scenario.say("Erin", said)
+    state = (await site.get("/session/state")).json()
+    assert state["step"]["words"] == "Step 1 of 2"
+    assert [a["line"] for a in state["amounts"]["uses"]] == [
+        "1 onion, diced", "1 tsp cumin", "1 tsp smoked paprika", "½ tsp chili powder", "1 tsp salt",
+    ]  # fmt: skip
+
+
+async def test_notes_left_while_cooking_ask_nothing(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CF2: a [Note] chip on step 3 and "note: less salt next time" in chat are both saved
+    on the right steps, with nothing asked."""
+    load(scenario.app.services)
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "alfredo sauce", "scale": ""})
+    scenario.primary.queue_structured(lines(ALFREDO))
+    await scenario.say("Erin", "Let's make the alfredo sauce")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("done", "all here", "skip prep", "go to step 3"):
+        await scenario.say("Erin", said)
+    state = (await site.get("/session/state")).json()
+    assert state["step"]["label"] == "3"
+    tapped = await site.post(
+        f"/session/cook/{state['id']}/act", headers={"X-Requested-With": "fetch"},
+        data={"csrf": csrf, "action": "note", "seq": str(state["seq"]),
+              "chip": "Split this step", "label": "3"},
+    )  # fmt: skip
+    assert tapped.json()["said"] == "Noted for after."
+    await scenario.say("Erin", "go to step 2")
+    await scenario.say("Erin", "note: less salt next time")
+    assert scenario.inbox("Erin")[-1] == "Noted for after."
+    cooking = scenario.app.services.maybe(keys.cooking)
+    assert cooking is not None and cooking.notes is not None
+    notes = cooking.notes.for_session(state["id"])
+    assert [(n.step_label, n.words) for n in notes] == [
+        ("3", "Split this step"), ("2", "less salt next time")]  # fmt: skip
+    assert not [t for t in scenario.inbox("Erin") if t.endswith("?")]
+
+
+async def test_the_spices_noted_missing_are_added_while_cooking(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CF3: a step the rule left without its spices (no model answer yet); "note: the spices
+    aren't here" adds them while Erin is still on the step, and the report is in the
+    feedback book."""
+    from tests.unit.test_cooking_note_sort import CHANA, ITEMS, answer
+    from themi.standard.feedback import FeedbackBook
+
+    load(scenario.app.services, CHANA)
+    await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "chana masala", "scale": ""})
+    scenario.primary.queue_structured(lines(ITEMS))
+    await scenario.say("Erin", "Let's make chana masala")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("all here", "skip prep", "go to step 2"):
+        await scenario.say("Erin", said)
+    state = (await site.get("/session/state")).json()
+    assert [a["line"] for a in state["amounts"]["uses"]] == ["1 onion, diced"]
+    scenario.primary.queue_structured(answer(
+        "display", report="bug", bug="'spices' left unlinked",
+        links={"add": [{"line": 2, "item": "cumin"}, {"line": 3, "item": "smoked paprika"}],
+               "remove": []}))  # fmt: skip
+    await scenario.say("Erin", "note: the spices aren't here")
+    assert scenario.inbox("Erin")[-1] == "Noted for after."
+    await scenario.run_jobs()  # sorted in the background
+    state = (await site.get("/session/state")).json()
+    assert [a["line"] for a in state["amounts"]["uses"]] == [
+        "1 onion, diced", "1 tsp cumin", "1 tsp smoked paprika"]  # fmt: skip
+    assert state["line"] == "Added the cumin and smoked paprika to step 2."
+    report = FeedbackBook(scenario.app.db).report(FeedbackBook(scenario.app.db).items())
+    assert "Cooking: 'spices' left unlinked (Chana Masala, step 2)" in report
+
+
+async def test_the_wrap_up_offers_the_notes_first(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CF5: after [All done], Erin sees her split before and after, changes the recipe,
+    keeps "less salt" as a note, and then gets CK6's offers (here RC5's save, a web recipe)."""
+    from tests.unit.test_cook_wrap_notes import SPLIT
+    from tests.unit.test_cooking_note_sort import CHANA, ITEMS, answer
+
+    load(scenario.app.services, CHANA)
+    scenario.app.db.execute("UPDATE recipes SET source = 'web' WHERE name = 'Chana Masala'")
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "chana masala", "scale": ""})
+    scenario.primary.queue_structured(lines(ITEMS))
+    await scenario.say("Erin", "Let's make chana masala")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("all here", "skip prep", "go to step 3"):
+        await scenario.say("Erin", said)
+    scenario.primary.queue_structured(SPLIT)
+    await scenario.say("Erin", "note: this is two steps")
+    scenario.primary.queue_structured(answer("note", note="less salt next time"))
+    await scenario.say("Erin", "next time less salt")
+    await scenario.run_jobs()  # both sorted in the background
+
+    async def act(action: str, **form: str) -> dict:
+        state = (await site.get("/session/state")).json()
+        response = await site.post(
+            f"/session/cook/{state['id']}/act", headers={"X-Requested-With": "fetch"},
+            data={"csrf": csrf, "action": action, "seq": str(state["seq"]), **form},
+        )  # fmt: skip
+        return response.json()
+
+    scenario.primary.queue_structured({"steps": []})  # the step links, asked on the page
+    scenario.primary.queue_structured({"titles": []})
+    await act("all_done")
+    page = (await site.get("/session/cook/view")).text
+    assert "Your note: &ldquo;this is two steps&rdquo;" in page
+    assert "<mark>" in page and "Change the recipe" in page and "Keep as a note" in page
+    state = (await site.get("/session/state")).json()
+    done = await act("wrap_note_change", note=str(state["wrap"]["note"]))
+    assert done["said"] == "Changed Chana Masala in Themi's copy."
+    assert done["wrap"]["choice"] == "note"
+    done = await act("wrap_note_keep", note=str(done["wrap"]["note"]))
+    assert done["said"] == "Added the note to Chana Masala in Themi's copy."
+    assert done["wrap"]["kind"] != "note"
+    assert not [t for t in scenario.inbox("Erin") if "Your note" in t]  # the screen had it

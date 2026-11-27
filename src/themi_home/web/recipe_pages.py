@@ -9,6 +9,7 @@ scripts, so it gets its own, wider Content-Security-Policy.
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Query, Request
@@ -285,7 +286,83 @@ def routes(kit: Kit) -> APIRouter:
             problem=problem,
             link=book().link(recipe),
             chart=recipe.chart,
+            **cooking_notes(session.member, recipe),  # CF6
         )
+
+    def cooking_notes(member: Member, recipe: Recipe) -> dict[str, Any]:
+        from themi_home import cooking_notes_wrap as wrap
+        from themi_home.cooking_notes import CHIPS, LINE_CHIPS
+
+        cooking = app.services.maybe(keys.cooking)
+        if cooking is None or cooking.notes is None or recipe.is_chart:
+            return {"cook_notes": [], "cook_changes": [], "note_chips": [], "line_chips": []}
+        return {"cook_notes": wrap.page_notes(cooking, recipe, member),
+                "cook_changes": wrap.page_history(cooking, recipe),
+                "note_chips": list(CHIPS), "line_chips": list(LINE_CHIPS)}  # fmt: skip
+
+    @router.post("/recipes/{recipe_id:int}/note")
+    async def page_note(request: Request, recipe_id: int) -> Response:
+        """CF9: a note on a step or an ingredient line, from the recipe's page. Sorted while
+        the page reloads: a display fix applies at once, a change or a note is offered."""
+        signed, form = await kit.checked(request)
+        cooking = app.services.maybe(keys.cooking)
+        recipe = book().get(recipe_id)
+        if recipe is None or cooking is None or cooking.notes is None:
+            return kit.redirect("/recipes", "That recipe isn't in the cookbook any more.")
+
+        def number(name: str) -> int | None:
+            value = str(form.get(name, ""))
+            return int(value) if value.isdigit() else None
+
+        member = app.store.get_member(signed.member.id)
+        note = cooking.notes.add_on_page(
+            recipe, member, step=number("step"), line=number("line"),
+            chip=str(form.get("chip", "")), said=str(form.get("said", "")),
+        )  # fmt: skip
+        if note is None:
+            return kit.redirect(f"/recipes/{recipe_id}", "There was nothing to note.")
+        note = await cooking.notes.sort(note)
+        said = {"fixed": "Noted, and fixed on Themi's side.",
+                "reported": "Noted for the developer, thanks."}.get(
+                    note.status, "Noted. It's under Notes from cooking.")  # fmt: skip
+        return kit.redirect(f"/recipes/{recipe_id}#cook-notes", said)
+
+    @router.post("/recipes/{recipe_id:int}/notes/{note_id:int}")
+    async def decide_note(request: Request, recipe_id: int, note_id: int) -> Response:
+        """CF6: a note from cooking decided on the recipe's page, by whoever decides it."""
+        from themi_home import cooking_notes_wrap as wrap
+
+        signed, form = await kit.checked(request)
+        cooking = app.services.maybe(keys.cooking)
+        notes = cooking.notes if cooking is not None else None
+        note = notes.get(note_id) if notes is not None else None
+        action = str(form.get("action", ""))
+        if cooking is None or notes is None or note is None:
+            return kit.redirect(f"/recipes/{recipe_id}", "That note isn't here any more.")
+        if note.recipe_id != recipe_id or action not in wrap.NOTE_TAPS:
+            return kit.redirect(f"/recipes/{recipe_id}", "That note isn't here any more.")
+        member = app.store.get_member(signed.member.id)
+        if member.id != wrap.decider(cooking, note) or note.status not in wrap.PAGE_STATUSES:
+            return kit.redirect(f"/recipes/{recipe_id}")
+        said = await wrap.decide(notes, note, member, action)
+        return kit.redirect(f"/recipes/{recipe_id}", said or "Kept for later.")
+
+    @router.post("/recipes/{recipe_id:int}/changes/{edit_id:int}/undo")
+    async def undo_change(request: Request, recipe_id: int, edit_id: int) -> Response:
+        """CF6: [Undo] on a change made from a note, while the doc has Themi's words."""
+        from themi_home.cookbook_edit import Rejected
+
+        signed, _ = await kit.checked(request)
+        cooking = app.services.maybe(keys.cooking)
+        edits = cooking.notes.edits if cooking is not None and cooking.notes else None
+        row = app.store.db.one("SELECT recipe_id FROM cookbook_edits WHERE id = ?", (edit_id,))
+        if edits is None or row is None or row["recipe_id"] != recipe_id:
+            return kit.redirect(f"/recipes/{recipe_id}", "That change isn't here any more.")
+        try:
+            outcome = await edits.stage_undo(app.store.get_member(signed.member.id), edit_id)
+        except Rejected:
+            return kit.redirect(f"/recipes/{recipe_id}", "That change is undone already.")
+        return kit.redirect(f"/recipes/{recipe_id}", outcome.message)
 
     @router.post("/recipes/{recipe_id:int}/groceries")
     async def to_groceries(request: Request, recipe_id: int) -> Response:

@@ -22,6 +22,7 @@ from themi.accounts import Member
 from themi.localtime import to_utc_iso
 from themi_home.body_double_scene import CHEER_FOR, pick_cooking_state
 from themi_home.cooking_links import MORE, shown
+from themi_home.cooking_notes_wrap import NOTE_TAPS
 from themi_home.cooking_timers import PRESETS
 from themi_home.cooking_wrap import WRAP_TAPS
 from themi_home.gram_weights import GramWeights
@@ -137,6 +138,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         "steps": [],
         "strip_steps": [],
         "next_title": "",
+        "last_time": [],  # CF6: notes still waiting from an earlier cook, on this step
     }
     if session.phase == "ready":
         out["ahead"] = [
@@ -193,6 +195,9 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
                 for i, p in enumerate(parts)
             ]  # fmt: skip
         out["amounts"] = amounts(cooking, session, recipe, part.label, viewer)
+        from themi_home.cooking_notes_wrap import last_time
+
+        out["last_time"] = last_time(cooking, session, recipe, part.text, here)
         if n + 1 < len(parts):
             nxt = parts[n + 1]
             out["peek"] = f"Next, step {nxt.label}: {nxt.text}"
@@ -201,11 +206,11 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
                 titles[after] if after != here and after < len(titles) else f"step {nxt.label}"
             )
         if cooking.timers is not None:
-            from themi_home.cooking_timers import durations
+            from themi_home.cooking_timers import step_durations
 
             out["offers"] = [
                 {"label": f"Timer {found.said}", "minutes": found.minutes, "step": part.label}
-                for found in durations(part.text)
+                for found in step_durations(cooking.db, recipe, part)
                 if not found.reminder
             ]
     from themi_home.cooking_ahead import look_ahead, strip
@@ -249,6 +254,8 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     from themi_home.cooking_wrap import offer
 
     out["wrap"] = offer(cooking, session, recipe) if out["ended"] else None
+    if out["wrap"] is not None and out["wrap"]["kind"] == "note":  # CF5: the owner decides
+        out["wrap"] = {**out["wrap"], "can_decide": viewer.id == session.member_id}
     out["soonest"] = running[0]["ends_at"] if running else ""
     out["presets"] = list(PRESETS)
     out["chime_volume"] = cooking.preferences(viewer.id).cooking_chime_volume
@@ -261,6 +268,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         else None,
     )  # CK5: the chameleon
     out["chat"] = cooking.page_chat(session)
+    out["notes"] = notes_state(cooking, session)  # CF2
     out["music"] = music(cooking, session, viewer)
     out["meta"] = meta(out)
     out["drawn"] = drawn(out)
@@ -269,6 +277,20 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         timer["text"] = span(left)
         timer["of"] = span(timer["seconds"])
     return out
+
+
+def notes_state(cooking: Cooking, session: Session) -> dict[str, Any]:
+    """CF2: the [Note] sheet's chips, and how many notes this session has."""
+    from themi_home.cooking_notes import CHIPS, LINE_CHIPS
+
+    if cooking.notes is None:
+        return {"on": False, "count": 0, "chips": [], "line_chips": []}
+    return {
+        "on": session.ended_at is None,
+        "count": len(cooking.notes.for_session(session.id)),
+        "chips": list(CHIPS),
+        "line_chips": list(LINE_CHIPS),
+    }
 
 
 def meta(out: dict[str, Any]) -> str:
@@ -514,6 +536,8 @@ async def act(
         log.info("Cook screen tap %r on session %s refused: not theirs or over",
                  action, session_id)  # fmt: skip
         return Tapped(False)
+    if action in ("note", "line_note") and session.ended_at is None:
+        return note_tap(cooking, session, member, action, form)  # CF2: never lost to `seq`
     if seq != session.seq:
         log.info("Cook screen tap %r on session %s refused: seq %s, now %s",
                  action, session_id, seq, session.seq)  # fmt: skip
@@ -535,6 +559,11 @@ async def act(
             words = "Timer cancelled" if "cancel" in action else "More time"
             return Tapped(True, f"{words}, and the oven's too.")
         return Tapped(tapped)
+    if action in NOTE_TAPS:  # CF5: a note at wrap-up, decided by the session's owner
+        from themi_home import cooking_notes_wrap
+
+        done, said = await cooking_notes_wrap.tap(cooking, session, member, action, form)
+        return Tapped(done, said)
     if action in WRAP_TAPS:
         from themi_home import cooking_wrap
 
@@ -656,6 +685,27 @@ async def act(
     else:
         return Tapped(False)
     return Tapped(True, said)
+
+
+def note_tap(
+    cooking: Cooking, session: Session, member: Member, action: str, form: dict[str, Any]
+) -> Tapped:
+    """CF2: [Note] under the step (a chip, words, or both) or on a line in the drawer. Saved
+    against the part shown when the sheet opened (its label comes with the tap), so a tap
+    from an older screen still counts. Nothing is asked."""
+    from themi_home.cooking_notes import NOTED
+
+    if cooking.notes is None:
+        return Tapped(False)
+    line = _int(form.get("n")) if action == "line_note" else None
+    note = cooking.notes.add(
+        session, member, chip=str(form.get("chip", "")), said=str(form.get("said", "")),
+        line=line, how="tap", label=str(form.get("label", "")),
+    )  # fmt: skip
+    if note is None:
+        return Tapped(False)
+    cooking._bump(session)
+    return Tapped(True, NOTED)
 
 
 async def rescale(

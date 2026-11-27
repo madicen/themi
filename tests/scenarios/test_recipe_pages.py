@@ -160,7 +160,8 @@ async def test_every_tap_on_the_screen_stays_off_chat(
 ) -> None:
     cooking, session_id = await cook_on_the_site(scenario, site, signed_in)
     scenario.primary.queue_structured({"jobs": []})
-    scenario.primary.queue_structured({"steps": []})
+    scenario.primary.queue_structured({"steps": []})  # CF1: step 3's links ("dry ingredients")
+    scenario.primary.queue_structured({"steps": []})  # CK12: the step titles
     taps = [("next", {}), ("tick", {"n": "0"}), ("untick", {"n": "0"}), ("next", {}),
             ("skip", {}), ("goto", {"to": "3"}), ("stop", {})]  # fmt: skip
     for action, form in taps:
@@ -175,7 +176,8 @@ async def test_a_timer_set_on_the_screen_still_rings_in_telegram(
 ) -> None:
     cooking, session_id = await cook_on_the_site(scenario, site, signed_in)
     scenario.primary.queue_structured({"jobs": []})
-    scenario.primary.queue_structured({"steps": []})
+    scenario.primary.queue_structured({"steps": []})  # CF1: step 3's links ("dry ingredients")
+    scenario.primary.queue_structured({"steps": []})  # CK12: the step titles
     for action in ("next", "next", "next"):
         await act(scenario, site, signed_in, cooking, session_id, action)
     await act(scenario, site, signed_in, cooking, session_id, "timer", minutes="1", step="1")
@@ -190,7 +192,8 @@ async def test_asked_in_telegram_it_answers_there(
 ) -> None:
     cooking, session_id = await cook_on_the_site(scenario, site, signed_in)
     scenario.primary.queue_structured({"jobs": []})
-    scenario.primary.queue_structured({"steps": []})
+    scenario.primary.queue_structured({"steps": []})  # CF1: step 3's links ("dry ingredients")
+    scenario.primary.queue_structured({"steps": []})  # CK12: the step titles
     for action in ("next", "next"):
         await act(scenario, site, signed_in, cooking, session_id, action)
     assert scenario.inbox("Erin") == []
