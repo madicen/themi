@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import httpx
 
-from tests.fixtures.cookbook import load
+from tests.fixtures.cookbook import load, recipe
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.unit.test_cook_screen import ALFREDO, lines
@@ -35,6 +35,11 @@ PANCAKES = [
     "white whole wheat flour", "all-purpose flour", "baking powder", "cinnamon", "kosher salt",
     "almond milk", "applesauce", "vanilla extract",
 ]  # fmt: skip
+# CF1: step 3's "dry ingredients" and "wet ingredients" are a gap, asked once, every line
+PANCAKE_LINKS = {
+    "steps": [{"step": 3, "lines": [{"line": n, "item": item}
+                                    for n, item in enumerate(PANCAKES, start=1)]}]
+}  # fmt: skip
 
 
 async def test_pancakes_with_two_timers_at_once(
@@ -50,6 +55,7 @@ async def test_pancakes_with_two_timers_at_once(
     scenario.primary.queue_structured({"jobs": []})
     for said in ("skip", "all here", "skip prep", "go to step 5"):
         await scenario.say("Erin", said)
+    scenario.primary.queue_structured(PANCAKE_LINKS)
     state = (await site.get("/session/state")).json()
     assert state["step"]["words"] == "Step 5 of 5"
     assert [o["label"] for o in state["offers"]] == ["Timer 2 min (2-3)", "Timer 1 min (1-2)"]
@@ -255,3 +261,37 @@ async def test_two_recipes_on_the_go_have_a_chip_each_and_a_tap_switches(
     assert alfredo is not None and alfredo.phase == "gather"  # that one moved
     pancakes_now = cooking.get(pancakes)
     assert pancakes_now is not None and pancakes_now.step == 2  # this one didn't
+
+
+CHANA = [
+    ("T", "Madicen Family Cookbook"),
+    ("H1", "Entrees"),
+    *recipe(
+        "Chana Masala",
+        ["1 onion, diced", "## Spices", "1 tsp cumin", "1 tsp smoked paprika",
+         "½ tsp chili powder", "1 tsp salt", "## For the pot", "1 can chickpeas"],
+        ["Add the onion and spices and cook 2 minutes.", "Stir in the chickpeas."],
+    ),
+]  # fmt: skip
+
+
+async def test_a_step_with_spices_shows_every_spice(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CF1 (the spices bug): "add the onion and spices" showed the onion and none of the
+    lines under Spices."""
+    load(scenario.app.services, CHANA)
+    await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "chana masala", "scale": ""})
+    scenario.primary.queue_structured(
+        lines(["onion", "cumin", "smoked paprika", "chili powder", "salt", "chickpeas"])
+    )
+    await scenario.say("Erin", "Let's make chana masala")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("all here", "skip prep", "go to step 1"):
+        await scenario.say("Erin", said)
+    state = (await site.get("/session/state")).json()
+    assert state["step"]["words"] == "Step 1 of 2"
+    assert [a["line"] for a in state["amounts"]["uses"]] == [
+        "1 onion, diced", "1 tsp cumin", "1 tsp smoked paprika", "½ tsp chili powder", "1 tsp salt",
+    ]  # fmt: skip

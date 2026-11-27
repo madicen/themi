@@ -12,7 +12,7 @@ from themi.ai.errors import PermanentError
 from themi.core import keys
 from themi_home import cookbook as book
 from themi_home.cooking import Cooking, CookingPreferences
-from themi_home.cooking_links import gaps, rule_links, with_grams, words
+from themi_home.cooking_links import gaps, group_words, rule_links, with_grams, words
 from themi_home.recipe_groceries import read_line
 
 
@@ -43,8 +43,12 @@ def test_every_rule_link_is_named_in_its_step() -> None:
         items = [read_line(i.text) for i in recipe.ingredients]
         for s, found in rule_links(recipe, items).items():
             said = words(recipe.steps[s].text)
+            loose = {w.removesuffix("e") for w in said}
             for n in found:
-                assert words(items[n].item) & said, (recipe.name, s, items[n].item)
+                group = group_words(recipe.ingredients[n].group)  # CF1: or its group is named
+                assert words(items[n].item) & said or (group and group <= loose), (
+                    recipe.name, s, items[n].item,
+                )  # fmt: skip
 
 
 def test_a_gap_is_a_step_with_amounts_and_no_link() -> None:
@@ -193,3 +197,65 @@ async def test_used_ticks_are_shared(scenario: Scenario, cooking: Cooking) -> No
     seq = cooking.state(erin)["seq"]
     assert await cooking.act_from_page(erin, session_id, "use", seq, {"n": "0"})  # a second tap
     assert cooking.state(husband)["amounts"]["uses"][0]["used"] is False
+
+
+# ----- CF1: ingredient groups and collective words (the spices bug) --------------------------
+
+
+def made(lines: list[tuple[str, str]], steps: list[str], recipe_id: int = 0):  # type: ignore[no-untyped-def]
+    from datetime import UTC, datetime
+
+    from themi_home.cookbook import Line
+    from themi_home.recipes import Recipe
+
+    return Recipe(
+        id=recipe_id, key="k", source="doc", url=None, section="Entrees", subsection="",
+        name="Chana Masala", ingredients=tuple(Line(t, g) for t, g in lines),
+        steps=tuple(Line(s) for s in steps), notes=(), source_text="", kind="recipe", chart=(),
+        yield_count=None, yield_said=None, needs_look="", removed=False,
+        updated_at=datetime(2026, 10, 21, tzinfo=UTC),
+    )  # fmt: skip
+
+
+SPICES = [("1 tsp cumin", "Spices"), ("1 tsp smoked paprika", "Spices"),
+          ("½ tsp chili powder", "Spices"), ("1 tsp salt", "Spices")]  # fmt: skip
+
+
+def test_a_group_named_in_a_step_uses_every_line_of_it() -> None:
+    steps = ["Add the onion and spices and cook 2 minutes.", "Stir in the chickpeas."]
+    recipe = made([("1 onion, diced", ""), *SPICES, ("1 can chickpeas", "")], steps)
+    items = [read_line(i.text) for i in recipe.ingredients]
+    assert rule_links(recipe, items) == {0: [0, 1, 2, 3, 4], 1: [5]}
+    paste = made([("2 cloves garlic", "Masala Paste"), ("1 inch ginger", "Masala Paste"),
+                  ("1 Tbsp oil", "")], ["Heat the oil, then fry the masala paste."])  # fmt: skip
+    items = [read_line(i.text) for i in paste.ingredients]
+    assert rule_links(paste, items) == {0: [0, 1, 2]}
+    sauce = made([("1 tsp onion powder", "For the sauce"), ("1 tsp baking powder", "")],
+                 ["Whisk the baking powder in."])  # fmt: skip
+    items = [read_line(i.text) for i in sauce.ingredients]
+    assert rule_links(sauce, items) == {0: [1]}  # "the" isn't the sauce group's name
+
+
+def test_a_collective_word_is_a_gap_though_the_rule_found_something() -> None:
+    lines_ = [("1 onion, diced", ""), *[(t, "") for t, _ in SPICES]]
+    recipe = made(lines_, ["Add the onion and spices.", "Add the onion.", "Add the rest."])
+    items = [read_line(i.text) for i in recipe.ingredients]
+    found = rule_links(recipe, items)
+    assert found[0] == [0] and found[2] == []
+    assert gaps(recipe, found) == [0, 2]  # "spices", "the rest"; step 2 names everything
+
+
+async def test_model_links_are_joined_to_the_rules_for_a_gap(
+    scenario: Scenario, cooking: Cooking
+) -> None:
+    alfredo = next(r for r in cooking.recipes.all() if r.name == "Alfredo Sauce")
+    lines_ = [("1 onion, diced", ""), *[(t, "") for t, _ in SPICES]]
+    recipe = made(lines_, ["Add the onion and spices.", "Add the onion."], recipe_id=alfredo.id)
+    items = [read_line(i.text) for i in recipe.ingredients]
+    scenario.primary.queue_structured(
+        {"steps": [{"step": 1, "lines": [{"line": n, "item": items[n - 1].item}
+                                         for n in (2, 3, 4, 5)]},
+                   {"step": 2, "lines": [{"line": 3, "item": items[2].item}]}]}
+    )  # fmt: skip
+    await cooking.links.ensure(scenario.member("Erin"), recipe, items)
+    assert cooking.links.links(recipe, items) == {0: [0, 1, 2, 3, 4], 1: [0]}  # step 2: no gap

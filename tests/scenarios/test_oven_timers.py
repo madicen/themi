@@ -12,7 +12,7 @@ from tests.fakes.smarthq import FakeSmartHQ
 from tests.fixtures.cookbook import load
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
-from tests.scenarios.test_cook_screen import PANCAKES
+from tests.scenarios.test_cook_screen import PANCAKE_LINKS, PANCAKES
 from tests.scenarios.test_oven_cook_screen import Screen
 from tests.unit.test_cook_screen import lines
 from themi import clock
@@ -29,6 +29,7 @@ async def at_step_5(scenario: Scenario, site: httpx.AsyncClient) -> Screen:
     scenario.primary.queue_structured({"jobs": []})
     for said in ("skip", "all here", "skip prep", "go to step 5"):
         await scenario.say("Erin", said)
+    scenario.primary.queue_structured(PANCAKE_LINKS)  # CF1: step 3 is asked about once
     return Screen(scenario, site, csrf)
 
 

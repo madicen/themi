@@ -571,7 +571,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | PT6a | Package tracking: what the family reads (wall, morning line, chat) | Package tracking | [~] |
 | PT6b | Package tracking: what Telegram tells them (problems, delivered) | Package tracking | [ ] |
 | PT7 | Package tracking: the FedEx lookup | Package tracking | deferred |
-| CF1 | Cooking feedback: step links for ingredient groups and collective words | Cooking feedback | [ ] |
+| CF1 | Cooking feedback: step links for ingredient groups and collective words | Cooking feedback | [x] 2026-11-27 |
 | CF2 | Cooking feedback: notes while cooking | Cooking feedback | [ ] |
 | CF3 | Cooking feedback: sorting notes, Themi's own fixes, bug reports | Cooking feedback | [ ] |
 | CF4 | Cooking feedback: recipe edits written to the doc | Cooking feedback | [ ] |
@@ -26951,7 +26951,7 @@ Rules every CF prompt keeps:
   provider; no real network.
 
 ### CF1 · Cooking feedback: step links for ingredient groups and collective words
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: CK2
 Read first: the plan's "The spices bug"; CK2's notes; `themi_home/cooking_links.py`
 (`rule_links`, `gaps`, `StepLinks.links`, `ensure`); `themi_home/cookbook.py`
@@ -26973,6 +26973,20 @@ reused without a call; with no model, rule links only. Integration: the cook scr
 amounts for that step list all five lines.
 Scenario: cooking a recipe whose step 2 says "add the onion and spices", the step shows the
 onion and the cumin, paprika, chili and salt lines.
+
+Notes:
+- `cooking_links.group_words` and `COLLECTIVE`. A group's name is matched with a final "e"
+  dropped from each stemmed word ("spice" and "spices" stem differently); "for", "the",
+  "and", "with" are left out of group names ("For the sauce" is "sauce").
+- Deviation: a step whose group name the rule already linked isn't a gap for that reason
+  alone (the rule found its lines); only `COLLECTIVE` words and the old amount rule make gaps.
+- Pancakes' step 3 ("the dry ingredients ... the wet ingredients") is now a gap, so cooking it
+  asks once more. Tests that start pancakes on the screen queue that answer:
+  `PANCAKE_LINKS` in `test_cook_screen.py` and `test_oven_timers.py`, and a second
+  `{"steps": []}` in `test_recipe_pages.py`. `test_every_rule_link_is_named_in_its_step`
+  now also allows a link whose group the step names (Biryani's "masala paste").
+- Michael asked (2026-11-27) to build CF1 to CF9 in one go with one full run at the end, so
+  `make test-all` for CF1 is part of CF9's.
 
 ### CF2 · Cooking feedback: notes while cooking
 Status: [ ]

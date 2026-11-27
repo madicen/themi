@@ -3,12 +3,17 @@
 By rule first: a line's item ("cashews", "lemon juice") is in the step's words, matched by
 `name_key` and `stem`: every word of it, or its last word when that word names a food on
 its own ("white whole wheat flour" in "whisk the flours", but not "onion powder" in "the
-baking powder"). When the rule finds nothing for a step that has
-amounts or ingredient words ("2 Tbsp of the oil", "all other ingredients"), one structured
-call maps the steps to line numbers, with the recipe in a data block, cached in
-`cooking_links` until the recipe's words change. A link whose item isn't in its line is
-dropped, as RC3a's prep check drops a job that names no line. With no model: rule links
-only. The model's links are used only for the steps the rule left empty.
+baking powder"). A step that names an ingredient group ("the masala paste", "spices" for a
+"Spices" group) uses every line of that group (CF1).
+
+A step is a gap when the rule finds nothing though it has amounts or ingredient words
+("2 Tbsp of the oil", "all other ingredients"), or when it has a collective word ("spices",
+"the dry ingredients", "the rest") whatever the rule found (CF1: "the onion and spices"
+matched the onion and dropped the spices). For the gaps, one structured call maps the
+steps to line numbers, with the recipe in a data block, cached in `cooking_links` until the
+recipe's words change. A link whose item isn't in its line is dropped, as RC3a's prep check
+drops a job that names no line. With no model: rule links only. A gap step's model links
+are joined to the rule's.
 
 Units (a preference): "As written", or "With grams", which puts a weight the line already
 gives next to its amount ("1 Cup (130 g) cashews, soaked ..."). Nothing is converted that
@@ -83,6 +88,11 @@ AMOUNT_WORDS = re.compile(
     r"|\b(?:ingredients?|everything|the rest|remaining|dry mix|wet mix)\b",
     re.IGNORECASE,
 )
+COLLECTIVE = re.compile(
+    r"\b(?:spices|seasonings?|(?:dry|wet) ingredients|the rest|everything else|remaining)\b",
+    re.IGNORECASE,
+)  # CF1: one word for several lines, so the rule can't have found them all
+GROUP_FILLER = {"for", "the", "and", "with"}
 GENERIC = {
     stem(w) for w in (
         "powder", "sauce", "oil", "juice", "extract", "seeds", "leaves", "paste", "syrup",
@@ -110,20 +120,34 @@ def named(item: str, said: set[str]) -> bool:
     return len(wanted) > 1 and last not in GENERIC and last in said
 
 
+def group_words(group: str) -> set[str]:
+    """A group's name as words to find in a step: "For the sauce" is {"sauce"}. A final "e"
+    is dropped, so "spice" and "spices" (stemmed "spic") match."""
+    return {w.removesuffix("e") for w in words(group) if w not in GROUP_FILLER}
+
+
 def rule_links(recipe: Recipe, items: list[Ingredient]) -> dict[int, list[int]]:
-    """For each step (0-based), the lines (0-based) whose item is in the step's words."""
+    """For each step (0-based), the lines (0-based) whose item is in the step's words, or
+    whose group the step names (CF1)."""
+    groups = [line.group for line in recipe.ingredients]
     out: dict[int, list[int]] = {}
     for s, step in enumerate(recipe.steps):
         said = words(step.text)
-        out[s] = [n for n, item in enumerate(items) if named(item.item, said)]
+        loose = {w.removesuffix("e") for w in said}
+        named_groups = {g for g in set(groups) if (gw := group_words(g)) and gw <= loose}
+        out[s] = [
+            n for n, item in enumerate(items)
+            if named(item.item, said) or (n < len(groups) and groups[n] in named_groups)
+        ]  # fmt: skip
     return out
 
 
 def gaps(recipe: Recipe, links: dict[int, list[int]]) -> list[int]:
-    """Steps the rule found nothing for, though they name amounts or ingredients."""
+    """Steps the rule found nothing for, though they name amounts or ingredients, and steps
+    with a collective word whatever it found (CF1)."""
     return [
         s for s, step in enumerate(recipe.steps)
-        if not links.get(s) and AMOUNT_WORDS.search(step.text)
+        if (not links.get(s) and AMOUNT_WORDS.search(step.text)) or COLLECTIVE.search(step.text)
     ]  # fmt: skip
 
 
@@ -153,11 +177,11 @@ class StepLinks:
         return {int(k): [int(n) for n in v] for k, v in json.loads(row["data"]).items()}
 
     def links(self, recipe: Recipe, items: list[Ingredient]) -> dict[int, list[int]]:
-        """Rule links, with the cached model's links for the steps the rule left empty."""
+        """Rule links, joined by the cached model's links for the gap steps (CF1)."""
         found = rule_links(recipe, items)
         model = self.cached(recipe) or {}
         for s in gaps(recipe, found):
-            found[s] = model.get(s, [])
+            found[s] = sorted(set(found.get(s, [])) | set(model.get(s, [])))
         return found
 
     async def ensure(self, member: Member, recipe: Recipe, items: list[Ingredient]) -> None:
