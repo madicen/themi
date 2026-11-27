@@ -32,6 +32,7 @@ from themi.localtime import member_day, member_day_start, to_utc_iso
 from themi_google import parcel_words
 from themi_google.deliveries import Parcel
 from themi_home import wall_focus
+from themi_home.wall_alerts import AlertAnswers, WallAlert, leave_alert, ranked
 from themi_home.wall_columns import TOGETHER, TOGETHER_TONE, Place, WallColumns, key_of
 
 if TYPE_CHECKING:
@@ -282,6 +283,7 @@ class WallScreen:
     night: NightView | None = None  # WL6: None by day
     look: str = "light"  # F52b: "light", "dark" or "auto"
     focus: bool = False  # F60e: the body double is here, so the top bar offers it
+    alerts: tuple[WallAlert, ...] = ()  # WA1: the big countdowns, at most two
 
 
 class WallView:
@@ -311,7 +313,26 @@ class WallView:
             night=self.night(),
             look=self.look(),
             focus=wall_focus.body_double(self.services) is not None,
+            alerts=self.alerts(),
         )
+
+    # ----- WA1: the alerts -------------------------------------------------------------
+
+    def alerts(self) -> tuple[WallAlert, ...]:
+        """The big countdowns (Themi Wall Alerts Plan): leaving from K4's heads-ups, and (WA3)
+        the kitchen's timers; at most two, less what's been tapped away."""
+        now, tz = clock.now(), self.tz()
+        found: list[WallAlert] = []
+        travel = self.services.maybe(keys.travel)
+        people = {m.id: m for m in self.people()}
+        for leaving in travel.leavings(now) if travel is not None else []:
+            whose = [people[i] for i in leaving.member_ids if i in people]
+            tone = self.tone_of(whose[0]) if len(whose) == 1 else self.together_tone()
+            alert = leave_alert(leaving, now, tz, tone)
+            if alert is not None:
+                found.append(alert)
+        kept = AlertAnswers(self.services.store.db).apply(found)
+        return tuple(ranked(kept))
 
     # ----- WL6: the night -------------------------------------------------------------
 

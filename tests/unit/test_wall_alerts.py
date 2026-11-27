@@ -1,0 +1,126 @@
+"""WA1: the leave card's states and words (Themi Wall Alerts Plan, "Leaving the house").
+
+A dentist at 3:00 pm, a 35-minute drive: leave by 2:25, getting ready from 2:10.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+import pytest
+
+from themi_google.travel import Leaving
+from themi_home.wall_alerts import (
+    WallAlert,
+    countdown,
+    drive_words,
+    leave_alert,
+    leave_state,
+    ranked,
+)
+
+LA = ZoneInfo("America/Los_Angeles")
+
+
+def at(hour: int, minute: int = 0, second: int = 0) -> datetime:
+    return datetime(2026, 10, 21, hour, minute, second, tzinfo=LA)
+
+
+def dentist(**changes: object) -> Leaving:
+    values: dict[str, object] = dict(
+        key="dentist smile dental@2026-10-21T22:00:00Z", member_ids=(1,), names=("Erin",),
+        title="Dentist", starts_at=at(15), leave_by=at(14, 25), ready_from=at(14, 10),
+        drive_minutes=35, traffic=True,
+    )  # fmt: skip
+    values.update(changes)
+    return Leaving(**values)  # type: ignore[arg-type]
+
+
+def card(moment: datetime, **changes: object) -> WallAlert:
+    found = leave_alert(dentist(**changes), moment, LA, "p0")
+    assert found is not None
+    return found
+
+
+@pytest.mark.parametrize(
+    ("moment", "state"),
+    [
+        (at(14, 9, 59), ""),
+        (at(14, 10), "ready"),
+        (at(14, 19, 59), "ready"),
+        (at(14, 20), "almost"),
+        (at(14, 24, 59), "almost"),
+        (at(14, 25), "go"),
+        (at(14, 26, 59), "go"),
+        (at(14, 27), "behind"),
+        (at(14, 59, 59), "behind"),
+        (at(15), ""),
+    ],
+)
+def test_the_states_through_the_afternoon(moment: datetime, state: str) -> None:
+    assert leave_state(dentist(), moment) == state
+
+
+def test_getting_ready_counts_down_to_leave_by_not_the_event() -> None:
+    found = card(at(14, 12, 20))
+    assert (found.label, found.title, found.numerals, found.counts) == (
+        "Time to get ready", "Dentist at 3:00", "12:40", "down",
+    )  # fmt: skip
+    assert found.sub == "until we leave at 2:25"
+    assert found.ends_at == at(14, 25)
+    assert (found.bar_from, found.bar_to, found.bar) == ("Ready from 2:10", "Out the door 2:25", 16)
+    assert found.detail == "Erin · 35 min drive with traffic"
+    assert found.sound == "ready"
+    assert [b.label for b in found.buttons] == ["We're off", "Quiet"]
+
+
+def test_the_last_five_minutes() -> None:
+    found = card(at(14, 20, 50))
+    assert (found.label, found.numerals, found.sub, found.sound) == (
+        "Almost time to go", "4:10", "out the door at 2:25", "five",
+    )  # fmt: skip
+
+
+def test_time_to_go() -> None:
+    found = card(at(14, 25))
+    assert (found.label, found.numerals, found.counts, found.sound) == (
+        "Time to go", "Time to go", "", "go",
+    )  # fmt: skip
+    assert [b.answer for b in found.buttons] == ["off"]
+
+
+def test_running_behind_says_when_leaving_now_gets_them_there_and_is_silent() -> None:
+    found = card(at(14, 28))
+    assert (found.label, found.title, found.numerals) == ("Dentist at 3:00", "Leaving now", "3:03")
+    assert found.sub == "gets you there around then, 35 min drive with traffic"
+    assert found.sound == "" and found.counts == ""
+    assert "late" not in f"{found.label} {found.title} {found.sub}".lower()
+    assert [b.answer for b in found.buttons] == ["off", "not_going"]
+
+
+def test_a_private_event_shows_no_title() -> None:
+    found = card(at(14, 12), title="")
+    assert found.title == "Leaving at 2:25"
+    assert "Dentist" not in f"{found.label} {found.title} {found.sub} {found.detail}"
+
+
+def test_both_of_them_and_a_rough_guess() -> None:
+    found = card(at(14, 12), names=("Erin", "Husband"), member_ids=(1, 2), traffic=False)
+    assert found.detail == "Erin and Husband · 35 min drive, a rough guess"
+
+
+def test_countdown_and_drive_words() -> None:
+    assert [countdown(s) for s in (-5, 0, 59, 760, 3900)] == [
+        "0:00", "0:00", "0:59", "12:40", "1:05:00",
+    ]  # fmt: skip
+    assert drive_words(75, True) == "1 hr 15 min drive with traffic"
+
+
+def test_only_the_soonest_leave_and_at_most_two() -> None:
+    first = card(at(14, 12))
+    later = leave_alert(
+        dentist(key="b", leave_by=at(14, 40), ready_from=at(14, 10)), at(14, 12), LA, "p0"
+    )
+    assert later is not None
+    assert ranked([later, first]) == [first]
