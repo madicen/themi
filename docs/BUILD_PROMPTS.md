@@ -577,6 +577,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CF4 | Cooking feedback: recipe edits written to the doc | Cooking feedback | [ ] |
 | CF5 | Cooking feedback: the wrap-up review | Cooking feedback | [ ] |
 | CF6 | Cooking feedback: the recipe page, and "From last time" | Cooking feedback | [ ] |
+| CF7 | Cooking feedback: Themi-side fixes for prep jobs and timer chips | Cooking feedback | [ ] |
+| CF8 | Cooking feedback: Themi-side fixes for sentence splits | Cooking feedback | [ ] |
+| CF9 | Cooking feedback: notes from the recipe page | Cooking feedback | [ ] |
 
 ## Fixed technical choices
 
@@ -26929,8 +26932,12 @@ way to give feedback while cooking that can change the recipes: some of it is Th
 itself (a step that is really two). Decisions the same day: a recipe change goes into the
 Google Doc on approval; notes are captured while cooking and reviewed after [All done], with
 anything undecided waiting on the recipe's page; Themi's own display mistakes are fixed on
-its side and also filed as bug reports. Proposed and not yet confirmed (the plan's decision
-5): a display fix applies as soon as the note is sorted, before wrap-up. The prefix is CF.
+its side and also filed as bug reports. Answered in the doc the same day: a display fix
+needs no approval, so it applies as soon as the note is sorted, before wrap-up (anything
+needing approval, or a fix not ready before the session ends, waits for wrap-up); and only
+the person whose session it was approves a recipe change, even for the shared cookbook.
+Prep-job and timer fixes (CF7), sentence-split fixes (CF8) and notes from the recipe page
+(CF9) were added to the plan. The prefix is CF.
 Rules every CF prompt keeps:
 
 - Notes, recipes and steps are data in delimited blocks for the model; recipe text is quoted
@@ -27065,7 +27072,9 @@ Read first: the plan's "After [All done]"; `themi_home/cooking_wrap.py` (`offer`
   as before and after with the changed words marked (a split shows the new steps listed),
   and [Change the recipe] [Keep as a note] [Not now]. A display fix already applied shows
   "Fixed on Themi's side, and reported" with [OK] [Undo]. An `other` note isn't offered.
-- [Change the recipe] stages `cookbook_edit` and the tap approves it at tier ask; the line
+- [Change the recipe] stages `cookbook_edit` and the tap approves it at tier ask; on a
+  group session only the session's owner's tap approves (the partner sees the offer but
+  not the approving buttons); the line
   after says "Changed in the cookbook" (or, at a higher tier, what the tier says). [Keep as a
   note] stages an `add_note` op. [Not now] sets the note `waiting`. A note still being
   sorted when its turn comes is skipped and waits.
@@ -27092,3 +27101,52 @@ Tests: the page's lists and buttons (family only), undo from the page; the step'
 the next session, gone once decided.
 Scenario: a note left at [Not now] shows on the recipe page and on its step the next time
 the recipe is cooked; deciding it on the page clears both.
+
+### CF7 · Cooking feedback: Themi-side fixes for prep jobs and timer chips
+Status: [ ]
+Depends on: CF3
+Read first: the plan's "More Themi-side fixes (CF7, CF8)"; RC3a's prep jobs
+(`Cooking.prep_jobs`, `with_amount`), RC3c's timer offers and `cooking_timers.py`; CF3's
+`recipe_fixes` and sort schema.
+- The sort's schema gains `prep` (the job as shown, the job to show or none) and `timer`
+  (the chip as shown, the chip to show: label and minutes, or none) fixes, validated against
+  what the step actually showed.
+- Each kept in `recipe_fixes` (kinds `prep`, `timer`) with the step's hash, applied at once
+  as link fixes are, retired by a step-hash change, and filed as a bug report too.
+- `prep_jobs` and the step's timer offers apply a recipe's live fixes last; the screen and
+  the chat card redraw.
+Tests: each fix applied, removed, retired by a changed step; validation drops a fix for a
+job or chip the step didn't show; the report.
+Scenario: "that timer should be 12 minutes" on step 4 changes the chip to 12 min at once,
+and the next cook shows 12 min too.
+
+### CF8 · Cooking feedback: Themi-side fixes for RC3b's sentence splits
+Status: [ ]
+Depends on: CF3, RC3b
+Read first: the plan's "More Themi-side fixes (CF7, CF8)"; `cooking.step_parts`,
+`LONG_STEP`, `SENTENCE`.
+- A `split` fix: for one step, the sentence numbers to split after, used instead of RC3b's
+  own choice for that step (an empty list keeps it whole). Only for a note about how Themi
+  split a long step on screen; a note asking for a split of the recipe itself stays a
+  recipe change (CF4).
+- `step_parts` takes the recipe's live split fixes. A session that's going on keeps the
+  part it's on: the screen moves to the part holding the same first sentence.
+Tests: a fix splits where it says, keeps a step whole, is retired by a changed step; a
+session mid-step lands on the right part; the sort tells a display split from a recipe split
+(scripted).
+Scenario: Peasant Bread's long step 3, split mid-thought, is split at the right sentence
+after one note, while still on it.
+
+### CF9 · Cooking feedback: notes from the recipe page
+Status: [ ]
+Depends on: CF3, CF6
+Read first: the plan's "Notes from the recipe page (CF9)"; CF2's note sheet; CF6's recipe
+page.
+- Each step and ingredient line on the recipe's page gets the same [Note] sheet and chips,
+  with no cooking session (CSRF forms, family only).
+- Saved with `session_id` null and how "page", sorted the same way. A display fix applies at
+  once; a recipe change or note is offered right there with [Change the recipe] [Keep as a
+  note] [Not now], approved by whoever left it.
+Tests: a page note saved and sorted, each offer's buttons, the display fix on the next cook.
+Scenario: Erin notes "this is two steps" on the recipe page, approves the split there, and
+the doc changes.
