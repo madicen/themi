@@ -571,6 +571,12 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | PT6a | Package tracking: what the family reads (wall, morning line, chat) | Package tracking | [~] |
 | PT6b | Package tracking: what Telegram tells them (problems, delivered) | Package tracking | [ ] |
 | PT7 | Package tracking: the FedEx lookup | Package tracking | deferred |
+| CF1 | Cooking feedback: step links for ingredient groups and collective words | Cooking feedback | [ ] |
+| CF2 | Cooking feedback: notes while cooking | Cooking feedback | [ ] |
+| CF3 | Cooking feedback: sorting notes, Themi's own fixes, bug reports | Cooking feedback | [ ] |
+| CF4 | Cooking feedback: recipe edits written to the doc | Cooking feedback | [ ] |
+| CF5 | Cooking feedback: the wrap-up review | Cooking feedback | [ ] |
+| CF6 | Cooking feedback: the recipe page, and "From last time" | Cooking feedback | [ ] |
 
 ## Fixed technical choices
 
@@ -26913,3 +26919,176 @@ Depends on: PT4
 Read first: the plan's "Part 3: Carrier lookup" and "Aggregators and what's left out".
 - A FedEx Track API client behind `Carrier`, like PT4's. Until then FedEx parcels rely on
   FedEx Delivery Manager emails (PT3).
+
+## Cooking feedback
+
+Design source: the [Themi Cooking Feedback Plan](https://claude.ai/artifact/HqDg5tQhrasA4p3NcRKkrV).
+Read it with the Claude Docs tools, like the other plans. Michael asked on 2026-11-27 for a
+way to give feedback while cooking that can change the recipes: some of it is Themi's bugs
+(a step's amounts missing the lines the recipe calls "spices" together), some is the recipe
+itself (a step that is really two). Decisions the same day: a recipe change goes into the
+Google Doc on approval; notes are captured while cooking and reviewed after [All done], with
+anything undecided waiting on the recipe's page; Themi's own display mistakes are fixed on
+its side and also filed as bug reports. Proposed and not yet confirmed (the plan's decision
+5): a display fix applies as soon as the note is sorted, before wrap-up. The prefix is CF.
+Rules every CF prompt keeps:
+
+- Notes, recipes and steps are data in delimited blocks for the model; recipe text is quoted
+  as written. A proposed recipe op quotes its old words exactly and is dropped if they aren't
+  in the recipe.
+- Every doc write is staged through `themi.autonomy.stage` (`cookbook_edit`); every line to a
+  person goes through the outbox; model calls through the router; time from `themi.clock`.
+- PDA: nothing is asked while cooking ("Noted for after." and nothing more); offers have
+  buttons and [Not now]; nothing said in chat about notes waiting or a half-done session.
+- No energy in notes, proposals or reports. Tests use the fake Docs client and the scripted
+  provider; no real network.
+
+### CF1 · Cooking feedback: step links for ingredient groups and collective words
+Status: [ ]
+Depends on: CK2
+Read first: the plan's "The spices bug"; CK2's notes; `themi_home/cooking_links.py`
+(`rule_links`, `gaps`, `StepLinks.links`, `ensure`); `themi_home/cookbook.py`
+(`_ingredient_groups`, how `Line.group` is set).
+A bug fix: start with failing tests.
+- Group names by rule: a step whose words name an ingredient group ("the masala paste", "the
+  spice mix", "spices" for a "Spices" group) uses every line of that group, matched with
+  `name_key` and `stem` as items are.
+- `gaps` also returns a step the rule found something for when it has a collective word:
+  "spices", "seasonings", "dry ingredients", "wet ingredients", "the rest", "everything
+  else", "remaining", or a group's name. `AMOUNT_WORDS` stays as it is.
+- For a gap step, `links` joins the model's lines to the rule's (sorted, no repeats) instead
+  of using them only when the rule's list is empty. Each model link is still checked with
+  `in_line`. `ensure` asks when any gap has no cached answer, as now.
+Tests (unit, `test_cooking_links.py`): "Add the onion and spices" with four lines under a
+"Spices" group links onion plus all four; the same with ungrouped spices joins the scripted
+model's lines; "the baking powder" still doesn't take "onion powder"; a cached answer is
+reused without a call; with no model, rule links only. Integration: the cook screen's
+amounts for that step list all five lines.
+Scenario: cooking a recipe whose step 2 says "add the onion and spices", the step shows the
+onion and the cumin, paprika, chili and salt lines.
+
+### CF2 · Cooking feedback: notes while cooking
+Status: [ ]
+Depends on: CK1, CK8, CK12
+Read first: the plan's "What the family sees" (leaving a note) and "Data model";
+`themi_home/cooking_screen.py` (`state`, `act`), `web/session_pages.py` (the cook act
+route), `templates/cook/_step.html`, `_amounts.html`, `static/cook.js`, `cooking_voice.py`;
+`Cooking.on_text`.
+- Migration `cooking_schema/0006_notes.sql`: `cooking_notes` with every column the plan
+  lists, including the sort's columns (filled from CF3), and `recipe_fixes` and
+  `cookbook_edits` (used from CF3 and CF4), so the track takes one migration.
+- `themi_home/cooking_notes.py`: `CookingNotes.add(session, member, *, chip, said, line,
+  how)` saves the note against the session's current part (label, index, its words as
+  shown, the recipe's digest). An empty note (no chip, no words) is refused.
+- The cook screen: a [Note] button under the step (64 px), opening a sheet with the chips
+  "Missing ingredients", "Split this step", "Wrong amount", "Something else", a text box and,
+  where push-to-talk is on, the mic. A chip alone saves. A [Note] on each line of the amounts
+  drawer saves with that line. New act actions `note` and `line_note`, CSRF-checked, the old
+  `seq` rule as for the other moves (a note isn't lost to a stale `seq`: it's saved against
+  the part shown when the sheet opened, sent with the request). "Noted for after." shows
+  for 4 s on the screen. `state` gains `notes`: the count left this session.
+- Chat and voice while a session is going on: "note: ...", "note that ...", "next time ...",
+  "Themi, note ..." save a note (how typed or voice) and reply "Noted for after." Free
+  phrasing through a `cooking_note` tool in the cooking group.
+- Either partner on a group session; each note keeps who left it.
+Tests: unit for `add` (current part, line, refused empty), the act route (owner, partner,
+stale `seq`, CSRF), the chat prefixes and the tool; browser test: a chip tap saves and the
+line shows; no question is ever sent.
+Scenario: Michael taps [Note] then "Split this step" on step 3, says "note: less salt next
+time" in chat, and both notes are saved on the right steps with nothing asked.
+
+### CF3 · Cooking feedback: sorting notes, Themi's own fixes, bug reports
+Status: [ ]
+Depends on: CF1, CF2, F1
+Read first: the plan's "Kinds of note", "Sorting", "Step links with fixes" and "Bug
+reports"; `standard/feedback.py` (`FeedbackBook.record`, the report format); CK2's
+`StepLinks`; GW5 (gram corrections).
+- `CookingNotes.sort(note)`: one structured call through the router (`AITask.RECIPES`,
+  background kind), started as a job when a note is saved. Recipe, step as shown with its
+  amounts, and the note each in its own data block. The answer: kind (`display`, `change`,
+  `note`, `other`), a one-line summary, and per kind: link changes, recipe ops, note text, or
+  a bug summary. Validation: link changes kept only when `in_line` passes; each recipe op
+  only when its old text is the recipe's (an unmatched one turns the note into `note` kind);
+  op names from the closed set. With no model or a failed call: kind `note` with the note's
+  words, and a bug report.
+- Display fixes (V1: links only) go into `recipe_fixes` with the step's hash and apply at
+  once: `StepLinks.links` applies a recipe's live fixes last (added and removed lines); a fix
+  whose step hash doesn't match the step is ignored. The cook screen redraws (`drawn`
+  changes), with the line "Added the spices to this step." from the fix's summary.
+- Bug reports: `display` and `other` notes, and any note the sort couldn't do, are recorded
+  in the feedback book as `bug` (or `idea` when the sort says so) with the cooking snapshot
+  (recipe name, key, book; step label and words; amounts shown; the note; kind and fix;
+  session id; links digest). Text starts "Cooking:". `bug_id` on the note.
+- A wrong gram weight goes to GW5's correction instead of a fix.
+Tests: unit for each kind with scripted answers, the validation drops, the no-model road,
+a fix retired when the step's words change, the report's snapshot (no energy, no chat
+history); integration: a note on a step redraws its amounts.
+Scenario: "the spices aren't here" on a step CF1 still can't link (no group, the model left
+them out) adds them within the session, and `themi feedback` shows the "Cooking:" report.
+
+### CF4 · Cooking feedback: recipe edits written to the doc
+Status: [ ]
+Depends on: CF3, RC5
+Read first: the plan's "Recipe ops" and "The doc write"; `themi_home/cookbook.py`
+(`entry_range`, `entry_requests`, `delete_requests`), `cookbook_save.py` (`_write`, the
+revision check, staging), `recipes.py` (`sync`, `store_doc`); `tests/fakes/gdocs_api.py`.
+- The ops: `replace_step`, `split_step`, `merge_steps`, `insert_step`, `replace_line`,
+  `insert_line`, `remove_line`, `add_note`, as dataclasses with `apply(recipe)` (for web
+  recipes and previews) and `requests(document, entry)` (for the doc), plus `inverse()` for
+  undo.
+- `cookbook.py` builds the requests: each op's paragraph found by exact text inside the
+  entry's range only; words replaced inside a paragraph so its style is kept; new steps copy
+  the neighbour's style; hand-numbered entries numbered alike with later steps renumbered in
+  the same batch; `add_note` into "Recipe Notes:" or a new paragraph before "Source:" and
+  `-----`, as "Cooking note (Nov 27): ...".
+- A `cookbook_edit` action, default tier ask, in the recipes trust group: payload is the note
+  id, recipe id, book and ops. Execute: read the doc, build the requests, one
+  `batchUpdate` with the revision read; old text not found → nothing written, note `stale`,
+  sorted once more. Then `Recipes.sync(force=True, which=book)` and a `cookbook_edits` row
+  (revisions before and after). A web recipe's ops apply to its `recipes` row instead.
+- `undo(edit_id)` stages the inverse ops, written only while the doc still has the words
+  Themi wrote.
+Tests: unit for every op on a fake doc (plain and hand-numbered entries, a grouped
+ingredient, the Biryani-like entry with "Ingredients" twice), the paragraph search scoped to
+the entry, stale old text, the revision retry, undo and undo refused; integration: approval
+through the tiers writes, re-syncs, and the cook screen shows the new steps.
+Scenario: approving "split step 3 into two" makes the doc's step 3 two numbered steps, and
+the next cook of the recipe shows 3 and 4 where 3 was.
+
+### CF5 · Cooking feedback: the wrap-up review
+Status: [ ]
+Depends on: CF4, CK6
+Read first: the plan's "After [All done]"; `themi_home/cooking_wrap.py` (`offer`, `tap`,
+`WRAP_TAPS`); `templates/cook/` wrap partials; the chat card's wrap-up buttons.
+- `cooking_wrap.offer` gains the notes, after the warm line and before RC5's save and the
+  other CK6 offers, one at a time: the note (who left it on a group session), the proposal
+  as before and after with the changed words marked (a split shows the new steps listed),
+  and [Change the recipe] [Keep as a note] [Not now]. A display fix already applied shows
+  "Fixed on Themi's side, and reported" with [OK] [Undo]. An `other` note isn't offered.
+- [Change the recipe] stages `cookbook_edit` and the tap approves it at tier ask; the line
+  after says "Changed in the cookbook" (or, at a higher tier, what the tier says). [Keep as a
+  note] stages an `add_note` op. [Not now] sets the note `waiting`. A note still being
+  sorted when its turn comes is skipped and waits.
+- The same offers on the chat card where the wrap-up shows there. Nothing in chat if they
+  leave the screen.
+Tests: the order of offers, each button's effect, a group session's attribution, the
+still-sorting skip, no message when the screen is left; browser test: before and after
+shown, a tap moves to the next offer.
+Scenario: after [All done], Erin sees the split, taps [Change the recipe], keeps "less salt"
+as a note, and then gets CK6's "Anything used up?"
+
+### CF6 · Cooking feedback: the recipe page, and "From last time"
+Status: [ ]
+Depends on: CF5, RC6
+Read first: the plan's "Later"; `web/recipe_pages.py` (`recipe_page`),
+`templates/recipe.html`; `cooking_screen.state`.
+- The recipe page gains "Notes from cooking": waiting notes with the CF5 buttons (CSRF
+  forms), and the changes made from notes, newest first, each with [Undo] while the doc has
+  Themi's words (CF4's `undo`).
+- The next cook of that recipe: a waiting note shows on its step (matched by the step's
+  words, else its index) as "From last time: <note>", small, with nothing to answer. A
+  stale or decided note doesn't show.
+Tests: the page's lists and buttons (family only), undo from the page; the step's line on
+the next session, gone once decided.
+Scenario: a note left at [Not now] shows on the recipe page and on its step the next time
+the recipe is cooked; deciding it on the page clears both.

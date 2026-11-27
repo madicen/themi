@@ -43,6 +43,10 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Package tracking (parcels by tracking number, carrier alert emails, UPS and USPS lookups):
   Themi Package Tracking Plan, https://claude.ai/artifact/1LNv3ZfV3MMuZvc3GgAuVk. Read it
   the same way. It is the design source for the PT prompts.
+- Cooking feedback (notes left while cooking, Themi's own display fixes, recipe changes
+  written to the cookbook doc): Themi Cooking Feedback Plan,
+  https://claude.ai/artifact/HqDg5tQhrasA4p3NcRKkrV. Read it the same way. It is the design
+  source for the CF prompts.
 
 ## "Implement the next prompt"
 
