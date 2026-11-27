@@ -26,6 +26,7 @@ from themi import clock
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
+    from themi.core.services import Services
     from themi.storage.db import Database
     from themi_google.travel import Leaving
 
@@ -198,3 +199,8 @@ class AlertAnswers:
                 continue
             kept.append(replace(alert, silent=True) if QUIET in said else alert)
         return kept
+
+
+def answer_alert(services: Services, key: str, answer: str) -> None:
+    """A tap on a card, kept so every frame agrees (WA2)."""
+    AlertAnswers(services.store.db).answer(key, answer)

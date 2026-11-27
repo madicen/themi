@@ -6,10 +6,12 @@ heads-up goes at 2:10 ("leave around 2:25"), and the wall's card shows from then
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import httpx
 import pytest
 
 from tests.fakes.gcal_api import FakeGcal
@@ -18,7 +20,7 @@ from tests.fakes.telegram_api import FakeTelegram
 from tests.fakes.travel import FakeTravel
 from tests.fixtures.family import SeededFamily
 from tests.fixtures.web import web_client
-from tests.integration.test_wall_screen import with_wall
+from tests.integration.test_wall_screen import frame, with_wall, words
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
@@ -158,3 +160,93 @@ async def test_two_trips_the_sooner_leave_by_first(
     await at(leaving, 14, 31)
     shown = WallView(leaving.app.services).alerts()
     assert [(a.state, a.label) for a in shown] == [("behind", "Dentist at 3:00")]
+
+
+# ----- WA2: the card on the wall ---------------------------------------------------------
+
+
+async def part(s: Scenario, client: httpx.AsyncClient) -> str:
+    response = await client.get("/wall/part/alerts")
+    assert response.status_code == 200
+    return response.text
+
+
+async def test_the_part_draws_each_state_and_ticks_from_the_servers_now(
+    leaving: Scenario, fake_gcal: FakeGcal
+) -> None:
+    share(leaving)
+    fake_gcal.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
+    async with web_client(leaving) as client:
+        await frame(leaving, client)
+        await at(leaving, 14)
+        assert "wall-alert" not in await part(leaving, client)
+        await at(leaving, 14, 12, 20)
+        html = await part(leaving, client)
+        assert 'class="wall-alert alert-leave alert-ready"' in html
+        assert 'data-now="2026-10-21T14:12:20-07:00"' in html
+        assert 'data-count="down" data-to="2026-10-21T21:25:00+00:00">12:40<' in html
+        assert words(html).startswith("Time to get ready Dentist at 3:00 12:40 until we leave")
+        assert 'data-w="16"' in html and 'data-sound="ready"' in html
+        await at(leaving, 14, 20, 50)
+        assert "alert-almost" in await part(leaving, client)
+        await at(leaving, 14, 25)
+        html = await part(leaving, client)
+        assert "alert-go" in html and "Time to go" in html and "Quiet" not in html
+        await at(leaving, 14, 28)
+        html = await part(leaving, client)
+        assert "alert-behind" in html and "Leaving now" in html and "data-sound" not in html
+        page = (await client.get("/wall")).text
+        assert 'id="wall-alerts"' in page and "Leaving now" in page
+
+
+async def test_a_tap_holds_on_every_frame(leaving: Scenario, fake_gcal: FakeGcal) -> None:
+    fake_gcal.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
+    await at(leaving, 14, 12)
+    (alert,) = WallView(leaving.app.services).alerts()
+    async with web_client(leaving) as one, web_client(leaving) as two:
+        await frame(leaving, one)
+        await frame(leaving, two)
+        csrf = re.search(r'"X-CSRF-Token": "([^"]+)"', (await one.get("/wall")).text)
+        assert csrf
+        headers = {"X-CSRF-Token": csrf.group(1)}
+        quiet = await one.post("/wall/alert", data={"key": alert.key, "answer": "quiet"}, headers=headers)
+        assert quiet.status_code == 200 and "data-sound" not in quiet.text
+        html = await part(leaving, two)
+        assert "alert-ready" in html and "data-sound" not in html  # still up, without sound
+        off = await one.post("/wall/alert", data={"key": alert.key, "answer": "off"}, headers=headers)
+        assert "wall-alert" not in off.text
+        assert "wall-alert" not in await part(leaving, two)
+        nonsense = await one.post("/wall/alert", data={"key": "x", "answer": "off"}, headers=headers)
+        assert nonsense.status_code == 200
+        assert leaving.app.db.one("SELECT 1 FROM wall_alert_answers WHERE alert_key = 'x'") is None
+
+
+async def test_not_going_ends_it_and_nothing_is_sent(
+    leaving: Scenario, fake_gcal: FakeGcal
+) -> None:
+    fake_gcal.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
+    await at(leaving, 14, 28)
+    (alert,) = WallView(leaving.app.services).alerts()
+    sent = len(leaving.inbox("Erin"))
+    async with web_client(leaving) as client:
+        await frame(leaving, client)
+        csrf = re.search(r'"X-CSRF-Token": "([^"]+)"', (await client.get("/wall")).text)
+        assert csrf
+        await client.post(
+            "/wall/alert", data={"key": alert.key, "answer": "not_going"},
+            headers={"X-CSRF-Token": csrf.group(1)},
+        )  # fmt: skip
+    assert WallView(leaving.app.services).alerts() == ()
+    await leaving.app.outbox.flush()
+    assert len(leaving.inbox("Erin")) == sent
+
+
+async def test_the_private_event_stays_private_on_the_page(
+    leaving: Scenario, fake_gcal: FakeGcal
+) -> None:
+    fake_gcal.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
+    await at(leaving, 14, 12)
+    async with web_client(leaving) as client:
+        await frame(leaving, client)
+        html = await part(leaving, client)
+    assert "Leaving at 2:25" in html and "Dentist" not in html and "Smile" not in html

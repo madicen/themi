@@ -79,6 +79,19 @@ def text_pairs(t: dict[str, str]) -> list[tuple[str, str, str]]:
             ("on a dark button", "--on-fg", "--fg"),
             ("the now line's time", "--on-now", "--now"),
             ("the stale line", "--stale", "--stale-bg"),
+            # WA2: the alerts
+            ("getting ready's label", "--alert-ready", "--card"),
+            ("getting ready's button", "--on-alert", "--alert-ready"),
+            ("the last minutes' words", "--on-go", "--alert-go"),
+            ("the last minutes' button", "--alert-go-ink", "--on-go"),
+            ("running behind's words", "--alert-behind", "--alert-behind-bg"),
+            ("running behind's line", "--fg", "--alert-behind-bg"),
+            ("running behind's button", "--alert-behind-bg", "--alert-behind"),
+            ("the kitchen's label", "--alert-kitchen", "--card"),
+            ("the kitchen's button", "--on-kitchen", "--alert-kitchen"),
+            ("the kitchen's next line", "--fg", "--alert-kitchen-bg"),
+            ("a timer that's up", "--on-kitchen", "--alert-kitchen"),
+            ("a timer that's up, its next line", "--fg", "--alert-kitchen-tint"),
         ]
     ]
     for p in PEOPLE:
@@ -167,3 +180,10 @@ def test_a_months_event_is_filled_with_its_tone() -> None:
     """F64a (bug #273): `.cal-ev` is painted with the event's tone, as the week ahead's are."""
     [body] = [b for s, b in blocks() if s == ".cal-ev"]
     assert "background: var(--tone)" in body and "color: var(--on-tone)" in body
+
+
+def test_the_alerts_tick_from_the_servers_now() -> None:
+    """WA2: the countdowns tick from the part's data-now, never the frame's own clock."""
+    assert 'list.getAttribute("data-now")' in SCRIPT
+    assert "var at = Date.now() + alertSkew;" in SCRIPT
+    assert 'body.alerting .wall-screen > :not(.wall-top)' in CSS

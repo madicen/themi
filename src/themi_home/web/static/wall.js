@@ -238,6 +238,37 @@
     musicShown();
   });
 
+  // WA2: the alerts. Each countdown ticks every second between the 15-second polls, from
+  // the server's now (data-now) and never the frame's own clock; the wall dims under them.
+  var alertSkew = 0;
+  function clockText(s) {
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return (h ? h + ":" + ("0" + m).slice(-2) : m) + ":" + ("0" + sec).slice(-2);
+  }
+  function alertsSeen() {
+    var list = document.querySelector(".wall-alert-list[data-now]");
+    if (list && !list.hasAttribute("data-skew")) {
+      alertSkew = Date.parse(list.getAttribute("data-now")) - Date.now();
+      list.setAttribute("data-skew", "1");
+    }
+    document.body.classList.toggle("alerting", !!document.querySelector(".wall-alert"));
+  }
+  function alertsTick() {
+    alertsSeen();
+    var at = Date.now() + alertSkew;
+    document.querySelectorAll("#wall-alerts [data-count][data-to]").forEach(function (el) {
+      var mark = Date.parse(el.getAttribute("data-to"));
+      if (isNaN(mark)) return;
+      var up = el.getAttribute("data-count") === "up";
+      var s = Math.max(0, Math.floor((up ? at - mark : mark - at) / 1000));
+      el.textContent = (up ? "+" : "") + clockText(s);
+    });
+  }
+  setInterval(alertsTick, 1000);
+  document.addEventListener("htmx:afterSwap", function (event) {
+    if (event.target.id === "wall-alerts") alertsTick();
+  });
+
   // F60e: the built-in loop plays from the frame through #wall-music, which lives outside
   // the sheet so a tap or a redraw doesn't stop it. Nothing plays until Play is tapped.
   // The choice and volume are kept as /session keeps them (POST /wall/focus/music).
@@ -519,6 +550,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     place(document);
     nightMode();
+    alertsTick();
     hold();
     fit();
     setInterval(function () { tick(); tickPlanner(); }, 60000);

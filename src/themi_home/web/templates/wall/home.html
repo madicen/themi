@@ -24,6 +24,10 @@
 <div id="wall-night" hx-get="/wall/part/night" hx-trigger="every 60s" hx-swap="innerHTML">
   {% include "wall/_night.html" %}
 </div>
+{#- WA2: the alerts, a layer over the wall (and the night) below the clock -#}
+<div id="wall-alerts" class="wall-alerts" hx-get="/wall/part/alerts" hx-trigger="every 15s, wall-refresh from:body" hx-swap="innerHTML">
+  {% include "wall/_alerts.html" %}
+</div>
 <main class="wall-screen">
   <header class="wall-top" id="wall-top" hx-get="/wall/part/top" hx-trigger="every 30s" hx-swap="innerHTML">
     {% include "wall/_top.html" %}
