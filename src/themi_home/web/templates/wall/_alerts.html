@@ -1,9 +1,9 @@
 {#- WA2: the wall's alerts (the Themi Wall Alerts Plan): at most two big cards, centred over
     the dimmed wall. The page ticks each [data-count] from data-now between polls. -#}
 {% if screen.alerts %}
-<div class="wall-alert-list" data-now="{{ screen.now.isoformat() }}">
+<div class="wall-alert-list" data-now="{{ screen.now.isoformat() }}" data-volume="{{ screen.alert_volume }}" data-got-it="{{ asset('home/audio/trills/got-it.m4a') }}">
 {% for a in screen.alerts %}
-<section class="wall-alert alert-{{ a.kind }} alert-{{ a.state }}{% if not loop.first %} alert-second{% endif %}" aria-label="{{ a.label }}" data-alert="{{ a.key }}" data-state="{{ a.state }}"{% if a.sound and not a.silent %} data-sound="{{ a.sound }}"{% endif %}>
+<section class="wall-alert alert-{{ a.kind }} alert-{{ a.state }}{% if not loop.first %} alert-second{% endif %}" aria-label="{{ a.label }}" data-alert="{{ a.key }}" data-state="{{ a.state }}"{% if a.chirp %} data-chirp{% endif %}{% if a.sound %} data-sound="{{ a.sound }}" data-sound-key="{{ a.sound_key or a.state }}" data-sound-url="{{ asset('home/audio/trills/' ~ a.sound ~ '.m4a') }}"{% endif %}>
   <div class="alert-head">
     {% if a.kind == "leave" %}<span class="alert-cham" aria-hidden="true">{{ inline_svg("home/chameleon/chameleon.svg") }}</span>
     {%- elif a.icon == "clock" %}<svg class="alert-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 3h6"/></svg>
@@ -21,6 +21,7 @@
   {% if a.bar_from or a.bar_to %}<p class="alert-ends"><span>{{ a.bar_from }}</span><span>{{ a.bar_to }}</span></p>{% endif %}{% endif %}
   {% if a.next_line %}<p class="alert-next"><span>{{ a.next_line }}</span><strong data-count="down" data-to="{{ a.next_iso }}"></strong></p>{% endif %}
   {% if a.detail %}<p class="alert-detail">{% if a.tone %}<span class="alert-dot tone-{{ a.tone }}"></span>{% endif %}{{ a.detail }}</p>{% endif %}
+  {% if a.sound %}<button type="button" class="alert-sound" data-sound-unlock hidden>Tap for sound</button>{% endif %}
   {% if a.buttons %}<div class="alert-buttons">
     {%- for b in a.buttons %}<button type="button" class="alert-button{% if b.main %} main{% endif %}" data-answer="{{ b.answer }}" hx-post="/wall/alert" hx-vals='{{ {"key": a.key, "answer": b.answer} | tojson }}' hx-target="#wall-alerts" hx-swap="innerHTML">{{ b.label }}</button>{% endfor -%}
   </div>{% endif %}

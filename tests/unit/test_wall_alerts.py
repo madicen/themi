@@ -5,16 +5,20 @@ A dentist at 3:00 pm, a 35-minute drive: leave by 2:25, getting ready from 2:10.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from themi_google.travel import Leaving
+from themi_home.trills import TRILLS, length
 from themi_home.wall_alerts import (
     WallAlert,
     countdown,
     drive_words,
+    heard,
     kitchen_alerts,
     leave_alert,
     leave_state,
@@ -184,3 +188,45 @@ def test_a_timer_from_chat_shows_a_clock_and_its_own_label() -> None:
 )  # fmt: skip
 def test_up_words(minutes: float, said: str) -> None:
     assert up_words(minutes) == said
+
+
+# ----- WA4: Themi's trills ---------------------------------------------------------------
+
+TRILL_DIR = Path(__file__).parents[2] / "src/themi_home/web/static/audio/trills"
+SCRIPT = (Path(__file__).parents[2] / "src/themi_home/web/static/wall.js").read_text()
+
+
+@pytest.mark.parametrize(
+    ("sounds", "leave", "kitchen"),
+    [("On", "ready", "kitchen"), ("Kitchen only", "", "kitchen"), ("Off", "", "")],
+)
+def test_which_sounds_play_by_the_setting(sounds: str, leave: str, kitchen: str) -> None:
+    up = kitchen_alerts(
+        [timer(1, at(17, 47), fired_at=at(17, 47).isoformat())], at(17, 48), LA, {}  # type: ignore[list-item]
+    )[0]
+    assert heard(card(at(14, 12)), sounds).sound == leave
+    assert heard(up, sounds).sound == kitchen
+    assert heard(up, sounds).chirp == bool(kitchen)
+    assert heard(replace(up, silent=True), "On").sound == ""  # Quiet
+
+
+def test_a_timer_thats_up_trills_once_more_after_two_minutes() -> None:
+    row = timer(1, at(17, 47), fired_at=at(17, 47).isoformat())
+    first = kitchen_alerts([row], at(17, 48, 59), LA, {})[0]  # type: ignore[list-item]
+    again = kitchen_alerts([row], at(17, 49), LA, {})[0]  # type: ignore[list-item]
+    assert (first.sound_key, again.sound_key) == ("up", "up-again")
+    assert first.sound == again.sound == "kitchen"
+
+
+def test_every_trill_is_made_and_short() -> None:
+    assert set(TRILLS) == {"ready", "five", "go", "kitchen", "got-it"}
+    for name in TRILLS:
+        assert (TRILL_DIR / f"{name}.m4a").stat().st_size > 1000, name
+        assert length(name) < 1.5, name
+
+
+def test_the_page_plays_each_once_and_waits_for_a_touch() -> None:
+    assert 'sessionStorage.getItem(key)' in SCRIPT
+    assert '"wall-trill:" + card.getAttribute("data-alert") + ":" + card.getAttribute("data-sound-key")' in SCRIPT
+    assert "if (chip) chip.hidden = false;  // not allowed yet" in SCRIPT
+    assert 'sound.volume = list ? Number(list.getAttribute("data-volume"))' in SCRIPT

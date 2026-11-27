@@ -31,7 +31,7 @@ from themi.core.calendar_view import CalendarPreferences
 from themi_google.travel import TravelPreferences
 from themi_home.cooking import Cooking, Session
 from themi_home.cooking_screen import FIRED_SHOWN, timers
-from themi_home.wall_view import WallView
+from themi_home.wall_view import WallSettings, WallView
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 HOME = "12 Main St, Springfield"
@@ -338,3 +338,48 @@ async def test_a_timer_nobody_taps_goes_after_two_hours(kitchen: Scenario) -> No
     assert [a.state for a in WallView(kitchen.app.services).alerts()] == ["up"]
     clock.advance(FIRED_SHOWN)
     assert WallView(kitchen.app.services).alerts() == ()
+
+
+# ----- WA4: the trills and the settings --------------------------------------------------
+
+
+def settings(s: Scenario, **values: object) -> None:
+    s.app.store.save_household(s.member("Erin"), WallSettings, **values)
+
+
+async def test_the_card_names_its_trill_and_the_file_is_there(
+    leaving: Scenario, fake_gcal: FakeGcal
+) -> None:
+    fake_gcal.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
+    await at(leaving, 14, 12)
+    async with web_client(leaving) as client:
+        await frame(leaving, client)
+        html = await part(leaving, client)
+        assert 'data-sound="ready" data-sound-key="ready"' in html and "data-chirp" in html
+        assert 'data-volume="1.0"' in html and "Tap for sound" in html
+        url = re.search(r'data-sound-url="([^"]+)"', html)
+        chirp = re.search(r'data-got-it="([^"]+)"', html)
+        assert url and chirp
+        for found in (url, chirp):
+            sound = await client.get(found.group(1))
+            assert sound.status_code == 200 and len(sound.content) > 1000
+        settings(leaving, alert_sounds="Kitchen only")
+        html = await part(leaving, client)
+        assert "data-sound" not in html and "data-chirp" not in html and "alert-ready" in html
+        settings(leaving, alert_sounds="On", leave_alerts=False)
+        assert "wall-alert" not in await part(leaving, client)
+
+
+async def test_kitchen_alerts_can_be_switched_off(kitchen: Scenario) -> None:
+    cooking, session = await cooking_now(kitchen)
+    assert cooking.timers is not None
+    cooking.timers.start(kitchen.member("Erin"), session, alfredo(cooking), "1", 10)
+    assert len(WallView(kitchen.app.services).alerts()) == 1
+    settings(kitchen, kitchen_alerts=False)
+    assert WallView(kitchen.app.services).alerts() == ()
+
+
+async def test_half_as_loud_at_night(kitchen: Scenario) -> None:
+    settings(kitchen, bedtime="10:00")  # the clock starts at 9 am; morning routines at 8
+    clock.advance(timedelta(hours=1, minutes=5))
+    assert WallView(kitchen.app.services).screen().alert_volume == 0.5

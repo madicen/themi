@@ -266,7 +266,52 @@
   }
   setInterval(alertsTick, 1000);
   document.addEventListener("htmx:afterSwap", function (event) {
-    if (event.target.id === "wall-alerts") alertsTick();
+    if (event.target.id === "wall-alerts") { alertsTick(); alertSounds(); }
+  });
+
+  // WA4: Themi's trills. A card's sound plays once for its alert and state (kept in
+  // sessionStorage, so a poll or a reload doesn't play it again); a timer that's up has a
+  // second state two minutes on. Browsers play sound only after a touch on the page: until
+  // then the card shows "Tap for sound", and the tap plays it. Half volume at night.
+  function playedKey(card) {
+    return "wall-trill:" + card.getAttribute("data-alert") + ":" + card.getAttribute("data-sound-key");
+  }
+  function trill(url) {
+    var list = document.querySelector(".wall-alert-list[data-volume]");
+    var sound = new Audio(url);
+    sound.volume = list ? Number(list.getAttribute("data-volume")) || 1 : 1;
+    return sound.play();
+  }
+  function alertSounds() {
+    document.querySelectorAll("#wall-alerts .wall-alert[data-sound-url]").forEach(function (card) {
+      var key = playedKey(card);
+      if (sessionStorage.getItem(key)) return;
+      var chip = card.querySelector("[data-sound-unlock]");
+      trill(card.getAttribute("data-sound-url")).then(function () {
+        sessionStorage.setItem(key, "1");
+        if (chip) chip.hidden = true;
+      }, function () {
+        if (chip) chip.hidden = false;  // not allowed yet: wait for a touch
+      });
+    });
+  }
+  document.addEventListener("click", function (event) {
+    var chip = event.target.closest && event.target.closest("[data-sound-unlock]");
+    if (chip) {
+      var card = chip.closest(".wall-alert");
+      chip.hidden = true;
+      trill(card.getAttribute("data-sound-url")).then(function () {
+        sessionStorage.setItem(playedKey(card), "1");
+      }, function () {});
+      return;
+    }
+    // We're off or Got it: one tiny chirp, on a card whose sounds are on (data-chirp)
+    var done = event.target.closest && event.target.closest(".wall-alert[data-chirp] .alert-button");
+    var answer = done && done.getAttribute("data-answer");
+    var list = document.querySelector(".wall-alert-list[data-got-it]");
+    if ((answer === "off" || answer === "got_it") && list) {
+      trill(list.getAttribute("data-got-it")).then(function () {}, function () {});
+    }
   });
 
   // F60e: the built-in loop plays from the frame through #wall-music, which lives outside
@@ -551,6 +596,7 @@
     place(document);
     nightMode();
     alertsTick();
+    alertSounds();
     hold();
     fit();
     setInterval(function () { tick(); tickPlanner(); }, 60000);

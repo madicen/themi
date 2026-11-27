@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
 ALMOST = timedelta(minutes=5)  # the last five minutes before leave-by
 GO = timedelta(minutes=2)  # "Time to go" stays this long after leave-by
+AGAIN = timedelta(minutes=2)  # WA4: a timer that's up and not tapped trills once more then
 SHOWN = 2
 ENDS = ("off", "not_going", "got_it")  # answers that take an alert off the wall
 QUIET = "quiet"  # keeps the card, without its sounds
@@ -72,7 +73,9 @@ class WallAlert:
     bar_from: str = ""
     bar_to: str = ""
     sound: str = ""  # the trill this state plays once (WA4), or ""
+    sound_key: str = ""  # what "once" is counted by on the page: the state, or "up-again"
     silent: bool = False  # Quiet was tapped
+    chirp: bool = False  # WA4: a tap on We're off or Got it chirps (its sounds are on)
     next_line: str = ""  # kitchen: "Then: Noodles, step 5"
     next_at: datetime | None = None
     icon: str = ""  # kitchen: "pot" for a cook session's timer, "clock" for one from chat
@@ -218,6 +221,7 @@ def kitchen_alerts(
                 detail="", ends_at=fired, rank=0, tone=tones.get(row["member_id"], ""),
                 sound="kitchen", next_line=line, next_at=at, up_since=fired,
                 up_for=f"+{countdown((now - fired).total_seconds())}",
+                sound_key="up-again" if now - fired >= AGAIN else "up",
                 icon="pot" if row["session_id"] else "clock",
                 buttons=(Button("got_it", "Got it", main=True),),
             )  # fmt: skip
@@ -240,6 +244,14 @@ def kitchen_alerts(
             )  # fmt: skip
         )
     return out
+
+
+def heard(alert: WallAlert, sounds: str) -> WallAlert:
+    """WA4: the alert with no sound when the wall's setting (On, Kitchen only, Off) or its
+    Quiet says so. Only a kitchen timer that's up plays a second time."""
+    if alert.silent or sounds == "Off" or (sounds == "Kitchen only" and alert.kind != "kitchen"):
+        return replace(alert, sound="", chirp=False)
+    return replace(alert, chirp=True)
 
 
 def ranked(alerts: list[WallAlert]) -> list[WallAlert]:

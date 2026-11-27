@@ -645,3 +645,9 @@ body.alerting .wall-screen > :not(.wall-top), body.alerting .wall-night { opacit
 .alert-second .alert-buttons { flex: none; }
 .alert-second .alert-button:not(.main) { display: none; }
 .alert-second .alert-button { min-width: 12rem; }
+
+/* WA4: until the frame has been touched, the browser won't play a sound: the card says so */
+.alert-sound { align-self: center; min-height: 4rem; padding: 0 1.75rem; border-radius: 2rem; border: 0.2rem solid currentColor;
+  background: transparent; color: inherit; font: inherit; font-size: 1.75rem; font-weight: 700; cursor: pointer; }
+.alert-sound[hidden] { display: none; }
+.alert-second .alert-sound { display: none; }
