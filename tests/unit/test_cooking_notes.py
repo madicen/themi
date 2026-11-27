@@ -10,6 +10,7 @@ from tests.fixtures.cookbook import load
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.unit.test_cook_screen import ALFREDO, lines
+from tests.unit.test_cooking_note_sort import live
 from themi.core import keys
 from themi_home import cooking_voice
 from themi_home.cooking import Cooking, CookingPreferences
@@ -24,7 +25,7 @@ def cooking(scenario: Scenario) -> Cooking:
     return found
 
 
-async def at_step(scenario: Scenario, cooking: Cooking, step: str = "2", *, in_group: bool = False):  # type: ignore[no-untyped-def]  # noqa: E501
+async def at_step(scenario: Scenario, cooking: Cooking, step: str = "2", *, in_group: bool = False):  # type: ignore[no-untyped-def]
     scenario.primary.queue_structured(lines(ALFREDO))
     alfredo = next(r for r in cooking.recipes.all() if r.name == "Alfredo Sauce")
     session = await cooking.start(scenario.member("Erin"), alfredo, in_group=in_group)
@@ -77,7 +78,7 @@ async def test_a_typed_note_is_noted_and_nothing_is_asked(
     assert cooking.notes is not None
     (note,) = cooking.notes.for_session(session.id)
     assert (note.said, note.how, note.step_label) == ("less salt next time", "typed", "3")
-    assert cooking.get(session.id).step == session.step  # the session didn't move
+    assert live(cooking, session.id).step == session.step  # the session didn't move
 
 
 async def test_the_cooking_note_tool(scenario: Scenario, cooking: Cooking) -> None:
@@ -98,7 +99,7 @@ async def test_a_spoken_note(scenario: Scenario, cooking: Cooking) -> None:
     assert cooking.notes is not None
     (note,) = cooking.notes.for_session(session.id)
     assert (note.said, note.how) == ("blend it longer.", "voice")
-    assert cooking.get(session.id).line == NOTED and scenario.inbox("Erin")[-1:] != [NOTED]
+    assert live(cooking, session.id).line == NOTED and scenario.inbox("Erin")[-1:] != [NOTED]
 
 
 async def test_the_note_sheet_on_the_screen(

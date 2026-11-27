@@ -313,7 +313,7 @@ class Part:
 
 def step_parts(recipe: Recipe) -> list[Part]:
     parts: list[Part] = []
-    chosen = dict(recipe.splits)  # CF8: where a cooking note said to split it
+    chosen = dict(getattr(recipe, "splits", ()))  # CF8: a note's split (a parsed one has none)
     for n, step in enumerate(recipe.steps, start=1):
         if n - 1 in chosen:
             sentences = SENTENCE.split(step.text)
