@@ -387,7 +387,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F65d | Feedback: "the family's chores" as a picture is the whole shared list | Feedback | [x] 2026-11-27 |
 | F65e | Feedback: an event Themi adds is on the wall's calendar at once | Feedback | [x] 2026-11-27 |
 | F65f | Feedback: switching recipes on the cook screen posts nothing new in the chat | Feedback | [x] 2026-11-27 |
-| F65g | Feedback: the cook screen's recipe chips look like the rest of the cook screen | Feedback | [ ] |
+| F65g | Feedback: the cook screen's recipe chips look like the rest of the cook screen | Feedback | [x] 2026-11-27 |
 | F65h | Feedback: conversation mode notes a job for the other person | Feedback | [ ] |
 | F65i | Feedback: "Let's make X" never reads an old screenshot as a recipe | Feedback | [ ] |
 | F65j | Feedback: the family's list on the wall can be dragged too | Feedback | [ ] |
@@ -19567,7 +19567,7 @@ Notes:
 - **Setup:** update the Pi. Mark #279 reviewed once live.
 
 ### F65g · Feedback (2026-11-27): the cook screen's recipe chips look like the rest of the cook screen
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: F64f, CK redesign (the `cook-card`, `--cook-round`, themes)
 Read first: `themi_home/web/static/cook.css` (`.cook-going`, `.cook-going-chip`, and the
 redesign's `.cook-card`, `.cook-chip`, `--cook-round`, `--cook-display`, the kitchen theme);
@@ -19597,6 +19597,20 @@ front one's the accent; screenshots of both themes saved with the test run for M
 see (say where in Notes).
 
 Data/Setup: update the Pi. Mark #280 reviewed once Michael has seen it.
+
+Notes:
+- The going row: each recipe a card (`--card`, `--line`, `--cook-round`, the cook tap height),
+  its name in the display face (`--cook-display`) over its step and the soonest timer in
+  `--muted`; the one in front in `--accent` / `--accent-fg`. One row, `overflow-x: auto`,
+  no wrapping. Only the existing variables, so light, dark and kitchen follow.
+- The other recipes' chips are written out in `_main.html` (not the `act` macro), so the
+  name and step are spans like the front one's and its timer counts down too (F64f's label
+  had no timer for them). The `aria-label` "Go to Pancakes, 3/5" is unchanged.
+- Tests: `test_the_recipes_on_the_go_fit_and_a_chip_switches` (both widths) checks the chip's
+  background is `--card`, the front one's `--accent`, the radius `--cook-round` and the
+  display face. With `THEMI_SHOTS=<folder>` it saves `cook-going-{light,dark,kitchen}-{390,1180}.png`
+  there for Michael to see.
+- **Setup:** update the Pi. Mark #280 reviewed once Michael has seen it.
 
 ### F65h · Feedback (2026-11-27): conversation mode notes a job for the other person
 Status: [ ]

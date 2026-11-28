@@ -20,13 +20,21 @@ body.cook-page { --cook-tap: 64px; --cook-text: 2rem; overflow-x: hidden;
     grid-template-areas: "head head" "going going" "strip strip" "step side"; }
 }
 /* F64f: a chip per recipe on the go; a tap brings it to the front */
-.cook-going { grid-area: going; display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.cook-going form { margin: 0; }
-.cook-going-chip { display: inline-flex; align-items: baseline; gap: var(--space-2); min-height: 2.75rem; margin: 0;
-  padding: var(--space-2) var(--space-3); border-radius: 999px; border: 1px solid currentColor; background: none;
-  color: inherit; font: inherit; cursor: pointer; }
-.cook-going-chip.on { font-weight: 700; border-width: 2px; cursor: default; }
-.cook-going-where, .cook-going-timer { opacity: 0.75; font-variant-numeric: tabular-nums; }
+/* F64f, F65g (Michael's bug #280): the recipes on the go, one card each in the screen's own
+   look (its card colours, corners and display face); the one in front lit with the accent.
+   One row that scrolls sideways on a phone rather than wrapping. */
+.cook-going { grid-area: going; display: flex; flex-wrap: nowrap; gap: var(--space-3); overflow-x: auto;
+  scrollbar-width: none; padding-bottom: var(--space-1); }
+.cook-going::-webkit-scrollbar { display: none; }
+.cook-going form { margin: 0; flex: 0 0 auto; }
+.cook-page .cook-going-chip { display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 2px; min-height: var(--cook-tap); margin: 0; padding: var(--space-2) var(--space-4); flex: 0 0 auto;
+  background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: var(--cook-round);
+  font: inherit; font-size: 1rem; text-align: left; cursor: pointer; white-space: nowrap; }
+.cook-page .cook-going-chip.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); cursor: default; }
+.cook-going-name { font-family: var(--cook-display); font-size: 1.25rem; line-height: 1.1; }
+.cook-going-where, .cook-going-timer { color: var(--muted); font-size: .95rem; font-variant-numeric: tabular-nums; }
+.cook-going-chip.on .cook-going-where, .cook-going-chip.on .cook-going-timer { color: inherit; opacity: .85; }
 .cook-go { margin-top: var(--space-2); }
 .cook-head { grid-area: head; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: baseline; }
 .cook-recipe { margin: 0; font-size: 1.15rem; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }

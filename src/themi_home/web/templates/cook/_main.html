@@ -25,7 +25,13 @@
   <nav class="cook-going" aria-label="Recipes on the go">
     {% for g in state.going %}
     {% if g.front %}<p class="cook-going-chip on" aria-current="true"><span class="cook-going-name">{{ g.name }}</span> <span class="cook-going-where">{{ g.where }}</span>{% if g.ends_at %} <span class="cook-going-timer" data-ends="{{ g.ends_at }}"></span>{% endif %}</p>
-    {% else %}{{ act({"id": g.id, "seq": g.seq}, csrf, "front", g.name ~ " · " ~ g.where, cls="cook-going-chip", aria="Go to " ~ g.name ~ ", " ~ g.where) }}{% endif %}
+    {% else %}{#- F65g: drawn like the screen's cards: the name in the display face, where it is and its timer under it -#}
+    <form method="post" action="/session/cook/{{ g.id }}/act">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="seq" value="{{ g.seq }}">
+      <input type="hidden" name="action" value="front">
+      <button class="cook-going-chip" aria-label="Go to {{ g.name }}, {{ g.where }}"><span class="cook-going-name">{{ g.name }}</span> <span class="cook-going-where">{{ g.where }}</span>{% if g.ends_at %} <span class="cook-going-timer" data-ends="{{ g.ends_at }}"></span>{% endif %}</button>
+    </form>{% endif %}
     {% endfor %}
   </nav>
   {% endif %}
