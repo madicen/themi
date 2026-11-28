@@ -385,7 +385,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F65b | Feedback: "yes, that one's done" to Themi's "Is it done?" marks it done | Feedback | [x] 2026-11-27 |
 | F65c | Feedback: the wall's "+N more" counts only what's still to do | Feedback | [x] 2026-11-27 |
 | F65d | Feedback: "the family's chores" as a picture is the whole shared list | Feedback | [x] 2026-11-27 |
-| F65e | Feedback: an event Themi adds is on the wall's calendar at once | Feedback | [ ] |
+| F65e | Feedback: an event Themi adds is on the wall's calendar at once | Feedback | [x] 2026-11-27 |
 | F65f | Feedback: switching recipes on the cook screen posts nothing new in the chat | Feedback | [ ] |
 | F65g | Feedback: the cook screen's recipe chips look like the rest of the cook screen | Feedback | [ ] |
 | F65h | Feedback: conversation mode notes a job for the other person | Feedback | [ ] |
@@ -19476,7 +19476,7 @@ Notes:
 - **Setup:** update the Pi. Mark #281 reviewed once live.
 
 ### F65e · Feedback (2026-11-27): an event Themi adds is on the wall's calendar at once
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: F59f, F64a
 Read first: `themi_google/connectors/gcal/busy.py` (`entries_between`, `_live`, `LIVE_KEEP`,
 `stored`); `themi_google/events.py` (`_show`, the add/move/delete executors);
@@ -19510,6 +19510,23 @@ Tests: a month-range read held, then an event added through the executor: the ne
 in the week strip and the month without waiting.
 
 Data/Setup: update the Pi. Mark #277 reviewed once live.
+
+Notes:
+- The cause was more than the hold: `make` put an event in `calendar_entries` at once only
+  when it wasn't for the family calendar (`if payload["calendar"] != "family"`, since K3),
+  so Thanksgiving waited for the next 15-minute calendar read. The week strip and today's
+  line read `calendar_entries`.
+- `_show` now writes the row for every account whose `member_calendars` has that calendar
+  (both people for the family calendar); for the family calendar with nobody reading it,
+  nothing (K3's reason kept); for one's own, as before when nobody lists it.
+- `CalendarBusy.forget_ranges()` clears `_live`; `Events.forget_ranges()` calls it after an
+  add, a move and a delete, and `refresh` calls it after a read that found anything.
+- The wall's week strip polls every 60 s (was 600 s); the columns and today's line already
+  poll every 30 s.
+- Deviation: no wall screen test; the two scenarios cover the rows the wall reads and the hold.
+- Tests: `test_bug_277_a_family_event_is_in_both_peoples_read_at_once`,
+  `test_bug_277_a_held_range_read_is_read_again_after_an_add` (test_calendar_events.py).
+- **Setup:** update the Pi. Mark #277 reviewed once live.
 
 ### F65f · Feedback (2026-11-27): switching recipes on the cook screen posts nothing new in the chat
 Status: [ ]

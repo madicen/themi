@@ -497,8 +497,11 @@ class Events:
             account_id, calendar_id, eid, title, location, when, themi_id,
             description=str(payload.get("details") or ""),
         )  # fmt: skip
-        if payload["calendar"] != "family":
-            self._show(member, account_id, calendar_id, eid, title, location, when, themi_id)
+        # F65e (bug #277): the family calendar's too, for everyone who reads it; before, it
+        # waited for the next calendar read.
+        self._show(member, account_id, calendar_id, eid, title, location, when, themi_id,
+                   only_readers=payload["calendar"] == "family")  # fmt: skip
+        self.forget_ranges()
         where = "the family calendar" if payload["calendar"] == "family" else "your calendar"
         return themi_id, f"On {where}: {describe(title, when, location, tz)}."
 
@@ -561,6 +564,7 @@ class Events:
             (new_title, new_location, to_utc_iso(when.starts), to_utc_iso(when.ends),
              int(when.all_day), found.event_id),
         )  # fmt: skip
+        self.forget_ranges()  # F65e
 
     def _notes(self, description: str, found: Found, when: When, payload: dict[str, Any]) -> str:
         notes = payload.get("notes") or {}
@@ -602,6 +606,7 @@ class Events:
                 )
             self.db.execute("DELETE FROM calendar_entries WHERE event_id = ?", (found.event_id,))
             await self.withdraw_changes(found.event_id, keep=ctx.action_id)
+        self.forget_ranges()  # F65e
         found = self._payload_found(payload)
         both = " (both calendars)" if len(copies) > 1 else ""
         shown = describe(found.title, found.when, "", self._tz())
@@ -692,23 +697,44 @@ class Events:
         source = self.db.scalar("SELECT source FROM themi_events WHERE id = ?", (themi_id,))
         return source if str(source or "").startswith(TASK_BLOCK) else f"event:{themi_id}"
 
+    def forget_ranges(self) -> None:
+        """F65e (bug #277): the wall's ranges read straight from Google (F59f's month) are
+        read again, so a change Themi just made shows."""
+        reader = self.services.maybe(keys.calendars)
+        if reader is not None and hasattr(reader, "forget_ranges"):
+            reader.forget_ranges()
+
     def _show(
         self, member: Member, account_id: int, calendar_id: str, eid: str, title: str,
-        location: str, when: When, themi_id: int,
+        location: str, when: When, themi_id: int, *, only_readers: bool = False,
     ) -> None:  # fmt: skip
-        """Into the calendar read (K1) now, rather than at the next refresh."""
+        """Into the calendar read (K1) now, rather than at the next refresh: for everyone
+        whose account reads that calendar (F65e: the family calendar is on both), else for
+        `member` (`only_readers`: nobody, when nobody reads it)."""
+        readers = [
+            (r["member_id"], r["account_id"])
+            for r in self.db.query(
+                "SELECT a.member_id, a.id AS account_id FROM member_calendars c "
+                "JOIN linked_accounts a ON a.id = c.account_id WHERE c.calendar_id = ? "
+                "ORDER BY a.id",
+                (calendar_id,),
+            )
+        ]
+        if not readers and not only_readers:
+            readers = [(member.id, account_id)]
         self.db.execute("DELETE FROM calendar_entries WHERE event_id = ?", (eid,))
-        self.db.execute(
-            "INSERT INTO calendar_entries (member_id, account_id, calendar_id, event_id, title, "
-            "location, starts_at, ends_at, all_day, video, busy, source, fetched_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
-            (
-                member.id, account_id, calendar_id, eid, title, location,
-                to_utc_iso(when.starts), to_utc_iso(when.ends), int(when.all_day),
-                int(not when.all_day and not self._marker(themi_id).startswith(TASK_BLOCK)),
-                self._marker(themi_id), to_utc_iso(clock.now()),
-            ),
-        )  # fmt: skip
+        for reader_id, reader_account in readers:
+            self.db.execute(
+                "INSERT INTO calendar_entries (member_id, account_id, calendar_id, event_id, "
+                "title, location, starts_at, ends_at, all_day, video, busy, source, fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+                (
+                    reader_id, reader_account, calendar_id, eid, title, location,
+                    to_utc_iso(when.starts), to_utc_iso(when.ends), int(when.all_day),
+                    int(not when.all_day and not self._marker(themi_id).startswith(TASK_BLOCK)),
+                    self._marker(themi_id), to_utc_iso(clock.now()),
+                ),
+            )  # fmt: skip
 
     def _payload_found(self, payload: dict[str, Any]) -> Found:
         when = When(
