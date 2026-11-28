@@ -186,7 +186,17 @@ def test_the_alerts_tick_from_the_servers_now() -> None:
     """WA2: the countdowns tick from the part's data-now, never the frame's own clock."""
     assert 'list.getAttribute("data-now")' in SCRIPT
     assert "var at = Date.now() + alertSkew;" in SCRIPT
-    assert "body.alerting .wall-screen > :not(.wall-top):not(#wall-view)" in CSS
+    # WA7: dimmed while the alerts are out, not while they're tucked into the strip
+    assert "body.alerting:not(.alerts-tucked) .wall-screen > :not(.wall-top):not(#wall-view)" in CSS
+
+
+def test_a_tap_beside_the_alerts_lands_on_their_layer_and_tucks_them() -> None:
+    """WA7: out, the alerts' layer covers the wall and takes the tap that would have ticked a
+    chore; tucked, it lets taps through. They come back after data-tuck-after seconds."""
+    assert "body.alerting:not(.alerts-tucked) .wall-alerts { pointer-events: auto; }" in CSS
+    assert "inset: 0" in rule(".wall-alerts")
+    assert 'target.id === "wall-alerts"' in SCRIPT and "tuck(true)" in SCRIPT
+    assert '.getAttribute("data-tuck-after")' in SCRIPT
 
 
 def test_the_alerts_paint_over_the_wall_and_under_a_view() -> None:

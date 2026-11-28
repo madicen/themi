@@ -563,11 +563,15 @@ body.night:not(.awake) { background: var(--night-bg); }
    bottom over the wall, which dims and keeps its layout. Read from across the room: the
    countdown is about 300px tall on the frame, 380px in the last five minutes. */
 /* Bug #285 (WA5): above the wall's own positioned and dimmed parts, below a view's sheet */
-.wall-alerts { position: fixed; z-index: 10; top: 13rem; left: 2.5rem; right: 2.5rem; bottom: 2.5rem;
+/* WA7: the layer covers the whole wall, so a tap beside the cards lands on it (and tucks
+   them, wall.js) instead of ticking a chore under them */
+.wall-alerts { position: fixed; z-index: 10; inset: 0; padding: 13rem 2.5rem 2.5rem;
   display: flex; flex-direction: column; justify-content: center; pointer-events: none; }
 .wall-alerts:empty { display: none; }
+body.alerting:not(.alerts-tucked) .wall-alerts { pointer-events: auto; }
 #wall-view { position: relative; z-index: 11; }
-body.alerting .wall-screen > :not(.wall-top):not(#wall-view), body.alerting .wall-night { opacity: 0.4; }
+body.alerting:not(.alerts-tucked) .wall-screen > :not(.wall-top):not(#wall-view),
+body.alerting:not(.alerts-tucked) .wall-night { opacity: 0.4; }
 .wall-alert-list { display: flex; flex-direction: column; gap: 1.5rem; max-height: 100%; }
 .wall-alert {
   pointer-events: auto; display: flex; flex-direction: column; gap: 1.75rem;
@@ -648,6 +652,28 @@ body.alerting .wall-screen > :not(.wall-top):not(#wall-view), body.alerting .wal
 .alert-second .alert-buttons { flex: none; }
 .alert-second .alert-button:not(.main) { display: none; }
 .alert-second .alert-button { min-width: 12rem; }
+
+/* WA7: tucked, the cards are a strip at the top: each its icon, words and countdown, in its
+   state's colours. The wall moves down under it and isn't dimmed; a tap on it brings them back. */
+body.alerts-tucked .wall-alerts { bottom: auto; padding: 1rem 2.5rem 0; justify-content: flex-start; }
+body.alerts-tucked .wall-screen { padding-top: 8.75rem; }
+body.alerts-tucked .wall-alert-list { flex-direction: row; gap: 1rem; }
+body.alerts-tucked .wall-alert { flex: 1 1 0; min-width: 0; flex-direction: row; align-items: center; gap: 1.25rem;
+  padding: 0.75rem 1.75rem; border-width: 0.3rem; border-radius: 999px; text-align: left; cursor: pointer; }
+body.alerts-tucked .wall-alert > :not(.alert-head):not(.alert-count) { display: none; }
+body.alerts-tucked .wall-alert .alert-head { flex: 1 1 auto; min-width: 0; flex-direction: row; justify-content: flex-start; gap: 1rem; }
+body.alerts-tucked .wall-alert .alert-cham { display: block; width: 3.5rem; }
+body.alerts-tucked .wall-alert .alert-icon { width: 3rem; height: 3rem; }
+body.alerts-tucked .wall-alert .alert-words { align-items: flex-start; gap: 0; }
+body.alerts-tucked .wall-alert .alert-label { display: block; font-size: 1.2rem; }
+body.alerts-tucked .wall-alert .alert-label, body.alerts-tucked .wall-alert .alert-title {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.alerts-tucked .wall-alert .alert-title { font-size: 1.9rem; font-weight: 700; }
+body.alerts-tucked .wall-alert .alert-title:empty { display: none; }
+body.alerts-tucked .wall-alert .alert-count { flex: none; font-size: 3.75rem; letter-spacing: -0.02em; }
+body.alerts-tucked .wall-alert.alert-up .alert-said { display: none; }  /* its +0:42 instead */
+body.alerts-tucked .wall-alert.alert-up .alert-label { font-size: 1.9rem; }
+body.alerts-tucked .wall-alert.alert-go .alert-label { display: none; }  /* its words say it */
 
 /* WA4: until the frame has been touched, the browser won't play a sound: the card says so */
 .alert-sound { align-self: center; min-height: 4rem; padding: 0 1.75rem; border-radius: 2rem; border: 0.2rem solid currentColor;

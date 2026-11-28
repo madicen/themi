@@ -251,7 +251,11 @@
       alertSkew = Date.parse(list.getAttribute("data-now")) - Date.now();
       list.setAttribute("data-skew", "1");
     }
-    document.body.classList.toggle("alerting", !!document.querySelector(".wall-alert"));
+    var showing = !!document.querySelector(".wall-alert");
+    document.body.classList.toggle("alerting", showing);
+    if (!showing || (tucked() && alertMarks().some(function (m) { return tuckedWith.indexOf(m) < 0; }))) {
+      tuck(false);  // nothing left, or a new alert or state: front and centre again
+    }
   }
   function alertsTick() {
     alertsSeen();
@@ -272,6 +276,44 @@
     });
   }
   setInterval(alertsTick, 1000);
+
+  // WA7: a tap on the wall while the alerts show tucks them into a strip at the top, so the
+  // wall can be used with a timer going; that tap does nothing else (it lands on the alerts'
+  // layer, never on a chore). A tap on the strip, a new alert or state (a timer going off),
+  // or the list's data-tuck-after seconds without a touch bring them back.
+  var tuckTimer = null, tuckedWith = [];
+  function tucked() { return document.body.classList.contains("alerts-tucked"); }
+  function alertMarks() {
+    return Array.prototype.map.call(document.querySelectorAll("#wall-alerts .wall-alert"), function (card) {
+      return [card.getAttribute("data-alert"), card.getAttribute("data-state"),
+              card.getAttribute("data-sound-key") || ""].join(":");
+    });
+  }
+  function tuckLater() {
+    if (tuckTimer) clearTimeout(tuckTimer);
+    var list = document.querySelector(".wall-alert-list[data-tuck-after]");
+    var seconds = (list && Number(list.getAttribute("data-tuck-after"))) || 30;
+    tuckTimer = setTimeout(function () { tuck(false); }, seconds * 1000);
+  }
+  function tuck(on) {
+    if (tuckTimer) { clearTimeout(tuckTimer); tuckTimer = null; }
+    if (on === tucked()) return;
+    document.body.classList.toggle("alerts-tucked", on);
+    tuckedWith = on ? alertMarks() : [];
+    if (on) tuckLater();
+    fit();  // the wall moves down under the strip, and back
+  }
+  document.addEventListener("click", function (event) {
+    if (!document.body.classList.contains("alerting")) return;
+    var target = event.target;
+    if (!tucked() && (target.id === "wall-alerts" || target.classList.contains("wall-alert-list"))) {
+      tuck(true);
+    } else if (tucked() && target.closest && target.closest("#wall-alerts .wall-alert")) {
+      event.preventDefault();
+      tuck(false);
+    }
+  });
+  document.addEventListener("pointerdown", function () { if (tucked()) tuckLater(); }, true);
   document.addEventListener("htmx:afterSwap", function (event) {
     if (event.target.id === "wall-alerts") { alertsTick(); alertSounds(); }
   });

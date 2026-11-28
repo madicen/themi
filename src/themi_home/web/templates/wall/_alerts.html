@@ -1,7 +1,8 @@
 {#- WA2: the wall's alerts (the Themi Wall Alerts Plan): at most two big cards, centred over
-    the dimmed wall. The page ticks each [data-count] from data-now between polls. -#}
+    the dimmed wall. The page ticks each [data-count] from data-now between polls.
+    WA7: a tap on the wall tucks them into a strip at the top for data-tuck-after seconds. -#}
 {% if screen.alerts %}
-<div class="wall-alert-list" data-now="{{ screen.now.isoformat() }}" data-volume="{{ screen.alert_volume }}" data-got-it="{{ asset('home/audio/trills/got-it.m4a') }}">
+<div class="wall-alert-list" data-now="{{ screen.now.isoformat() }}" data-tuck-after="30" data-volume="{{ screen.alert_volume }}" data-got-it="{{ asset('home/audio/trills/got-it.m4a') }}">
 {% for a in screen.alerts %}
 <section class="wall-alert alert-{{ a.kind }} alert-{{ a.state }}{% if not loop.first %} alert-second{% endif %}" aria-label="{{ a.label }}" data-alert="{{ a.key }}" data-state="{{ a.state }}"{% if a.chirp %} data-chirp{% endif %}{% if a.sound %} data-sound="{{ a.sound }}" data-sound-key="{{ a.sound_key or a.state }}" data-sound-url="{{ asset('home/audio/trills/' ~ a.sound ~ '.m4a') }}"{% endif %}>
   <div class="alert-head">
