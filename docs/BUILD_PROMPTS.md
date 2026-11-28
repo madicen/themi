@@ -600,6 +600,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WA4 | Wall alerts: Themi's trills | Wall alerts | [x] 2026-11-27 |
 | WA5 | Wall alerts: on the frame | Wall alerts | [~] |
 | WA6 | Wall alerts: a timer from chat | Wall alerts | [x] 2026-11-27 |
+| WA7 | Wall alerts: tucked into a strip while the wall is used | Wall alerts | [x] 2026-11-27 |
 
 ## Fixed technical choices
 
@@ -28060,3 +28061,33 @@ Notes:
   `tools.json` gains `start_timer` (recipes).
 - New: `tests/scenarios/test_chat_timer.py` (5).
 - Mark #284 reviewed once it's live.
+
+### WA7 · Wall alerts: tucked into a strip while the wall is used
+Status: [x] 2026-11-27
+Depends on: WA2, WA6
+Read first: WA2's notes (the layer, `body.alerting`); `wall.js` (the alerts' tick, the
+person page's hold and tap); Michael after WA6 on the frame: a tap meant to put the timer
+aside ticked the chore under it.
+- Out, the alerts' layer covers the whole wall, so a tap beside the cards lands on it and
+  does nothing but tuck them: a strip at the very top, each card its icon, words and
+  countdown in its state's colours. The wall moves down under the strip, isn't dimmed, and
+  can be used as usual.
+- They come back front and centre on a tap on the strip, after `data-tuck-after` (30)
+  seconds without a touch (each touch starts the wait again), or at once when an alert or a
+  state is new (a timer going off, its second trill, time to go). Per frame, in the page
+  only; a reload shows them out.
+Tests: browser, a tap on a chore under the card tucks and ticks nothing, then a tap on it
+ticks; the strip above the clock, the wall undimmed, only words and countdown shown; a tap on
+the strip brings them back; back after the wait, restarted by a touch; back at once when the
+timer goes off. Script text: the layer takes taps only while out.
+
+Notes:
+- `_alerts.html` carries `data-tuck-after="30"`; `wall.js` `tuck()`, `alertMarks()` (key,
+  state and sound key), and `alertsSeen` untucks when a mark is new or nothing shows.
+  `body.alerts-tucked` in `wall.css`; the dimming is now `body.alerting:not(.alerts-tucked)`
+  (`test_wall_look.py`'s WA2 assertion follows it). `fit()` runs on each change.
+- While out, a tap on the top row (Talk to Themi, Body double, the weather) tucks too
+  rather than opening its sheet.
+- New: `tests/integration/test_wall_alerts_tuck_browser.py`.
+- Not looked at on the frame yet (with WA5's next try). The plan doesn't describe tucking;
+  add it to the plan's "Taps" when it's next edited.
