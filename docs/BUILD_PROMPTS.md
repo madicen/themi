@@ -389,7 +389,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F65f | Feedback: switching recipes on the cook screen posts nothing new in the chat | Feedback | [x] 2026-11-27 |
 | F65g | Feedback: the cook screen's recipe chips look like the rest of the cook screen | Feedback | [x] 2026-11-27 |
 | F65h | Feedback: conversation mode notes a job for the other person | Feedback | [x] 2026-11-27 |
-| F65i | Feedback: "Let's make X" never reads an old screenshot as a recipe | Feedback | [ ] |
+| F65i | Feedback: "Let's make X" never reads an old screenshot as a recipe | Feedback | [x] 2026-11-27 |
 | F65j | Feedback: the family's list on the wall can be dragged too | Feedback | [ ] |
 | F65k | Idea: a task can be edited on the wall: its words and its due date | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -19660,7 +19660,7 @@ Notes:
 - **Setup:** update the Pi. Mark #278 reviewed once live.
 
 ### F65i · Feedback (2026-11-27): "Let's make X" never reads an old screenshot as a recipe
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: F34l, F34mb, F34o
 Read first: `themi/core/kept_pictures.py` (`KEPT_FOR`, `KEPT_TURNS`, `group`); `themi/core/agent.py`
 (`_earlier_picture`, `earlier`, the picture groups added when `shown`); the `/bug` and
@@ -19687,6 +19687,21 @@ and `find_recipe` runs; a picture sent alone, then "can you copy this recipe": t
 used; F34mb's two-page test still passes. A scenario of the reply-582 evening.
 
 Data/Setup: update the Pi. Nothing to mark reviewed (a 👎 on a reply, no report).
+
+Notes:
+- `kept_pictures.points_at_picture(text)` (`POINTS_AT`: this/that/it/they, "the picture",
+  "photo", "screenshot", "the other page", "here's", …; or 3 words or fewer, an answer to
+  Themi's question about it). `_earlier_picture` offers the kept picture only then; a turn
+  that doesn't take it doesn't use one of its two turns.
+- A picture sent with `/bug` or `/idea` is dropped from the kept ones after the command
+  (`KeptPictures.drop`; the group before it, if still within half an hour, comes back).
+  F34o's "that" in a bug report still peeks at the one before.
+- Deviation: `recipe_from_picture` itself is unchanged: with no picture offered, it already
+  says there's none, and the model has `find_recipe` for a name.
+- Tests: `test_reply_582_lets_make_x_after_an_idea_picture_reads_no_picture`,
+  `test_words_that_dont_point_at_the_picture_dont_take_it`, `test_points_at_picture`
+  (test_pictures.py); the F34l/F34mb picture tests pass unchanged.
+- **Setup:** update the Pi. Nothing to mark reviewed.
 
 ### F65j · Feedback (2026-11-27): the family's list on the wall can be dragged too
 Status: [ ]

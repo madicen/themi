@@ -39,6 +39,7 @@ from themi.channels.outbox import Priority
 from themi.core import keys, listening, partner, pronouns
 from themi.core.approvals import ASK_TEXT
 from themi.core.capabilities import PICTURES, VOICE_NOTES
+from themi.core.kept_pictures import points_at_picture
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services, their_last
@@ -469,10 +470,14 @@ class Agent:
         if text.startswith("/") and (not picture or name in PICTURE_COMMANDS):
             if (event_handler := self.services.event_commands.get(name)) is not None:
                 await event_handler(event, argument.strip())
+                if picture:  # F65i: saved with the report; not kept to be asked about
+                    self.services.kept_pictures.drop(member.id)
                 return
             handler = self.services.commands.get(name)
             if handler is not None:
                 await handler(member, argument.strip())
+                if picture:
+                    self.services.kept_pictures.drop(member.id)
                 return
         for take in () if picture else self.services.text_handlers:  # RC3a: "next" cooking
             if await take(event, member, text):
@@ -493,7 +498,7 @@ class Agent:
         ):  # CM1c: "that wasn't a task" takes the sidecar's latest back
             await self._reply(member, await conversation.sidecar.undo(member))
             return
-        earlier = () if picture else self._earlier_picture(member)
+        earlier = () if picture else self._earlier_picture(member, text)
         chatting = (  # F34g: a picture always goes to the tool agent; F34l: one from before too
             not picture
             and not earlier
@@ -688,9 +693,11 @@ class Agent:
         )
         return any(r["telegram_message_id"] not in cards for r in rows)
 
-    def _earlier_picture(self, member: Member) -> tuple[Picture, ...]:
+    def _earlier_picture(self, member: Member, text: str) -> tuple[Picture, ...]:
         """F34l: their latest picture (F34mb: the pictures sent together with it), for the
-        next two messages within half an hour."""
+        next two messages within half an hour. F65i: only when the message points at it."""
+        if not points_at_picture(text):
+            return ()
         return self.services.kept_pictures.use(member.id)
 
     async def _converse(

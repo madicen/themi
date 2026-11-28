@@ -267,3 +267,35 @@ async def test_other_commands_in_a_caption_still_arent_run(scenario: Scenario) -
     scenario.primary.queue_text("A flyer.")
     await scenario.picture("Erin", FLYER, caption="/pause 2 hours")
     assert len(scenario.primary.requests) == 1  # it went to the model, as a picture
+
+
+async def test_reply_582_lets_make_x_after_an_idea_picture_reads_no_picture(
+    scenario: Scenario,
+) -> None:
+    """F65i: a wall screenshot sent with /idea, then "Let's make shortening pie crust" 29
+    minutes later: Themi read the screenshot as the recipe."""
+    await scenario.picture("Erin", FLYER, caption="/idea the person page should drag")
+    await scenario.advance(minutes=29)
+    scenario.primary.queue_text("Here's the pie crust.")
+    await scenario.say("Erin", "Let's make shortening pie crust")
+    assert images_in(scenario.primary.requests[-1]) == []
+
+
+async def test_words_that_dont_point_at_the_picture_dont_take_it(scenario: Scenario) -> None:
+    scenario.primary.queue_text("A flyer.")
+    await scenario.picture("Erin", FLYER, caption="what's this?")
+    scenario.primary.queue_text("Sure.")
+    await scenario.say("Erin", "Let's make shortening pie crust")
+    assert images_in(scenario.primary.requests[-1]) == []
+    scenario.primary.queue_text("Saturday.")
+    await scenario.say("Erin", "can you put this on the calendar")
+    (image,) = images_in(scenario.primary.requests[-1])
+    assert image.data == FLYER  # still kept for words that do
+
+
+def test_points_at_picture() -> None:
+    from themi.core.kept_pictures import points_at_picture
+
+    assert points_at_picture("can you copy this recipe") and points_at_picture("yes please")
+    assert points_at_picture("here's the other page") and points_at_picture("when is it?")
+    assert not points_at_picture("Let's make shortening pie crust")
