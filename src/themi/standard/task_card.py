@@ -43,7 +43,7 @@ CHART_HEADING = "On the chart"
 SHARED_NAME = "Either of you"
 EVERYONE = ("everyone", "everybody", "us", "our", "all", "both")
 # F65d (bug #281): "the family chores", "the Either of you list": the shared list alone, all
-# of it, as the wall's Together column has it.
+# of it.
 FAMILY = (
     "family", "the family", "family's", "the family's", "shared", "together", "either of you",
     "either", "the family list", "family list", "the shared list", "shared list",
