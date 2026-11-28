@@ -561,10 +561,12 @@ body.night:not(.awake) { background: var(--night-bg); }
 /* WA2: the alerts (Themi Wall Alerts Plan). A layer below the clock, its cards centred top to
    bottom over the wall, which dims and keeps its layout. Read from across the room: the
    countdown is about 300px tall on the frame, 380px in the last five minutes. */
-.wall-alerts { position: fixed; top: 13rem; left: 2.5rem; right: 2.5rem; bottom: 2.5rem;
+/* Bug #285 (WA5): above the wall's own positioned and dimmed parts, below a view's sheet */
+.wall-alerts { position: fixed; z-index: 10; top: 13rem; left: 2.5rem; right: 2.5rem; bottom: 2.5rem;
   display: flex; flex-direction: column; justify-content: center; pointer-events: none; }
 .wall-alerts:empty { display: none; }
-body.alerting .wall-screen > :not(.wall-top), body.alerting .wall-night { opacity: 0.4; }
+#wall-view { position: relative; z-index: 11; }
+body.alerting .wall-screen > :not(.wall-top):not(#wall-view), body.alerting .wall-night { opacity: 0.4; }
 .wall-alert-list { display: flex; flex-direction: column; gap: 1.5rem; max-height: 100%; }
 .wall-alert {
   pointer-events: auto; display: flex; flex-direction: column; gap: 1.75rem;

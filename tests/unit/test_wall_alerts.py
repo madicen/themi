@@ -75,7 +75,9 @@ def test_getting_ready_counts_down_to_leave_by_not_the_event() -> None:
     )  # fmt: skip
     assert found.sub == "until we leave at 2:25"
     assert found.ends_at == at(14, 25)
-    assert (found.bar_from, found.bar_to, found.bar) == ("Ready from 2:10", "Out the door 2:25", 16)
+    # bug #287 (WA5): the bar is the time left, and empties towards leave-by
+    assert (found.bar_from, found.bar_to, found.bar) == ("Ready from 2:10", "Out the door 2:25", 84)
+    assert (found.bar_since, found.ends_at) == (at(14, 10), at(14, 25))
     assert found.detail == "Erin · 35 min drive with traffic"
     assert found.sound == "ready"
     assert [b.label for b in found.buttons] == ["We're off", "Quiet"]
@@ -86,6 +88,7 @@ def test_the_last_five_minutes() -> None:
     assert (found.label, found.numerals, found.sub, found.sound) == (
         "Almost time to go", "4:10", "out the door at 2:25", "five",
     )  # fmt: skip
+    assert (found.bar, found.bar_since) == (83, at(14, 20))
 
 
 def test_time_to_go() -> None:
@@ -153,7 +156,8 @@ def test_the_soonest_running_timer_and_the_next() -> None:
     assert (card.state, card.label, card.title, card.numerals, card.counts) == (
         "running", "Back to the kitchen in", "Pad Thai · Sauce, step 3", "6:12", "down",
     )  # fmt: skip
-    assert (card.bar, card.bar_from, card.bar_to) == (38, "of 10:00", "done at 5:47")
+    assert (card.bar, card.bar_from, card.bar_to) == (62, "of 10:00", "done at 5:47")
+    assert card.bar_since == at(17, 37)
     assert (card.next_line, card.next_at) == ("Then: Pad Thai · Noodles, step 5", at(17, 56))
     assert (card.icon, card.sound, card.buttons, card.rank) == ("pot", "", (), 2)
 
@@ -232,5 +236,15 @@ def test_the_page_plays_each_once_and_waits_for_a_touch() -> None:
     assert "sessionStorage.getItem(key)" in SCRIPT
     key = '"wall-trill:" + card.getAttribute("data-alert") + ":" + card.getAttribute('
     assert key + '"data-sound-key")' in SCRIPT
-    assert "if (chip) chip.hidden = false;  // not allowed yet" in SCRIPT
-    assert 'sound.volume = list ? Number(list.getAttribute("data-volume"))' in SCRIPT
+    assert "gain.gain.value = volume();" in SCRIPT
+
+
+def test_one_touch_unlocks_sound_for_the_pages_life() -> None:
+    """WA5: the frame played no trill when a timer went off, nor a chirp on Got it. Sounds
+    go through one Web Audio context a touch unlocks; an <audio> element is the fallback;
+    each try is reported to the log."""
+    assert "window.AudioContext || window.webkitAudioContext" in SCRIPT
+    assert 'document.addEventListener("pointerdown", function () {' in SCRIPT
+    assert "audio.createBufferSource()" in SCRIPT
+    assert 'fetch("/wall/alert/sound"' in SCRIPT
+    assert 'report(name, "played", "web audio")' in SCRIPT

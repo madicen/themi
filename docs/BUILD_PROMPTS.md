@@ -587,7 +587,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WA2 | Wall alerts: the card on the wall | Wall alerts | [x] 2026-11-27 |
 | WA3 | Wall alerts: kitchen timers | Wall alerts | [x] 2026-11-27 |
 | WA4 | Wall alerts: Themi's trills | Wall alerts | [x] 2026-11-27 |
-| WA5 | Wall alerts: on the frame | Wall alerts | [ ] |
+| WA5 | Wall alerts: on the frame | Wall alerts | [~] |
+| WA6 | Wall alerts: a timer from chat | Wall alerts | [ ] |
 
 ## Fixed technical choices
 
@@ -27432,10 +27433,46 @@ Notes:
   `test_package_data.py` caught it in the full run).
 
 ### WA5 · Wall alerts: on the frame
-Status: [ ]
+Status: [~]
 Depends on: WA3, WA4
 Read first: the plan's "Open questions for Michael"; WA1 to WA4's notes.
 With Michael at the Cozyla: does sound unlock after one tap, and after the page reloads?
 Are the numerals readable from across the room, and the trills loud enough but not startling?
 Anything this turns up gets a prompt of its own or a fix here, each fix starting with a
 failing test. Record the answers to the plan's open questions in Notes.
+
+Notes:
+- First try on the frame, 2026-11-27 (reports #284 to #289, a 15-minute Lasagna timer):
+  - #285, the card looked see-through: the layer came before `<main>` with no z-index, so
+    the wall's positioned and dimmed parts painted over it. Now `z-index: 10`, with
+    `#wall-view` at 11 and left out of the dimming.
+  - #286/#287, the bar filled up: it's now the time left, emptying, and ticks every second
+    from `data-bar-from`/`data-bar-to`. #288: the "done at" time was right.
+  - #289 and no sound at all: the Pi's container has no MIME type for `.m4a`, so the trills
+    (and the body double's loops) went out as `application/octet-stream`; `PackStatic` now
+    sets audio types itself (`MEDIA_TYPES`). Sounds now go through one Web Audio context
+    that the first touch unlocks for the page's life (Michael: the frame does play
+    sounds, as Android's calendar shows); an `<audio>` element is the fallback. "Tap for
+    sound" shows on every card whose sounds are on until then, not only when a trill fails.
+    Every try is logged: `docker compose logs themi | grep "Wall sound"` on the Pi.
+  - #284, "start a 6 minute timer" in chat set a reminder: there's no timer tool outside a
+    cook session. WA6.
+- **Waiting:** another try on the frame with these fixes: a touch, then a timer going off
+  untouched; and after a reload. Read the "Wall sound" lines from the Pi's log.
+
+### WA6 · Wall alerts: a timer from chat
+Status: [ ]
+Depends on: WA3
+Read first: the plan's "Back to the kitchen" (timers set from chat show a clock and their
+own label); report #284; `cooking_timers.py` (`begin`, `run_job`, the typed "how long left",
+"cancel the timer", "add 2 minutes"); `themi/core/tools.py`; the tool groups.
+- A `start_timer` tool (minutes, an optional label): a `cooking_timers` row with no session
+  and no recipe step, its label "6 min timer" unless they named it, on the scheduler like
+  any timer. It's theirs to ask for, so it needs no trust tier beyond the timers' own.
+- When it ends: "Time's up: 6 min timer." (or its label) as an urgent message, as a step's
+  does. The typed "how long left", "cancel the timer" and "add 2 minutes" work on it.
+- On the wall it shows as WA3 drew it: a clock, its label, the countdown, Got it.
+- The golden `tools.json` gains the tool; say so in the commit.
+Tests: unit, the tool's row and words; the ending message; cancel and add on a chat timer.
+Integration: the wall's card with the clock. Scenario: "start a 6 minute timer" in chat (the
+scripted model calls `start_timer`), then the wall counts it down and Got it clears it.

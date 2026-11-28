@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
+import re
 import secrets
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
@@ -67,6 +69,7 @@ NAME = "wall"
 CODE_TTL = timedelta(minutes=10)
 MISSES_ALLOWED = 5
 LOCKED_FOR = timedelta(minutes=10)
+log = logging.getLogger(__name__)
 WALL_COOKIE = "themi_wall"
 COOKIE_AGE = timedelta(days=400)  # the longest a browser keeps a cookie
 DEFAULT_NAME = "Wall"
@@ -1249,6 +1252,19 @@ def routes(kit: Kit) -> APIRouter:
         if answer in ANSWERS and any(a.key == key for a in view.alerts()):
             answer_alert(kit.app.services, key, answer)
         return kit.page(request, "wall/_alerts.html", screen=WallView(kit.app.services).screen())
+
+    @router.post("/wall/alert/sound")
+    async def alert_sound(request: Request) -> Response:
+        """WA5: whether a trill played on the frame, and the browser's reason when it didn't
+        ("NotAllowedError": no touch yet), so a silent frame can be read from the log."""
+        form = await posted(request)
+        if form is None:
+            return gone()
+        sound = re.sub(r"[^a-z-]", "", form.get("sound", ""))[:20]
+        outcome = " ".join(form.get("outcome", "").split())[:40]
+        detail = " ".join(form.get("detail", "").split())[:160]
+        log.info("Wall sound %s: %s %s", sound, outcome, detail)
+        return Response(status_code=204)
 
     @router.get("/wall/pair", response_class=HTMLResponse)
     def pair_form(request: Request) -> Response:

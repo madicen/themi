@@ -17,11 +17,11 @@
   {%- else %}<p class="alert-count alert-said">{{ a.numerals }}</p>{% endif %}
   {% if a.sub %}<p class="alert-sub">{{ a.sub }}</p>{% endif %}
   {% if a.up_since %}<p class="alert-count alert-since" data-count="up" data-to="{{ a.up_iso }}">{{ a.up_for }}</p>{% endif %}
-  {% if a.bar is not none %}<div class="alert-bar"><span class="alert-fill" data-w="{{ a.bar }}"></span></div>
+  {% if a.bar is not none %}<div class="alert-bar"><span class="alert-fill" data-w="{{ a.bar }}"{% if a.bar_since %} data-bar-from="{{ a.bar_since_iso }}" data-bar-to="{{ a.ends_iso }}"{% endif %}></span></div>
   {% if a.bar_from or a.bar_to %}<p class="alert-ends"><span>{{ a.bar_from }}</span><span>{{ a.bar_to }}</span></p>{% endif %}{% endif %}
   {% if a.next_line %}<p class="alert-next"><span>{{ a.next_line }}</span><strong data-count="down" data-to="{{ a.next_iso }}"></strong></p>{% endif %}
   {% if a.detail %}<p class="alert-detail">{% if a.tone %}<span class="alert-dot tone-{{ a.tone }}"></span>{% endif %}{{ a.detail }}</p>{% endif %}
-  {% if a.sound %}<button type="button" class="alert-sound" data-sound-unlock hidden>Tap for sound</button>{% endif %}
+  {% if a.chirp %}<button type="button" class="alert-sound" data-sound-unlock hidden>Tap for sound</button>{% endif %}
   {% if a.buttons %}<div class="alert-buttons">
     {%- for b in a.buttons %}<button type="button" class="alert-button{% if b.main %} main{% endif %}" data-answer="{{ b.answer }}" hx-post="/wall/alert" hx-vals='{{ {"key": a.key, "answer": b.answer} | tojson }}' hx-target="#wall-alerts" hx-swap="innerHTML">{{ b.label }}</button>{% endfor -%}
   </div>{% endif %}

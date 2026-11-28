@@ -263,6 +263,13 @@
       var s = Math.max(0, Math.floor((up ? at - mark : mark - at) / 1000));
       el.textContent = (up ? "+" : "") + clockText(s);
     });
+    // bug #287 (WA5): the bar is the time left, emptying towards its end
+    document.querySelectorAll("#wall-alerts [data-bar-from][data-bar-to]").forEach(function (el) {
+      var from = Date.parse(el.getAttribute("data-bar-from"));
+      var to = Date.parse(el.getAttribute("data-bar-to"));
+      if (isNaN(from) || isNaN(to) || to <= from) return;
+      el.style.width = Math.min(Math.max((to - at) / (to - from), 0), 1) * 100 + "%";
+    });
   }
   setInterval(alertsTick, 1000);
   document.addEventListener("htmx:afterSwap", function (event) {
@@ -271,38 +278,103 @@
 
   // WA4: Themi's trills. A card's sound plays once for its alert and state (kept in
   // sessionStorage, so a poll or a reload doesn't play it again); a timer that's up has a
-  // second state two minutes on. Browsers play sound only after a touch on the page: until
-  // then the card shows "Tap for sound", and the tap plays it. Half volume at night.
+  // second state two minutes on. Half volume at night.
+  // WA5 (the frame played nothing): through the Web Audio API. One touch anywhere on the
+  // page unlocks its audio context, which then stays unlocked while the page is open, so
+  // a trill can play when a timer goes off with nobody touching the frame. An <audio>
+  // element (which a frame's web view may refuse without a touch every time) is only the
+  // fallback. Until the first touch, cards whose sounds are on say "Tap for sound". Each
+  // try is reported to the server's log (POST /wall/alert/sound).
+  var audio = null, buffers = {};
+  function unlocked() { return !!audio && audio.state === "running"; }
+  function unlock() {
+    var Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) return;
+    if (!audio) audio = new Context();
+    if (audio.state !== "running") audio.resume().then(chips, chips);
+    else chips();
+  }
+  function chips() {
+    var on = unlocked();
+    document.querySelectorAll("#wall-alerts .wall-alert[data-chirp] [data-sound-unlock]").forEach(
+      function (chip) { chip.hidden = on; }
+    );
+  }
+  function buffer(url) {
+    if (!buffers[url]) {
+      buffers[url] = fetch(url).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.arrayBuffer();
+      }).then(function (bytes) {
+        return new Promise(function (done, failed) { audio.decodeAudioData(bytes, done, failed); });
+      });
+      buffers[url].catch(function () { delete buffers[url]; });
+    }
+    return buffers[url];
+  }
+  function volume() {
+    var list = document.querySelector(".wall-alert-list[data-volume]");
+    return list ? Number(list.getAttribute("data-volume")) || 1 : 1;
+  }
+  function report(name, outcome, detail) {
+    var headers = {};
+    try { headers = JSON.parse(document.body.getAttribute("hx-headers") || "{}"); } catch (e) {}
+    var form = new URLSearchParams({ sound: name, outcome: outcome, detail: detail || "" });
+    fetch("/wall/alert/sound", { method: "POST", headers: headers, body: form }).catch(function () {});
+  }
+  function soundName(url) { return (url.split("/").pop() || "").split(".")[0]; }
+  function trill(url) {
+    var name = soundName(url);
+    if (unlocked()) {
+      return buffer(url).then(function (decoded) {
+        var source = audio.createBufferSource(), gain = audio.createGain();
+        gain.gain.value = volume();
+        source.buffer = decoded;
+        source.connect(gain);
+        gain.connect(audio.destination);
+        source.start();
+        report(name, "played", "web audio");
+      }, function (error) {
+        report(name, "failed", "decode: " + (error && (error.name || error.message)));
+        throw error;
+      });
+    }
+    var element = new Audio(url);
+    element.volume = volume();
+    return element.play().then(function () {
+      report(name, "played", "audio element");
+    }, function (error) {
+      report(name, (error && error.name) || "failed", "audio element, not unlocked yet");
+      throw error;
+    });
+  }
   function playedKey(card) {
     return "wall-trill:" + card.getAttribute("data-alert") + ":" + card.getAttribute("data-sound-key");
   }
-  function trill(url) {
-    var list = document.querySelector(".wall-alert-list[data-volume]");
-    var sound = new Audio(url);
-    sound.volume = list ? Number(list.getAttribute("data-volume")) || 1 : 1;
-    return sound.play();
-  }
   function alertSounds() {
+    chips();
     document.querySelectorAll("#wall-alerts .wall-alert[data-sound-url]").forEach(function (card) {
       var key = playedKey(card);
       if (sessionStorage.getItem(key)) return;
-      var chip = card.querySelector("[data-sound-unlock]");
+      sessionStorage.setItem(key, "trying");
       trill(card.getAttribute("data-sound-url")).then(function () {
         sessionStorage.setItem(key, "1");
-        if (chip) chip.hidden = true;
       }, function () {
-        if (chip) chip.hidden = false;  // not allowed yet: wait for a touch
+        sessionStorage.removeItem(key);  // tried again on the next poll, or the first touch
+        var chip = card.querySelector("[data-sound-unlock]");
+        if (chip) chip.hidden = false;
       });
     });
   }
+  // Any touch unlocks sound; one that lands while a trill is waiting plays it.
+  document.addEventListener("pointerdown", function () {
+    var was = unlocked();
+    unlock();
+    if (!was && audio) audio.resume().then(alertSounds, function () {});
+  }, true);
   document.addEventListener("click", function (event) {
-    var chip = event.target.closest && event.target.closest("[data-sound-unlock]");
-    if (chip) {
-      var card = chip.closest(".wall-alert");
-      chip.hidden = true;
-      trill(card.getAttribute("data-sound-url")).then(function () {
-        sessionStorage.setItem(playedKey(card), "1");
-      }, function () {});
+    if (event.target.closest && event.target.closest("[data-sound-unlock]")) {
+      unlock();
       return;
     }
     // We're off or Got it: one tiny chirp, on a card whose sounds are on (data-chirp)
@@ -310,6 +382,7 @@
     var answer = done && done.getAttribute("data-answer");
     var list = document.querySelector(".wall-alert-list[data-got-it]");
     if ((answer === "off" || answer === "got_it") && list) {
+      unlock();
       trill(list.getAttribute("data-got-it")).then(function () {}, function () {});
     }
   });

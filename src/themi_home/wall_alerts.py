@@ -69,7 +69,8 @@ class WallAlert:
     rank: int
     tone: str = ""  # the person's colour class, for the dot
     counts: str = ""  # "down", "up" or ""
-    bar: int | None = None
+    bar: int | None = None  # bug #287 (WA5): the share of the time left, emptying
+    bar_since: datetime | None = None  # when the bar was full; the page empties it to ends_at
     bar_from: str = ""
     bar_to: str = ""
     sound: str = ""  # the trill this state plays once (WA4), or ""
@@ -86,6 +87,10 @@ class WallAlert:
     @property
     def ends_iso(self) -> str:
         return to_utc_iso(self.ends_at)
+
+    @property
+    def bar_since_iso(self) -> str:
+        return to_utc_iso(self.bar_since) if self.bar_since else ""
 
     @property
     def up_iso(self) -> str:
@@ -107,6 +112,12 @@ def countdown(seconds: float) -> str:
     hours, rest = divmod(whole, 3600)
     minutes, secs = divmod(rest, 60)
     return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+def left_of(seconds: float, span: timedelta) -> int:
+    """The bar: how much of `span` is left, 0 to 100 (bug #287: it empties, never fills)."""
+    whole = span.total_seconds()
+    return max(0, min(100, round(100 * seconds / whole))) if whole > 0 else 0
 
 
 def drive_words(minutes: int, traffic: bool) -> str:
@@ -149,11 +160,10 @@ def leave_alert(leaving: Leaving, now: datetime, tz: ZoneInfo, tone: str) -> Wal
         buttons=buttons,
     )  # fmt: skip
     if state == "ready":
-        span = (leaving.leave_by - leaving.ready_from).total_seconds()
-        done = (now - leaving.ready_from).total_seconds()
         return replace(
             card, label="Time to get ready", numerals=countdown(left), counts="down",
-            sub=f"until we leave at {leave}", bar=round(100 * done / span) if span > 0 else 0,
+            sub=f"until we leave at {leave}",
+            bar=left_of(left, leaving.leave_by - leaving.ready_from), bar_since=leaving.ready_from,
             bar_from=f"Ready from {short_time(leaving.ready_from.astimezone(tz))}",
             bar_to=f"Out the door {leave}", sound="ready",
         )  # fmt: skip
@@ -161,7 +171,7 @@ def leave_alert(leaving: Leaving, now: datetime, tz: ZoneInfo, tone: str) -> Wal
         return replace(
             card, label="Almost time to go", numerals=countdown(left), counts="down",
             sub=f"out the door at {leave}",
-            bar=round(100 * (1 - left / ALMOST.total_seconds())), sound="five",
+            bar=left_of(left, ALMOST), bar_since=leaving.leave_by - ALMOST, sound="five",
         )  # fmt: skip
     if state == "go":
         return replace(
@@ -256,7 +266,8 @@ def kitchen_alerts(
                 ends_at=ends,
                 rank=2,
                 tone=tones.get(row["member_id"], ""),
-                bar=max(0, min(100, round(100 * (1 - left / total)))) if total > 0 else 0,
+                bar=left_of(left, timedelta(seconds=total)),
+                bar_since=ends - timedelta(seconds=total),
                 bar_from=f"of {countdown(total)}",
                 bar_to=f"done at {short_time(ends.astimezone(tz))}",
                 next_line=line,
