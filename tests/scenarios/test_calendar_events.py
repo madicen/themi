@@ -874,3 +874,58 @@ async def test_go_ahead_on_a_card_whose_event_has_come_in_adds_nothing(
     assert [e["summary"] for e in linked.events(ERIN, ERIN)] == [SAMUEL]
     result = scenario.app.db.scalar("SELECT result FROM pending_actions WHERE id = ?", (row["id"],))
     assert result == "Already on your calendar. Nothing new was added."
+
+
+async def test_bug_277_a_family_event_is_in_both_peoples_read_at_once(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """F65e: "Thanksgiving at the in-laws" went on the family calendar, and the wall had to
+    wait for the next calendar read: family events weren't put in what's read."""
+    db = scenario.app.db
+    erin_account = db.scalar("SELECT id FROM linked_accounts WHERE member_id = ?",
+                             (scenario.member("Erin").id,))  # fmt: skip
+    husband_account = db.execute(
+        "INSERT INTO linked_accounts (member_id, provider, address, refresh_token, enabled, "
+        "created_at) VALUES (?, 'gmail', 'husband@example.com', x'00', 0, '2026-10-01')",
+        (scenario.member("Husband").id,),
+    )
+    await say(
+        scenario,
+        "Put the block party on the family calendar Saturday at 2",
+        "add_calendar_event",
+        dentist(
+            title="Block party", date="2026-10-24", start="14:00", location="", calendar="family"
+        ),
+    )
+    (event,) = linked.events(ERIN, "Themi")
+    family = db.scalar("SELECT calendar_id FROM calendars WHERE account_id = ?", (erin_account,))
+    for account in (erin_account, husband_account):
+        db.execute("INSERT OR IGNORE INTO member_calendars (account_id, calendar_id, name) "
+                   "VALUES (?, ?, 'Madicen Family')", (account, family))  # fmt: skip
+    db.execute("DELETE FROM calendar_entries")
+    await say(
+        scenario,
+        "And the potluck on the family calendar Sunday at noon",
+        "add_calendar_event",
+        dentist(title="Potluck", date="2026-10-25", start="12:00", location="", calendar="family"),
+    )
+    rows = db.query("SELECT member_id, title FROM calendar_entries ORDER BY member_id")
+    assert [(r["member_id"], r["title"]) for r in rows] == [
+        (scenario.member("Erin").id, "Potluck"),
+        (scenario.member("Husband").id, "Potluck"),
+    ]
+    assert event["summary"] == "Block party"
+
+
+async def test_bug_277_a_held_range_read_is_read_again_after_an_add(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """F65e: the wall's month is read from Google and held five minutes; an event Themi
+    added in that time didn't show, even on a reload."""
+    from themi.core import keys
+
+    reader = scenario.app.services.get(keys.calendars)
+    reader._live[(1, "a", "b")] = (clock.now(), [])
+    await say(scenario, "Put the dentist on my calendar Tuesday at 3, at Smile Dental",
+              "add_calendar_event", dentist())  # fmt: skip
+    assert reader._live == {}

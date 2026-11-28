@@ -29,7 +29,7 @@ async def test_a_tick_stays_struck_through_for_ten_minutes_then_folds(wall: Scen
     clock.advance(timedelta(minutes=9))
     shown = column(await screen(wall), erin)
     assert re.search(rf'class="wall-item done" data-key="task-{errand.id}"', shown)
-    assert "wall-fold" not in shown
+    assert not re.search(r'class="wall-fold" data-done="[1-9]', shown)  # F65c: one waits, hidden
     clock.advance(timedelta(minutes=2))
     shown = column(await screen(wall), erin)
     assert f"task-{errand.id}" not in shown

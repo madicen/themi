@@ -186,4 +186,15 @@ def test_the_alerts_tick_from_the_servers_now() -> None:
     """WA2: the countdowns tick from the part's data-now, never the frame's own clock."""
     assert 'list.getAttribute("data-now")' in SCRIPT
     assert "var at = Date.now() + alertSkew;" in SCRIPT
-    assert "body.alerting .wall-screen > :not(.wall-top)" in CSS
+    assert "body.alerting .wall-screen > :not(.wall-top):not(#wall-view)" in CSS
+
+
+def test_the_alerts_paint_over_the_wall_and_under_a_view() -> None:
+    """Bug #285 (WA5): the layer came before <main> with no z-index, so the wall's own
+    positioned and dimmed parts painted over the card and it looked see-through."""
+    alerts = int(re.search(r"z-index:\s*(\d+)", rule(".wall-alerts"))[1])  # type: ignore[index]
+    view = int(re.search(r"z-index:\s*(\d+)", rule("#wall-view"))[1])  # type: ignore[index]
+    assert 0 < alerts < view
+    assert "position: relative" in rule("#wall-view")
+    dimmed = next(s for s, b in blocks() if "opacity: 0.4" in b and "body.alerting" in s)
+    assert ":not(#wall-view)" in dimmed  # a view opened over an alert isn't dimmed

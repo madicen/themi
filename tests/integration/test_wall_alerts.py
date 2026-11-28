@@ -190,7 +190,8 @@ async def test_the_part_draws_each_state_and_ticks_from_the_servers_now(
         assert 'data-now="2026-10-21T14:12:20-07:00"' in html
         assert 'data-count="down" data-to="2026-10-21T21:25:00+00:00">12:40<' in html
         assert words(html).startswith("Time to get ready Dentist at 3:00 12:40 until we leave")
-        assert 'data-w="16"' in html and 'data-sound="ready"' in html
+        assert 'data-w="84"' in html and 'data-sound="ready"' in html  # bug #287: time left
+        assert 'data-bar-from="2026-10-21T21:10:00+00:00"' in html
         await at(leaving, 14, 20, 50)
         assert "alert-almost" in await part(leaving, client)
         await at(leaving, 14, 25)
@@ -198,7 +199,7 @@ async def test_the_part_draws_each_state_and_ticks_from_the_servers_now(
         assert "alert-go" in html and "Time to go" in html and "Quiet" not in html
         await at(leaving, 14, 28)
         html = await part(leaving, client)
-        assert "alert-behind" in html and "Leaving now" in html and "data-sound" not in html
+        assert "alert-behind" in html and "Leaving now" in html and 'data-sound="' not in html
         page = (await client.get("/wall")).text
         assert 'id="wall-alerts"' in page and "Leaving now" in page
 
@@ -216,9 +217,9 @@ async def test_a_tap_holds_on_every_frame(leaving: Scenario, fake_gcal: FakeGcal
         quiet = await one.post(
             "/wall/alert", data={"key": alert.key, "answer": "quiet"}, headers=headers
         )
-        assert quiet.status_code == 200 and "data-sound" not in quiet.text
+        assert quiet.status_code == 200 and 'data-sound="' not in quiet.text
         html = await part(leaving, two)
-        assert "alert-ready" in html and "data-sound" not in html  # still up, without sound
+        assert "alert-ready" in html and 'data-sound="' not in html  # still up, without sound
         off = await one.post(
             "/wall/alert", data={"key": alert.key, "answer": "off"}, headers=headers
         )
@@ -371,7 +372,7 @@ async def test_the_card_names_its_trill_and_the_file_is_there(
             assert sound.status_code == 200 and len(sound.content) > 1000
         settings(leaving, alert_sounds="Kitchen only")
         html = await part(leaving, client)
-        assert "data-sound" not in html and "data-chirp" not in html and "alert-ready" in html
+        assert 'data-sound="' not in html and "data-chirp" not in html and "alert-ready" in html
         settings(leaving, alert_sounds="On", leave_alerts=False)
         assert "wall-alert" not in await part(leaving, client)
 
@@ -389,3 +390,59 @@ async def test_half_as_loud_at_night(kitchen: Scenario) -> None:
     settings(kitchen, bedtime="10:00")  # the clock starts at 9 am; morning routines at 8
     clock.advance(timedelta(hours=1, minutes=5))
     assert WallView(kitchen.app.services).screen().alert_volume == 0.5
+
+
+async def test_the_trills_are_served_as_audio_where_the_system_doesnt_know_m4a(
+    kitchen: Scenario, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WA5 (the frame played nothing): the Pi's container has no MIME type for .m4a, so the
+    trills went out as application/octet-stream, which the frame's browser won't play."""
+    import mimetypes
+
+    import starlette.responses
+
+    known = mimetypes.guess_type
+    monkeypatch.setattr(
+        starlette.responses,
+        "guess_type",
+        lambda url, strict=True: (None, None) if str(url).endswith(".m4a") else known(url, strict),
+    )
+    async with web_client(kitchen) as client:
+        sound = await client.get("/static/home/audio/trills/kitchen.m4a")
+    assert sound.status_code == 200
+    assert sound.headers["content-type"] == "audio/mp4"
+
+
+async def test_the_frame_says_whether_a_trill_played(
+    kitchen: Scenario, caplog: pytest.LogCaptureFixture
+) -> None:
+    """WA5: the frame played nothing and nobody could see why; each try is now in the log."""
+    async with web_client(kitchen) as client:
+        await frame(kitchen, client)
+        csrf = re.search(r'"X-CSRF-Token": "([^"]+)"', (await client.get("/wall")).text)
+        assert csrf
+        with caplog.at_level("INFO", logger="themi_home.wall"):
+            said = await client.post(
+                "/wall/alert/sound",
+                data={"sound": "kitchen", "outcome": "NotAllowedError", "detail": "x" * 500},
+                headers={"X-CSRF-Token": csrf.group(1)},
+            )
+    assert said.status_code == 204
+    (line,) = [r.getMessage() for r in caplog.records if "Wall sound" in r.getMessage()]
+    assert line.startswith("Wall sound kitchen: NotAllowedError")
+    assert len(line) < 260
+
+
+async def test_a_running_timer_offers_tap_for_sound(kitchen: Scenario) -> None:
+    """Bug #289 (WA5): no "Tap for sound" on the card. Every card whose sounds are on has
+    it, so the frame can be unlocked before a timer goes off."""
+    cooking, session = await cooking_now(kitchen)
+    assert cooking.timers is not None
+    cooking.timers.start(kitchen.member("Erin"), session, alfredo(cooking), "1", 15)
+    async with web_client(kitchen) as client:
+        await frame(kitchen, client)
+        html = await part(kitchen, client)
+        assert "alert-running" in html and "data-sound=" not in html
+        assert "data-chirp" in html and "Tap for sound" in html
+        settings(kitchen, alert_sounds="Off")
+        assert "Tap for sound" not in await part(kitchen, client)

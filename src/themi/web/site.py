@@ -31,6 +31,7 @@ from urllib.parse import urlsplit
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.types import Scope
 
 from themi.accounts import TRACKING_INPUTS, BusyTime, InvalidValue, Member
 from themi.accounts.models import DAY_NAMES
@@ -138,6 +139,11 @@ def security_headers(response: Response, form_targets: str = "") -> None:
     response.headers["Referrer-Policy"] = "no-referrer"
 
 
+# WA5: types a slim container's MIME table may not know. Without them the wall's trills and
+# the body double's loops went out as application/octet-stream, which the frame won't play.
+MEDIA_TYPES = {".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav"}
+
+
 class PackStatic(StaticFiles):
     """CR17b: the core's static files under /static/, and each pack's under
     /static/<pack>/ (one mount, so the routes stay as they were)."""
@@ -145,6 +151,19 @@ class PackStatic(StaticFiles):
     def __init__(self, core: Path, packs: dict[str, Path]) -> None:
         super().__init__(directory=str(core))
         self.packs = packs
+
+    def file_response(
+        self,
+        full_path: str | os.PathLike[str],
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        media = MEDIA_TYPES.get(Path(full_path).suffix.lower())
+        if media is not None and response.status_code != 304:
+            response.headers["content-type"] = media
+        return response
 
     def lookup_path(self, path: str) -> tuple[str, os.stat_result | None]:
         head, _, rest = path.partition("/")

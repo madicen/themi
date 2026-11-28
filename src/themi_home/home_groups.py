@@ -16,6 +16,7 @@ RECIPES = ToolGroup(
         "n|cook|bak|eat|vegan)|what (?:can|could) (?:i|we) make|with what (?:we|i) ha"
         "ve|\\bgrams?\\b|\\bweigh(?:s|ed|t|ts)?\\b|\\d\\s?g\\b"  # GW4, GW5: weights in grams
         "|cheese book"  # RC8b: a recipe book of its own, by its name
+        "|\\btimers?\\b"  # WA6: a timer from chat
     ),
     examples=(
         "Can you pull up the alfredo sauce recipe?",
@@ -31,6 +32,7 @@ RECIPES = ToolGroup(
         "I'd like to bake snickerdoodles, what's the recipe?",
         "Pull up a soup from the recipes",
         "Send me a picture of the lasagna recipe to print",
+        "Start a 6 minute timer",  # WA6
     ),
     tools=(
         "find_recipe",
@@ -52,6 +54,7 @@ RECIPES = ToolGroup(
         "save_recipe_to_cookbook",
         "cookbook_recipes_we_can_make",
         "recipe_card",  # DC10
+        "start_timer",  # WA6
     ),
     order=40,
 )

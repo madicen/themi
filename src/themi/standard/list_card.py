@@ -177,13 +177,15 @@ async def _send(ctx: ToolContext, data: ListCardData, caption: str, kind: str) -
     "show_tasks_picture",
     "Sends them a picture of a to-do list as cards, overdue first, then today's, the next "
     "few days' and any time. who: 'me' for their own ('my tasks as a picture'), "
-    "'everyone' for the family's ('our tasks', 'the family's tasks': a column each, and "
-    "what either can do across the bottom), or a person's name ('Erin's tasks'). "
+    "'everyone' for everybody's ('our tasks', 'everyone's tasks': a column each, and "
+    "what either can do across the bottom), 'family' for the shared list alone, all of it "
+    "('the family chores', 'the Either of you list', 'the family to-dos'), or a person's "
+    "name ('Erin's tasks'). "
     "with_chores: true for chores and tasks together ('chores and tasks', 'everything on my "
     "list'): each person's chores up on the chart come first. The chore chart alone is "
     "show_chore_chart. It's sent as it is: don't list it again.",
     {
-        "who": {"type": "string", "description": "'me', 'everyone', or a name."},
+        "who": {"type": "string", "description": "'me', 'everyone', 'family', or a name."},
         "with_chores": {"type": "boolean"},
     },
 )
@@ -206,6 +208,8 @@ async def show_tasks_picture(ctx: ToolContext, args: dict[str, Any]) -> str:
         if png is not None and await ctx.services.outbox.send_photo(
             ctx.member, png, _caption(ctx.member, data), kind="tasks_picture"
         ):
+            if data.everything:  # F65d: not "the chore chart" (bug #281)
+                return "Sent the family's list as a picture; it's not the chore chart." + note
             return "Sent the tasks as a picture." + note
     await ctx.services.outbox.send(
         ctx.member, cards_text(data), priority=Priority.REPLY, kind="tasks_picture"

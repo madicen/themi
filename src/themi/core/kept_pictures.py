@@ -9,6 +9,7 @@ page" sent a little later."""
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -16,6 +17,22 @@ from themi import clock
 from themi.channels.events import Picture
 
 KEPT_FOR = timedelta(minutes=30)
+# F65i (reply 582): a later message takes the kept picture only when it points at a picture,
+# or is a short answer (to Themi's question about it). "Let's make shortening pie crust",
+# half an hour after a wall screenshot, was read as a recipe in the picture.
+POINTS_AT = re.compile(
+    r"\b(?:this|that|these|those|it|its|it's|they|them|the (?:picture|photo|pic|image|"
+    r"screenshot|page|card|flyer|list|recipe I sent|other page)|pictures?|photos?|pics?|"
+    r"images?|screenshots?|here's|above|on there|in there)\b",
+    re.IGNORECASE,
+)
+SHORT_ANSWER = 3  # words
+
+
+def points_at_picture(text: str) -> bool:
+    return len(text.split()) <= SHORT_ANSWER or bool(POINTS_AT.search(text))
+
+
 KEPT_TURNS = 2
 TOGETHER = timedelta(minutes=1)  # F34mb: a picture this soon after the last joins its group
 MOST_TOGETHER = 4
@@ -62,6 +79,14 @@ class KeptPictures:
         if album:
             kept.albums.add(album)
         return joined_album
+
+    def drop(self, member_id: int) -> None:
+        """F65i (reply 582): forget their latest group (a picture sent with /bug or /idea is
+        the report's, not something to ask about later); the one before it comes back."""
+        self._kept.pop(member_id, None)
+        before = self._before.pop(member_id, None)
+        if before is not None and clock.now() - before.at <= KEPT_FOR:
+            self._kept[member_id] = before
 
     def peek(self, member_id: int) -> Picture | None:
         """Their latest picture if it's still kept, without using a turn of it up."""

@@ -549,7 +549,7 @@
   },
   "show_tasks_picture": {
     "group": "wall",
-    "spec": "28a09241e670"
+    "spec": "3f51ed033751"
   },
   "show_usage": {
     "group": "usage",
@@ -598,6 +598,10 @@
   "start_email_audit": {
     "group": "email",
     "spec": "0339bcfe6d1f"
+  },
+  "start_timer": {
+    "group": "recipes",
+    "spec": "1ec7914a5d0d"
   },
   "stop_cooking": {
     "group": "recipes",

@@ -276,3 +276,23 @@ def test_plausible() -> None:
     assert plausible(15, 1, "tbsp") and plausible(120, 1, "cup") and plausible(50, 1, "each")
     assert not plausible(150, 1, "tbsp") and not plausible(5, 1, "cup")
     assert not plausible(0.5, 1, "each") and not plausible(10, 1, "oz")
+    assert plausible(9, 1, "cup") and plausible(26, 1, "cup")  # F65a: a cup of dill is 9 g
+
+
+def test_a_light_weight_offers_no_tenfold() -> None:
+    """F65a: "26 g for 1 cup seems very little. Did you mean 260?" for dill."""
+    from themi_home.gram_weights import GramWeights
+
+    assert GramWeights.check(None, 1, "cup", 26) is None  # type: ignore[arg-type]
+    asked = GramWeights.check(None, 1, "cup", 3)  # type: ignore[arg-type]
+    assert asked == ("3 g for 1 cup seems very little.", [3])  # 30 g isn't usual either
+    asked = GramWeights.check(None, 1, "tbsp", 150)  # type: ignore[arg-type]
+    assert asked is not None and asked[0].endswith("Did you mean 15?")
+
+
+def test_bare_drops_the_measure_words() -> None:
+    from themi_home.gram_weights import bare, key
+
+    assert bare(key("rounded tsp onion powder")) == bare(key("onion powder"))
+    assert bare(key("fresh herbs- dill")) == bare(key("fresh dill sprigs"))
+    assert bare(key("ground nutmeg")) != bare(key("nutmeg"))

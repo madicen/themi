@@ -135,3 +135,55 @@ async def test_someone_unknown_is_asked_about(scenario: Scenario) -> None:
 async def test_the_chore_chart_alone_is_still_its_own_tool(scenario: Scenario) -> None:
     offered = await ask(scenario, "Husband", "Show the chore chart", "show_chore_chart", {})
     assert "show_chore_chart" in offered
+
+
+async def shared_list(scenario: Scenario, n: int) -> list[str]:
+    """F65d: `n` family to-dos and one either-of-you chore, besides each person's own."""
+    await family(scenario)
+    made = []
+    for i in range(n):
+        t = await task(scenario, "Erin", f"Family job {i + 1}", due=None)
+        await board(scenario).reassign(t.id, None, shared=True, nudge=False)
+        made.append(t.title)
+    return made
+
+
+async def test_bug_281_the_family_list_alone_is_all_of_it(scenario: Scenario) -> None:
+    """Bug #281: "the family chores" drew everyone's columns and only 4 shared cards."""
+    jobs = await shared_list(scenario, 6)
+    data = task_cards(scenario.app.services, scenario.member("Husband"), "family", True)
+    assert data is not None and data.title == "The family's chores and tasks"
+    (lane,) = data.lanes
+    assert [g.heading for g in lane.groups] == [SHARED_NAME, "Family to-do"]
+    assert titles(lane) == ["Vacuum maintenance", *jobs]
+    assert "Call the vet" not in titles(lane) and "Text Susan" not in titles(lane)
+    from themi.standard.task_card import view
+
+    shown = view(data)
+    assert len(shown["cards"]) == 7 and not shown["lanes"][0]["more"]
+
+
+async def test_everyone_says_more_past_four_shared(scenario: Scenario) -> None:
+    await shared_list(scenario, 5)
+    from themi.standard.task_card import view
+
+    data = task_cards(scenario.app.services, scenario.member("Husband"), "everyone")
+    assert data is not None and len(data.shared) == 6
+    assert view(data)["shared"]["more"] == "+2 more"
+
+
+async def test_bug_281_asking_for_the_family_chores_sends_the_family_list(
+    scenario: Scenario,
+) -> None:
+    await shared_list(scenario, 2)
+    before = len(scenario.primary.requests)
+    await ask(
+        scenario,
+        "Husband",
+        "Can I see the family chores for today?",
+        "show_tasks_picture",
+        {"who": "family", "with_chores": True},
+    )
+    assert captions(scenario, "Husband") == ["The family's chores and tasks."]
+    result = str(scenario.primary.requests[before + 1].messages[-1])
+    assert "not the chore chart" in result

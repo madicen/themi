@@ -132,6 +132,11 @@ class CalendarBusy:
         # F59f: ranges read straight from Google (the wall's month), by person and range
         self._live: dict[tuple[int, str, str], tuple[datetime, list[Entry]]] = {}
 
+    def forget_ranges(self) -> None:
+        """F65e (bug #277): ranges read straight from Google are read again next time (an
+        event Themi added, moved or deleted, or a calendar read that changed things)."""
+        self._live.clear()
+
     def stored(self, start: datetime, end: datetime) -> bool:
         """F59f: whether [start, end) is inside what the regular read keeps (last week to two
         weeks ahead), so `entries` has it."""
@@ -230,6 +235,8 @@ class CalendarBusy:
                 self._keep(member, account.id, found, now)
                 read += 1
                 done.append(member)
+        if done:
+            self.forget_ranges()  # F65e
         for member in {m.id: m for m in done}.values():
             for listener in self.listeners:
                 try:

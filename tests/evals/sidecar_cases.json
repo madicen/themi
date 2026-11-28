@@ -21,6 +21,8 @@
     {"id": "event-dinner", "kind": "event", "speaker": "Erin", "message": "we're having dinner at Sam's on Saturday at 7, I'm excited", "reply": "That sounds lovely.", "expect": [{"tool": "add_calendar_event", "words": ["Sam"]}], "requires_calendar": true},
     {"id": "fact-vet-closed", "kind": "fact", "speaker": "Erin", "message": "heads up, the vet is closed on Mondays now", "reply": "Good to know.", "expect": [{"tool": "remember_fact", "words": ["Monday"]}]},
     {"id": "mode-own-burnout", "kind": "mode", "speaker": "Erin", "message": "I'm completely burnt out, I want burnout mode", "reply": "I hear you. Rest.", "expect": [{"tool": "start_burnout"}]},
-    {"id": "mode-partner-burnout", "kind": "none", "speaker": "Erin", "message": "Husband is so burnt out lately, he could use burnout mode", "reply": "That's hard to watch.", "expect": []}
+    {"id": "mode-partner-burnout", "kind": "none", "speaker": "Erin", "message": "Husband is so burnt out lately, he could use burnout mode", "reply": "That's hard to watch.", "expect": []},
+    {"id": "task-for-partner-benefits", "kind": "task", "speaker": "Erin", "message": "It seems all my specialists are suddenly out of network. Husband will need to ask his work to look into what happened there, and request continuity of care so the insurance will pay for me to keep seeing my current doctors", "reply": "That sounds so stressful to deal with out of nowhere.", "expect": [{"tool": "create_task", "words": ["husband", "continuity of care"]}]},
+    {"id": "partner-feelings", "kind": "none", "speaker": "Erin", "message": "Husband is really stressed about work this week", "reply": "That's a lot for him. Are you two doing okay?", "expect": []}
   ]
 }

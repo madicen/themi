@@ -243,3 +243,28 @@ async def test_the_sidecar_can_add_to_a_list_and_reacts(scenario: Scenario) -> N
     )
     assert ("AA batteries", "Erin") in things_to_buy(scenario)
     assert reactions(scenario) == [REACTION]
+
+
+async def test_bug_278_a_job_for_the_other_person_is_their_task(scenario: Scenario) -> None:
+    """F65h: Erin, in conversation mode: "Michael will need to ask StackAdapt…". The chat
+    reply was kind and nothing was noted for Michael."""
+    await chat_on(scenario)
+    husband_saw = len(scenario.inbox("Husband"))
+    job = {
+        "title": "Ask work about Erin's specialists going out of network; request continuity "
+        "of care",
+        **TASK,
+        "assign_to": "Husband",
+    }
+    await chat(
+        scenario,
+        "It seems all my specialists are suddenly out of network. Husband will need to ask "
+        "his work to look into what happened there, and request continuity of care",
+        "That sounds so stressful to deal with out of nowhere.",
+        ("create_task", job),
+    )
+    row = scenario.app.db.one("SELECT * FROM tasks WHERE title LIKE 'Ask work%'")
+    assert row is not None and row["assignee"] == scenario.member("Husband").id
+    assert reactions(scenario) == [REACTION]
+    assert len(scenario.inbox("Husband")) > husband_saw  # he's told, as for any handed-on task
+    assert "someone else in the family needs to do" in sidecar_requests(scenario)[0].system

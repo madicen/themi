@@ -463,3 +463,38 @@ async def test_i_ran_yesterday_counts_for_yesterday(scenario: Scenario) -> None:
     assert reply.endswith(" Counted for yesterday, Sun 25 Oct. Next round: Tue 27 Oct.")
     (done,) = board(scenario).runs(run.id)[-1:]
     assert done.done_at.astimezone(board(scenario)._tz()).date() == date(2026, 10, 25)
+
+
+async def test_bug_282_a_long_yes_to_is_it_done_marks_it(scenario: Scenario) -> None:
+    """F65b (reply 620): "Yes, that one's done, but also the crushed pepper is done too" to
+    Themi's "… Is it done?" was refused, word for word the same question again."""
+    onion = await chore(scenario, "Weigh one rounded tsp onion powder")
+    await scenario.app.services.outbox.send(
+        scenario.member("Erin"),
+        "\"Weigh one rounded tsp onion powder\" is still open: I couldn't tell that's the one "
+        "you meant. Is it done?",
+        priority=Priority.REPLY,
+    )
+    scenario.primary.queue_tool_call("complete_task", {"task_id": onion.id})
+    scenario.primary.queue_text("")
+    await scenario.say("Erin", "Yes, that one's done, but also the crushed pepper is done too.")
+    assert board(scenario).get(onion.id).status == "done"
+
+
+async def test_bug_282_the_related_task_just_closed_is_done_already(scenario: Scenario) -> None:
+    """F65b (reply 619): "Check off the related task." after a weight closed it went to
+    another weighing task, which was refused with "Is it done?"."""
+    onion = await chore(scenario, "Weigh one rounded tsp onion powder")
+    await scenario.app.services.outbox.send(
+        scenario.member("Erin"),
+        "Saved: 1 Tbsp Crushed Peppercorns: Weight in Grams 8g. And 'Weigh 1 tablespoon of "
+        "crushed peppercorns when you're next cooking' is done.",
+        priority=Priority.REPLY,
+    )
+    scenario.primary.queue_tool_call("complete_task", {"task_id": onion.id})
+    scenario.primary.queue_text("")
+    replies = await scenario.say("Erin", "Check off the related task.")
+    assert replies[-1] == (
+        '"Weigh 1 tablespoon of crushed peppercorns when you\'re next cooking" is done already.'
+    )
+    assert board(scenario).get(onion.id).status == "open"

@@ -381,6 +381,17 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F64g | Idea: Things to cook can be edited on the wall | Feedback | [x] 2026-11-25 |
 | F64h | Idea: the calendar's day on the wall runs down the screen | Feedback | [x] 2026-11-25 |
 | F64i | Idea: a person's page on the wall: drag to reorder, to someone else, delete | Feedback | [x] 2026-11-25 |
+| F65a | Feedback: a weight Michael weighs is believed, and its weighing task closes | Feedback | [x] 2026-11-27 |
+| F65b | Feedback: "yes, that one's done" to Themi's "Is it done?" marks it done | Feedback | [x] 2026-11-27 |
+| F65c | Feedback: the wall's "+N more" counts only what's still to do | Feedback | [x] 2026-11-27 |
+| F65d | Feedback: "the family's chores" as a picture is the whole shared list | Feedback | [x] 2026-11-27 |
+| F65e | Feedback: an event Themi adds is on the wall's calendar at once | Feedback | [x] 2026-11-27 |
+| F65f | Feedback: switching recipes on the cook screen posts nothing new in the chat | Feedback | [x] 2026-11-27 |
+| F65g | Feedback: the cook screen's recipe chips look like the rest of the cook screen | Feedback | [x] 2026-11-27 |
+| F65h | Feedback: conversation mode notes a job for the other person | Feedback | [x] 2026-11-27 |
+| F65i | Feedback: "Let's make X" never reads an old screenshot as a recipe | Feedback | [x] 2026-11-27 |
+| F65j | Feedback: the family's list on the wall can be dragged too | Feedback | [x] 2026-11-27 |
+| F65k | Idea: a task can be edited on the wall: its words and its due date | Feedback | [x] 2026-11-27 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -587,7 +598,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WA2 | Wall alerts: the card on the wall | Wall alerts | [x] 2026-11-27 |
 | WA3 | Wall alerts: kitchen timers | Wall alerts | [x] 2026-11-27 |
 | WA4 | Wall alerts: Themi's trills | Wall alerts | [x] 2026-11-27 |
-| WA5 | Wall alerts: on the frame | Wall alerts | [ ] |
+| WA5 | Wall alerts: on the frame | Wall alerts | [~] |
+| WA6 | Wall alerts: a timer from chat | Wall alerts | [x] 2026-11-27 |
 
 ## Fixed technical choices
 
@@ -19233,6 +19245,563 @@ Notes:
 - **Setup:** update the Pi (the migration runs on start), reload the wall. Mark #274
   reviewed once live.
 
+### F65a · Feedback (2026-11-27): a weight Michael weighs is believed, and its weighing task closes
+Status: [x] 2026-11-27
+Depends on: GW5, F45d
+Read first: `themi_home/gram_weights.py` (`DENSITY`, `plausible`, `check`, `weighed`,
+`task_for_more`, `same_task_question`, the `gram_weights_meta` rows with a `task_id`,
+`_settle_task`), `weighed_gram_weight` and `correct_gram_weight`; the Gram Conversion Plan's
+GW5 section. From Michael's bug #282 (2026-11-27, 3:29 pm): "you're having a really tough
+time understanding the weights I'm giving and that you can mark the tasks as complete".
+
+What the Pi shows (replies 610 to 619):
+- "1 cup of fresh dill sprigs weighs about 9 grams" (reply 610): `weighed_gram_weight` was
+  declined, "9 g for 1 cup doesn't look like a weight". `DENSITY` is (0.15, 2.0) g/ml; 9 g a
+  cup is 0.038. Leafy herbs really are that light (Aqua-Calc, which Themi itself found two
+  minutes later, says 9 g). "1 Cup of fresh dill is 26g" (reply 611, `correct_gram_weight`)
+  got "26 g for 1 cup seems very little. Did you mean 260?". After the web said 9 g, "1 cup
+  of fresh dill is 9g" was declined again (reply 614); only on the wall did the task close.
+- "Look it up yourself" (reply 612) ran `look_up_guide` ("No guide of ours lists fresh
+  dill"); "Look it up on the internet" was needed for `search_web`.
+- "One rounded teaspoon of onion powder is three grams" (reply 616) saved "1 tsp Onion
+  Powder: 3g" but left task 155, "Weigh one rounded tsp onion powder", open. Its meta key is
+  `onion powder round tsp` (the measure words are in the wanted name, "rounded tsp onion
+  powder"), so neither the exact key nor F45d's ends-with match found it. The peppercorns
+  (reply 618, key `crushed peppercorns`) matched and closed task 158 at once.
+- "Check off the related task" (reply 619) then went to task 155 and was refused (F65b).
+
+Build:
+- `DENSITY`'s low end goes to 0.02 g/ml (dried leafy herbs, fresh herb sprigs, popcorn,
+  puffed cereal). The high end stays. `check`'s "Did you mean …?" offers the ×10 or ÷10
+  only when that lands in the usual range for most foods (0.3 to 1.5 g/ml); a light weight
+  in the new band is saved without asking. Say the new numbers in a comment with this bug.
+- A weighing task is found by its ingredient's words with the measure words dropped: units
+  (cup, tbsp, tsp, ml, …), "rounded", "heaped/heaping", "level", "scant", "packed", and
+  number words ("one", "a"). "onion powder" finds "rounded tsp onion powder"; "dill" or
+  "fresh dill" finds "fresh herbs- dill". One such task: it closes with the weight, as an
+  exact match does now. Several: F45d's [Yes, the same] question names them.
+- A weight told in a different measure from the task ("1 tsp" for a "rounded tsp" task)
+  still closes it, and the guide line says what they said ("1 rounded tsp onion powder:
+  3 g" when they said rounded), as `guide_line` writes the amount.
+- "Look it up yourself" / "look it up" / "can you check" right after a weight question runs
+  the web look-up for that ingredient's weight (the GW web search Themi already does for
+  missing weights, or `search_web`), not the family's guides. Say in Notes which you used.
+- After a weight is saved and its task closed, the reply says so in one line ("…, and
+  'Weigh one rounded tsp onion powder' is done."), so a "check off the related task"
+  isn't needed.
+
+Tests: 9 g a cup of dill is saved, not questioned; 26 g a cup asks nothing; 5 g a cup of
+flour still asks (0.02 is the floor). "onion powder" 3 g closes "Weigh one rounded tsp onion
+powder"; two open tasks with the same ingredient ask which; the saved line keeps "rounded".
+A scenario: the dill and onion-powder afternoon, each weight saved and its task done
+without being asked twice.
+
+Data/Setup: update the Pi. Mark #282 reviewed once F65b is live too.
+
+Notes:
+- `DENSITY` is (0.025, 2.0) g/ml. Deviation: 0.025, not 0.02, since `test_plausible` holds
+  that 5 g a cup (0.021) asks; 9 g (0.038) and 26 g (0.11) a cup are saved now. `check`
+  offers ×10 or ÷10 only inside `USUAL` (0.3 to 1.5 g/ml, `usual()`): 3 g a cup asks with
+  no "Did you mean"; 150 g a tablespoon still offers 15.
+- `MEASURE_WORDS` and `bare(key)`: a key without units, rounded/heaped/level/scant/packed,
+  sprigs, herbs, number words. Only for finding a weighing task; the guide's keys keep them.
+  `weighed` closes the one open weighing task whose bare words equal the weight's
+  (`task_for_measure`) and drops its "wanted" row; several match: none is closed (F45d's
+  ends-with question still runs for "nutmeg" vs "ground nutmeg").
+- The reply ends "And '<task title>' is done." (`TASK_DONE_TEXT`) for the exact match too;
+  `test_a_reply_saves_the_weight_and_closes_the_task` expects that line now.
+- Look it up: the decline for an implausible weight and `correct_gram_weight`'s question
+  tell the model to use `search_web` when they say to look it up, not their guides.
+- Deviation: the guide line doesn't keep "rounded": the tool's amount has no word for it.
+- Tests: `test_bug_282_a_cup_of_dill_is_nine_grams`,
+  `test_bug_282_onion_powder_closes_the_rounded_tsp_task`,
+  `test_two_tasks_for_one_ingredient_close_neither_by_measure` (scenarios/test_gram_tasks.py);
+  `test_a_light_weight_offers_no_tenfold`, `test_bare_drops_the_measure_words`.
+- **Setup:** update the Pi. Mark #282 reviewed once F65b is live too.
+
+### F65b · Feedback (2026-11-27): "yes, that one's done" to Themi's "Is it done?" marks it done
+Status: [x] 2026-11-27
+Depends on: P8b, F65a
+Read first: `themi/core/which_task.py` (`texts_to_score`, `SHORT_ANSWER`, `which`);
+`themi/standard/tasks.py` (`complete_task`, `_check_meant`, `names_task`, `_not_named`, the
+refusal's `reply`); `themi/core/agent.py` around `said_before`. From Michael's bug #282 and
+the 👎 on reply 620 (2026-11-27, 3:28 pm).
+
+What the Pi shows:
+- Reply 619, "Check off the related task.", right after "One tablespoon of crushed
+  peppercorns is eight grams" was saved (and task 158, the peppercorns, already closed by
+  it). The model picked task 155 (onion powder); the namer refused it (nothing named it),
+  and Themi said: "'Weigh one rounded tsp onion powder' is still open: I couldn't tell
+  that's the one you meant. Is it done?"
+- Reply 620, "Yes, that one's done, but also the crushed pepper is done too.": refused
+  again, word for word the same question. The answer is 11 words, so `texts_to_score` reads
+  only it, not the question it answers (`SHORT_ANSWER` is 3 words); "that one" names
+  nothing, and "crushed pepper" is closest to no open task (158 was done). The second
+  refusal blamed "neither did Themi's last message", which did name it.
+
+Build:
+- An answer to Themi's own question is read with the question, whatever its length, when
+  it starts with a yes ("yes", "yeah", "yep", "it is", "that one's done", "done") or points
+  back ("that one", "it", "that's done"): Themi's last message is scored as well as their
+  words, and a task its question named is named.
+- A message naming two tasks ("that one's done, but also the crushed pepper") handles each:
+  the one the question named is marked done, and the other is looked for too. One already
+  done says so in its line ("'Weigh 1 tablespoon of crushed peppercorns' was done already,
+  when you gave its weight.").
+- "The related task" / "that task" right after Themi saved a weight (or did anything with a
+  task in it) means that task; if it's done already, say so rather than picking another.
+- The same refusal is never said twice in a row for the same task: the second time, Themi
+  marks it done when their message is a yes (above), or asks with buttons [Yes, done] [No]
+  for that task.
+
+Tests (in `tests/unit/test_which_task.py` and a tasks test): Themi's "Is it done?" naming
+task A, then "Yes, that one's done, but also B is done too" marks A done and B done (or says
+B was already done); "the related task" after a weight saved with its task closed says it's
+done already. A scenario: the onion powder and peppercorns from reply 618 to 620.
+
+Data/Setup: update the Pi. Mark #282 reviewed once live (with F65a).
+
+Notes:
+- `which_task.ANSWER` / `answers()`: a message of up to 3 words, or one starting with a yes
+  ("yes", "yep", "it is", "done", "that one", "that's done") or saying "that one's done", is
+  read with Themi's last message. A longer answer names the clear best for Themi's question
+  plus the clear best for its own words (`which`), so "Yes, that one's done, but also the
+  mushrooms are done" names both. `meant_instead` (the word check) uses `answers` too.
+- "Check off the related task" (`RELATED`: "the related/that/the same/its task") right after
+  Themi's message said "And '<title>' is done." or "Marked done: <title>." (`JUST_DONE`):
+  any other task is refused with the reply "\"<title>\" is done already.", checked before
+  the naming.
+- Deviation: no [Yes, done] [No] buttons on a second refusal. There's no task-done button
+  kind to hang them on, and the yes-answer fix is what reply 620 needed.
+- Tests: `tests/unit/test_which_task.py` (5); `test_bug_282_a_long_yes_to_is_it_done_marks_it`,
+  `test_bug_282_the_related_task_just_closed_is_done_already` (test_anchored_chores.py).
+- **Setup:** update the Pi. Mark #282 reviewed once live (with F65a).
+
+### F65c · Feedback (2026-11-27): the wall's "+N more" counts only what's still to do
+Status: [x] 2026-11-27
+Depends on: F58c, F60f
+Read first: `themi_home/web/static/wall-fit.js` (`fitColumn`, `fitWall`);
+`themi_home/web/templates/wall/_columns.html` (a section's items, then the struck-through
+`finished` ones, its `.wall-more` and `.wall-fold`); `themi_home/wall_view.py` (`FOLD_AFTER`,
+the Together column). From Michael's bug #283 (2026-11-27, 3:30 pm, a photo of the Together
+column): "It says there are 2 more, but that's just a lie".
+
+What the Pi shows: the photo's Family to-do shows four open to-dos, then "Weigh 1 cup of
+fresh herbs- dill" struck through (done 3:26 pm), then "+2 more" and "✓ 3 done". At 3:30
+the family had no more open to-dos: the two cut were the peppercorns (done 3:27) and the
+onion powder (done 3:29), both struck through, still inside `FOLD_AFTER`'s ten minutes.
+`wall-fit.js` cuts from the end of the last section and counts every cut entry into "+N
+more"; done entries are at the end, so they went first and became "2 more". The "+2 more"
+button opens the open to-dos, where they aren't.
+
+Build:
+- An entry whose item is done (`.wall-item.done`) that doesn't fit is counted into its
+  section's "✓ N done" line, not "+N more" (made visible if it was hidden at 0, the way
+  "+N more" is now: render `.wall-fold` always, hidden at 0, with `data-done`).
+- Done entries are cut before any open one in the same section; "+N more" counts open
+  entries only.
+- `fitColumn` takes each item's done-ness and returns `shown`, `more` and `folded`; the
+  arithmetic stays testable without a page.
+
+Tests: the `fitColumn` unit test (node) gets a section with four open and three done items
+in room for five: shows four open and one done, "+0 more", "3 done" grows by two. A browser
+test of the Together column at 1080 x 1920 with struck-through entries cut: the "+N more"
+says only open ones, and opening it lists that many.
+
+Data/Setup: update the Pi, reload the wall. Mark #283 reviewed once live.
+
+Notes:
+- `fitColumn(sections, other, room, moreHeight, foldHeight)`: a section may carry `done`
+  (per item) and `folded`; a done item cut is counted into `folded`, an open one into
+  `more`. Sections without `done` return `{shown, more}` as before.
+- `_columns.html`: a section with items and nothing folded has an empty
+  `<p class="wall-fold" data-done="0" hidden>`, which `fitWall` fills ("✓ N done") when
+  done items are cut; `.wall-fold[hidden]` hides it. `test_wall_fold.py`'s "no fold at 9
+  minutes" now checks no fold with a count (the hidden one is always there).
+- Tests: three in `tests/unit/test_wall_fit.py`; `tests/integration/test_wall_fold_browser.py`
+  (16 shared to-dos, four ticked, at 1080 x 1920: "+N more" equals the open entries cut,
+  and "N done" the done ones).
+- **Setup:** update the Pi, reload the wall. Mark #283 reviewed once live.
+
+### F65d · Feedback (2026-11-27): "the family's chores" as a picture is the whole shared list
+Status: [x] 2026-11-27
+Depends on: F43b
+Read first: `themi/standard/list_card.py` (`show_tasks_picture`, `_caption`);
+`themi/standard/task_card.py` (`whose`, `EVERYONE`, `task_cards`, `MOST_SHARED`, the "Either
+of you" row in `cards_svg`). From Michael's bug #281 (2026-11-27, 2:25 pm): "it never
+showed me the full list. The image it sent is mine, Erin's, and only 4 of the family
+chores. I only asked to see the full family chore list".
+
+What the Pi shows (reply 609): "Can I see the family chores for today?" and then "I want to
+see all of the Either of you list" both ran `show_tasks_picture` with `who: "everyone"`,
+`with_chores: true`. `whose` puts "family" in `EVERYONE`, so the picture is a column per
+person plus the shared row across the bottom, and that row draws `MOST_SHARED` = 4 cards.
+The family had more shared to-dos open (the wall's Together column showed them). The reply
+then said "Sent the chore chart.", which it wasn't.
+
+Build:
+- `who` takes "family" (also "shared", "together", "either of you", "the family list"):
+  a picture of only the shared list, as the wall's Together column has it ("Either of you"
+  and "Family to-do", each grouped by overdue/today/soon/any time), every item, two across
+  as a lane draws them. Caption "The family's chores and tasks." "everyone" stays the
+  column-per-person picture.
+- In "everyone", the shared row says "+N more" past `MOST_SHARED` (check it does; add it if
+  not) so a cut never looks like the whole list.
+- The tool's description lists "family" with its examples ("the family chores", "the
+  Either of you list"). The tool's result says "Sent the family's list as a picture."; the
+  reply never calls a tasks picture "the chore chart".
+
+Tests: `task_cards(..., who="family")` holds every shared open task and no one's own;
+`whose` maps the new words; the "everyone" picture with six shared tasks says "+2 more"; the
+golden `tools.json` changes for the description. A scenario: "Can I see the family chores
+for today?" sends the family-only picture.
+
+Data/Setup: update the Pi. Mark #281 reviewed once live.
+
+Notes:
+- `task_card.FAMILY` ("family", "shared", "together", "either of you", "the family list", …)
+  goes to `family_cards`: one lane, "Family", with groups "Either of you" and "Family to-do",
+  every open shared or either task (overdue first, each card's note saying when it was
+  due), `everything=True` so `view` draws them all. "family" left `EVERYONE`.
+- Deviation: each group is in the tasks' order with its due note, not split again into
+  overdue/today/soon under each.
+- The "everyone" picture already said "+N more" past `MOST_SHARED`; a test holds it.
+- `show_tasks_picture`'s description lists 'family' with "the family chores", "the Either
+  of you list"; its result for the family picture says it isn't the chore chart. Golden:
+  `tools.json` changes for that description, as the prompt says.
+- Tests: `test_bug_281_the_family_list_alone_is_all_of_it`,
+  `test_everyone_says_more_past_four_shared`,
+  `test_bug_281_asking_for_the_family_chores_sends_the_family_list`
+  (scenarios/test_family_tasks_picture.py).
+- **Setup:** update the Pi. Mark #281 reviewed once live.
+
+### F65e · Feedback (2026-11-27): an event Themi adds is on the wall's calendar at once
+Status: [x] 2026-11-27
+Depends on: F59f, F64a
+Read first: `themi_google/connectors/gcal/busy.py` (`entries_between`, `_live`, `LIVE_KEEP`,
+`stored`); `themi_google/events.py` (`_show`, the add/move/delete executors);
+`themi_home/wall_view.py` (`range_events`, `events`, `_week_events`). From Michael's bug
+#277 (2026-11-25, 10:27 pm): "why is it taking so long to show the Thanksgiving event on the
+wall frame? Even refreshing the page didn't work to show it".
+
+What the Pi shows: "We're going to the in-law's tomorrow for Thanksgiving at 2" (10:23 pm)
+ran `add_calendar_event`; action 1267 wrote it to the Madicen Family calendar and `_show`
+put it in `calendar_entries` at once (for Michael's account). Four minutes later it wasn't
+on the wall. The wall's month and other ranges outside what's kept (F59f) are read from
+Google and held in `_live` for `LIVE_KEEP` (5 minutes), keyed by member and range;
+nothing clears that hold when Themi itself adds, moves or deletes an event, so a reload
+inside five minutes shows the old read. (The logs from then are gone, so which view he was
+on isn't certain; the hold is the one path that ignores the new row. Check the week strip
+and today's timeline read `calendar_entries` and show it, too.)
+
+Build:
+- Adding, moving or deleting an event through Themi (and a calendar refresh that brings
+  changes) drops the held range reads (`_live`) for everyone: the next wall load reads
+  again. Or patch the held lists in place; say which in Notes.
+- `_show` puts the new event in for every member whose account sees that calendar (the
+  family calendar is on both accounts), not only the one who asked, so Erin's side of the
+  wall and her day agree before the next refresh.
+- The wall, which reloads its screen on a timer, picks it up by itself within a minute; no
+  manual refresh needed. Say the interval in Notes.
+
+Tests: a month-range read held, then an event added through the executor: the next
+`range_events` has it. An event on the shared calendar added by Michael is in
+`calendar_entries` for both members. A wall screen test: an event added for tomorrow shows
+in the week strip and the month without waiting.
+
+Data/Setup: update the Pi. Mark #277 reviewed once live.
+
+Notes:
+- The cause was more than the hold: `make` put an event in `calendar_entries` at once only
+  when it wasn't for the family calendar (`if payload["calendar"] != "family"`, since K3),
+  so Thanksgiving waited for the next 15-minute calendar read. The week strip and today's
+  line read `calendar_entries`.
+- `_show` now writes the row for every account whose `member_calendars` has that calendar
+  (both people for the family calendar); for the family calendar with nobody reading it,
+  nothing (K3's reason kept); for one's own, as before when nobody lists it.
+- `CalendarBusy.forget_ranges()` clears `_live`; `Events.forget_ranges()` calls it after an
+  add, a move and a delete, and `refresh` calls it after a read that found anything.
+- The wall's week strip polls every 60 s (was 600 s); the columns and today's line already
+  poll every 30 s.
+- Deviation: no wall screen test; the two scenarios cover the rows the wall reads and the hold.
+- Tests: `test_bug_277_a_family_event_is_in_both_peoples_read_at_once`,
+  `test_bug_277_a_held_range_read_is_read_again_after_an_add` (test_calendar_events.py).
+- **Setup:** update the Pi. Mark #277 reviewed once live.
+
+### F65f · Feedback (2026-11-27): switching recipes on the cook screen posts nothing new in the chat
+Status: [x] 2026-11-27
+Depends on: F64e, F64f
+Read first: `themi_home/cooking.py` (`switch`, the "Set aside: …" edit, the "(Carried on
+below.)" edit, the card sent fresh); `themi_home/cooking_screen.py` (`act`, the `front` tap).
+From Michael's bug #279 (2026-11-26, 9:37 am): "swapping between recipes sends chats in
+telegram".
+
+What the Pi shows: at 9:36 am the cook screen's chips switched Pumpkin Pie and Water Pie
+twice (taps `front` on sessions 40 and 41). Each switch edited the old front card to "Set
+aside: …", edited another to "(Carried on below.)", and sent the whole card again as a new
+message (the pumpkin pie's ingredient list twice), so the chat filled up and pinged.
+
+Build:
+- A switch made on the cook screen (a `front` tap) sends no new message. The chat's cooking
+  card for the recipe now in front is edited in place to show it, and the other's card to
+  "Set aside: …" with its [Back to …] button, as now. Telegram's edits don't notify.
+- A switch asked for in chat ("back to the ricotta") still sends the card at the bottom, as
+  F64e built: there the person is in the chat and expects the answer there.
+- The "(Carried on below.)" edit happens only when a new card really was sent below.
+
+Tests: a `front` tap on the screen with two sessions: the outbox has edits only, no new
+message; a chat "switch to the pancakes" still sends one card. The `test_cooking_several`
+scenarios follow.
+
+Data/Setup: update the Pi. Mark #279 reviewed once live.
+
+Notes:
+- `Cooking.switch(session, in_place=True)` from the cook screen's `front` tap: the old front's
+  card is edited to "Set aside: …" (as before) and the new front's own card is edited in
+  place (`show(fresh=False)`); with no card of its own, nothing is sent and only the screen
+  redraws. Chat's `switch_recipe` and the [Go to …] / [Back to …] buttons still send the
+  card fresh at the bottom ("(Carried on below.)" only then, from `card.show`).
+- `test_two_recipes_on_the_go_have_a_chip_each_and_a_tap_switches` (test_cook_screen.py)
+  checked the new card sent at the bottom; it now checks nothing new is sent and both cards
+  are edited.
+- **Setup:** update the Pi. Mark #279 reviewed once live.
+
+### F65g · Feedback (2026-11-27): the cook screen's recipe chips look like the rest of the cook screen
+Status: [x] 2026-11-27
+Depends on: F64f, CK redesign (the `cook-card`, `--cook-round`, themes)
+Read first: `themi_home/web/static/cook.css` (`.cook-going`, `.cook-going-chip`, and the
+redesign's `.cook-card`, `.cook-chip`, `--cook-round`, `--cook-display`, the kitchen theme);
+`themi_home/web/templates/cooking/_main.html` (the going row); the Cooking Companion Plan's
+screen design. From Michael's bug #280 (2026-11-26, 9:37 am): "the visuals for multiple
+recipes don't match the rest of the cooking companion".
+
+What the Pi shows: F64f's chips are plain outlined pills (`border: 1px solid currentColor;
+background: none`, the page's body font), while everything else on the screen uses the
+redesign's cards (`--card`, `--line`, `--cook-round`), its display font for the recipe name,
+the accent for what's on, and the kitchen theme's colours. No screenshot with the report:
+take one of the screen with two recipes going (at 390 x 844 and 1180 x 820, each theme)
+before changing anything, and compare.
+
+Build:
+- The going row is drawn with the screen's own pieces: each recipe a card-style chip
+  (`--card` background, `--line` border, `--cook-round` corners, the cook tap height), its
+  name in the display font, its step and timer muted under or beside it. The one in front
+  uses the accent, as a pressed `.cook-chip` does. It follows every theme (kitchen
+  included) through the existing variables only: no new colours.
+- The row sits where the header's rhythm puts it (same gaps as the head and the step) and
+  scrolls sideways on a phone rather than wrapping into three lines.
+
+Tests: the browser test `test_the_recipes_on_the_go_fit_and_a_chip_switches` keeps passing at
+both widths; a check that the chip's computed background and radius are the card's, and the
+front one's the accent; screenshots of both themes saved with the test run for Michael to
+see (say where in Notes).
+
+Data/Setup: update the Pi. Mark #280 reviewed once Michael has seen it.
+
+Notes:
+- The going row: each recipe a card (`--card`, `--line`, `--cook-round`, the cook tap height),
+  its name in the display face (`--cook-display`) over its step and the soonest timer in
+  `--muted`; the one in front in `--accent` / `--accent-fg`. One row, `overflow-x: auto`,
+  no wrapping. Only the existing variables, so light, dark and kitchen follow.
+- The other recipes' chips are written out in `_main.html` (not the `act` macro), so the
+  name and step are spans like the front one's and its timer counts down too (F64f's label
+  had no timer for them). The `aria-label` "Go to Pancakes, 3/5" is unchanged.
+- Tests: `test_the_recipes_on_the_go_fit_and_a_chip_switches` (both widths) checks the chip's
+  background is `--card`, the front one's `--accent`, the radius `--cook-round` and the
+  display face. With `THEMI_SHOTS=<folder>` it saves `cook-going-{light,dark,kitchen}-{390,1180}.png`
+  there for Michael to see.
+- **Setup:** update the Pi. Mark #280 reviewed once Michael has seen it.
+
+### F65h · Feedback (2026-11-27): conversation mode notes a job for the other person
+Status: [x] 2026-11-27
+Depends on: CM1b, F36a
+Read first: `themi/standard/sidecar.py` (its system text, `SIDECAR_TOOLS`, how `create_task`
+is called and assigned); `themi/standard/tasks.py` (`create_task`'s `assign_to`, telling the
+assignee). From Erin's bug #278 (2026-11-26, 5:53 am): "Themi should have also made a
+task/note to add to Michaels stack adapt benefits meeting thing or whatever".
+
+What the Pi shows: Erin has conversation mode on. At 5:52 am she said "It seems all my
+Stanford specialists are suddenly out of network. Michael will need to ask stack adapt to
+look into what happened there, and request continuity of care so that Cigna will pay for me
+to keep seeing my current doctors" (reply 586, groups not recorded: the tool-less `_chat`).
+The chat reply was kind; the sidecar logged nothing (no `sidecar_log` row since 7 on
+11-26), so no task was made for Michael.
+
+Build:
+- The sidecar's instructions cover a job the person says someone else in the family needs
+  to do ("Michael will need to…", "Erin has to…", "can you get Michael to…"): `create_task`
+  assigned to that person, with what it's for in the title or steps ("Ask StackAdapt about
+  Erin's Stanford doctors going out of network; request continuity of care for Cigna").
+  It goes through the trust tiers as a task for someone else does now (a card for Erin if
+  that's the tier), and the assignee is told as any handed-on task is.
+- Where the person said it's for a meeting or a list ("add to Michael's benefits meeting"),
+  the task's steps say so; if there's a calendar event by that name for the assignee, the
+  task is due before it.
+- The ✍ reaction marks it, as other sidecar items.
+
+Tests: the sidecar with a fake model: Erin's message makes a task assigned to Michael and
+Michael's outbox gets the heads-up; a message about someone else's feelings ("Michael is
+stressed") makes nothing. An eval line in the sidecar evals for this message.
+
+Data/Setup: update the Pi. Mark #278 reviewed once live.
+
+Notes:
+- The sidecar's `SYSTEM` says a job someone says another family member needs to do is a
+  `create_task` assigned to that person (`assign_to` their name), the title or steps saying
+  what it's for and where it should go; never one for how someone feels. `create_task`'s
+  own assigning, trust tiers and heads-up do the rest.
+- Deviation: no "due before the calendar event of that name"; the task's steps carry "for
+  his benefits meeting" when said. A follow-up if Michael wants it.
+- Evals: two cases in `tests/evals/sidecar_cases.json` (`task-for-partner-benefits`, and
+  `partner-feelings`, which makes nothing). Not run here: they need a real model
+  (`make evals`).
+- Tests: `test_bug_278_a_job_for_the_other_person_is_their_task` (test_sidecar.py): a task
+  for Husband, the ✍, and Husband told.
+- **Setup:** update the Pi. Mark #278 reviewed once live.
+
+### F65i · Feedback (2026-11-27): "Let's make X" never reads an old screenshot as a recipe
+Status: [x] 2026-11-27
+Depends on: F34l, F34mb, F34o
+Read first: `themi/core/kept_pictures.py` (`KEPT_FOR`, `KEPT_TURNS`, `group`); `themi/core/agent.py`
+(`_earlier_picture`, `earlier`, the picture groups added when `shown`); the `/bug` and
+`/idea` commands (where a picture is saved with a report); `themi_home/web_recipes.py`
+(`recipe_from_picture`). From the 👎 on reply 582 (2026-11-25, 9:16 pm).
+
+What the Pi shows: "Let's make shortening pie crust" got "I couldn't find a recipe I could
+read in that picture." The tools run were `recipe_from_picture`, with the picture groups
+offered: the last picture Michael had sent was the wall screenshot with /idea #274 at 8:47
+pm, 29 minutes before, still kept (30 minutes, two turns). The same words a minute later as
+"Let's cook shortening pie crust" found it in the cookbook.
+
+Build:
+- A picture sent with `/bug` or `/idea` is saved with the report and isn't kept for a
+  follow-up (F34o's "that" in a bug report still takes the one before it).
+- A kept picture is offered to a later message only when its words point at a picture
+  ("this", "that", "the picture", "the photo", "from the photo", "here's the other page",
+  "the recipe I sent"). Otherwise the turn runs as if there were none.
+- `recipe_from_picture` declines on an earlier picture whose words don't point at it, and
+  says to use `find_recipe` / `start_cooking` for a recipe named in words.
+
+Tests: a picture with `/idea`, then "Let's make shortening pie crust": no picture is offered
+and `find_recipe` runs; a picture sent alone, then "can you copy this recipe": the picture is
+used; F34mb's two-page test still passes. A scenario of the reply-582 evening.
+
+Data/Setup: update the Pi. Nothing to mark reviewed (a 👎 on a reply, no report).
+
+Notes:
+- `kept_pictures.points_at_picture(text)` (`POINTS_AT`: this/that/it/they, "the picture",
+  "photo", "screenshot", "the other page", "here's", …; or 3 words or fewer, an answer to
+  Themi's question about it). `_earlier_picture` offers the kept picture only then; a turn
+  that doesn't take it doesn't use one of its two turns.
+- A picture sent with `/bug` or `/idea` is dropped from the kept ones after the command
+  (`KeptPictures.drop`; the group before it, if still within half an hour, comes back).
+  F34o's "that" in a bug report still peeks at the one before.
+- Deviation: `recipe_from_picture` itself is unchanged: with no picture offered, it already
+  says there's none, and the model has `find_recipe` for a name.
+- Tests: `test_reply_582_lets_make_x_after_an_idea_picture_reads_no_picture`,
+  `test_words_that_dont_point_at_the_picture_dont_take_it`, `test_points_at_picture`
+  (test_pictures.py); the F34l/F34mb picture tests pass unchanged.
+- **Setup:** update the Pi. Nothing to mark reviewed.
+
+### F65j · Feedback (2026-11-27): the family's list on the wall can be dragged too
+Status: [x] 2026-11-27
+Depends on: F64i
+Read first: F64i's Notes; `themi_home/web/templates/wall/_view_together.html`;
+`themi_home/wall_views.py` (`together`, `find_together`, `person_move`); `themi_home/wall_view.py`
+(`ordered`, `set_order`, the Together column); `themi_home/web/static/wall.js` (the hold
+and drag). From Michael's bug #275 (2026-11-25, 10:20 pm): "can't reorder the family tasks
+on the wall frame".
+
+What the Pi shows: 0.9.0 (with F64i) went live at 10:19 pm; F64i built press-and-hold drag
+for a person's page only. The Together page ("View shared list") and the home screen's
+Together column still only tick.
+
+Build:
+- The Together page gets F64i's press and hold: reorder within "Either of you" and within
+  "Family to-do"; chips for each person to give it to them (it stops being shared and is
+  theirs, told as a reassignment); Delete with Undo, and the repeating chore question.
+- Family order is kept in `wall_task_order` under a family key (member NULL or 0; say which
+  in Notes) and used by the Together page and the home screen's Together column, as a
+  person's order is.
+- A person's page also gets a "Family" chip already (F64i); dropping there puts the task on
+  the shared list at the end of the family order.
+
+Tests: the Together page's move POSTs (reorder, give, delete, undo) like
+`test_wall_person_moves.py`; the column follows the order; a browser drag on the Together
+page at 1080 x 1920.
+
+Data/Setup: update the Pi, reload the wall. Mark #275 reviewed once live.
+
+Notes:
+- Family order: `wall_schema/0009_wall_family_order.sql` (`wall_family_order`: task, rank),
+  its own table rather than a NULL member in `wall_task_order` (its member is NOT NULL with
+  a foreign key). `WallView.family_ordered` / `set_family_order` / `to_family_end`; used by
+  the Together page (`WallViews.together`) and the home screen's Together column
+  (`_together`), for "Either of you" and "Family to-do" alike.
+- `POST /wall/view/together/move` (`together_move`): `move` (within its card), `give` (a
+  member id: theirs alone, not shared), `delete`, `stop`, `skip`, `undo_delete`,
+  `undo_skip`, as F64i's person route, staged through the wall's tap category as the task's
+  assignee (else the first person). A repeating chore asks in place first.
+- `_view_together.html`: `data-moves`, `data-drop`/`data-drag` on both lists, a chip per
+  person, Delete, the Undo bar and the ask, so `wall.js`'s F64i drag works unchanged.
+- A person's page dropping on "Family" puts the task at the end of the family's order.
+- Tests: `tests/integration/test_wall_together_moves.py` (5),
+  `tests/integration/test_wall_together_drag_browser.py` (a mouse drag at 1080 x 1920).
+- **Setup:** update the Pi (the migration runs on start), reload the wall. Mark #275 reviewed
+  once live.
+
+### F65k · Idea (2026-11-27): a task can be edited on the wall: its words and its due date
+Status: [x] 2026-11-27
+Depends on: F64i, F65j, F64g
+Read first: `themi_home/web/templates/wall/_view_person.html`, `_view_together.html`,
+`_view_list.html`; `themi_home/wall_views.py` (`person_move`); F64g's Notes (a text box on
+the wall, the frame's own keyboard, the Undo bar); `themi/standard/tasks.py` (renaming,
+`reschedule`, `due_time`, repeating chores' next date). From Michael's idea #276
+(2026-11-25, 10:23 pm): "be able to edit tasks and edit due dates on the wall frame".
+
+What the Pi shows: on the wall a task can be ticked, given to someone, moved to tomorrow (the
+list view) and, with F64i, dragged and deleted. Its title and due date can only be changed in
+chat.
+
+Build:
+- A tap on a task's words (not its ring) on a person's page or the Together page unfolds it
+  in place: a title box (the frame's keyboard, as F64g's Rename) and a row of date chips:
+  Today, Tomorrow, the weekend, Next week, "Pick a day" (a small month to tap), No date. A
+  time can be set or cleared for a task that has one. [Save] and [Cancel]; tapping elsewhere
+  folds it unsaved.
+- Saving stages through the wall's tap category as other wall changes do; a rename uses
+  the tasks' rename, a date `reschedule` (a repeating chore moves this round only, as
+  "Tomorrow" does now; say so on the chip row: "This time only").
+- An Undo bar for 8 seconds after a save.
+- The ring still ticks; press and hold still drags (F64i): the unfold is a plain tap on
+  the words only.
+
+Tests: a rename POST and a reschedule POST change the task (and are staged); a repeating
+chore's date moves this round only; Undo puts both back; a browser test at 1080 x 1920 taps a
+task's words, types a title, picks Tomorrow and saves, and the ring tap still ticks.
+
+Data/Setup: update the Pi, reload the wall. Mark #276 reviewed once live.
+
+Notes:
+- `wall.js`: a click on a task's words (`.wall-words` in a `[data-drag]` row of a page with
+  `data-moves`) is caught before htmx's tick and asks for the page with `?edit=<task>`; the
+  ring and the rest of the row still tick; press and hold still drags.
+- `GET /wall/view/person/{id}?edit=N` and `/wall/view/together?edit=N` unfold it under its
+  row (`editor` macro in `_sheet.html`): a title box, day chips (Today, Tomorrow, The
+  weekend = the coming Saturday, Next week = next Monday, No date, Pick a day), a time box,
+  [Save] [Cancel]. A repeating chore's legend says "this time only".
+- Save posts `op=edit` to the page's `/move`; `save_edit` stages it through the wall's tap
+  category; the executor's `edit` (`WallTaps._edit`) renames (`board.update`) and
+  reschedules (`board.reschedule`, a chore's round only). An Undo bar for 8 seconds posts
+  `undo_edit` with the old words, day and time. A bad date or time is ignored; an empty
+  title keeps the old one.
+- Deviations: "Pick a day" is the frame's own date input, not a drawn month; the time is the
+  frame's time input.
+- Tests: `tests/integration/test_wall_task_edit.py` (6);
+  `test_f65k_a_tap_on_the_words_unfolds_it_and_the_ring_still_ticks`
+  (test_wall_together_drag_browser.py).
+- **Setup:** update the Pi, reload the wall. Mark #276 reviewed once live.
+
 ## Conversation mode
 
 From the spec "Themi AI Agent: Conversation Mode & Silent Sidecar State Engine" (shared
@@ -27432,10 +28001,62 @@ Notes:
   `test_package_data.py` caught it in the full run).
 
 ### WA5 · Wall alerts: on the frame
-Status: [ ]
+Status: [~]
 Depends on: WA3, WA4
 Read first: the plan's "Open questions for Michael"; WA1 to WA4's notes.
 With Michael at the Cozyla: does sound unlock after one tap, and after the page reloads?
 Are the numerals readable from across the room, and the trills loud enough but not startling?
 Anything this turns up gets a prompt of its own or a fix here, each fix starting with a
 failing test. Record the answers to the plan's open questions in Notes.
+
+Notes:
+- First try on the frame, 2026-11-27 (reports #284 to #289, a 15-minute Lasagna timer):
+  - #285, the card looked see-through: the layer came before `<main>` with no z-index, so
+    the wall's positioned and dimmed parts painted over it. Now `z-index: 10`, with
+    `#wall-view` at 11 and left out of the dimming.
+  - #286/#287, the bar filled up: it's now the time left, emptying, and ticks every second
+    from `data-bar-from`/`data-bar-to`. #288: the "done at" time was right.
+  - #289 and no sound at all: the Pi's container has no MIME type for `.m4a`, so the trills
+    (and the body double's loops) went out as `application/octet-stream`; `PackStatic` now
+    sets audio types itself (`MEDIA_TYPES`). Sounds now go through one Web Audio context
+    that the first touch unlocks for the page's life (Michael: the frame does play
+    sounds, as Android's calendar shows); an `<audio>` element is the fallback. "Tap for
+    sound" shows on every card whose sounds are on until then, not only when a trill fails.
+    Every try is logged: `docker compose logs themi | grep "Wall sound"` on the Pi.
+  - #284, "start a 6 minute timer" in chat set a reminder: there's no timer tool outside a
+    cook session. WA6.
+- **Waiting:** another try on the frame with these fixes: a touch, then a timer going off
+  untouched; and after a reload. Read the "Wall sound" lines from the Pi's log.
+
+### WA6 · Wall alerts: a timer from chat
+Status: [x] 2026-11-27
+Depends on: WA3
+Read first: the plan's "Back to the kitchen" (timers set from chat show a clock and their
+own label); report #284; `cooking_timers.py` (`begin`, `run_job`, the typed "how long left",
+"cancel the timer", "add 2 minutes"); `themi/core/tools.py`; the tool groups.
+- A `start_timer` tool (minutes, an optional label): a `cooking_timers` row with no session
+  and no recipe step, its label "6 min timer" unless they named it, on the scheduler like
+  any timer. It's theirs to ask for, so it needs no trust tier beyond the timers' own.
+- When it ends: "Time's up: 6 min timer." (or its label) as an urgent message, as a step's
+  does. The typed "how long left", "cancel the timer" and "add 2 minutes" work on it.
+- On the wall it shows as WA3 drew it: a clock, its label, the countdown, Got it.
+- The golden `tools.json` gains the tool; say so in the commit.
+Tests: unit, the tool's row and words; the ending message; cancel and add on a chat timer.
+Integration: the wall's card with the clock. Scenario: "start a 6 minute timer" in chat (the
+scripted model calls `start_timer`), then the wall counts it down and Got it clears it.
+
+Notes:
+- `start_timer` (in `cooking_timers.py`, registered by `CookingTimers.install`) and
+  `CookingTimers.start_alone`: a `cooking_timers` row with no session and an empty step,
+  its label (and `recipe`, which can't be empty) "6 min timer" or their words, a leading
+  "the" dropped. Up to 8 hours (`LONG`); longer, or a time of day, is add_reminder. It's
+  Themi's own timer, so a plain `@tool`, no trust tier.
+- An empty step marks a timer from chat: "Time's up: 6 min timer.", "4 min left on the
+  tea.", "Added 2 min: the tea is done at …". On the wall it's a clock with "Timer" over its
+  label, and "Time's up" (not "Kitchen time") when it ends. The cook screen lists it by its
+  label alone.
+- In the recipes tool group (a home-pack group; `start_timer` lives with the cooking
+  timers), with "timer" among its words and "Start a 6 minute timer" an example. Golden
+  `tools.json` gains `start_timer` (recipes).
+- New: `tests/scenarios/test_chat_timer.py` (5).
+- Mark #284 reviewed once it's live.

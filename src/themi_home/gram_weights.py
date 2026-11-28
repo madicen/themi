@@ -150,6 +150,7 @@ TASK_UNIT_WORDS = {"cup": "cup", "tbsp": "tablespoon", "tsp": "teaspoon", "ml": 
                    "l": "liter"}  # fmt: skip
 WEIGHED_TEXT = "Saved: {line}."
 NOW_WITH_GRAMS = " {recipes} now show grams for it."
+TASK_DONE_TEXT = " And '{title}' is done."  # F65a: no "check off the related task" needed
 # GW5: corrections from chat
 UNDO_FOR = timedelta(hours=24)
 BUTTON_KIND = "gram_weight"
@@ -378,7 +379,10 @@ def guide_line(name: str, amount: float, unit: str, grams: float) -> str:
 PLUS = re.compile(r"\s*\+\s*")
 STATED = re.compile(r"\(\s*(?P<n>\d+(?:\.\d+)?)\s*(?:g|grams?)\s*\)", re.IGNORECASE)
 # What a cup of anything weighs, about: a weight outside these is a misreading (GW3, GW5).
-DENSITY = (0.15, 2.0)  # g/ml
+# g/ml. F65a (bug #282): fresh herb sprigs and dried leafy herbs weigh 0.03-0.05 (a cup of
+# dill is 9 g), so the floor is 0.025; 5 g a cup still asks.
+DENSITY = (0.025, 2.0)
+USUAL = (0.3, 1.5)  # g/ml most foods weigh: a "Did you mean …?" offers only a weight in here
 EACH = (1.0, 2000.0)  # g for one
 
 
@@ -392,6 +396,29 @@ def plausible(grams: float, amount: float, unit: str) -> bool:
     if unit == "each":
         return EACH[0] <= grams / amount <= EACH[1]
     return False
+
+
+def usual(grams: float, amount: float, unit: str) -> bool:
+    """F65a: a weight most foods would have, for offering a "Did you mean …?"."""
+    if unit in VOLUME_ML and amount > 0:
+        return USUAL[0] <= grams / (amount * VOLUME_ML[unit]) <= USUAL[1]
+    return plausible(grams, amount, unit)
+
+
+# F65a (bug #282): words that say how something was measured, not what it is. A weighing
+# task for "rounded tsp onion powder" is the one for "onion powder"; "fresh herbs- dill" the
+# one for "fresh dill sprigs". Only for finding a weighing task: the guide's keys keep them.
+MEASURE_WORDS = frozenset(
+    "cup cups c tbsp tablespoon tablespoons tbs tsp teaspoon teaspoons ml rounded round "
+    "heaped heaping level scant packed loosely firmly sprig sprigs herb herbs one two three "
+    "whole single".split()
+)
+
+
+def bare(k: str) -> frozenset[str]:
+    """A key's words without the measure words (F65a)."""
+    drop = MEASURE_WORDS | {stem(w) for w in MEASURE_WORDS}
+    return frozenset(w for w in k.split() if w not in drop)
 
 
 def rounded(grams: float) -> float | None:
@@ -1132,7 +1159,7 @@ class GramWeights:
         """None when `grams` could be right; otherwise the question and what to offer."""
         if plausible(grams, amount, unit):
             return None
-        others = [g for g in (grams / 10, grams * 10) if plausible(g, amount, unit)]
+        others = [g for g in (grams / 10, grams * 10) if usual(g, amount, unit)]
         what = "a lot" if others and others[0] < grams else "very little"
         said = amount_said(amount, unit, "").strip() or "one"
         question = f"{grams:g} g for {said} seems {what}."
@@ -1383,13 +1410,43 @@ class GramWeights:
     ) -> str:
         """What they weighed, saved (source `weighed`); its task done. The words to say."""
         per = grams / amount
+        exact = self.meta(key(name))
+        task_id = exact["task_id"] if exact and self._open_task(exact["task_id"]) else None
         if not await self.save(member, name, 1, unit, per, "weighed", requested=True):
             return "Not saved: the weights guide couldn't take another line."
         said = WEIGHED_TEXT.format(line=guide_line(name, 1, unit, per))
         recipes = self.recipes_with(name)
         if recipes:
             said += NOW_WITH_GRAMS.format(recipes=names_said(recipes))
+        closed = []
+        if task_id and not self._open_task(task_id):
+            closed.append(int(task_id))
+        other = self.task_for_measure(name)  # F65a: "onion powder" for "rounded tsp …"
+        if other is not None:
+            await self._settle_task(int(other["task_id"]), member, done=True)
+            self.db.execute("DELETE FROM gram_weights_meta WHERE key = ?", (other["key"],))
+            closed.append(int(other["task_id"]))
+        for done in closed:
+            title = self.db.scalar("SELECT title FROM tasks WHERE id = ?", (done,))
+            if title:
+                said += TASK_DONE_TEXT.format(title=title)
         return said
+
+    def task_for_measure(self, name: str) -> dict[str, Any] | None:
+        """F65a (bug #282): the one open weighing task for this ingredient told another way
+        ("onion powder" for "rounded tsp onion powder"); None when none or several."""
+        said = bare(key(name))
+        if not said:
+            return None
+        found = [
+            row
+            for row in self.db.query(
+                "SELECT * FROM gram_weights_meta WHERE task_id IS NOT NULL AND key != ?",
+                (key(name),),
+            )
+            if self._open_task(row["task_id"]) and bare(row["key"]) == said
+        ]
+        return found[0] if len(found) == 1 else None
 
     def task_for_more(self, name: str) -> dict[str, Any] | None:
         """F45d (reply 491): the one open weighing task whose ingredient ends with the name
@@ -1647,7 +1704,8 @@ async def weighed_gram_weight(ctx: ToolContext, args: dict[str, Any]) -> str:
     if not plausible(grams, amount, unit):
         raise ToolDeclined(
             f"{grams:g} g for {amount:g} {unit} doesn't look like a weight; ask them to check "
-            "the scale's number."
+            "the scale's number. If they say to look it up, search the web for its weight "
+            "(search_web), not their guides."
         )
     said = await weights.weighed(ctx.member, name, amount, unit, grams)
     question, buttons = weights.same_task_question(name)  # F45d: "nutmeg" for "ground nutmeg"
@@ -1692,7 +1750,10 @@ async def correct_gram_weight(ctx: ToolContext, args: dict[str, Any]) -> str:
         await ctx.services.outbox.send(ctx.member, question, priority=Priority.REPLY,
                                        buttons=buttons)  # fmt: skip
         ctx.cards.append(question)
-        return f"Asked them, with a button for each: {question}"
+        return (
+            f"Asked them, with a button for each: {question} If they say to look it up, "
+            "search the web for its weight (search_web), not their guides."
+        )
     said, buttons = await weights.correct(ctx.member, name, amount, unit, grams)
     await ctx.services.outbox.send(ctx.member, said, priority=Priority.REPLY, buttons=buttons)
     ctx.cards.append(said)

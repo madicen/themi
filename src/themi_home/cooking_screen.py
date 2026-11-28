@@ -469,7 +469,7 @@ def timers(cooking: Cooking, session: Session) -> list[dict[str, Any]]:
                 go = {"id": other.id, "seq": other.seq, "name": row["recipe"]}
         out.append({
             "id": row["id"],
-            "label": f"{row['recipe']}: {label}" if several else label,
+            "label": f"{row['recipe']}: {label}" if several and row["step"] else label,
             "ends_at": row["ends_at"],
             "fired": row["fired_at"] is not None,
             "seconds": round(float(row["minutes"]) * 60),  # CK12: "of 8:00", and the bar
@@ -550,7 +550,7 @@ async def act(
     if action == "front":  # F64f: a chip, or a timer's [Go to …]: that recipe to the front
         if session.ended_at is not None or session.in_group:
             return Tapped(False)
-        await cooking.switch(session)
+        await cooking.switch(session, in_place=True)  # F65f: nothing new in the chat
         return Tapped(True)
     if action in TIMER_TAPS:
         tapped = timer_tap(cooking, session, action, form)

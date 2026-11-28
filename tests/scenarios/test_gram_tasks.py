@@ -114,6 +114,7 @@ async def test_a_reply_saves_the_weight_and_closes_the_task(
     replies = await scenario.say("Erin", "A cup of teff flour was 92 grams")
     assert replies == [
         "Saved: 1 Cup Teff Flour: Weight in Grams 92g. Teff Pancakes now show grams for it."
+        " And 'Weigh 1 cup of teff flour when you're next cooking' is done."  # F65a
     ]
     assert weights.book().grams("teff flour", 1, "cup") == 92
     meta = weights.meta(key("teff flour"))
@@ -404,3 +405,50 @@ async def test_a_weighing_task_says_so_in_the_open_items(
         "Weigh 1 tablespoon of ground nutmeg when you're next cooking. A weighing task, for "
         "ground nutmeg in the weights guide." in result
     )
+
+
+async def test_bug_282_a_cup_of_dill_is_nine_grams(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    """F65a: "1 cup of fresh dill sprigs weighs about 9 grams" was refused as no weight."""
+    cookbook_recipe(scenario, "Tzatziki", ["1 cup fresh herbs- dill"])
+    weights.record("fresh herbs- dill", "wanted")
+    await weights.look_up()
+    (task,) = tasks(scenario)
+    scenario.primary.queue_tool_call(
+        "weighed_gram_weight",
+        {"ingredient": "fresh dill sprigs", "amount": 1, "unit": "cup", "grams": 9},
+    )
+    (reply,) = await scenario.say("Husband", "1 cup of fresh dill sprigs weighs about 9 grams")
+    assert reply.startswith("Saved: 1 Cup Fresh Dill Sprigs: Weight in Grams 9g.")
+    assert reply.endswith(f"And '{task['title']}' is done.")
+    assert scenario.app.db.scalar("SELECT status FROM tasks WHERE id = ?", (task["id"],)) == "done"
+
+
+async def test_bug_282_onion_powder_closes_the_rounded_tsp_task(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    """F65a: "One rounded teaspoon of onion powder is three grams" left "Weigh one rounded
+    tsp onion powder" open: its key has the measure words in it."""
+    cookbook_recipe(scenario, "Gravy", ["1 rounded tsp onion powder"])
+    weights.record("rounded tsp onion powder", "wanted")
+    await weights.look_up()
+    (task,) = tasks(scenario)
+    scenario.primary.queue_tool_call(
+        "weighed_gram_weight",
+        {"ingredient": "onion powder", "amount": 1, "unit": "tsp", "grams": 3},
+    )
+    (reply,) = await scenario.say("Husband", "One rounded teaspoon of onion powder is 3 grams")
+    assert reply.endswith(f"And '{task['title']}' is done.")
+    assert "Is that the" not in reply
+    assert scenario.app.db.scalar("SELECT status FROM tasks WHERE id = ?", (task["id"],)) == "done"
+
+
+async def test_two_tasks_for_one_ingredient_close_neither_by_measure(
+    scenario: Scenario, weights: GramWeights
+) -> None:
+    cookbook_recipe(scenario, "Gravy", ["1 rounded tsp onion powder", "1 heaped tsp onion powder"])
+    weights.record("rounded tsp onion powder", "wanted")
+    weights.record("heaped tsp onion powder", "wanted")
+    await weights.look_up()
+    assert weights.task_for_measure("onion powder") is None

@@ -43,6 +43,18 @@ GROUP_MARGIN = 0.05
 TIMEOUT = 1.0  # seconds
 SHORT_ANSWER = 3  # words or fewer ("Yes please"): read with what Themi asked before it
 ALL_OF_THEM = re.compile(r"\b(?:all|everything|every one|both)\b", re.IGNORECASE)
+# F65b (bug #282, reply 620): "Yes, that one's done, but also the crushed pepper is done too"
+# answers Themi's "Is it done?" however long it is: it's read with the question too.
+ANSWER = re.compile(
+    r"^\W*(?:yes|yeah|yep|yup|yess+|sure|correct|it is|it's done|it was|done|that one|"
+    r"that's (?:the one|done|it))\b|\bthat one(?:'s| is| was)? (?:done|finished)\b",
+    re.IGNORECASE,
+)
+
+
+def answers(request: str) -> bool:
+    """A short answer, or a longer one that says yes or points back at what Themi asked."""
+    return len(request.split()) <= SHORT_ANSWER or bool(ANSWER.search(request))
 
 
 @dataclass(frozen=True)
@@ -56,7 +68,7 @@ def texts_to_score(said: Said, titles: Mapping[int, str]) -> list[str]:
     """Their message; and, for a short answer, what it answers."""
     request = said.request.strip()
     texts = [request] if request else []
-    if len(request.split()) <= SHORT_ANSWER:
+    if answers(request):
         texts += [t.strip() for t in (said.said_before, said.previous) if t.strip()]
     return list(dict.fromkeys(texts))
 
@@ -77,6 +89,12 @@ def which(
     own_words = len(request.split()) > SHORT_ANSWER or any(
         words_in_common(request, t) for t in titles.values()
     )
+    before = said.said_before.strip()
+    if not every and len(request.split()) > SHORT_ANSWER and before and answers(request):
+        # F65b: a longer answer names what Themi asked about, and anything it names itself
+        both = (clear_best(sims[before], threshold, margin),
+                clear_best(sims[request], threshold, margin))  # fmt: skip
+        return frozenset(i for i in both if i is not None)
     for text in texts_to_score(said, titles):
         if every and text != request:  # "All done!" to a list of them, by their titles
             return frozenset(i for i, title in titles.items() if title.lower() in text.lower())

@@ -33,7 +33,7 @@ from themi.core.prompts import OpenItem
 from themi.core.services import Services
 from themi.core.tools import Done as DoneLine
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
-from themi.core.which_task import ALL_OF_THEM, SHORT_ANSWER, Said
+from themi.core.which_task import ALL_OF_THEM, Said, answers
 from themi.core.wording import near_twin, title_matches, words_in_common
 from themi.energy import EnergyModel
 from themi.energy.matching import Assignment, Matcher, not_set_aside
@@ -2542,6 +2542,10 @@ async def _check_meant(
     """What they said names this task, and not another open one: by meaning (P8b), or by
     words when that can't be told in time. `must_name`: a done needs its task named; a
     change only must not name another one."""
+    done = JUST_DONE.search(ctx.said_before + " ")
+    related = must_name and done and RELATED.search(ctx.request_text)
+    if related and done and (done.group(1) or done.group(2)) != task.title:
+        raise _not_named(task, ctx)  # F65b: they mean the one just closed
     board = _board(ctx)
     rows = board.db.query(
         f"SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND {board.shown()} AND id != ?",
@@ -2559,14 +2563,14 @@ async def _check_meant(
         if must_name and not names_task(
             task.title, ctx.request_text, ctx.previous_text, ctx.said_before
         ):
-            raise _not_named(task)
+            raise _not_named(task, ctx)
         return
     if task.id in named:
         return
     if named:
         raise _names_other(task, board.get(min(named)), not_done)
     if must_name:
-        raise _not_named(task)
+        raise _not_named(task, ctx)
 
 
 def _names_other(task: Task, meant: Task, not_done: str) -> ToolFailed:
@@ -2577,7 +2581,21 @@ def _names_other(task: Task, meant: Task, not_done: str) -> ToolFailed:
     )
 
 
-def _not_named(task: Task) -> ToolFailed:
+# F65b (bug #282): "Check off the related task" right after Themi closed it with a weight
+RELATED = re.compile(r"\b(?:the related|that|the same|its) task\b", re.IGNORECASE)
+JUST_DONE = re.compile(r"And '(.+?)' is done\.|Marked done: (.+?)\. ")
+
+
+def _not_named(task: Task, ctx: ToolContext | None = None) -> ToolFailed:
+    done = JUST_DONE.search(ctx.said_before + " ") if ctx is not None else None
+    if ctx is not None and done and RELATED.search(ctx.request_text):
+        title = done.group(1) or done.group(2)
+        return ToolFailed(
+            f"Not marked done: the task they mean is {title}, which Themi just marked done. "
+            f"Say it's done already; don't mark {task.title}.",
+            reply=f'"{title}" is done already.',
+            refused=naming.NOT_NAMED,
+        )
     return ToolFailed(  # bug #119: the reply said "Marked done" anyway, so Themi says it
         f"Not marked done: nothing they said names {task.title}, and neither did Themi's "
         "last message. Mark only what they say is done; ask if it isn't clear.",
@@ -2599,7 +2617,7 @@ def meant_instead[TitledT: _Titled](
     contacted Erin's parents" marked the bins done, 2026-10-29). A short answer ("Yes please")
     is read with what Themi asked before it (#92). Just "done" names nothing: no check."""
     texts = [request]
-    if len(request.split()) <= SHORT_ANSWER:
+    if answers(request):  # F65b: "Yes, that one's done, but …" too
         texts.append(said_before)
     for said in texts:
         if words_in_common(said, title):

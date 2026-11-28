@@ -451,6 +451,7 @@ body.night:not(.awake) { background: var(--night-bg); }
 .drag-delete { position: sticky; bottom: 0; z-index: 15; width: 100%; border-color: var(--now); color: var(--now); }
 .drag-delete.over { background: var(--now); color: var(--on-now); }
 .drag-to-people[hidden], .drag-delete[hidden] { display: none; }
+.wall-fold[hidden] { display: none; } /* F65c: there to be filled when done items are cut */
 .sheet-ask { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 1.2rem; border-radius: 1.5rem; background: var(--card); font-size: 1.3rem; }
 .page-box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
 .page-box-head span { font-size: 1.2rem; font-weight: 600; color: var(--tone); }
@@ -561,10 +562,12 @@ body.night:not(.awake) { background: var(--night-bg); }
 /* WA2: the alerts (Themi Wall Alerts Plan). A layer below the clock, its cards centred top to
    bottom over the wall, which dims and keeps its layout. Read from across the room: the
    countdown is about 300px tall on the frame, 380px in the last five minutes. */
-.wall-alerts { position: fixed; top: 13rem; left: 2.5rem; right: 2.5rem; bottom: 2.5rem;
+/* Bug #285 (WA5): above the wall's own positioned and dimmed parts, below a view's sheet */
+.wall-alerts { position: fixed; z-index: 10; top: 13rem; left: 2.5rem; right: 2.5rem; bottom: 2.5rem;
   display: flex; flex-direction: column; justify-content: center; pointer-events: none; }
 .wall-alerts:empty { display: none; }
-body.alerting .wall-screen > :not(.wall-top), body.alerting .wall-night { opacity: 0.4; }
+#wall-view { position: relative; z-index: 11; }
+body.alerting .wall-screen > :not(.wall-top):not(#wall-view), body.alerting .wall-night { opacity: 0.4; }
 .wall-alert-list { display: flex; flex-direction: column; gap: 1.5rem; max-height: 100%; }
 .wall-alert {
   pointer-events: auto; display: flex; flex-direction: column; gap: 1.75rem;
@@ -651,3 +654,16 @@ body.alerting .wall-screen > :not(.wall-top), body.alerting .wall-night { opacit
   background: transparent; color: inherit; font: inherit; font-size: 1.75rem; font-weight: 700; cursor: pointer; }
 .alert-sound[hidden] { display: none; }
 .alert-second .alert-sound { display: none; }
+
+/* F65k (idea #276): a task unfolded under its row: its words, day chips and time */
+.wall-edit { list-style: none; margin: 0.25rem 0 0.75rem; padding: 1rem; border-radius: 1.25rem; background: var(--soft); }
+.wall-edit-form { display: flex; flex-direction: column; gap: 0.75rem; }
+.wall-edit-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 1.1rem; color: var(--muted); }
+.wall-edit-title, .wall-edit input[type="time"], .wall-edit input[type="date"] { font: inherit; font-size: 1.4rem; color: var(--fg);
+  padding: 0.6rem 0.8rem; border-radius: 0.9rem; border: 1px solid var(--line, currentColor); background: var(--card); min-height: 3.5rem; }
+.wall-edit-days { display: flex; flex-wrap: wrap; gap: 0.5rem; border: 0; margin: 0; padding: 0; }
+.wall-edit-days legend { font-size: 1.1rem; color: var(--muted); margin-bottom: 0.25rem; }
+.wall-edit-chip { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 3.5rem; padding: 0 1rem; border-radius: 999px;
+  background: var(--card); font-size: 1.2rem; cursor: pointer; }
+.wall-edit-chip input[type="radio"] { width: 1.3rem; height: 1.3rem; accent-color: var(--tone); }
+.wall-edit-chip:has(input:checked) { outline: 3px solid var(--tone); }

@@ -4,6 +4,10 @@ Skipped where Chrome isn't installed."""
 
 from __future__ import annotations
 
+import base64
+import json
+import os
+
 import httpx
 import pytest
 
@@ -469,5 +473,30 @@ async def test_the_recipes_on_the_go_fit_and_a_chip_switches(
         assert await tab.value("document.querySelectorAll('.cook-going-chip').length") == 2
         assert await tab.value(LAYOUT) == ""
         assert await tab.value(recipe) == "Alfredo Sauce"
+        # F65g (bug #280): drawn as the screen's cards are; the one in front in the accent
+        looks = json.loads(await tab.value(
+            "(() => { const s = getComputedStyle(document.body);"
+            " const card = s.getPropertyValue('--card').trim();"
+            " const accent = s.getPropertyValue('--accent').trim();"
+            " const probe = c => { const d = document.createElement('div'); d.style.color = c;"
+            "  document.body.appendChild(d); const v = getComputedStyle(d).color; d.remove();"
+            "  return v; };"
+            " const on = getComputedStyle(document.querySelector('.cook-going-chip.on'));"
+            " const off = getComputedStyle(document.querySelector('button.cook-going-chip'));"
+            " const name = getComputedStyle(document.querySelector('.cook-going-name'));"
+            " return JSON.stringify({off: off.backgroundColor === probe(card),"
+            "  on: on.backgroundColor === probe(accent),"
+            "  round: off.borderTopLeftRadius === s.getPropertyValue('--cook-round').trim(),"
+            "  display: name.fontFamily.includes('Themi Display')}); })()"
+        ))  # fmt: skip
+        assert looks == {"off": True, "on": True, "round": True, "display": True}
+        if folder := os.environ.get("THEMI_SHOTS"):
+            for theme in ("light", "dark", "kitchen"):
+                await tab.value(f"document.body.dataset.theme = '{theme}'; true")
+                shot = await tab.call("Page.captureScreenshot", format="png")
+                name = f"cook-going-{theme}-{width}.png"
+                with open(os.path.join(folder, name), "wb") as f:
+                    f.write(base64.b64decode(shot["result"]["data"]))
+            await tab.value("document.body.dataset.theme = 'auto'; true")
         await tab.value("document.querySelector('.cook-going form button').click()")
         assert await until(lambda: tab.value(f"{recipe} === 'Pancakes'"))
