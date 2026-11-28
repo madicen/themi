@@ -564,9 +564,11 @@ class Cooking:
                     {"session": session.id, "action": "front"})],
         )  # fmt: skip
 
-    async def switch(self, session: Session, *, note: str = "") -> None:
+    async def switch(self, session: Session, *, note: str = "", in_place: bool = False) -> None:
         """F64e: bring a recipe on the go to the front: the one there is set aside, and this
-        one's card comes again at the bottom of the chat, as it was."""
+        one's card comes again at the bottom of the chat, as it was. F65f (bug #279):
+        `in_place`, a switch made on the cook screen: no new message, only edits (its card,
+        if it has one, says it's in front again; the other's says it's set aside)."""
         member = self._owner(session)
         front = self.current(member)
         self.db.execute(
@@ -576,7 +578,10 @@ class Cooking:
         if front is not None and front.id != session.id:
             await self.set_aside(front)
             self._bump(front)
-        await self.show(session, fresh=True, note=note)
+        if in_place and session.message_id is None:
+            self._save(session)  # no card to edit: the screen redraws, the chat stays quiet
+            return
+        await self.show(session, fresh=not in_place, note=note)
 
     async def next_in_front(self, member: Member) -> None:
         """F64e: one recipe ended with others still on the go: back to the next one."""

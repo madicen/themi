@@ -238,6 +238,7 @@ async def test_two_recipes_on_the_go_have_a_chip_each_and_a_tap_switches(
     assert 'class="cook-going"' in page and "Go to Pancakes, 3/5" in page
 
     chip = next(g for g in state["going"] if g["name"] == "Pancakes")
+    sent_before = len(scenario.inbox("Erin"))
     tapped = await site.post(
         f"/session/cook/{pancakes}/act",
         data={"csrf": csrf, "action": "front", "seq": str(chip["seq"])},
@@ -246,8 +247,12 @@ async def test_two_recipes_on_the_go_have_a_chip_each_and_a_tap_switches(
     assert tapped.status_code < 400
     now = (await site.get("/session/state")).json()
     assert now["id"] == pancakes and now["step"]["words"] == "Step 3 of 5"
-    sent = scenario.inbox("Erin")[-1]
-    assert sent.startswith("Pancakes: step 3 of 5") and "Also going: Alfredo Sauce" in sent
+    # F65f (bug #279): a switch on the screen sends nothing new; the cards are edited
+    assert len(scenario.inbox("Erin")) == sent_before
+    edits = [c[1]["text"] for c in scenario.telegram.calls_in_order("editMessageText")]
+    assert any(e.startswith("Pancakes: step 3 of 5") and "Also going: Alfredo Sauce" in e
+               for e in edits[-2:])  # fmt: skip
+    assert any(e.startswith("Set aside: Alfredo Sauce") for e in edits[-2:])
 
     behind = next(g for g in now["going"] if g["name"] == "Alfredo Sauce")
     await site.post(  # a tap for the Alfredo, from a page drawn before the switch

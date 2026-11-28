@@ -386,7 +386,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F65c | Feedback: the wall's "+N more" counts only what's still to do | Feedback | [x] 2026-11-27 |
 | F65d | Feedback: "the family's chores" as a picture is the whole shared list | Feedback | [x] 2026-11-27 |
 | F65e | Feedback: an event Themi adds is on the wall's calendar at once | Feedback | [x] 2026-11-27 |
-| F65f | Feedback: switching recipes on the cook screen posts nothing new in the chat | Feedback | [ ] |
+| F65f | Feedback: switching recipes on the cook screen posts nothing new in the chat | Feedback | [x] 2026-11-27 |
 | F65g | Feedback: the cook screen's recipe chips look like the rest of the cook screen | Feedback | [ ] |
 | F65h | Feedback: conversation mode notes a job for the other person | Feedback | [ ] |
 | F65i | Feedback: "Let's make X" never reads an old screenshot as a recipe | Feedback | [ ] |
@@ -19529,7 +19529,7 @@ Notes:
 - **Setup:** update the Pi. Mark #277 reviewed once live.
 
 ### F65f · Feedback (2026-11-27): switching recipes on the cook screen posts nothing new in the chat
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: F64e, F64f
 Read first: `themi_home/cooking.py` (`switch`, the "Set aside: …" edit, the "(Carried on
 below.)" edit, the card sent fresh); `themi_home/cooking_screen.py` (`act`, the `front` tap).
@@ -19554,6 +19554,17 @@ message; a chat "switch to the pancakes" still sends one card. The `test_cooking
 scenarios follow.
 
 Data/Setup: update the Pi. Mark #279 reviewed once live.
+
+Notes:
+- `Cooking.switch(session, in_place=True)` from the cook screen's `front` tap: the old front's
+  card is edited to "Set aside: …" (as before) and the new front's own card is edited in
+  place (`show(fresh=False)`); with no card of its own, nothing is sent and only the screen
+  redraws. Chat's `switch_recipe` and the [Go to …] / [Back to …] buttons still send the
+  card fresh at the bottom ("(Carried on below.)" only then, from `card.show`).
+- `test_two_recipes_on_the_go_have_a_chip_each_and_a_tap_switches` (test_cook_screen.py)
+  checked the new card sent at the bottom; it now checks nothing new is sent and both cards
+  are edited.
+- **Setup:** update the Pi. Mark #279 reviewed once live.
 
 ### F65g · Feedback (2026-11-27): the cook screen's recipe chips look like the rest of the cook screen
 Status: [ ]
