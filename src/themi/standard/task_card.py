@@ -41,7 +41,15 @@ MOST_SHARED = 4  # cards the "Either of you" row shows
 SOON_DAYS = 3  # "the next few days"
 CHART_HEADING = "On the chart"
 SHARED_NAME = "Either of you"
-EVERYONE = ("everyone", "everybody", "us", "our", "family", "all", "both")
+EVERYONE = ("everyone", "everybody", "us", "our", "all", "both")
+# F65d (bug #281): "the family chores", "the Either of you list": the shared list alone, all
+# of it, as the wall's Together column has it.
+FAMILY = (
+    "family", "the family", "family's", "the family's", "shared", "together", "either of you",
+    "either", "the family list", "family list", "the shared list", "shared list",
+)  # fmt: skip
+FAMILY_TITLE = "The family's {what}"
+FAMILY_TODO = "Family to-do"
 
 
 @dataclass(frozen=True)
@@ -74,6 +82,7 @@ class TaskCardData:
     day: date
     lanes: tuple[Lane, ...]
     shared: tuple[Card, ...] = ()
+    everything: bool = False  # F65d: every card drawn, none counted into "+N more"
 
 
 # ----- the data ---------------------------------------------------------------------------
@@ -101,6 +110,8 @@ def task_cards(
     board = services.get(keys.taskboard)
     summary = services.maybe(keys.day_summary)
     today: date = summary.today(member) if summary is not None else board._today()
+    if who.strip().casefold() in FAMILY:
+        return family_cards(services, board, today, with_chores)
     chosen = whose(services, member, who)
     people = chosen if chosen is not None else services.store.list_members()
     queue = services.maybe(keys.chart_queue) if with_chores else None
@@ -135,6 +146,28 @@ def task_cards(
     what = "chores and tasks" if queue is not None else "tasks"
     title = f"{people[0].name}'s {what}" if chosen is not None else f"Everyone's {what}"
     return TaskCardData(title, today, tuple(lanes), shared_cards)
+
+
+def family_cards(services: Any, board: Any, today: date, with_chores: bool) -> TaskCardData | None:
+    """F65d: the shared list alone, every item: "Either of you" then "Family to-do", each
+    in the tasks' order (overdue first), each card saying when it was due."""
+    found: dict[int, Any] = {}
+    for person in services.store.list_members():
+        for task in board.open_for(person):
+            if task.shared or task.either:
+                found.setdefault(task.id, task)
+    ordered = sorted(found.values(), key=_order(today))
+    either = tuple(_task_card(board, t, today) for t in ordered if t.either)
+    family = tuple(_task_card(board, t, today) for t in ordered if not t.either)
+    groups = tuple(
+        Group(name, cards) for name, cards in ((SHARED_NAME, either), (FAMILY_TODO, family)) if cards
+    )
+    if not groups:
+        return None
+    what = "chores and tasks" if with_chores else "tasks"
+    return TaskCardData(
+        FAMILY_TITLE.format(what=what), today, (Lane("Family", groups),), everything=True
+    )
 
 
 def _order(today: date) -> Any:
@@ -252,7 +285,7 @@ def view(data: TaskCardData, theme: str = "light") -> dict[str, Any]:
     colors = THEMES[theme]
     count = max(len(data.lanes), 1)
     across = 2 if count == 1 else 1
-    most = MOST * across
+    most = MOST * across if not data.everything else 10_000
     width = (WIDTH - 2 * PAD - GAP * (count - 1)) / count
     named = count > 1 or bool(data.shared)
     lanes, bottom = [], TOP

@@ -384,7 +384,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F65a | Feedback: a weight Michael weighs is believed, and its weighing task closes | Feedback | [x] 2026-11-27 |
 | F65b | Feedback: "yes, that one's done" to Themi's "Is it done?" marks it done | Feedback | [x] 2026-11-27 |
 | F65c | Feedback: the wall's "+N more" counts only what's still to do | Feedback | [x] 2026-11-27 |
-| F65d | Feedback: "the family's chores" as a picture is the whole shared list | Feedback | [ ] |
+| F65d | Feedback: "the family's chores" as a picture is the whole shared list | Feedback | [x] 2026-11-27 |
 | F65e | Feedback: an event Themi adds is on the wall's calendar at once | Feedback | [ ] |
 | F65f | Feedback: switching recipes on the cook screen posts nothing new in the chat | Feedback | [ ] |
 | F65g | Feedback: the cook screen's recipe chips look like the rest of the cook screen | Feedback | [ ] |
@@ -19424,7 +19424,7 @@ Notes:
 - **Setup:** update the Pi, reload the wall. Mark #283 reviewed once live.
 
 ### F65d · Feedback (2026-11-27): "the family's chores" as a picture is the whole shared list
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: F43b
 Read first: `themi/standard/list_card.py` (`show_tasks_picture`, `_caption`);
 `themi/standard/task_card.py` (`whose`, `EVERYONE`, `task_cards`, `MOST_SHARED`, the "Either
@@ -19457,6 +19457,23 @@ golden `tools.json` changes for the description. A scenario: "Can I see the fami
 for today?" sends the family-only picture.
 
 Data/Setup: update the Pi. Mark #281 reviewed once live.
+
+Notes:
+- `task_card.FAMILY` ("family", "shared", "together", "either of you", "the family list", …)
+  goes to `family_cards`: one lane, "Family", with groups "Either of you" and "Family to-do",
+  every open shared or either task (overdue first, each card's note saying when it was
+  due), `everything=True` so `view` draws them all. "family" left `EVERYONE`.
+- Deviation: each group is in the tasks' order with its due note, not split again into
+  overdue/today/soon under each.
+- The "everyone" picture already said "+N more" past `MOST_SHARED`; a test holds it.
+- `show_tasks_picture`'s description lists 'family' with "the family chores", "the Either
+  of you list"; its result for the family picture says it isn't the chore chart. Golden:
+  `tools.json` changes for that description, as the prompt says.
+- Tests: `test_bug_281_the_family_list_alone_is_all_of_it`,
+  `test_everyone_says_more_past_four_shared`,
+  `test_bug_281_asking_for_the_family_chores_sends_the_family_list`
+  (scenarios/test_family_tasks_picture.py).
+- **Setup:** update the Pi. Mark #281 reviewed once live.
 
 ### F65e · Feedback (2026-11-27): an event Themi adds is on the wall's calendar at once
 Status: [ ]
