@@ -7,36 +7,61 @@
 //   sections: [{items: [height, ...], more: n}], other: height of everything else,
 //   room: the column body's height, moreHeight: one "+N more" button's height.
 // It returns, for each section, how many items to show and the "+N more" to say.
+// F65c (Michael's bug #283, "It says there are 2 more, but that's just a lie"): a section may
+// also say which items are done (`done`, struck through, at its end) and its "N done" count
+// (`folded`). A done item that doesn't fit goes into "N done", never "+N more", which counts
+// only what's still to do; `folded` comes back for those sections. `foldHeight`: the "N done"
+// line's height, for when it has to appear.
 (function (root) {
   "use strict";
-  function fitColumn(sections, other, room, moreHeight) {
-    var out = sections.map(function (s) { return { shown: s.items.length, more: s.more || 0 }; });
+  function fitColumn(sections, other, room, moreHeight, foldHeight) {
+    foldHeight = foldHeight || 0;
+    var out = sections.map(function (s) {
+      var o = { shown: s.items.length, more: s.more || 0 };
+      if (s.done) o.folded = s.folded || 0;
+      return o;
+    });
     function used() {
       var total = other;
       out.forEach(function (o, i) {
         for (var k = 0; k < o.shown; k++) total += sections[i].items[k];
         if (o.more > 0) total += moreHeight;
+        if (o.folded > 0 && !(sections[i].folded > 0)) total += foldHeight;
       });
       return total;
     }
     for (var i = out.length - 1; i >= 0; i--) {
       while (out[i].shown > 0 && used() > room) {
         out[i].shown -= 1;
-        out[i].more += 1;
+        var done = sections[i].done;
+        if (done && done[out[i].shown]) out[i].folded += 1;
+        else out[i].more += 1;
       }
     }
     return out;
   }
 
   function sectionsOf(body) {
-    // A section is an <h3>, its <ul> of .wall-entry items and its .wall-more button.
+    // A section is an <h3>, its <ul> of .wall-entry items, its .wall-more button and its
+    // .wall-fold "N done" line (F65c).
     var found = [];
     body.querySelectorAll("ul").forEach(function (list) {
       var more = list.nextElementSibling;
       if (!more || !more.classList.contains("wall-more")) more = null;
-      found.push({ entries: Array.prototype.slice.call(list.querySelectorAll(":scope > .wall-entry")), more: more });
+      var fold = (more || list).nextElementSibling;
+      if (!fold || !fold.classList.contains("wall-fold")) fold = null;
+      found.push({ entries: Array.prototype.slice.call(list.querySelectorAll(":scope > .wall-entry")),
+                   more: more, fold: fold });
     });
     return found;
+  }
+
+  function sayDone(fold, count) {
+    if (!fold) return;
+    fold.hidden = count <= 0;
+    var n = fold.querySelector(".wall-fold-n");
+    if (n) n.textContent = String(count);
+    else if (count > 0) fold.innerHTML = '<span aria-hidden="true">✓</span> <span class="wall-fold-n">' + count + "</span> done";
   }
 
   function say(button, count) {
@@ -71,6 +96,7 @@
       sections.forEach(function (s) {
         s.entries.forEach(function (e) { e.classList.remove("wall-cut"); });
         say(s.more, s.more ? Number(s.more.getAttribute("data-more")) || 0 : 0);
+        sayDone(s.fold, s.fold ? Number(s.fold.getAttribute("data-done")) || 0 : 0);
       });
       var room = body.clientHeight;
       if (!room || body.scrollHeight <= room) return;
@@ -84,9 +110,22 @@
         probe.more.hidden = was;
         say(probe.more, Number(probe.more.getAttribute("data-more")) || 0);
       }
+      var foldHeight = 0;
+      var foldProbe = sections.filter(function (s) { return s.fold; })[0];
+      if (foldProbe) {
+        var hid = foldProbe.fold.hidden;
+        foldProbe.fold.hidden = false;
+        foldHeight = foldProbe.fold.getBoundingClientRect().height;
+        foldProbe.fold.hidden = hid;
+      }
       var heights = sections.map(function (s) {
-        return { items: s.entries.map(function (e) { return e.getBoundingClientRect().height; }),
-                 more: s.more ? Number(s.more.getAttribute("data-more")) || 0 : 0 };
+        var h = { items: s.entries.map(function (e) { return e.getBoundingClientRect().height; }),
+                  more: s.more ? Number(s.more.getAttribute("data-more")) || 0 : 0 };
+        if (s.fold) {
+          h.done = s.entries.map(function (e) { return !!e.querySelector(".wall-item.done"); });
+          h.folded = Number(s.fold.getAttribute("data-done")) || 0;
+        }
+        return h;
       });
       var itemsTotal = 0;
       var moresTotal = 0;
@@ -95,10 +134,11 @@
         if (h.more > 0) moresTotal += moreHeight;
       });
       var other = body.scrollHeight - itemsTotal - moresTotal;
-      var fitted = fitColumn(heights, other, room, moreHeight);
+      var fitted = fitColumn(heights, other, room, moreHeight, foldHeight);
       fitted.forEach(function (f, i) {
         sections[i].entries.forEach(function (e, k) { e.classList.toggle("wall-cut", k >= f.shown); });
         say(sections[i].more, f.more);
+        if (f.folded !== undefined) sayDone(sections[i].fold, f.folded);
       });
     });
   }

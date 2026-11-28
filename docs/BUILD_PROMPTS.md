@@ -381,9 +381,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F64g | Idea: Things to cook can be edited on the wall | Feedback | [x] 2026-11-25 |
 | F64h | Idea: the calendar's day on the wall runs down the screen | Feedback | [x] 2026-11-25 |
 | F64i | Idea: a person's page on the wall: drag to reorder, to someone else, delete | Feedback | [x] 2026-11-25 |
-| F65a | Feedback: a weight Michael weighs is believed, and its weighing task closes | Feedback | [ ] |
-| F65b | Feedback: "yes, that one's done" to Themi's "Is it done?" marks it done | Feedback | [ ] |
-| F65c | Feedback: the wall's "+N more" counts only what's still to do | Feedback | [ ] |
+| F65a | Feedback: a weight Michael weighs is believed, and its weighing task closes | Feedback | [x] 2026-11-27 |
+| F65b | Feedback: "yes, that one's done" to Themi's "Is it done?" marks it done | Feedback | [x] 2026-11-27 |
+| F65c | Feedback: the wall's "+N more" counts only what's still to do | Feedback | [x] 2026-11-27 |
 | F65d | Feedback: "the family's chores" as a picture is the whole shared list | Feedback | [ ] |
 | F65e | Feedback: an event Themi adds is on the wall's calendar at once | Feedback | [ ] |
 | F65f | Feedback: switching recipes on the cook screen posts nothing new in the chat | Feedback | [ ] |
@@ -19246,7 +19246,7 @@ Notes:
   reviewed once live.
 
 ### F65a · Feedback (2026-11-27): a weight Michael weighs is believed, and its weighing task closes
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: GW5, F45d
 Read first: `themi_home/gram_weights.py` (`DENSITY`, `plausible`, `check`, `weighed`,
 `task_for_more`, `same_task_question`, the `gram_weights_meta` rows with a `task_id`,
@@ -19298,8 +19298,29 @@ without being asked twice.
 
 Data/Setup: update the Pi. Mark #282 reviewed once F65b is live too.
 
+Notes:
+- `DENSITY` is (0.025, 2.0) g/ml. Deviation: 0.025, not 0.02, since `test_plausible` holds
+  that 5 g a cup (0.021) asks; 9 g (0.038) and 26 g (0.11) a cup are saved now. `check`
+  offers ×10 or ÷10 only inside `USUAL` (0.3 to 1.5 g/ml, `usual()`): 3 g a cup asks with
+  no "Did you mean"; 150 g a tablespoon still offers 15.
+- `MEASURE_WORDS` and `bare(key)`: a key without units, rounded/heaped/level/scant/packed,
+  sprigs, herbs, number words. Only for finding a weighing task; the guide's keys keep them.
+  `weighed` closes the one open weighing task whose bare words equal the weight's
+  (`task_for_measure`) and drops its "wanted" row; several match: none is closed (F45d's
+  ends-with question still runs for "nutmeg" vs "ground nutmeg").
+- The reply ends "And '<task title>' is done." (`TASK_DONE_TEXT`) for the exact match too;
+  `test_a_reply_saves_the_weight_and_closes_the_task` expects that line now.
+- Look it up: the decline for an implausible weight and `correct_gram_weight`'s question
+  tell the model to use `search_web` when they say to look it up, not their guides.
+- Deviation: the guide line doesn't keep "rounded": the tool's amount has no word for it.
+- Tests: `test_bug_282_a_cup_of_dill_is_nine_grams`,
+  `test_bug_282_onion_powder_closes_the_rounded_tsp_task`,
+  `test_two_tasks_for_one_ingredient_close_neither_by_measure` (scenarios/test_gram_tasks.py);
+  `test_a_light_weight_offers_no_tenfold`, `test_bare_drops_the_measure_words`.
+- **Setup:** update the Pi. Mark #282 reviewed once F65b is live too.
+
 ### F65b · Feedback (2026-11-27): "yes, that one's done" to Themi's "Is it done?" marks it done
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: P8b, F65a
 Read first: `themi/core/which_task.py` (`texts_to_score`, `SHORT_ANSWER`, `which`);
 `themi/standard/tasks.py` (`complete_task`, `_check_meant`, `names_task`, `_not_named`, the
@@ -19340,8 +19361,24 @@ done already. A scenario: the onion powder and peppercorns from reply 618 to 620
 
 Data/Setup: update the Pi. Mark #282 reviewed once live (with F65a).
 
+Notes:
+- `which_task.ANSWER` / `answers()`: a message of up to 3 words, or one starting with a yes
+  ("yes", "yep", "it is", "done", "that one", "that's done") or saying "that one's done", is
+  read with Themi's last message. A longer answer names the clear best for Themi's question
+  plus the clear best for its own words (`which`), so "Yes, that one's done, but also the
+  mushrooms are done" names both. `meant_instead` (the word check) uses `answers` too.
+- "Check off the related task" (`RELATED`: "the related/that/the same/its task") right after
+  Themi's message said "And '<title>' is done." or "Marked done: <title>." (`JUST_DONE`):
+  any other task is refused with the reply "\"<title>\" is done already.", checked before
+  the naming.
+- Deviation: no [Yes, done] [No] buttons on a second refusal. There's no task-done button
+  kind to hang them on, and the yes-answer fix is what reply 620 needed.
+- Tests: `tests/unit/test_which_task.py` (5); `test_bug_282_a_long_yes_to_is_it_done_marks_it`,
+  `test_bug_282_the_related_task_just_closed_is_done_already` (test_anchored_chores.py).
+- **Setup:** update the Pi. Mark #282 reviewed once live (with F65a).
+
 ### F65c · Feedback (2026-11-27): the wall's "+N more" counts only what's still to do
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: F58c, F60f
 Read first: `themi_home/web/static/wall-fit.js` (`fitColumn`, `fitWall`);
 `themi_home/web/templates/wall/_columns.html` (a section's items, then the struck-through
@@ -19372,6 +19409,19 @@ test of the Together column at 1080 x 1920 with struck-through entries cut: the 
 says only open ones, and opening it lists that many.
 
 Data/Setup: update the Pi, reload the wall. Mark #283 reviewed once live.
+
+Notes:
+- `fitColumn(sections, other, room, moreHeight, foldHeight)`: a section may carry `done`
+  (per item) and `folded`; a done item cut is counted into `folded`, an open one into
+  `more`. Sections without `done` return `{shown, more}` as before.
+- `_columns.html`: a section with items and nothing folded has an empty
+  `<p class="wall-fold" data-done="0" hidden>`, which `fitWall` fills ("✓ N done") when
+  done items are cut; `.wall-fold[hidden]` hides it. `test_wall_fold.py`'s "no fold at 9
+  minutes" now checks no fold with a count (the hidden one is always there).
+- Tests: three in `tests/unit/test_wall_fit.py`; `tests/integration/test_wall_fold_browser.py`
+  (16 shared to-dos, four ticked, at 1080 x 1920: "+N more" equals the open entries cut,
+  and "N done" the done ones).
+- **Setup:** update the Pi, reload the wall. Mark #283 reviewed once live.
 
 ### F65d · Feedback (2026-11-27): "the family's chores" as a picture is the whole shared list
 Status: [ ]

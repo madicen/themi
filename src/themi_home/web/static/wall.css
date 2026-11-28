@@ -451,6 +451,7 @@ body.night:not(.awake) { background: var(--night-bg); }
 .drag-delete { position: sticky; bottom: 0; z-index: 15; width: 100%; border-color: var(--now); color: var(--now); }
 .drag-delete.over { background: var(--now); color: var(--on-now); }
 .drag-to-people[hidden], .drag-delete[hidden] { display: none; }
+.wall-fold[hidden] { display: none; } /* F65c: there to be filled when done items are cut */
 .sheet-ask { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 1.2rem; border-radius: 1.5rem; background: var(--card); font-size: 1.3rem; }
 .page-box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
 .page-box-head span { font-size: 1.2rem; font-weight: 600; color: var(--tone); }

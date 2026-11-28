@@ -49,7 +49,9 @@
     {#- F58c: every section with items has its "+N more", hidden at 0, so wall-fit.js can
         count in the items that don't fit on the frame. -#}
     {% if sec.items or sec.more %}<button type="button" class="wall-more" data-more="{{ sec.more or 0 }}"{% if not sec.more %} hidden{% endif %} hx-get="/wall/view/list/todo/{{ c.member_id or 'family' }}" hx-target="#wall-view" hx-swap="innerHTML">{% if sec.more %}+{{ sec.more }} more{% endif %}</button>{% endif %}
-    {% if sec.folded %}<p class="wall-fold"><span aria-hidden="true">✓</span> {{ sec.folded }} done</p>{% endif %}
+    {#- F65c: with items, its "N done" is there hidden at 0, so wall-fit.js can fold done items
+        that don't fit into it rather than into "+N more". -#}
+    {% if sec.folded %}<p class="wall-fold" data-done="{{ sec.folded }}"><span aria-hidden="true">✓</span> <span class="wall-fold-n">{{ sec.folded }}</span> done</p>{% elif sec.items %}<p class="wall-fold" data-done="0" hidden></p>{% endif %}
   {% endif %}{% endfor %}
   </div>
   <button type="button" class="wall-col-foot" hx-get="{{ opens }}" hx-target="#wall-view" hx-swap="innerHTML">{{ "View full day" if c.member_id else "View shared list" }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
