@@ -2,7 +2,7 @@
     it), what's done today on the right (a tap unticks). Never who did more.
     F65j (bug #275): press and hold one to pick it up (wall.js, as F64i's person page): drop
     it in its card for the family's order, on a person to give it to them, or on Delete. -#}
-{% from "wall/_sheet.html" import page, item with context %}
+{% from "wall/_sheet.html" import page, item, editor with context %}
 {% set vals = {"view": "together"} %}
 {% set here = "/wall/view/together" %}
 {% macro open_item(i, drag) %}
@@ -26,7 +26,7 @@
   {% if undo %}
   <div class="sheet-undo" role="status" data-undo-for="8">
     <span>{{ undo.label }}</span>
-    <button type="button" class="sheet-button" hx-post="{{ here }}/move" hx-vals='{{ {"op": undo.op, "task": undo.task, "due": undo.due or ""} | tojson }}' hx-target="#wall-view" hx-swap="innerHTML">Undo</button>
+    <button type="button" class="sheet-button" hx-post="{{ here }}/move" hx-vals='{{ {"op": undo.op, "task": undo.task, "due": undo.due or "", "title": undo.title or "", "time": undo.time or ""} | tojson }}' hx-target="#wall-view" hx-swap="innerHTML">Undo</button>
   </div>
   {% endif %}
   {% if asking_task %}
@@ -44,10 +44,10 @@
     <section class="page-box page-open">
       {% set n = view.family.items | length %}
       <div class="page-box-head"><h3>Family to-do</h3>{% if n %}<span>{{ n }} open</span>{% endif %}</div>
-      {% if view.family.items %}<ul data-drop="family">{% for i in view.family.items %}{{ open_item(i, "family") }}{% endfor %}</ul>
+      {% if view.family.items %}<ul data-drop="family">{% for i in view.family.items %}{{ open_item(i, "family") }}{% if editing and editing.key == i.key %}{{ editor(editing, here) }}{% endif %}{% endfor %}</ul>
       {% else %}<p class="wall-empty">{{ view.family.empty }}</p>{% endif %}
       <h4 class="page-sub-head">Either of you</h4>
-      {% if view.either.items %}<ul data-drop="either">{% for i in view.either.items %}{{ open_item(i, "either") }}{% endfor %}</ul>
+      {% if view.either.items %}<ul data-drop="either">{% for i in view.either.items %}{{ open_item(i, "either") }}{% if editing and editing.key == i.key %}{{ editor(editing, here) }}{% endif %}{% endfor %}</ul>
       {% else %}<p class="wall-empty">{{ view.either.empty }}</p>{% endif %}
     </section>
     <section class="page-box page-done">

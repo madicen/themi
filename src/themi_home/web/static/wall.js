@@ -655,7 +655,18 @@
     if (event.target.closest && event.target.closest("[data-drag]")) event.preventDefault();
   });
   document.addEventListener("click", function (event) {
-    if (swallow) { event.preventDefault(); event.stopPropagation(); }
+    if (swallow) { event.preventDefault(); event.stopPropagation(); return; }
+    // F65k (idea #276): a tap on a task's words on a person's or the Together page unfolds
+    // it to change its words and day; its ring (and the rest of the row) still ticks.
+    var words = event.target.closest && event.target.closest(".wall-words");
+    var li = words && words.closest("[data-drag]");
+    var page = li && li.closest("[data-moves]");
+    if (!page || !window.htmx) return;
+    event.preventDefault();
+    event.stopPropagation();
+    var url = page.getAttribute("data-moves").replace(/\/move$/, "");
+    window.htmx.ajax("GET", url + "?edit=" + li.getAttribute("data-task"),
+                     { target: "#wall-view", swap: "innerHTML" });
   }, true);
 
   // WL6: keep the screen on while the wall is open, and ask again when it's seen again.

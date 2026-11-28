@@ -391,7 +391,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F65h | Feedback: conversation mode notes a job for the other person | Feedback | [x] 2026-11-27 |
 | F65i | Feedback: "Let's make X" never reads an old screenshot as a recipe | Feedback | [x] 2026-11-27 |
 | F65j | Feedback: the family's list on the wall can be dragged too | Feedback | [x] 2026-11-27 |
-| F65k | Idea: a task can be edited on the wall: its words and its due date | Feedback | [ ] |
+| F65k | Idea: a task can be edited on the wall: its words and its due date | Feedback | [x] 2026-11-27 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -19751,7 +19751,7 @@ Notes:
   once live.
 
 ### F65k · Idea (2026-11-27): a task can be edited on the wall: its words and its due date
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: F64i, F65j, F64g
 Read first: `themi_home/web/templates/wall/_view_person.html`, `_view_together.html`,
 `_view_list.html`; `themi_home/wall_views.py` (`person_move`); F64g's Notes (a text box on
@@ -19781,6 +19781,26 @@ chore's date moves this round only; Undo puts both back; a browser test at 1080 
 task's words, types a title, picks Tomorrow and saves, and the ring tap still ticks.
 
 Data/Setup: update the Pi, reload the wall. Mark #276 reviewed once live.
+
+Notes:
+- `wall.js`: a click on a task's words (`.wall-words` in a `[data-drag]` row of a page with
+  `data-moves`) is caught before htmx's tick and asks for the page with `?edit=<task>`; the
+  ring and the rest of the row still tick; press and hold still drags.
+- `GET /wall/view/person/{id}?edit=N` and `/wall/view/together?edit=N` unfold it under its
+  row (`editor` macro in `_sheet.html`): a title box, day chips (Today, Tomorrow, The
+  weekend = the coming Saturday, Next week = next Monday, No date, Pick a day), a time box,
+  [Save] [Cancel]. A repeating chore's legend says "this time only".
+- Save posts `op=edit` to the page's `/move`; `save_edit` stages it through the wall's tap
+  category; the executor's `edit` (`WallTaps._edit`) renames (`board.update`) and
+  reschedules (`board.reschedule`, a chore's round only). An Undo bar for 8 seconds posts
+  `undo_edit` with the old words, day and time. A bad date or time is ignored; an empty
+  title keeps the old one.
+- Deviations: "Pick a day" is the frame's own date input, not a drawn month; the time is the
+  frame's time input.
+- Tests: `tests/integration/test_wall_task_edit.py` (6);
+  `test_f65k_a_tap_on_the_words_unfolds_it_and_the_ring_still_ticks`
+  (test_wall_together_drag_browser.py).
+- **Setup:** update the Pi, reload the wall. Mark #276 reviewed once live.
 
 ## Conversation mode
 

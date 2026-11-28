@@ -654,3 +654,16 @@ body.alerting .wall-screen > :not(.wall-top):not(#wall-view), body.alerting .wal
   background: transparent; color: inherit; font: inherit; font-size: 1.75rem; font-weight: 700; cursor: pointer; }
 .alert-sound[hidden] { display: none; }
 .alert-second .alert-sound { display: none; }
+
+/* F65k (idea #276): a task unfolded under its row: its words, day chips and time */
+.wall-edit { list-style: none; margin: 0.25rem 0 0.75rem; padding: 1rem; border-radius: 1.25rem; background: var(--soft); }
+.wall-edit-form { display: flex; flex-direction: column; gap: 0.75rem; }
+.wall-edit-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 1.1rem; color: var(--muted); }
+.wall-edit-title, .wall-edit input[type="time"], .wall-edit input[type="date"] { font: inherit; font-size: 1.4rem; color: var(--fg);
+  padding: 0.6rem 0.8rem; border-radius: 0.9rem; border: 1px solid var(--line, currentColor); background: var(--card); min-height: 3.5rem; }
+.wall-edit-days { display: flex; flex-wrap: wrap; gap: 0.5rem; border: 0; margin: 0; padding: 0; }
+.wall-edit-days legend { font-size: 1.1rem; color: var(--muted); margin-bottom: 0.25rem; }
+.wall-edit-chip { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 3.5rem; padding: 0 1rem; border-radius: 999px;
+  background: var(--card); font-size: 1.2rem; cursor: pointer; }
+.wall-edit-chip input[type="radio"] { width: 1.3rem; height: 1.3rem; accent-color: var(--tone); }
+.wall-edit-chip:has(input:checked) { outline: 3px solid var(--tone); }

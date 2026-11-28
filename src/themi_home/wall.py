@@ -23,7 +23,7 @@ import logging
 import re
 import secrets
 from dataclasses import dataclass, replace
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -296,6 +296,8 @@ class WallTaps:
         if op == "words":
             task = await board.update(task_id, by, title=text)
             return f"It reads {task.title} now."
+        if op == "edit":  # F65k (idea #276): its words and its day, from its page
+            return await self._edit(board, task_id, by, payload, text)
         if op == "cancel":  # F64i: dropped on Delete (the record's kept)
             return await board.cancel(task_id, by)
         if op == "restore":  # F64i: its Undo
@@ -306,6 +308,23 @@ class WallTaps:
         if op == "unskip":  # its Undo: the round back on the day it was
             return await board.reschedule(task_id, date.fromisoformat(str(payload["due"])))
         raise ValueError(f"not a change the wall makes: {op}")
+
+    async def _edit(
+        self, board: Any, task_id: int, by: Member, payload: dict[str, Any], text: str
+    ) -> str:
+        """F65k: a new title (when it differs), and a new day ("none": no date) and time
+        ("none": no time); "" leaves either as it is."""
+        from themi.standard.tasks import KEEP
+
+        task = board.get(task_id)
+        if text and text != task.title:
+            task = await board.update(task_id, by, title=text)
+        due, at = str(payload.get("due") or ""), str(payload.get("time") or "")
+        if due or at:
+            due_on = task.due_on if not due else None if due == "none" else date.fromisoformat(due)
+            due_time: Any = KEEP if not at else None if at == "none" else time.fromisoformat(at)
+            await board.reschedule(task_id, due_on, due_time=due_time)
+        return f"Saved: {task.title}."
 
     def _list_change(self, op: str, payload: dict[str, Any], by: Member, text: str) -> str:
         """F59e: a household list's tick, put back or add, from its List view."""
@@ -501,6 +520,13 @@ def routes(kit: Kit) -> APIRouter:
         }
         task_id = int(raw) if raw.isdigit() else 0
         card = next((name for name, ids in here.items() if task_id in ids), None)
+        if op in ("edit", "undo_edit") and card is not None:  # F65k
+            task = board.get(task_id)
+            by = people.get(task.assignee or 0) or next(iter(people.values()))
+            outcome, undo = await save_edit(view, by, form, task_id)
+            response = together_page(request, view, said=outcome.message, undo=undo)
+            response.headers["HX-Trigger"] = "wall-refresh"
+            return response
         if op in ("undo_delete", "undo_skip") and task_id:
             task = board.get(task_id)
             if task is None or not _for_both(task):
@@ -580,6 +606,68 @@ def routes(kit: Kit) -> APIRouter:
     def sheet(request: Request, template: str, **values: Any) -> HTMLResponse:
         return kit.page(request, f"wall/{template}", close_after=CLOSE_AFTER, **values)
 
+    def editing(view: WallView, task_id: int) -> dict[str, Any] | None:
+        """F65k (idea #276): a task unfolded on a page to change its words and its day: what
+        the editor shows, with its day chips."""
+        board = kit.app.services.get(keys.taskboard)
+        try:
+            task = board.get(task_id)
+        except Exception:
+            return None
+        if task.status not in ("open", "snoozed"):
+            return None
+        today = view.household_day()
+        saturday = today + timedelta(days=(5 - today.weekday()) % 7 or 7)
+        monday = today + timedelta(days=7 - today.weekday())
+        chips = [("Today", today.isoformat()), ("Tomorrow", (today + timedelta(days=1)).isoformat()),
+                 ("The weekend", saturday.isoformat()), ("Next week", monday.isoformat()),
+                 ("No date", "none")]  # fmt: skip
+        return {
+            "key": f"task-{task.id}",
+            "id": task.id,
+            "title": task.title,
+            "due": task.due_on.isoformat() if task.due_on else "none",
+            "time": task.due_time.strftime("%H:%M") if task.due_time else "",
+            "repeats": task.repeats,
+            "chips": chips,
+        }
+
+    async def save_edit(view: WallView, by: Member, form: dict[str, str], task_id: int) -> Any:
+        """F65k: the editor's Save, staged as the wall's taps are; its Undo puts back what
+        was there."""
+        board = kit.app.services.get(keys.taskboard)
+        task = board.get(task_id)
+        before = {
+            "op": "undo_edit", "task": str(task_id), "title": task.title,
+            "due": task.due_on.isoformat() if task.due_on else "none",
+            "time": task.due_time.strftime("%H:%M") if task.due_time else "none",
+        }  # fmt: skip
+        is_undo = form.get("op") == "undo_edit"
+        title = " ".join(form.get("title", "").split())[:200]
+        due = form.get("pick", "") or form.get("due", "")  # "Pick a day" wins
+        if due and due != "none":
+            try:
+                date.fromisoformat(due)
+            except ValueError:
+                due = ""
+        at = form.get("time", "").strip()
+        if at and at != "none":
+            try:
+                time.fromisoformat(at)
+            except ValueError:
+                at = ""
+        if not at and task.due_time is not None:
+            at = "none"  # the time box emptied
+        payload = {"by": by.id, "op": "edit", "task": task_id, "text": title, "due": due,
+                   "time": at}  # fmt: skip
+        outcome = await kit.app.services.autonomy.stage(
+            TAP, by, f"Change {task.title} {WHERE}", payload, TAP, requested=True
+        )
+        undo = None
+        if outcome.action.status == "done" and not is_undo:
+            undo = before | {"label": f"{title or task.title} saved."}
+        return outcome, undo
+
     def person_view(
         request: Request, view: WallView, member_id: int, opened: int = 0, **shown: Any
     ) -> HTMLResponse:
@@ -616,6 +704,9 @@ def routes(kit: Kit) -> APIRouter:
         }
         task_id = int(raw) if raw.isdigit() else 0
         card = next((name for name, ids in here.items() if task_id in ids), None)
+        if op in ("edit", "undo_edit") and task_id in [i for ids in here.values() for i in ids]:
+            outcome, undo = await save_edit(view, member, form, task_id)  # F65k
+            return person_view(request, view, member_id, said=outcome.message, undo=undo)
         if op in ("undo_delete", "undo_skip") and task_id:  # its Undo: no longer on the page
             task = board.get(task_id)
             if task is None or task.assignee != member_id:
@@ -994,16 +1085,20 @@ def routes(kit: Kit) -> APIRouter:
         return sheet(request, "_view_weather.html", view=found) if found else HTMLResponse("")
 
     @router.get("/wall/view/person/{member_id:int}", response_class=HTMLResponse)
-    def person(request: Request, member_id: int, open: int = 0) -> Response:
+    def person(request: Request, member_id: int, open: int = 0, edit: int = 0) -> Response:
         if viewer(request) is None:
             return gone()
-        return person_view(request, WallView(kit.app.services), member_id, open)
+        view = WallView(kit.app.services)
+        shown = {"editing": editing(view, edit)} if edit else {}  # F65k
+        return person_view(request, view, member_id, open, **shown)
 
     @router.get("/wall/view/together", response_class=HTMLResponse)
-    def together(request: Request) -> Response:
+    def together(request: Request, edit: int = 0) -> Response:
         if viewer(request) is None:
             return gone()
-        return together_page(request, WallView(kit.app.services))
+        view = WallView(kit.app.services)
+        shown = {"editing": editing(view, edit)} if edit else {}  # F65k
+        return together_page(request, view, **shown)
 
     # ----- WL6: an app on the frame ----------------------------------------------------
 

@@ -47,3 +47,26 @@
   {{ caller() if caller }}
 </li>
 {% endmacro %}
+
+{#- F65k (idea #276): a task unfolded under its row to change its words and its day (a tap on
+    its words; its ring still ticks). `here` is the page, whose /move saves it. -#}
+{% macro editor(e, here) %}
+<li class="wall-edit" data-editing="{{ e.id }}">
+  <form class="wall-edit-form" hx-post="{{ here }}/move" hx-target="#wall-view" hx-swap="innerHTML">
+    <input type="hidden" name="op" value="edit">
+    <input type="hidden" name="task" value="{{ e.id }}">
+    <label class="wall-edit-label">Words <input class="wall-edit-title" name="title" value="{{ e.title }}" maxlength="200" autocomplete="off"></label>
+    <fieldset class="wall-edit-days">
+      <legend>When{% if e.repeats %} · this time only{% endif %}</legend>
+      {% set listed = e.chips | map(attribute=1) | list %}
+      {% for label, d in e.chips %}<label class="wall-edit-chip"><input type="radio" name="due" value="{{ d }}"{% if d == e.due %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}
+      <label class="wall-edit-chip wall-edit-pick"><span>Pick a day</span> <input type="date" name="pick" value="{{ e.due if e.due not in listed else '' }}"></label>
+    </fieldset>
+    <label class="wall-edit-label">Time <input type="time" name="time" value="{{ e.time }}"></label>
+    <div class="sheet-actions">
+      <button type="submit" class="sheet-button">Save</button>
+      <button type="button" class="sheet-button" hx-get="{{ here }}" hx-target="#wall-view" hx-swap="innerHTML">Cancel</button>
+    </div>
+  </form>
+</li>
+{% endmacro %}

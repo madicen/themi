@@ -58,3 +58,23 @@ async def test_bug_275_a_family_to_do_is_dragged_higher_up(wall: Scenario) -> No
         moved = {"task": str(gas.id), "op": "move", "before": str(vac.id)}
         assert sent == [["POST", "/wall/view/together/move", moved]]
         assert mimi.id
+
+
+async def test_f65k_a_tap_on_the_words_unfolds_it_and_the_ring_still_ticks(
+    wall: Scenario,
+) -> None:
+    """F65k (idea #276): its words open the editor; its ring is still a tick."""
+    (vac,) = [await task(wall, "Erin", "Vacuum maintenance", both="shared")]
+    clock.unfreeze()
+    async with page_in_chrome(wall, wall.member("Erin"), "body", width=1080, height=1920) as tab:
+        await together_page(wall, tab)
+        wx, wy = await centre(tab, f'[data-task="{vac.id}"] .wall-title')
+        await mouse(tab, "mousePressed", wx, wy)
+        await mouse(tab, "mouseReleased", wx, wy)
+        sent = json.loads(await tab.value("JSON.stringify(window.sent)"))
+        assert sent == [["GET", f"/wall/view/together?edit={vac.id}", None]]
+        await tab.value("window.sent = []; true")
+        rx, ry = await centre(tab, f'[data-task="{vac.id}"] .ring')
+        await mouse(tab, "mousePressed", rx, ry)
+        await mouse(tab, "mouseReleased", rx, ry)
+        assert await tab.value("JSON.stringify(window.sent)") == "[]"  # htmx's own tick
