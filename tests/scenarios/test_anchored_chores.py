@@ -471,7 +471,7 @@ async def test_bug_282_a_long_yes_to_is_it_done_marks_it(scenario: Scenario) -> 
     onion = await chore(scenario, "Weigh one rounded tsp onion powder")
     await scenario.app.services.outbox.send(
         scenario.member("Erin"),
-        '"Weigh one rounded tsp onion powder" is still open: I couldn\'t tell that\'s the one '
+        "\"Weigh one rounded tsp onion powder\" is still open: I couldn't tell that's the one "
         "you meant. Is it done?",
         priority=Priority.REPLY,
     )
@@ -495,6 +495,6 @@ async def test_bug_282_the_related_task_just_closed_is_done_already(scenario: Sc
     scenario.primary.queue_text("")
     replies = await scenario.say("Erin", "Check off the related task.")
     assert replies[-1] == (
-        "\"Weigh 1 tablespoon of crushed peppercorns when you're next cooking\" is done already."
+        '"Weigh 1 tablespoon of crushed peppercorns when you\'re next cooking" is done already.'
     )
     assert board(scenario).get(onion.id).status == "open"

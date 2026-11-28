@@ -6,7 +6,7 @@ from themi.core.which_task import Said, answers, texts_to_score, which
 
 TITLES = {155: "Weigh one rounded tsp onion powder", 160: "Weigh 1 cup of dried mushrooms"}
 QUESTION = (
-    '"Weigh one rounded tsp onion powder" is still open: I couldn\'t tell that\'s the one you '
+    "\"Weigh one rounded tsp onion powder\" is still open: I couldn't tell that's the one you "
     "meant. Is it done?"
 )
 ANSWER = "Yes, that one's done, but also the crushed pepper is done too."

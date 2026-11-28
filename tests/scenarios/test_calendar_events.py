@@ -893,8 +893,9 @@ async def test_bug_277_a_family_event_is_in_both_peoples_read_at_once(
         scenario,
         "Put the block party on the family calendar Saturday at 2",
         "add_calendar_event",
-        dentist(title="Block party", date="2026-10-24", start="14:00", location="",
-                calendar="family"),  # fmt: skip
+        dentist(
+            title="Block party", date="2026-10-24", start="14:00", location="", calendar="family"
+        ),
     )
     (event,) = linked.events(ERIN, "Themi")
     family = db.scalar("SELECT calendar_id FROM calendars WHERE account_id = ?", (erin_account,))
@@ -906,8 +907,7 @@ async def test_bug_277_a_family_event_is_in_both_peoples_read_at_once(
         scenario,
         "And the potluck on the family calendar Sunday at noon",
         "add_calendar_event",
-        dentist(title="Potluck", date="2026-10-25", start="12:00", location="",
-                calendar="family"),  # fmt: skip
+        dentist(title="Potluck", date="2026-10-25", start="12:00", location="", calendar="family"),
     )
     rows = db.query("SELECT member_id, title FROM calendar_entries ORDER BY member_id")
     assert [(r["member_id"], r["title"]) for r in rows] == [

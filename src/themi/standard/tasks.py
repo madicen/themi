@@ -2543,9 +2543,9 @@ async def _check_meant(
     words when that can't be told in time. `must_name`: a done needs its task named; a
     change only must not name another one."""
     done = JUST_DONE.search(ctx.said_before + " ")
-    if must_name and done and RELATED.search(ctx.request_text):
-        if (done.group(1) or done.group(2)) != task.title:  # F65b: it's the one just closed
-            raise _not_named(task, ctx)
+    related = must_name and done and RELATED.search(ctx.request_text)
+    if related and done and (done.group(1) or done.group(2)) != task.title:
+        raise _not_named(task, ctx)  # F65b: they mean the one just closed
     board = _board(ctx)
     rows = board.db.query(
         f"SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND {board.shown()} AND id != ?",

@@ -476,9 +476,11 @@ async def test_the_recipes_on_the_go_fit_and_a_chip_switches(
         # F65g (bug #280): drawn as the screen's cards are; the one in front in the accent
         looks = json.loads(await tab.value(
             "(() => { const s = getComputedStyle(document.body);"
-            " const card = s.getPropertyValue('--card').trim(), accent = s.getPropertyValue('--accent').trim();"
+            " const card = s.getPropertyValue('--card').trim();"
+            " const accent = s.getPropertyValue('--accent').trim();"
             " const probe = c => { const d = document.createElement('div'); d.style.color = c;"
-            "  document.body.appendChild(d); const v = getComputedStyle(d).color; d.remove(); return v; };"
+            "  document.body.appendChild(d); const v = getComputedStyle(d).color; d.remove();"
+            "  return v; };"
             " const on = getComputedStyle(document.querySelector('.cook-going-chip.on'));"
             " const off = getComputedStyle(document.querySelector('button.cook-going-chip'));"
             " const name = getComputedStyle(document.querySelector('.cook-going-name'));"

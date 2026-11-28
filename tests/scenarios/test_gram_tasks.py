@@ -407,7 +407,9 @@ async def test_a_weighing_task_says_so_in_the_open_items(
     )
 
 
-async def test_bug_282_a_cup_of_dill_is_nine_grams(scenario: Scenario, weights: GramWeights) -> None:
+async def test_bug_282_a_cup_of_dill_is_nine_grams(
+    scenario: Scenario, weights: GramWeights
+) -> None:
     """F65a: "1 cup of fresh dill sprigs weighs about 9 grams" was refused as no weight."""
     cookbook_recipe(scenario, "Tzatziki", ["1 cup fresh herbs- dill"])
     weights.record("fresh herbs- dill", "wanted")

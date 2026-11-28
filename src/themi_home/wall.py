@@ -619,7 +619,8 @@ def routes(kit: Kit) -> APIRouter:
         today = view.household_day()
         saturday = today + timedelta(days=(5 - today.weekday()) % 7 or 7)
         monday = today + timedelta(days=7 - today.weekday())
-        chips = [("Today", today.isoformat()), ("Tomorrow", (today + timedelta(days=1)).isoformat()),
+        tomorrow = today + timedelta(days=1)
+        chips = [("Today", today.isoformat()), ("Tomorrow", tomorrow.isoformat()),
                  ("The weekend", saturday.isoformat()), ("Next week", monday.isoformat()),
                  ("No date", "none")]  # fmt: skip
         return {
@@ -1088,17 +1089,16 @@ def routes(kit: Kit) -> APIRouter:
     def person(request: Request, member_id: int, open: int = 0, edit: int = 0) -> Response:
         if viewer(request) is None:
             return gone()
-        view = WallView(kit.app.services)
-        shown = {"editing": editing(view, edit)} if edit else {}  # F65k
-        return person_view(request, view, member_id, open, **shown)
+        view = WallView(kit.app.services)  # F65k: `edit`, a task unfolded to change
+        return person_view(request, view, member_id, open,
+                           editing=editing(view, edit) if edit else None)  # fmt: skip
 
     @router.get("/wall/view/together", response_class=HTMLResponse)
     def together(request: Request, edit: int = 0) -> Response:
         if viewer(request) is None:
             return gone()
         view = WallView(kit.app.services)
-        shown = {"editing": editing(view, edit)} if edit else {}  # F65k
-        return together_page(request, view, **shown)
+        return together_page(request, view, editing=editing(view, edit) if edit else None)
 
     # ----- WL6: an app on the frame ----------------------------------------------------
 

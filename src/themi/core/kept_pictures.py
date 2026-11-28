@@ -31,6 +31,8 @@ SHORT_ANSWER = 3  # words
 
 def points_at_picture(text: str) -> bool:
     return len(text.split()) <= SHORT_ANSWER or bool(POINTS_AT.search(text))
+
+
 KEPT_TURNS = 2
 TOGETHER = timedelta(minutes=1)  # F34mb: a picture this soon after the last joins its group
 MOST_TOGETHER = 4

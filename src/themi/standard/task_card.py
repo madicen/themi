@@ -160,7 +160,9 @@ def family_cards(services: Any, board: Any, today: date, with_chores: bool) -> T
     either = tuple(_task_card(board, t, today) for t in ordered if t.either)
     family = tuple(_task_card(board, t, today) for t in ordered if not t.either)
     groups = tuple(
-        Group(name, cards) for name, cards in ((SHARED_NAME, either), (FAMILY_TODO, family)) if cards
+        Group(name, cards)
+        for name, cards in ((SHARED_NAME, either), (FAMILY_TODO, family))
+        if cards
     )
     if not groups:
         return None
