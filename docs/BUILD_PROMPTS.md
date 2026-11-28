@@ -390,7 +390,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F65g | Feedback: the cook screen's recipe chips look like the rest of the cook screen | Feedback | [x] 2026-11-27 |
 | F65h | Feedback: conversation mode notes a job for the other person | Feedback | [x] 2026-11-27 |
 | F65i | Feedback: "Let's make X" never reads an old screenshot as a recipe | Feedback | [x] 2026-11-27 |
-| F65j | Feedback: the family's list on the wall can be dragged too | Feedback | [ ] |
+| F65j | Feedback: the family's list on the wall can be dragged too | Feedback | [x] 2026-11-27 |
 | F65k | Idea: a task can be edited on the wall: its words and its due date | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -19704,7 +19704,7 @@ Notes:
 - **Setup:** update the Pi. Nothing to mark reviewed.
 
 ### F65j · Feedback (2026-11-27): the family's list on the wall can be dragged too
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: F64i
 Read first: F64i's Notes; `themi_home/web/templates/wall/_view_together.html`;
 `themi_home/wall_views.py` (`together`, `find_together`, `person_move`); `themi_home/wall_view.py`
@@ -19731,6 +19731,24 @@ Tests: the Together page's move POSTs (reorder, give, delete, undo) like
 page at 1080 x 1920.
 
 Data/Setup: update the Pi, reload the wall. Mark #275 reviewed once live.
+
+Notes:
+- Family order: `wall_schema/0009_wall_family_order.sql` (`wall_family_order`: task, rank),
+  its own table rather than a NULL member in `wall_task_order` (its member is NOT NULL with
+  a foreign key). `WallView.family_ordered` / `set_family_order` / `to_family_end`; used by
+  the Together page (`WallViews.together`) and the home screen's Together column
+  (`_together`), for "Either of you" and "Family to-do" alike.
+- `POST /wall/view/together/move` (`together_move`): `move` (within its card), `give` (a
+  member id: theirs alone, not shared), `delete`, `stop`, `skip`, `undo_delete`,
+  `undo_skip`, as F64i's person route, staged through the wall's tap category as the task's
+  assignee (else the first person). A repeating chore asks in place first.
+- `_view_together.html`: `data-moves`, `data-drop`/`data-drag` on both lists, a chip per
+  person, Delete, the Undo bar and the ask, so `wall.js`'s F64i drag works unchanged.
+- A person's page dropping on "Family" puts the task at the end of the family's order.
+- Tests: `tests/integration/test_wall_together_moves.py` (5),
+  `tests/integration/test_wall_together_drag_browser.py` (a mouse drag at 1080 x 1920).
+- **Setup:** update the Pi (the migration runs on start), reload the wall. Mark #275 reviewed
+  once live.
 
 ### F65k · Idea (2026-11-27): a task can be edited on the wall: its words and its due date
 Status: [ ]

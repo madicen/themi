@@ -520,6 +520,38 @@ class WallView:
                 (member.id, task_id, rank),
             )
 
+    def family_order(self) -> dict[int, int]:
+        """F65j (bug #275): the family's order for the shared list: task id -> rank."""
+        rows = self.services.store.db.query("SELECT task_id, rank FROM wall_family_order")
+        return {int(r["task_id"]): int(r["rank"]) for r in rows}
+
+    def family_ordered(self, tasks: Iterable[Task], today: date) -> list[Task]:
+        """F65j: the shared ones dragged into order first, in that order; then the wall's."""
+        ours = self.family_order()
+        return sorted(
+            tasks,
+            key=lambda t: (0, ours[t.id], *_rank(t, today)) if t.id in ours
+            else (1, 0, *_rank(t, today)),
+        )  # fmt: skip
+
+    def set_family_order(self, task_ids: list[int]) -> None:
+        """F65j: these shared tasks, in this order, ahead of the rest."""
+        db = self.services.store.db
+        for rank, task_id in enumerate(task_ids):
+            db.execute(
+                "INSERT OR REPLACE INTO wall_family_order (task_id, rank) VALUES (?, ?)",
+                (task_id, rank),
+            )
+
+    def to_family_end(self, task_id: int) -> None:
+        """F65j: a task just put on the shared list goes after the ones in order."""
+        db = self.services.store.db
+        last = db.scalar("SELECT MAX(rank) FROM wall_family_order")
+        db.execute(
+            "INSERT OR REPLACE INTO wall_family_order (task_id, rank) VALUES (?, ?)",
+            (task_id, (last if last is not None else -1) + 1),
+        )
+
     def held(self, task: Task, member: Member) -> bool:
         """A chore waiting its turn on this person's chart (their limit, C2d): not on the
         wall, as it isn't on the chart. An important one always shows."""
@@ -667,11 +699,10 @@ class WallView:
         names: dict[int, str],
     ) -> WallColumn:
         both = [t for t in tasks if _for_both(t)]
-        either = sorted(
-            (t for t in both if t.repeats and t.due_on is not None and t.due_on <= today),
-            key=lambda t: _rank(t, today),
+        either = self.family_ordered(  # F65j: the family's own order first
+            (t for t in both if t.repeats and t.due_on is not None and t.due_on <= today), today
         )
-        family = sorted((t for t in both if not t.repeats), key=lambda t: _rank(t, today))
+        family = self.family_ordered((t for t in both if not t.repeats), today)
         shown = {t.id for t in either} | {t.id for t in family[:FAMILY_TODOS_SHOWN]}
         ours = [(t, at) for t, _, at in done if _for_both(t) and t.id not in shown]
         recent, folded = self._fold(ours)

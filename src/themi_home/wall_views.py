@@ -437,11 +437,10 @@ class WallViews:
         now = view.now()
         today = view.household_day()  # F59c
         both = [t for t in view._open_tasks(people) if _for_both(t)]
-        either = sorted(
-            (t for t in both if t.repeats and t.due_on is not None and t.due_on <= today),
-            key=lambda t: _rank(t, today),
+        either = view.family_ordered(  # F65j: the family's own order first
+            (t for t in both if t.repeats and t.due_on is not None and t.due_on <= today), today
         )
-        family = sorted((t for t in both if not t.repeats), key=lambda t: _rank(t, today))
+        family = view.family_ordered((t for t in both if not t.repeats), today)
         done = tuple(
             _done_item(t, f"{names[by]} did it" if by in names else "", emoji=view.emoji_of(t))
             for t, by, _ in view._done_tasks(people, view.since(None))
