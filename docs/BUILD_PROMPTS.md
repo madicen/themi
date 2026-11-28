@@ -388,7 +388,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F65e | Feedback: an event Themi adds is on the wall's calendar at once | Feedback | [x] 2026-11-27 |
 | F65f | Feedback: switching recipes on the cook screen posts nothing new in the chat | Feedback | [x] 2026-11-27 |
 | F65g | Feedback: the cook screen's recipe chips look like the rest of the cook screen | Feedback | [x] 2026-11-27 |
-| F65h | Feedback: conversation mode notes a job for the other person | Feedback | [ ] |
+| F65h | Feedback: conversation mode notes a job for the other person | Feedback | [x] 2026-11-27 |
 | F65i | Feedback: "Let's make X" never reads an old screenshot as a recipe | Feedback | [ ] |
 | F65j | Feedback: the family's list on the wall can be dragged too | Feedback | [ ] |
 | F65k | Idea: a task can be edited on the wall: its words and its due date | Feedback | [ ] |
@@ -19613,7 +19613,7 @@ Notes:
 - **Setup:** update the Pi. Mark #280 reviewed once Michael has seen it.
 
 ### F65h · Feedback (2026-11-27): conversation mode notes a job for the other person
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: CM1b, F36a
 Read first: `themi/standard/sidecar.py` (its system text, `SIDECAR_TOOLS`, how `create_task`
 is called and assigned); `themi/standard/tasks.py` (`create_task`'s `assign_to`, telling the
@@ -19644,6 +19644,20 @@ Michael's outbox gets the heads-up; a message about someone else's feelings ("Mi
 stressed") makes nothing. An eval line in the sidecar evals for this message.
 
 Data/Setup: update the Pi. Mark #278 reviewed once live.
+
+Notes:
+- The sidecar's `SYSTEM` says a job someone says another family member needs to do is a
+  `create_task` assigned to that person (`assign_to` their name), the title or steps saying
+  what it's for and where it should go; never one for how someone feels. `create_task`'s
+  own assigning, trust tiers and heads-up do the rest.
+- Deviation: no "due before the calendar event of that name"; the task's steps carry "for
+  his benefits meeting" when said. A follow-up if Michael wants it.
+- Evals: two cases in `tests/evals/sidecar_cases.json` (`task-for-partner-benefits`, and
+  `partner-feelings`, which makes nothing). Not run here: they need a real model
+  (`make evals`).
+- Tests: `test_bug_278_a_job_for_the_other_person_is_their_task` (test_sidecar.py): a task
+  for Husband, the ✍, and Husband told.
+- **Setup:** update the Pi. Mark #278 reviewed once live.
 
 ### F65i · Feedback (2026-11-27): "Let's make X" never reads an old screenshot as a recipe
 Status: [ ]

@@ -115,6 +115,11 @@ Call a tool only when {name}'s own words in this turn say it:
   renewed this week"). Never venting, wishes, hypotheticals or "someday" ("I should really
   clean the garage someday", "I wish the dishes did themselves"), never something already
   done, never something only Themi said, and never one already among the open tasks.
+  A job they say someone else in the family needs to do ("Michael will need to ask his
+  work about it", "Erin has to call the school", "can you get Michael to…") is a task for
+  that person: assign_to their name, and say in the title or steps what it's for, and
+  where they said it should go ("for his benefits meeting"). Never one for how someone
+  feels ("Michael is stressed").
 - complete_task or cancel_task: only for one of the open tasks listed, by its number, when
   they say it's done or no longer needed.
 - snooze_task: only for one of the open tasks listed, by its number, when they say it
