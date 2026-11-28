@@ -230,7 +230,7 @@ def kitchen_alerts(
                 state="up",
                 label=timer_title(row),
                 title="",
-                numerals="Kitchen time",
+                numerals="Kitchen time" if row["step"] else "Time's up",  # WA6: from chat
                 sub=up_words(minutes),
                 detail="",
                 ends_at=fired,
@@ -257,7 +257,7 @@ def kitchen_alerts(
                 key=f"timer:{row['id']}",
                 kind="kitchen",
                 state="running",
-                label="Back to the kitchen in",
+                label="Back to the kitchen in" if row["step"] else "Timer",  # WA6: from chat
                 title=timer_title(row),
                 numerals=countdown(left),
                 counts="down",

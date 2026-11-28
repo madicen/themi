@@ -599,6 +599,10 @@
     "group": "email",
     "spec": "0339bcfe6d1f"
   },
+  "start_timer": {
+    "group": "recipes",
+    "spec": "1ec7914a5d0d"
+  },
   "stop_cooking": {
     "group": "recipes",
     "spec": "ca52564b9fb3"

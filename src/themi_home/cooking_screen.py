@@ -469,7 +469,7 @@ def timers(cooking: Cooking, session: Session) -> list[dict[str, Any]]:
                 go = {"id": other.id, "seq": other.seq, "name": row["recipe"]}
         out.append({
             "id": row["id"],
-            "label": f"{row['recipe']}: {label}" if several else label,
+            "label": f"{row['recipe']}: {label}" if several and row["step"] else label,
             "ends_at": row["ends_at"],
             "fired": row["fired_at"] is not None,
             "seconds": round(float(row["minutes"]) * 60),  # CK12: "of 8:00", and the bar

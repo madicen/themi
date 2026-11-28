@@ -599,7 +599,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WA3 | Wall alerts: kitchen timers | Wall alerts | [x] 2026-11-27 |
 | WA4 | Wall alerts: Themi's trills | Wall alerts | [x] 2026-11-27 |
 | WA5 | Wall alerts: on the frame | Wall alerts | [~] |
-| WA6 | Wall alerts: a timer from chat | Wall alerts | [ ] |
+| WA6 | Wall alerts: a timer from chat | Wall alerts | [x] 2026-11-27 |
 
 ## Fixed technical choices
 
@@ -28029,7 +28029,7 @@ Notes:
   untouched; and after a reload. Read the "Wall sound" lines from the Pi's log.
 
 ### WA6 · Wall alerts: a timer from chat
-Status: [ ]
+Status: [x] 2026-11-27
 Depends on: WA3
 Read first: the plan's "Back to the kitchen" (timers set from chat show a clock and their
 own label); report #284; `cooking_timers.py` (`begin`, `run_job`, the typed "how long left",
@@ -28044,3 +28044,19 @@ own label); report #284; `cooking_timers.py` (`begin`, `run_job`, the typed "how
 Tests: unit, the tool's row and words; the ending message; cancel and add on a chat timer.
 Integration: the wall's card with the clock. Scenario: "start a 6 minute timer" in chat (the
 scripted model calls `start_timer`), then the wall counts it down and Got it clears it.
+
+Notes:
+- `start_timer` (in `cooking_timers.py`, registered by `CookingTimers.install`) and
+  `CookingTimers.start_alone`: a `cooking_timers` row with no session and an empty step,
+  its label (and `recipe`, which can't be empty) "6 min timer" or their words, a leading
+  "the" dropped. Up to 8 hours (`LONG`); longer, or a time of day, is add_reminder. It's
+  Themi's own timer, so a plain `@tool`, no trust tier.
+- An empty step marks a timer from chat: "Time's up: 6 min timer.", "4 min left on the
+  tea.", "Added 2 min: the tea is done at …". On the wall it's a clock with "Timer" over its
+  label, and "Time's up" (not "Kitchen time") when it ends. The cook screen lists it by its
+  label alone.
+- In the recipes tool group (a home-pack group; `start_timer` lives with the cooking
+  timers), with "timer" among its words and "Start a 6 minute timer" an example. Golden
+  `tools.json` gains `start_timer` (recipes).
+- New: `tests/scenarios/test_chat_timer.py` (5).
+- Mark #284 reviewed once it's live.

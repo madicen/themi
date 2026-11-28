@@ -9,6 +9,11 @@ several can run at once. When one ends: "Time's up: 10 min for step 3 of Pad Tha
 urgent message, even in quiet hours, because they asked for it. "How long left?", "cancel
 the timer" and "add 2 minutes" work typed; ending the session with timers running asks
 whether to keep them.
+
+WA6: a timer from chat ("start a 6 minute timer", `start_timer`) is the same kind of row with
+no cook session and no step, its label "6 min timer" unless they named it. It ends with
+"Time's up: 6 min timer.", answers "how long left", "add 2 minutes" and "cancel the timer"
+like any other, and shows on the wall with a clock.
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import keys
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import next_waking_start, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi_home.groups import COOKING
@@ -123,6 +129,42 @@ def default_label(recipe: Recipe, step: str) -> str:
     return f"{group}, step {step}" if group else f"Step {step}"
 
 
+def timer_name(row: dict[str, Any]) -> str:
+    """ "step 3" for a recipe's timer; "the 6 min timer" or "the tea" for one from chat."""
+    if row["step"]:
+        return f"step {row['step']}"
+    return f"the {row['label'] or row['recipe']}"
+
+
+@tool(
+    "start_timer",
+    "A timer they ask for in chat, counting down from now ('start a 6 minute timer', 'set a "
+    "timer for 20 minutes for the tea'): it shows on the wall and Themi says when it's up. "
+    "Not a message at a time of day (add_reminder), and not a recipe step's timer (the cook "
+    "screen has those). minutes: how long, up to 480; label: what it's for in their words "
+    "('the tea'), or ''.",
+    {"minutes": {"type": "number"}, "label": {"type": "string"}},
+)
+async def start_timer(ctx: ToolContext, args: dict[str, Any]) -> str:
+    cooking = ctx.services.maybe(keys.cooking)
+    timers = cooking.timers if cooking is not None else None
+    if timers is None:
+        raise ToolFailed("Timers aren't set up.")
+    try:
+        minutes = float(args.get("minutes") or 0)
+    except (TypeError, ValueError):
+        raise ToolFailed("minutes must be a number.") from None
+    if not 0 < minutes <= LONG:
+        raise ToolFailed(
+            f"A timer runs from a few seconds up to {LONG // 60} hours; for longer, or a time "
+            "of day, use add_reminder."
+        )
+    label = " ".join(str(args.get("label") or "").split()).removeprefix("the ")
+    _, ends = timers.start_alone(ctx.member, minutes, label)
+    named = f" for {label}" if label else ""
+    return f"Timer set: {_short(minutes)}{named}, done at {timers._clock(ends)}."
+
+
 class CookingTimers:
     def __init__(self, cooking: Cooking, jobs: Scheduler) -> None:
         self.cooking = cooking
@@ -132,6 +174,7 @@ class CookingTimers:
 
     def install(self) -> None:
         self.jobs.handler(JOB)(self.run_job)
+        self.services.tools.register(start_timer)  # WA6
         self.cooking.timers = self
         self.services.button_handlers["cooking_timer"] = self.on_button
         self.services.text_handlers.append(self.on_text)
@@ -200,6 +243,19 @@ class CookingTimers:
             (session.id, member.id, recipe.name, step, minutes, to_utc_iso(ends),
              int(session.in_group), to_utc_iso(now), label),
         )  # fmt: skip
+        self.jobs.enqueue(JOB, {"timer": timer_id}, run_after=ends)
+        return int(timer_id), ends
+
+    def start_alone(self, member: Member, minutes: float, label: str = "") -> tuple[int, datetime]:
+        """WA6: a timer from chat, with no cook session or step. Returns its id and end."""
+        now = clock.now()
+        ends = now + timedelta(minutes=minutes)
+        label = " ".join(label.split())[:LABEL] or f"{_short(minutes)} timer"
+        timer_id = self.db.execute(
+            "INSERT INTO cooking_timers (session_id, member_id, recipe, step, minutes, ends_at, "
+            "in_group, created_at, label) VALUES (NULL, ?, ?, '', ?, ?, 0, ?, ?)",
+            (member.id, label, minutes, to_utc_iso(ends), to_utc_iso(now), label),
+        )
         self.jobs.enqueue(JOB, {"timer": timer_id}, run_after=ends)
         return int(timer_id), ends
 
@@ -290,9 +346,14 @@ class CookingTimers:
             if session is not None and session.ended_at is None and front is not None
             and front.id != session.id else []
         )  # fmt: skip
+        said = (
+            f"Time's up: {_short(row['minutes'])} for step {row['step']} of {row['recipe']}."
+            if row["step"]
+            else f"Time's up: {row['label'] or row['recipe']}."  # WA6: a timer from chat
+        )
         await self.services.outbox.send(
             member,
-            f"Time's up: {_short(row['minutes'])} for step {row['step']} of {row['recipe']}.",
+            said,
             priority=Priority.URGENT,  # they set it: it rings in quiet hours too
             kind=KIND,  # to their own chat: a group message waits for everyone to be free
             buttons=go,
@@ -316,8 +377,8 @@ class CookingTimers:
         for row in timers:
             seconds = max(0, (datetime.fromisoformat(row["ends_at"]) - now).total_seconds())
             left = f"{math.ceil(seconds / 60)} min" if seconds >= 60 else f"{int(seconds)} sec"
-            whose = f" of {row['recipe']}" if several else ""
-            parts.append(f"{left} left on step {row['step']}{whose}")
+            whose = f" of {row['recipe']}" if several and row["step"] else ""
+            parts.append(f"{left} left on {timer_name(row)}{whose}")
         return "; ".join(parts).capitalize() + "."
 
     # ----- taps and typing ------------------------------------------------------------------
@@ -384,9 +445,7 @@ class CookingTimers:
         elif found := ADD.match(said):
             row = self.running(member)[-1]
             ends = self.add(member.id, row["id"], int(found.group(1))) or clock.now()
-            reply = (
-                f"Added {found.group(1)} min: step {row['step']} is done at {self._clock(ends)}."
-            )
+            reply = f"Added {found.group(1)} min: {timer_name(row)} is done at {self._clock(ends)}."
         else:
             return False
         session = self.cooking.current(member) if event.from_page else None
